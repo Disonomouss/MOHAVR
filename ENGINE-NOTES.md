@@ -398,6 +398,18 @@ HUD is drawn at screen positions inside each half, so it lands at different plac
   take view shake. Adding to it turns the body, movement and aim at once. UE yaw grows clockwise seen from
   above (a right turn is positive). Verified by snap turn: ±5461 per 30° step, read back through the view.
 
+## 5m. Menus and cinematic cameras (M5 cinema screen, measured 2026-09-25)
+
+- **UI menus show the Windows cursor.** On the game thread, `ShowCursor(FALSE) + 1` (then `ShowCursor(TRUE)`
+  to restore) gives the display count: main menu 0, pause menu 0, gameplay −1 (Debug.ViewState probe).
+  Decrement-then-restore never shows the cursor. `GetCursorInfo` is useless here (it's global and depends on
+  where the cursor is).
+- **The player's own view:** in first person, the yaw `GetPlayerViewPoint` returns equals
+  `PlayerController.Rotation.Yaw` (+0xF8) within 2 units. The main-menu scene (view yaw 55640 vs controller 0)
+  and the parachute landing roll (a camera animation) differ by more than 2048.
+- **`PlayerController.Location` (+0xE8) stays at the spawn point** (−1534, −14857, −17720 while the view was at
+  7612, −8967, ...): the controller doesn't follow its pawn, so a location test needs the Pawn (offset unknown).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

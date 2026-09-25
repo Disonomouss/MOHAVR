@@ -22,6 +22,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
+    c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));
+    if (c.cinemaScreen < 0 || c.cinemaScreen > 2) c.cinemaScreen = 0;
 
     c.headTracking      = get(L"Camera", L"HeadTracking", c.headTracking);
     c.headPosition      = get(L"Camera", L"HeadPosition", c.headPosition);

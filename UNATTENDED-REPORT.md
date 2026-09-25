@@ -161,10 +161,21 @@ what was learned.
 - [ ] Headset question (round 5): snap vs smooth, and which step feels right.
 
 ### F. M5 menus/cutscenes on a cinema screen — [S]
-- [ ] RE/script: detect "in a UI menu" (UIScene active), "cutscene/matinee" (cinematic mode), and "no pawn".
-- [ ] In those states: no stereo split (one full-screen view) and `hasView=0`, so the host shows the frame on a
-      world-locked cinema quad (size and distance in the ini/menu).
-- [ ] [S]: main menu → quad (the capture shows the full menu, not split); gameplay → stereo; the pause menu → quad.
+- [x] Detection (ENGINE-NOTES §5m). **UI menu:** the game thread's `ShowCursor` count is ≥ 0. Measured: main
+      menu 0, pause 0, gameplay −1; read without ever showing the cursor. **Cinematic camera:** the view's yaw
+      isn't the controller's `Rotation.Yaw` (more than about 11° apart; in play they match within 2 units). "No
+      pawn" isn't separate: death and matinee cameras fail the same yaw test. The controller's own `Location`
+      (+0xE8) does NOT follow the pawn, so it can't be used.
+- [x] In those states (debounced 150 ms) the Draw hook skips the stereo split, the view hook leaves the game's
+      camera alone, and the frame is published as `hasView=0`, so the host shows it on its world-locked screen.
+      The screen: `ScreenDistance` / `ScreenWidth` (default 2.0 m / 1.6 m, the round-1 "large but comfortable"),
+      at head height when it appears (LOCAL is at eye level on VD but on the floor in the simulator).
+      `Camera.CinemaScreen`: 0 off (default), 1 = UI menus, 2 = menus + cinematic cameras.
+- [x] [S] passed (`tools/sim_shot.py` = the simulator's composited headset view): main menu → one flat image on
+      the screen in both eyes (was split); Continue → gameplay in stereo; Esc → pause menu on the screen; Esc →
+      stereo again. With mode 2 the parachute landing roll (a game camera animation) also went flat for 2.1 s,
+      then back to stereo: feel question for round 5. No in-engine cutscene is reachable from the harness save,
+      so real cutscenes are [H].
 
 ### G. M5 HUD on its own layer — [S] mechanics, [H] placement
 - [ ] RE: a one-frame device-call trace (behind `Debug.TraceFrame=1`) around `UGameViewportClient::Draw`'s second

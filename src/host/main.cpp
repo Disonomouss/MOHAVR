@@ -396,6 +396,21 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     }();
     float menuBtnHeld = 0.0f;
     bool menuBtnFired = false;
+    // The flat screen for frames without a view (menus, cutscenes, loading): [Camera] ScreenDistance /
+    // ScreenWidth in metres, world-locked in front of LOCAL (follows Recentre).
+    auto iniFloat = [&](const wchar_t* key, float def, float lo, float hi) {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Camera", key, L"", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        const float f = static_cast<float>(_wtof(v));
+        return v[0] && f >= lo && f <= hi ? f : def;
+    };
+    const float screenDist = iniFloat(L"ScreenDistance", 2.0f, 0.5f, 20.0f);
+    const float screenWidth = iniFloat(L"ScreenWidth", 1.6f, 0.2f, 30.0f);
+    MLOG("host: flat screen %.2f m wide at %.2f m", screenWidth, screenDist);
+    // The screen's height: the head's when it (re)appears -- LOCAL's origin is at eye level on some
+    // runtimes (Virtual Desktop) and on the floor on others (the simulator).
+    float screenY = 0.0f;
+    bool screenUp = false;
     SetState(HostState::Running, "session created");
 
     // On-request capture of what the host received (the harness's view of the VR side).
@@ -693,6 +708,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
 
             const XrRect2Di full{{0, 0}, {static_cast<int32_t>(width), static_cast<int32_t>(height)}};
             if (lastMeta.hasView) {
+                screenUp = false;
                 // Every view is submitted with the exact pose and FOV it was rendered with, so the runtime can
                 // reproject it and the world stays locked.
                 //   stereo (M4): left half = eye 0, right half = eye 1, each with its own pose/fov;
@@ -721,13 +737,17 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 proj.views = pviews;
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);
             } else {
+                if (!screenUp) {
+                    screenUp = true;
+                    if (menuHeadOk) screenY = menuHead.position.y;
+                }
                 layer.space = local;
                 layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
                 layer.subImage.swapchain = swapchain;
                 layer.subImage.imageRect = full;
                 layer.pose.orientation.w = 1.0f;
-                layer.pose.position = {0.0f, 0.0f, -2.0f};
-                layer.size = {1.6f, 1.6f * static_cast<float>(height) / static_cast<float>(width)};
+                layer.pose.position = {0.0f, screenY, -screenDist};
+                layer.size = {screenWidth, screenWidth * static_cast<float>(height) / static_cast<float>(width)};
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
             }
             layerCount = 1;

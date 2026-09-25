@@ -59,6 +59,7 @@ struct AppliedFrame {
     bool         stereo;
     DWORD        thread;
     bool         valid;
+    bool         cinema;   // rendered as a flat full-screen image (menu/cutscene): no view, show on the quad
 };
 CRITICAL_SECTION g_lock;
 AppliedFrame g_building{}, g_current{}, g_previous{};
@@ -76,6 +77,12 @@ int          g_eyeCounter = 0;
 void*        g_stereoPlayers[2] = {};
 void*        g_leftViewState = nullptr;   // the player's own FSceneViewState
 void*        g_rightViewState = nullptr;  // ours, for eye 1 (allocated once, lives for the process)
+
+// M5 cinema mode (Camera.CinemaScreen): UI menus and cinematic cameras are rendered flat and
+// full-screen, without head tracking, and the host shows them on a world-locked screen.
+bool  g_cinema = false;           // decided at the start of each Draw, holds until the next
+bool  g_viewIsPlayers = true;     // last view: the controller's own yaw (not a matinee/menu camera)
+DWORD g_cinemaFlipSince = 0;      // when the wanted mode first differed from g_cinema (debounce)
 
 long g_views = 0;
 bool g_loggedProj[2] = {false, false};
@@ -148,10 +155,52 @@ void UpdateOrigin(const shared::Header* hdr, std::uint32_t recenterSeq, const sh
 // --- M4: UGameViewportClient::Draw -- make the engine draw two players (one per eye) ----------
 // Only for the duration of Draw, GEngine->GamePlayers points at our 2-entry array holding the
 // same ULocalPlayer twice; the real array is untouched and restored on return.
+void UpdateCinemaMode() {
+    if (!g_cfg.cinemaScreen) return;
+    // A UI menu shows the Windows cursor: UE3 raises this thread's ShowCursor count to >= 0 for menus and
+    // drops it below 0 in play (measured: main menu 0, pause menu 0, gameplay -1). Read it without ever
+    // showing the cursor: decrement, then restore.
+    const int cursor = ShowCursor(FALSE) + 1;
+    ShowCursor(TRUE);
+    const bool menu = cursor >= 0;
+    const bool camera = g_cfg.cinemaScreen >= 2 && !g_viewIsPlayers;
+    const bool want = menu || camera;
+    const DWORD now = GetTickCount();
+    if (want == g_cinema) {
+        g_cinemaFlipSince = 0;
+        return;
+    }
+    // Debounce: the new mode must hold for 150 ms (a one-frame camera glitch mustn't flip the view).
+    if (!g_cinemaFlipSince) g_cinemaFlipSince = now ? now : 1;
+    if (now - g_cinemaFlipSince < 150) return;
+    g_cinemaFlipSince = 0;
+    g_cinema = want;
+    static int logged = 0;
+    if (logged++ < 40)
+        MLOG("cinema: %s (%s)", want ? "ON -- flat full-screen image on the host's screen" : "off -- stereo, head-tracked",
+             want ? (menu ? "UI menu: cursor shown" : "the view is not the player's (cinematic camera)") : "player view, no menu");
+}
+
+void CommitCinemaFrame() {
+    EnterCriticalSection(&g_lock);
+    g_previous = g_current;
+    g_current = AppliedFrame{};
+    g_current.thread = GetCurrentThreadId();
+    g_current.valid = true;
+    g_current.cinema = true;
+    LeaveCriticalSection(&g_lock);
+}
+
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
+    UpdateCinemaMode();
+    if (g_cinema) {
+        g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera
+        CommitCinemaFrame();
+        return;
+    }
     const bool want = g_cfg.headTracking && g_cfg.stereo && hdr && (hdr->viewValid & 1u) && arr && arr[1] == 1 && arr[0];
     if (!want) {
         g_drawHook.thiscall<void>(self, viewport, canvas);
@@ -218,7 +267,7 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
 
 // Debug.ViewState: the game's own camera (before the head is applied) for scripted tests --
 // %TEMP%\MOHAVR\view_state.txt = "x y z yaw pitch" (Unreal units / rotator units), 5 times a second.
-void WriteViewState(const float* loc, const int* rot) {
+void WriteViewState(const float* loc, const int* rot, std::uintptr_t localPlayer) {
     static DWORD next = 0;
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - next) < 0) return;
@@ -234,7 +283,18 @@ void WriteViewState(const float* loc, const int* rot) {
     const std::wstring part = path + L".tmp";
     FILE* f = nullptr;
     if (_wfopen_s(&f, part.c_str(), L"w") != 0 || !f) return;
-    fprintf(f, "%.1f %.1f %.1f %d %d\n", loc[0], loc[1], loc[2], rot[1] & 0xFFFF, rot[0] & 0xFFFF);
+    // Cursor probe (F): this thread's ShowCursor display count, read without ever showing it
+    // (decrement, then restore), and the global cursor state.
+    const int cursorCount = ShowCursor(FALSE) + 1;
+    ShowCursor(TRUE);
+    CURSORINFO ci{sizeof(ci)};
+    GetCursorInfo(&ci);
+    // The controller's own Location (+0xE8, just before Rotation) and yaw, for the cinema-camera check.
+    const auto ctrl = localPlayer ? *reinterpret_cast<std::uintptr_t*>(localPlayer + addr::kLocalPlayerActor) : 0;
+    const float* cl = ctrl ? reinterpret_cast<const float*>(ctrl + addr::kActorRotation - 12) : nullptr;
+    const int cyaw = ctrl ? *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4) : 0;
+    fprintf(f, "%.1f %.1f %.1f %d %d cursor %d %lu ctrl %.1f %.1f %.1f %d\n", loc[0], loc[1], loc[2], rot[1] & 0xFFFF,
+            rot[0] & 0xFFFF, cursorCount, ci.flags, cl ? cl[0] : 0.0f, cl ? cl[1] : 0.0f, cl ? cl[2] : 0.0f, cyaw & 0xFFFF);
     fclose(f);
     MoveFileExW(part.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
 }
@@ -280,8 +340,19 @@ void OnViewPoint(SafetyHookContext& ctx) {
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
     if (!loc || !rot) return;
-    if (g_cfg.debugViewState && g_thisEye == 0) WriteViewState(loc, rot);
-    if (g_thisEye == 0) ApplySnapTurn(hdr, ctx.edi, rot);
+    if (g_cfg.debugViewState && g_thisEye == 0) WriteViewState(loc, rot, ctx.edi);
+    if (g_thisEye == 0) {
+        // Is this the player's own view? In first person the view's yaw is the controller's Rotation.Yaw
+        // (measured equal within 2 units); a menu scene or matinee camera has its own.
+        const auto ctrl = ctx.edi ? *reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor) : 0;
+        if (ctrl) {
+            const int cyaw = *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4);
+            const int diff = static_cast<std::int16_t>(static_cast<std::uint16_t>((cyaw - rot[1]) & 0xFFFF));
+            g_viewIsPlayers = diff >= -2048 && diff <= 2048;
+        }
+        if (!g_cinema) ApplySnapTurn(hdr, ctx.edi, rot);
+    }
+    if (g_cinema) return;  // flat: the game's own camera, untouched; the frame is marked "no view"
 
     const float gameYaw = UnrToRad(rot[1]);
     // Stereo: this eye's own pose (orientation and position); mono: the head.
@@ -486,7 +557,7 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta) {
     EnterCriticalSection(&g_lock);
     // With UE3's render thread the frame being presented was computed one game frame earlier.
     const AppliedFrame& v = (g_current.valid && g_current.thread == GetCurrentThreadId()) ? g_current : g_previous;
-    const bool ok = v.valid;
+    const bool ok = v.valid && !v.cinema;
     if (ok) {
         for (int e = 0; e < 2; ++e) {
             meta.pose[e] = v.pose[e];
