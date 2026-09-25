@@ -457,6 +457,21 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   as in the view hook), and the start with the hand position (GetWeaponStartTraceLocation is script: needs a
   hook on GetPlayerViewPoint or on the script call).
 
+## 5p. Performance and render resolution (2026-09-25, simulator, gameplay, stereo)
+
+| Resolution (per eye) | Game frame (avg / worst) | Frames > 20 ms | Address space free (largest block) |
+|---|---|---|---|
+| 1920×1080 (960×1080) | 5.82 ms / 12.2 ms | 0 of 1720 | 423.9 MB (231.4 MB) |
+| 2880×1620 (1440×1620) | 5.9–6.1 ms / 9.3–22.8 ms | 0–2 per 10 s | 498.8 MB (286.4 MB) |
+
+- The resolution comes from `ResX=/ResY=` on the command line (§5c), read with a first-match Parse on
+  `GetCommandLineW()`. A windowed game can be bigger than the desktop (a 2880×1620 window on a 1080p desktop
+  worked), and the D3D9On12 device and the bridge follow the backbuffer size.
+- `Render.ResX/ResY` swaps the EXE's `GetCommandLineW` import (import table walk, by name) to return
+  `"<exe>" -windowed ResX=W ResY=H <original args>`.
+- The simulator paces xrWaitFrame at its preview window's 60 Hz after the first ~15 s, so XR timing from the
+  simulator isn't representative.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

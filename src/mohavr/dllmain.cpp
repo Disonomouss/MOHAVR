@@ -11,6 +11,7 @@
 #include "config.hpp"
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
+#include "render_res.hpp"
 #include "xinput_hook.hpp"
 
 #define MOHAVR_VERSION "0.6.0-menu"
@@ -49,6 +50,7 @@ void Init(HMODULE self) {
         return;
     }
     if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
+    mohavr::render::InstallResolution(cfg);
     if (cfg.controllers && cfg.bridgeHost) mohavr::xinput::Install();
     MLOG("init done in DllMain (%.1f ms)", mohavr::log::MsSinceStart());
 }

@@ -29,6 +29,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/vr_view.cpp
         src/mohavr/xinput_hook.cpp
         src/mohavr/game_exec.cpp
+        src/mohavr/render_res.cpp
         src/mohavr/dinput8.def
     )
     # Mid-function hooks with register context (safetyhook needs C++23).

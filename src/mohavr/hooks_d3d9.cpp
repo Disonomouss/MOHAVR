@@ -82,7 +82,37 @@ HRESULT STDMETHODCALLTYPE Hook_Reset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETER
     return hr;
 }
 
+// Frame pacing (Present to Present), logged every 10 s: average, worst, and frames over 20 ms.
+void TrackFrameTime() {
+    static LARGE_INTEGER freq{}, last{};
+    static double sumMs = 0.0, worstMs = 0.0, windowStart = 0.0;
+    static long frames = 0, slow = 0;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    if (!freq.QuadPart) {
+        QueryPerformanceFrequency(&freq);
+        last = now;
+        windowStart = static_cast<double>(now.QuadPart) / static_cast<double>(freq.QuadPart);
+        return;
+    }
+    const double ms = 1000.0 * static_cast<double>(now.QuadPart - last.QuadPart) / static_cast<double>(freq.QuadPart);
+    last = now;
+    sumMs += ms;
+    if (ms > worstMs) worstMs = ms;
+    if (ms > 20.0) ++slow;
+    ++frames;
+    const double t = static_cast<double>(now.QuadPart) / static_cast<double>(freq.QuadPart);
+    if (t - windowStart >= 10.0) {
+        MLOG("perf: game frame %.2f ms avg (%.1f fps), worst %.1f ms, %ld of %ld over 20 ms", sumMs / frames,
+             1000.0 * frames / sumMs, worstMs, slow, frames);
+        sumMs = worstMs = 0.0;
+        frames = slow = 0;
+        windowStart = t;
+    }
+}
+
 HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, const RECT* dst, HWND wnd, const RGNDATA* dirty) {
+    TrackFrameTime();
     // Before Present: the finished frame is still in the backbuffer.
     capture::OnPresent(dev);
     bridge::OnPresent(dev);

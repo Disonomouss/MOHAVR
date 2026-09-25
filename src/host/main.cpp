@@ -470,6 +470,23 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         QueryPerformanceCounter(&qpcNow);
         const float dt = static_cast<float>(qpcNow.QuadPart - qpcLast.QuadPart) / static_cast<float>(qpf.QuadPart);
         qpcLast = qpcNow;
+        {
+            // XR frame pacing, logged every 10 s (the runtime paces xrWaitFrame).
+            static double sum = 0.0, worst = 0.0, since = 0.0;
+            static long n = 0, late = 0;
+            const double ms = 1000.0 * dt;
+            sum += ms;
+            worst = ms > worst ? ms : worst;
+            if (ms > 1.5 * 1000.0 / 90.0) ++late;
+            ++n;
+            since += dt;
+            if (since >= 10.0) {
+                MLOG("perf: XR frame %.2f ms avg (%.1f Hz), worst %.1f ms, %ld of %ld late (> 1.5 frames at 90 Hz)", sum / n,
+                     1000.0 * n / sum, worst, late, n);
+                sum = worst = since = 0.0;
+                n = late = 0;
+            }
+        }
         mohavr::host::MenuInput mi;
         {
             const XrActiveActionSet active[] = {{menuSet, XR_NULL_PATH}, {pad.Set(), XR_NULL_PATH}};

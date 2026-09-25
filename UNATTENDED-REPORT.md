@@ -212,9 +212,21 @@ what was learned.
 - [ ] [H] round 5: with `HideViewModel=1`, is the view comfortable? (The arms still show.)
 
 ### I. Performance and resolution — [S]
-- [ ] Log the game's frame time (Present-to-Present) and the XR frame time; report averages in gameplay.
-- [ ] `Render.Scale` option: force a larger backbuffer in `CreateDevice` (for example 1.5× per axis) → measure address
-      space (it must stay > 250 MB free) and frame time. Off by default; the numbers go in ENGINE-NOTES.
+- [x] Frame timing is logged every 10 s: the game's Present-to-Present (`perf: game frame ...` in MOHAVR.log) and
+      the host's XR frame (`perf: XR frame ...` in MOHAVR-host.log). Measured in gameplay, stereo, simulator:
+      **1920×1080: 5.8 ms (172 fps), worst 12 ms, 0 frames over 20 ms**; the XR loop ran at 90 Hz and then locked
+      to exactly 60 Hz (16.68 ms) about 15 s in. That is the simulator pacing to its preview window (60 Hz
+      monitor), not the mod; real pacing is [H].
+- [x] **Render resolution** (`Render.ResX/ResY`, default 0 = the game's own), done differently from the plan: UE3
+      sizes everything from `ResX=/ResY=` on the command line, so the game's import of `GetCommandLineW` (found by
+      walking its import table, verified against kernel32's export) returns the command line with
+      `-windowed ResX= ResY=` placed first (first match wins). Verified: the launch said 1920×1080 → the device
+      was created 2880×1620 and the bridge carried it. **2880×1620 (1.5×, 1440×1620 per eye): 6.0 ms per frame
+      (166 fps), worst 9–23 ms, 498.8 MB of address space free, largest block 286 MB** (at 1080p in the same
+      scene: 423.9 MB free, largest 231 MB; the free total varies with time in the level more than with
+      resolution). The harness's screen matching doesn't work at other resolutions (MOHA's UI is fixed-pixel),
+      so gameplay was reached blind (Enter, Down, Enter).
+- [ ] [H] round 5: try `Render.ResX=2880 Render.ResY=1620`: sharper? Still smooth?
 
 ### J. Robustness — [S]
 - [ ] A 30-minute soak in gameplay (idle + periodic injected movement) → no leaks (vmmap trend), no errors.
