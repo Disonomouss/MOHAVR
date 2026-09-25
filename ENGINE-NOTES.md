@@ -118,8 +118,27 @@ has a separate render thread, which lessons §2 flags for stereo.
 - `capture-window.ps1` (PrintWindow) captures the D3D9 window correctly.
 - `WM_CLOSE` to the main window closes the game cleanly in 0.5 s.
 - **Memory at the main menu:** working set 375 MB, private 579 MB, **virtual 999 MB**, which is
-  half of the 2 GB address space (the exe is not large-address-aware, §2). Gameplay will be
-  higher. This makes the address-space risk concrete for M2.
+  half of the 2 GB address space (the exe is not large-address-aware, §2).
+
+**Measured with the harness (2026-09-25, 5 runs, `tools/harness.ps1`):**
+- Front end: window after about 3 s → main menu after 11–12 s → Enter (Campaign) → Campaign
+  Menu after 2 s (New, **Continue**, Select Campaign, Stats & Medals, Extras, Back; left-aligned,
+  x ≈ 500, y ≈ 221/293/366/439/514/586). New is highlighted by default, and Down moves to
+  Continue. Enter on Continue → black loading screen → **gameplay 11 s later**.
+- **The player's save resumes mid-parachute descent over the flak tower** (mission "Secure
+  Flak Tower"), looking down; it lands about 15 s later ("Botched Landing"). That gives a
+  deterministic camera path every run, useful for M2–M4 comparisons.
+- **Virtual memory in gameplay: 1,324–1,346 MB** (working set about 720 MB, private about
+  915 MB), so **about 700 MB of address space is left** for everything the mod adds (D3D9On12,
+  the OpenXR runtime and loader, eye render targets).
+- **SendInput reaches gameplay:** relative mouse moves (`look.ps1`) turn the camera (frame
+  difference 40–59, against under 5 for a static scene), so injected input reaches the buffered
+  DirectInput mouse. Esc opens the pause menu (tabs Objectives, Options, Save & Load), and Esc
+  again resumes.
+- Loading screens are pure black (mean luminance < 8).
+- Screen checks (`tools/harness-ref/checks.json`): `mainmenu` and `campaignmenu` (title crops on
+  the metal frame) and `pausemenu` (tab bar) separate cleanly (0.0 against 25–43 cross-scores).
+  Gameplay is proven actively: Esc must open the pause menu.
 
 ## 6. Content and UnrealScript
 
@@ -213,8 +232,6 @@ Nothing measured yet. See §9.
 - The render thread is compiled in (`ONETHREAD` exists, §5c). Is it on by default on PC?
 - How the keyboard is read in gameplay: DirectInput buffered, or window messages (§5a).
 - Near planes: the culler's versus the projection's (lessons §2 warns there may be two).
-- A reliable "in gameplay" signal for the harness, since the engine doesn't log (§5c):
-  screenshot heuristics, or a memory read (for example, the local `PlayerController.Pawn` is not
-  none) through Cheat Engine or the mod.
-- Whether `SendInput` reaches gameplay (mouse-look and movement go through DirectInput, §5a).
-- Virtual memory in gameplay, and how much headroom is left below 2 GB.
+- Whether about 700 MB of address-space headroom (§5c) is enough for D3D9On12, the OpenXR runtime
+  and the eye targets. If not, options include making the process large-address-aware in memory
+  (not possible after load), a smaller footprint, or an out-of-process compositor bridge.

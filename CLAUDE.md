@@ -37,6 +37,17 @@ Engine 3 game, 32-bit, Direct3D 9.
     the code.
 11. **Keep copies of every log before relaunching the game.** The game overwrites its log.
 
+## Test harness
+- `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
+  Other actions: `launch`, `to-gameplay`, `ingame`, `wait <check>`, `state`, `key <keys>`,
+  `shot`, `mem`, `quit`, `restore`.
+- It **always** backs up the player's `Config\` and `Saved\` before launching and restores them
+  after quitting (D8). If a run dies, run `tools/harness.ps1 restore` before anything else; the
+  next `launch` refuses to start until then.
+- The engine writes no log, so screen state comes from `tools/screen_match.py` checks in
+  `tools/harness-ref/` (D9). Add a new screen with
+  `python tools/screen_match.py --add NAME shot.png X0 Y0 X1 Y1`, using a static UI area.
+
 ## Environment notes
 - MCP bridges: `ghidra`, `cheatengine`, `x64dbg` (x32dbg for MOHA), `openxr-simulator`. All
   four need their app running.

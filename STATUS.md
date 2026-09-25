@@ -3,8 +3,9 @@
 _Last updated: 2026-09-25_
 
 ## Where things stand
-The toolchain is complete. No mod code exists yet. The current milestone is **M0 (headless
-test rig)**; see PLAN.md.
+**M0 (headless test rig) is done.** `tools/harness.ps1 cycle` goes from a cold start to proven
+gameplay and back in about 30 s, unattended, restoring the player's data. It passed 4 of 4 runs.
+No mod code exists yet. The next milestone is **M1** (PLAN.md).
 
 ## Done
 - RE/VR toolchain mirrored from RDR2VR and verified (tools/SETUP.md):
@@ -36,15 +37,18 @@ test rig)**; see PLAN.md.
   used at the main menu. `tools/userdata.ps1` backs up and restores the player's folder
   (verified byte-identical).
 
+- Harness built and accepted (M0). Measured: gameplay uses about 1,335 MB of virtual memory,
+  leaving **about 700 MB** of the 2 GB. SendInput reaches gameplay. The save resumes
+  mid-parachute over the flak tower, giving a deterministic test scene.
+
 ## Next
-1. The harness (`tools/harness.ps1`): launch, wait for the window and the menu screenshot,
-   walk to gameplay from the save, quit, restore (D8, D9).
-2. Measure virtual memory in gameplay (the 2 GB limit).
+1. M1: an x86 `dinput8.dll` proxy with its own log, build check, and a first verified hook on
+   `Direct3DCreate9`. Deploying it adds a file to the game folder, so it needs the user's OK.
 
 ## Risks
-- **2 GB address space:** the exe is not large-address-aware, and **999 MB of virtual memory is
-  already used at the main menu**. D3D9On12, the OpenXR runtime and extra render targets all
-  share what's left. Measure gameplay usage early.
+- **2 GB address space:** the exe is not large-address-aware, and gameplay already uses
+  **about 1,335 MB of virtual memory, leaving about 700 MB** for D3D9On12, the OpenXR runtime
+  and the eye render targets. Measure what D3D9On12 alone costs as the first step of M2.
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.
 - **Input:** DirectInput 8 may not see SendInput, so harness input could need the mod's own

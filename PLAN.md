@@ -31,11 +31,23 @@ time, or needs the headset.
       the first launch; that's cheaper and definitive.
 
 ### Harness (after the first launch)
-- [ ] `tools/harness.ps1` for MOHA, adapted from RDR2VR's: launch via Steam (app 24840),
-      wait for log lines, quit, kill with a Steam cooldown. Back up and restore the player's
-      whole `Config\` **and** `Saved\` (D8).
-- [x] `tools/sendkey.ps1` (SendInput) reaches the menus. Gameplay input is still to test.
-- [ ] A front-end walk to live gameplay (Campaign → continue from the save), driven by
-      screenshot checks (D9).
-- [ ] Screenshots: `screenshot.ps1` for the game window and `capture-window.ps1` for the
-      simulator preview.
+- [x] `tools/harness.ps1`: launch, wait, key, shot, mem, ingame, to-gameplay, quit (with a kill
+      fallback and Steam cooldown), and restore. The player's Config and Saved are backed up and
+      restored every run (D8).
+- [x] SendInput reaches the menus **and gameplay** (mouse-look turns the camera).
+- [x] Front-end walk to live gameplay from the save, driven by screenshot checks (D9).
+- [x] Screenshots: `capture-window.ps1` (PrintWindow) works for the D3D9 window.
+- [x] **M0 acceptance: 4 of 4 consecutive `cycle` runs OK, about 30 s each.**
+
+## Next: M1 (the mod loads and stands down safely)
+- [ ] CMake project for an x86 `dinput8.dll` proxy that forwards `DirectInput8Create` to the
+      system DLL (D5). Build it with the VS toolchain for x86.
+- [ ] Mod log next to the exe (path from the module handle, not the working directory), plus
+      an ini.
+- [ ] Build check (SHA-256 or size plus timestamp of MOHA.exe, D4); stand down on a mismatch.
+- [ ] Hook library (safetyhook or MinHook, x86 via vcpkg), with prologue verification.
+- [ ] First hook: `Direct3DCreate9` (IAT or inline). Log that it was reached, and confirm the
+      proxy's init runs first.
+- [ ] Deployment script: copy the proxy into `Binaries\`, and remove it again (**needs the
+      user's OK: it adds a file to the game folder**).
+- [ ] Harness: wait on the mod's log lines instead of only screenshots.

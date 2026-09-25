@@ -1,0 +1,32 @@
+{
+  "mainmenu": {
+    "ref": "mainmenu.png",
+    "box": [
+      120,
+      80,
+      360,
+      140
+    ],
+    "thr": 12.0
+  },
+  "campaignmenu": {
+    "ref": "campaignmenu.png",
+    "box": [
+      120,
+      80,
+      420,
+      140
+    ],
+    "thr": 12.0
+  },
+  "pausemenu": {
+    "ref": "pausemenu.png",
+    "box": [
+      230,
+      50,
+      1350,
+      105
+    ],
+    "thr": 14.0
+  }
+}

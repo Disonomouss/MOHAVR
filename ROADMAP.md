@@ -6,7 +6,15 @@ the summary with what was actually done when a milestone closes.
 
 ---
 
-### M0. Headless test rig — [S]
+### M0. Headless test rig — [S] — **DONE 2026-09-25**
+*As built:* `tools/harness.ps1 cycle` backs up the player's Config and Saved, launches through
+Steam windowed at 1920×1080, and detects the main menu and campaign menu by screenshot crops (the
+engine writes no log, D9). It presses Campaign → Continue (verifying the highlight first), proves
+gameplay with an Esc/pause-menu probe, records memory, quits with WM_CLOSE, and restores the user
+data byte-exactly. **Passed 4 of 4 consecutive runs, about 30 s each.** Log-driven waits arrive
+with the mod's own log in M1.
+
+*Original plan:*
 Scripts to kill, deploy, launch (through Steam, keeping the SteamStub wrapper), bring the
 window to the front, drive the front end into live gameplay, inject input, and take
 screenshots (the preview window through PrintWindow). Progress is detected from UE3 log lines,
