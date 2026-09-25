@@ -219,7 +219,7 @@ void OnAfterReset(unsigned width, unsigned height) {
     }
 }
 
-void StartHost(const std::wstring& runtimeJson) {
+void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter) {
     if (g_hdr) return;
     InitializeCriticalSection(&g_rtLock);
     g_rtLockInit = true;
@@ -234,6 +234,8 @@ void StartHost(const std::wstring& runtimeJson) {
     g_hdr->version = shared::kVersion;
     g_hdr->gamePid = pid;
     g_hdr->gameState = static_cast<std::uint32_t>(shared::GameState::Starting);
+    g_hdr->defaultUnitsPerMeter = defaultUnitsPerMeter;
+    g_hdr->unitsPerMeter = 0.0f;  // until the host applies the player's saved value
 
     const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);

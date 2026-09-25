@@ -28,8 +28,11 @@ $docs    = [Environment]::GetFolderPath('MyDocuments')
 $userDir = Join-Path $docs 'EA Games\Medal of Honor Airborne(tm)'
 $parts   = 'Config', 'Saved'
 $root    = Split-Path $PSScriptRoot -Parent
+# The player's MOHAVR settings (world scale etc., written by the in-headset menu) are theirs too.
+$modIni  = Join-Path $env:LOCALAPPDATA 'MOHAVR\MOHAVR.user.ini'
+$modIniB = 'MOHAVR\MOHAVR.user.ini'   # its place inside a backup folder
 
-function Get-Manifest([string] $base) {
+function Get-Manifest([string] $base, [string] $iniPath) {
     $m = @{}
     foreach ($p in $parts) {
         $d = Join-Path $base $p
@@ -39,6 +42,7 @@ function Get-Manifest([string] $base) {
             }
         }
     }
+    if ($iniPath -and (Test-Path $iniPath)) { $m[$modIniB] = (Get-FileHash $iniPath -Algorithm SHA256).Hash }
     $m
 }
 
@@ -52,6 +56,10 @@ switch ($Action) {
             $src = Join-Path $userDir $p
             if (Test-Path $src) { Copy-Item $src (Join-Path $dest $p) -Recurse -Force }
         }
+        if (Test-Path $modIni) {
+            New-Item -ItemType Directory -Force (Join-Path $dest 'MOHAVR') | Out-Null
+            Copy-Item $modIni (Join-Path $dest $modIniB) -Force
+        }
         $n = (Get-ChildItem $dest -Recurse -File).Count
         Write-Host "backed up $n files -> $dest"
         $dest
@@ -59,7 +67,7 @@ switch ($Action) {
 
     'diff' {
         if (-not $From) { throw '-From <backup folder> is required' }
-        $a = Get-Manifest $From; $b = Get-Manifest $userDir
+        $a = Get-Manifest $From (Join-Path $From $modIniB); $b = Get-Manifest $userDir $modIni
         foreach ($k in ($a.Keys + $b.Keys | Sort-Object -Unique)) {
             if (-not $b.ContainsKey($k))      { "removed  $k" }
             elseif (-not $a.ContainsKey($k))  { "added    $k" }
@@ -81,6 +89,15 @@ switch ($Action) {
                 Where-Object { -not $keep.ContainsKey($_.FullName.Substring($dst.Length)) } |
                 ForEach-Object { Write-Host "  removing added file $($_.FullName)"; Remove-Item -LiteralPath $_.FullName -Force }
             Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+        }
+        # MOHAVR.user.ini: put the player's back, or remove one a test created.
+        $bIni = Join-Path $From $modIniB
+        if (Test-Path $bIni) {
+            New-Item -ItemType Directory -Force (Split-Path $modIni) | Out-Null
+            Copy-Item $bIni $modIni -Force
+        } elseif (Test-Path $modIni) {
+            Write-Host "  removing MOHAVR.user.ini created during the test"
+            Remove-Item -LiteralPath $modIni -Force
         }
         $left = @(& $PSCommandPath diff -From $From)
         if ($left.Count) { $left; throw 'restore incomplete' }

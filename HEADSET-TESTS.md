@@ -87,7 +87,31 @@ the engine's AllocateViewState, measured 2.79 → 1.04 (ENGINE-NOTES §5j). The 
 (controller weapon). The HUD is expected until M5 (HUD layer). The origin was again first taken from VD's
 placeholder, which VD flags as tracked; it recentred 20 ms later, and identity-orientation poses are now ignored.
 
-**Attempt 2:** deployed with the flicker fix (v0.5.1). Focus: is the right eye stable now, and the world size.
+**Attempt 2 (~20:40):** deployed with the flicker fix (v0.5.1).
+**Answers:** **the right eye is good now** · height is good · **world scale is too big** · the player asks for an
+in-game menu to adjust it.
+**Log:** the origin was set from a real pose on the first try, the right-eye view state was allocated, and an
+alt-tab at ~60 s recovered (Reset → S_OK, frames flowing again).
+**Verdict:** the flicker is fixed; stereo is working. Scale: the player tunes it with the new in-headset menu (round 4).
+
+---
+
+## Round 4: prepared 2026-09-25, in-headset menu (world scale)
+**Changed:** an in-headset menu, drawn by MOHAVR-host, not the game. **Left controller menu button (≡)** opens
+and closes it; **left stick** up/down chooses and left/right adjusts; **trigger** (or A) selects; B closes.
+Items: **World scale** (live: higher = smaller world, 5 per step), Reset to default (50), Close. Your value
+is saved to `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and used next time.
+(Also: stereo eye separation no longer depends on the head origin being set.)
+
+**How to try it:** Claude has deployed (stereo + head tracking + host). Launch, Campaign → Continue, open the
+menu, and raise World scale step by step until soldiers and doors look right. Close the menu, play a
+minute, adjust again if needed. Quit and tell Claude the value you settled on.
+
+**Questions:**
+1. Did the menu open with the left menu button, and do the stick and trigger work? (yes/no)
+2. Is the menu text readable, and is the panel at a comfortable distance and size? (describe)
+3. Which world scale looks right? (number)
+4. At that scale, how are your height and the gun (still doubled until M7)? (describe)
 
 **Answers:**
 

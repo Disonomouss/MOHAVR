@@ -114,8 +114,16 @@ float g_ox = 0, g_oy = 0, g_oz = 0;
 void UpdateOrigin(const shared::Header* hdr, const shared::Pose& head) {
     if (!(hdr->viewValid & 2u)) return;  // placeholder pose, not tracked yet
     // Virtual Desktop flags its pre-tracking placeholder as tracked (round 3: identity orientation
-    // at y = -1.21). An exactly-identity orientation never happens on a real head: skip it.
-    if (head.qx == 0.0f && head.qy == 0.0f && head.qz == 0.0f && head.qw == 1.0f) return;
+    // at y = -1.21, for ~20 ms). A real head is never exactly identity -- but the simulator's default
+    // pose is, and stays so. So an identity pose only counts once it has persisted for 1 s.
+    static DWORD identitySince = 0;
+    if (head.qx == 0.0f && head.qy == 0.0f && head.qz == 0.0f && head.qw == 1.0f) {
+        const DWORD now = GetTickCount();
+        if (!identitySince) identitySince = now ? now : 1;
+        if (now - identitySince < 1000) return;
+    } else {
+        identitySince = 0;
+    }
     const float dx = head.px - g_ox, dy = head.py - g_oy, dz = head.pz - g_oz;
     // More than 1 m from the origin isn't plausible for a seated/standing player: the origin was
     // taken before the headset was on (or the play space moved) -> recentre.
@@ -234,10 +242,26 @@ void OnViewPoint(SafetyHookContext& ctx) {
     rot[1] = RadToUnr(yaw);
     rot[2] = RadToUnr(roll);
 
-    // Translation relative to the origin; in stereo the eye position carries the IPD offset.
-    if (g_cfg.headPosition && g_haveOrigin) {
-        const Vec3 d = YawRotate(XrToUe(p.px - g_ox, p.py - g_oy, p.pz - g_oz), gameYaw);
-        const float s = g_cfg.unitsPerMeter;
+    // Translation: head movement relative to the origin (HeadPosition), and in stereo the eye's own
+    // offset from the head (half the IPD) -- the eye separation must not depend on the origin.
+    //   position tracking on + origin known: p - origin (covers both)
+    //   otherwise, stereo:                   p - head   (eye separation only)
+    float ox = 0.0f, oy = 0.0f, oz = 0.0f;
+    bool translate = true;
+    if (g_cfg.headPosition && g_haveOrigin) { ox = g_ox; oy = g_oy; oz = g_oz; }
+    else if (g_thisStereo) { ox = head.px; oy = head.py; oz = head.pz; }
+    else translate = false;
+    if (translate) {
+        const Vec3 d = YawRotate(XrToUe(p.px - ox, p.py - oy, p.pz - oz), gameYaw);
+        // World scale: live from the host's menu (the player's saved setting) once set, else the ini.
+        // It scales both head translation and, in stereo, the eye separation -> perceived world size.
+        const float live = hdr->unitsPerMeter;
+        const float s = (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter;
+        static float lastLogged = 0.0f;
+        if (s != lastLogged) {
+            MLOG("view: world scale %.1f units per metre%s", s, (live > 1.0f && live < 1000.0f) ? " (from the host menu/settings)" : " (ini)");
+            lastLogged = s;
+        }
         loc[0] += d.x * s;
         loc[1] += d.y * s;
         loc[2] += d.z * s;

@@ -51,6 +51,15 @@ Engine 3 game, 32-bit, Direct3D 9.
 - Engine addresses live only in `src/mohavr/addresses.hpp`; every patch goes through
   `src/mohavr/patch.cpp` (verify, then write).
 
+## In-headset menu (host)
+- `src/host/menu.cpp`: Dear ImGui into its own quad layer. Left Touch menu button toggles; the left
+  stick navigates and adjusts; the trigger or A selects. The first item is World Scale, live to the
+  game via shared block v4 (`unitsPerMeter`).
+- **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`. `tools/userdata.ps1`
+  backs it up and restores it with the MOHA user folder (a test that creates it has it removed).
+- Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`
+  (one command per call, about 0.3 s apart).
+
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
   Other actions: `launch`, `to-gameplay`, `ingame`, `wait <check>`, `state`, `key <keys>`,

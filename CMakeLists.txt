@@ -42,11 +42,14 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 else()
     add_executable(mohavr_host WIN32
         src/host/main.cpp
+        src/host/menu.cpp
         src/mohavr/log.cpp
     )
+    # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).
+    find_package(imgui CONFIG REQUIRED)
     set_target_properties(mohavr_host PROPERTIES OUTPUT_NAME MOHAVR-host)
     target_compile_features(mohavr_host PRIVATE cxx_std_20)
     target_compile_definitions(mohavr_host PRIVATE ${MOHAVR_COMMON_DEFS})
     target_compile_options(mohavr_host PRIVATE ${MOHAVR_COMMON_OPTS})
-    target_link_libraries(mohavr_host PRIVATE OpenXR::openxr_loader OpenXR::headers d3d11 dxgi shell32)
+    target_link_libraries(mohavr_host PRIVATE OpenXR::openxr_loader OpenXR::headers imgui::imgui d3d11 dxgi shell32)
 endif()

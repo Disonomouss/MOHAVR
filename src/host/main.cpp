@@ -25,6 +25,7 @@
 
 #include "../common/shared_frame.hpp"
 #include "../mohavr/log.hpp"
+#include "menu.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -303,6 +304,71 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     XR_OK(xrEnumerateSwapchainImages(swapchain, imgCount, &imgCount, reinterpret_cast<XrSwapchainImageBaseHeader*>(images.data())),
           "xrEnumerateSwapchainImages");
     MLOG("host: quad swapchain %ux%u format %lld, %u images", width, height, fmt, imgCount);
+
+    // --- in-headset menu + its controller actions ------------------------------------------------
+    mohavr::host::Menu menu;
+    const bool menuOk = menu.Init(dev, ctx, session, fmt, g_hdr);
+    if (menuOk) menu.ApplySavedSettings();
+
+    XrActionSet menuSet = XR_NULL_HANDLE;
+    XrAction aToggle = XR_NULL_HANDLE, aStick = XR_NULL_HANDLE, aSelect = XR_NULL_HANDLE, aBack = XR_NULL_HANDLE;
+    {
+        XrActionSetCreateInfo asci{XR_TYPE_ACTION_SET_CREATE_INFO};
+        strcpy_s(asci.actionSetName, "mohavr_menu");
+        strcpy_s(asci.localizedActionSetName, "MOHAVR menu");
+        XR_OK(xrCreateActionSet(instance, &asci, &menuSet), "xrCreateActionSet");
+        auto make = [&](XrAction& a, const char* name, const char* loc, XrActionType type) {
+            XrActionCreateInfo aci{XR_TYPE_ACTION_CREATE_INFO};
+            strcpy_s(aci.actionName, name);
+            strcpy_s(aci.localizedActionName, loc);
+            aci.actionType = type;
+            return xrCreateAction(menuSet, &aci, &a);
+        };
+        XR_OK(make(aToggle, "menu_toggle", "Open/close menu", XR_ACTION_TYPE_BOOLEAN_INPUT), "xrCreateAction(toggle)");
+        XR_OK(make(aStick, "menu_navigate", "Navigate menu", XR_ACTION_TYPE_VECTOR2F_INPUT), "xrCreateAction(stick)");
+        XR_OK(make(aSelect, "menu_select", "Select", XR_ACTION_TYPE_BOOLEAN_INPUT), "xrCreateAction(select)");
+        XR_OK(make(aBack, "menu_back", "Back", XR_ACTION_TYPE_BOOLEAN_INPUT), "xrCreateAction(back)");
+        auto path = [&](const char* s) { XrPath p = XR_NULL_PATH; xrStringToPath(instance, s, &p); return p; };
+        // Quest (Touch): left menu button toggles, left stick navigates, either trigger or A selects, B backs out.
+        const XrActionSuggestedBinding touch[] = {
+            {aToggle, path("/user/hand/left/input/menu/click")},
+            {aStick, path("/user/hand/left/input/thumbstick")},
+            {aSelect, path("/user/hand/left/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/a/click")},
+            {aBack, path("/user/hand/right/input/b/click")},
+        };
+        XrInteractionProfileSuggestedBinding sb{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
+        sb.interactionProfile = path("/interaction_profiles/oculus/touch_controller");
+        sb.suggestedBindings = touch;
+        sb.countSuggestedBindings = static_cast<uint32_t>(std::size(touch));
+        if (XR_FAILED(xrSuggestInteractionProfileBindings(instance, &sb))) MLOG("host: Touch bindings not accepted");
+        const XrActionSuggestedBinding simple[] = {
+            {aToggle, path("/user/hand/left/input/menu/click")},
+            {aSelect, path("/user/hand/right/input/select/click")},
+        };
+        sb.interactionProfile = path("/interaction_profiles/khr/simple_controller");
+        sb.suggestedBindings = simple;
+        sb.countSuggestedBindings = static_cast<uint32_t>(std::size(simple));
+        if (XR_FAILED(xrSuggestInteractionProfileBindings(instance, &sb))) MLOG("host: simple-controller bindings not accepted");
+        XrSessionActionSetsAttachInfo attach{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
+        attach.countActionSets = 1;
+        attach.actionSets = &menuSet;
+        XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
+        MLOG("host: menu actions attached (Touch + simple controller)");
+    }
+    // Test channel: %TEMP%\MOHAVR\host_cmd.txt, one command per line (toggle/up/down/left/right/select/back),
+    // consumed and deleted each frame -- the simulator can't press controller buttons.
+    std::wstring cmdPath;
+    {
+        wchar_t tmp[MAX_PATH];
+        const DWORD n = GetTempPathW(MAX_PATH, tmp);
+        cmdPath = std::wstring(tmp, n) + L"MOHAVR\\host_cmd.txt";
+    }
+    LARGE_INTEGER qpf, qpcLast;
+    QueryPerformanceFrequency(&qpf);
+    QueryPerformanceCounter(&qpcLast);
+    float stickHeld[4] = {0, 0, 0, 0};  // up, down, left, right: seconds held (auto-repeat)
     SetState(HostState::Running, "session created");
 
     // On-request capture of what the host received (the harness's view of the VR side).
@@ -351,7 +417,70 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
         XR_OK(xrWaitFrame(session, nullptr, &fs), "xrWaitFrame");
         XR_OK(xrBeginFrame(session, nullptr), "xrBeginFrame");
 
+        // --- menu input: controllers (when focused) + the test command file ---------------------
+        LARGE_INTEGER qpcNow;
+        QueryPerformanceCounter(&qpcNow);
+        const float dt = static_cast<float>(qpcNow.QuadPart - qpcLast.QuadPart) / static_cast<float>(qpf.QuadPart);
+        qpcLast = qpcNow;
+        mohavr::host::MenuInput mi;
+        {
+            XrActiveActionSet active{menuSet, XR_NULL_PATH};
+            XrActionsSyncInfo si{XR_TYPE_ACTIONS_SYNC_INFO};
+            si.countActiveActionSets = 1;
+            si.activeActionSets = &active;
+            if (xrSyncActions(session, &si) == XR_SUCCESS) {
+                auto pressed = [&](XrAction a) {
+                    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+                    gi.action = a;
+                    XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
+                    return XR_SUCCEEDED(xrGetActionStateBoolean(session, &gi, &b)) && b.isActive && b.changedSinceLastSync &&
+                           b.currentState;
+                };
+                mi.toggle = pressed(aToggle);
+                mi.select = pressed(aSelect);
+                mi.back = pressed(aBack);
+                XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+                gi.action = aStick;
+                XrActionStateVector2f v{XR_TYPE_ACTION_STATE_VECTOR2F};
+                if (XR_SUCCEEDED(xrGetActionStateVector2f(session, &gi, &v)) && v.isActive) {
+                    // Deflection -> presses: immediately, then repeat after 0.4 s every 0.12 s.
+                    const bool dir[4] = {v.currentState.y > 0.6f, v.currentState.y < -0.6f, v.currentState.x < -0.6f,
+                                         v.currentState.x > 0.6f};
+                    bool* out[4] = {&mi.up, &mi.down, &mi.left, &mi.right};
+                    for (int d = 0; d < 4; ++d) {
+                        if (!dir[d]) { stickHeld[d] = 0.0f; continue; }
+                        const float before = stickHeld[d];
+                        stickHeld[d] += dt;
+                        if (before == 0.0f) *out[d] = true;
+                        else if (stickHeld[d] > 0.4f && std::fmod(stickHeld[d] - 0.4f, 0.12f) < dt) *out[d] = true;
+                    }
+                }
+            }
+        }
+        if (GetFileAttributesW(cmdPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            FILE* cf = nullptr;
+            if (_wfopen_s(&cf, cmdPath.c_str(), L"r") == 0 && cf) {
+                char line[64];
+                while (fgets(line, sizeof(line), cf)) {
+                    const std::string c(line, strcspn(line, "\r\n "));
+                    if (c == "toggle") mi.toggle = true;
+                    else if (c == "up") mi.up = true;
+                    else if (c == "down") mi.down = true;
+                    else if (c == "left") mi.left = true;
+                    else if (c == "right") mi.right = true;
+                    else if (c == "select") mi.select = true;
+                    else if (c == "back") mi.back = true;
+                    if (!c.empty()) MLOG("host: test command '%s'", c.c_str());
+                }
+                fclose(cf);
+            }
+            DeleteFileW(cmdPath.c_str());
+        }
+
         // Head pose + eye views at the predicted display time -> the game (seqlock, M3).
+        XrPosef menuHead{};
+        menuHead.orientation.w = 1.0f;
+        bool menuHeadOk = false;
         {
             XrSpaceLocation headLoc{XR_TYPE_SPACE_LOCATION};
             XrViewLocateInfo vli{XR_TYPE_VIEW_LOCATE_INFO};
@@ -365,6 +494,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                                 (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
             const bool viewsOk = XR_SUCCEEDED(xrLocateViews(session, &vli, &vs, 2, &viewCount, views)) && viewCount == 2 &&
                                  (vs.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+            if (headOk) {
+                menuHead = headLoc.pose;
+                menuHeadOk = true;
+            }
             if (headOk && viewsOk) {
                 auto toPose = [](const XrPosef& p) {
                     return mohavr::shared::Pose{p.position.x, p.position.y, p.position.z,
@@ -399,6 +532,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                 }
             }
         }
+
+        if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
 
         // Take the newest game frame, if there is one we haven't taken (protocol: shared_frame.hpp).
         const std::uint64_t f = static_cast<std::uint64_t>(
@@ -439,7 +574,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
         XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
         XrCompositionLayerProjectionView pviews[2] = {{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
                                                       {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
-        const XrCompositionLayerBaseHeader* layers[1];
+        const XrCompositionLayerBaseHeader* layers[2];
         uint32_t layerCount = 0;
         if (fs.shouldRender) {
             uint32_t idx = 0;
@@ -493,6 +628,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
             }
             layerCount = 1;
+            // The menu panel on top of the game when open.
+            if (menuOk) {
+                if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
+            }
         }
         XrFrameEndInfo fe{XR_TYPE_FRAME_END_INFO};
         fe.displayTime = fs.predictedDisplayTime;

@@ -18,7 +18,8 @@ namespace mohavr::bridge {
 shared::Header* SharedHeader();
 
 // Creates the shared-memory block and launches MOHAVR-host.exe from this DLL's folder.
-void StartHost(const std::wstring& runtimeJson);
+// `defaultUnitsPerMeter` (the ini value) seeds the host's World Scale setting.
+void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter);
 
 // Per Present, before the real Present: lazy setup, then publish the frame if the host is ready
 // for one. Never blocks on the CPU.

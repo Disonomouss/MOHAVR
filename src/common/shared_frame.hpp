@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 3;           // 2: views + per-slot render pose (M3); 3: per-eye meta (M4)
+inline constexpr std::uint32_t kVersion = 4;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -93,6 +93,13 @@ struct Header {
 
     // --- v2: per-slot render metadata, game -> host (written before publishedFrame) ------------
     SlotMeta               slotMeta[kRing];
+
+    // --- v4: live settings (the host's in-headset menu -> game) --------------------------------
+    // The game writes its ini defaults once at start; the host overwrites the live values from
+    // the player's saved settings and the menu. 0 = not set (the game keeps its own value).
+    float                  defaultUnitsPerMeter;   // game -> host: the shipped/ini default
+    volatile float         unitsPerMeter;          // host -> game: live world scale (Unreal units per metre)
+    float                  reservedSettings[6];
 };
 #pragma pack(pop)
 
@@ -102,7 +109,8 @@ static_assert(offsetof(Header, ackFrame) == 96, "shared::Header layout must matc
 static_assert(offsetof(Header, viewSeq) == 368, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, viewDisplayTime) == 376, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, slotMeta) == 500, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 792, "shared::Header layout must match between x86 and x64");  // 500 + 3*96 = 788, padded to 8
+static_assert(offsetof(Header, defaultUnitsPerMeter) == 788, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 824, "shared::Header layout must match between x86 and x64");  // 788 + 4 + 4 + 24 = 820, padded to 8
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {
