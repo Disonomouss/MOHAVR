@@ -60,9 +60,69 @@ function Get-Moha { Get-Process MOHA -ErrorAction SilentlyContinue | Select-Obje
 function Save-State($s) { $s | ConvertTo-Json | Set-Content -Encoding utf8 $StatePath }
 function Load-State { if (Test-Path $StatePath) { Get-Content $StatePath -Raw | ConvertFrom-Json } }
 
+if (-not ('MohaHarness.Client' -as [type])) {
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Runtime.InteropServices;
+namespace MohaHarness {
+public static class Client {
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int L, T, R, B; }
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+    [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr h, ref POINT p);
+    // Copies the window's client area from the SCREEN (the window must be in front). Needed when
+    // the game presents through DXGI (D3D9On12): PrintWindow then returns a blank white image.
+    [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    public static void Save(IntPtr hwnd, string path) {
+        SetProcessDPIAware();   // physical pixels, whatever the desktop scaling is
+        RECT r; GetClientRect(hwnd, out r);
+        POINT p = new POINT(); ClientToScreen(hwnd, ref p);
+        using (var bmp = new Bitmap(r.R - r.L, r.B - r.T))
+        using (var g = Graphics.FromImage(bmp)) {
+            g.CopyFromScreen(p.X, p.Y, 0, 0, bmp.Size);
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+    }
+}}
+'@
+}
+
+$ModCapture = Join-Path $env:TEMP 'MOHAVR\capture.bmp'
+
+# Preferred when the mod is loaded: it copies the backbuffer itself (src/mohavr/frame_capture),
+# which works even when the window shows nothing (D3D9On12, VR). Returns $false if unavailable.
+function Get-ModCapture([string] $out) {
+    try { $ev = [System.Threading.EventWaitHandle]::OpenExisting('Local\MOHAVR_Capture') } catch { return $false }
+    $before = if (Test-Path $ModCapture) { (Get-Item $ModCapture).LastWriteTimeUtc } else { [datetime]::MinValue }
+    [void]$ev.Set(); $ev.Dispose()
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt 3) {
+        if ((Test-Path $ModCapture) -and (Get-Item $ModCapture).LastWriteTimeUtc -gt $before) {
+            python -c "from PIL import Image; Image.open(r'$ModCapture').convert('RGB').save(r'$out')"
+            return $true
+        }
+        Start-Sleep -Milliseconds 50
+    }
+    return $false
+}
+
 function Take-Shot([string] $name = 'shot') {
     $out = Join-Path $Shots ('{0}-{1}.png' -f (Get-Date -Format 'HHmmss'), $name)
+    if (Get-ModCapture $out) { return $out }
     & (Join-Path $PSScriptRoot 'capture-window.ps1') -Title 'Medal of Honor Airborne' -Out $out -ClientOnly 6>$null | Out-Null
+    # A uniform image means PrintWindow could not read the swapchain (DXGI flip under 9On12):
+    # fall back to the on-screen pixels of the client area.
+    $std = [double](python -c "from PIL import Image; import numpy as np; print(np.asarray(Image.open(r'$out').convert('L'),dtype=float).std())")
+    if ($std -lt 0.5) {
+        $p = Get-Moha
+        if ($p) {
+            & (Join-Path $PSScriptRoot 'focus-game.ps1') 6>$null | Out-Null
+            Start-Sleep -Milliseconds 150
+            $p.Refresh()
+            [MohaHarness.Client]::Save($p.MainWindowHandle, $out)
+        }
+    }
     $out
 }
 

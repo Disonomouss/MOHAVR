@@ -47,14 +47,21 @@ address-space budget for D3D9On12.
   730 ms later. The stand-down test and the offline smoke test pass, and undeploy restores the
   folder baseline.
 
+- M2 started. **D3D9On12 works** (the game renders correctly through it) and costs +137 MB of
+  address space, leaving 555 MB free with a largest block of 331 MB, enough for the OpenXR side.
+  Device and Present hooks are in; the game presents from its render thread at over 1,000 fps in
+  menus. The mod captures the backbuffer for the harness. Open issue: under 9On12 the game's
+  window stays white (not blocking).
+
 ## Next
-1. M2: measure `Direct3DCreate9On12`'s address-space cost in gameplay, then CreateDevice and the
-   OpenXR bridge (PLAN.md).
+1. M2: an OpenXR session in the process (x86 loader, D3D11), then copy the frame to a quad
+   (PLAN.md).
 
 ## Risks
-- **2 GB address space:** the exe is not large-address-aware, and gameplay already uses
-  **about 1,335 MB of virtual memory, leaving about 700 MB** for D3D9On12, the OpenXR runtime
-  and the eye render targets. Measure what D3D9On12 alone costs as the first step of M2.
+- **2 GB address space:** with D3D9On12, gameplay uses 1,493 MB, leaving **555 MB free (largest
+  block 331 MB)** for the OpenXR loader and runtime, a D3D11 device and the swapchains. Re-measure
+  after each addition with `tools/measure-variant.ps1`.
+- **The desktop window under 9On12 is white.** A mirror window must come from the mod.
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.
 - **Input:** DirectInput 8 may not see SendInput, so harness input could need the mod's own

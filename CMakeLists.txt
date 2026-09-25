@@ -16,6 +16,7 @@ add_library(mohavr SHARED
     src/mohavr/build_check.cpp
     src/mohavr/proxy_dinput8.cpp
     src/mohavr/hooks_d3d9.cpp
+    src/mohavr/frame_capture.cpp
     src/mohavr/patch.cpp
     src/mohavr/dinput8.def
 )

@@ -154,6 +154,42 @@ From `MOHAVR.log`, 2 runs:
 - The proxy costs about 1 MB of virtual memory (1,336–1,337 MB in gameplay, against 1,335 MB
   without it).
 
+## 5e. Presentation and D3D9On12 (measured in M2, 2026-09-25)
+
+**The present path** (`MOHAVR.log`, both variants):
+- The game presents with **`IDirect3DDevice9::Present`** (vtable slot 17) on the device's
+  implicit swap chain. It never calls `CreateAdditionalSwapChain`.
+- **Present runs on a separate render thread**, not the main thread: UE3's render thread (the
+  `ONETHREAD` switch, §5c). `CreateDevice` itself runs on the main thread.
+- **The menus are uncapped:** about 1,300 presents/s in plain D3D9 and about 1,000/s under
+  9On12, using about 2 CPU cores.
+- **The Steam overlay** (`gameoverlayrenderer.dll`) has already hooked `IDirect3D9::CreateDevice`
+  in plain D3D9 (vtable slot 16 points into it). Under 9On12 it doesn't hook. MOHAVR's hooks chain
+  on top of whatever is there.
+- `CreateDevice` succeeds the first time in both variants, with the parameters from §5b:
+  1920×1080, fmt 21, 1 backbuffer, no MSAA, COPY, windowed, no auto depth, lockable,
+  IMMEDIATE, flags 0x142.
+
+**D3D9On12** (`Bridge.D3D9On12=1`: `Direct3DCreate9On12` with no D3D12 device supplied):
+- **Works:** `CreateDevice` returns `S_OK`, the game renders correctly into the backbuffer
+  (verified by the mod's backbuffer capture in gameplay), and the harness cycle completes.
+- **The game window stays white:** every Present returns `S_OK`, but nothing reaches the window.
+  Neither PrintWindow nor an on-screen copy shows the frame. The game is not hung. Cause not yet
+  investigated (candidates: COPY swap effect or lockable backbuffer under 9On12, window/GDI
+  interaction). It doesn't block VR (the frame goes to the headset), but a desktop mirror will
+  have to come from the mod.
+- **Address-space cost in gameplay** (`tools/vmmap.py`, same scene, 20 s after landing):
+
+| | used | free | largest free blocks |
+|---|---|---|---|
+| plain D3D9 (mod loaded) | 1,356 MB | 692 MB | 496, 134, 8.6 MB |
+| D3D9On12 | 1,493 MB | 555 MB | **331**, 134, 32 MB |
+| **change** | **+137 MB** | −137 MB | largest −165 MB |
+
+  The NVIDIA D3D12 user-mode driver `nvwgf2um.dll` (58 MB) replaces `nvd3dum.dll` (44 MB), plus
+  `D3D12Core.dll` and more mapped and private memory. `nvgpucomp32.dll` (85 MB) is loaded in both.
+  A D3D11 device for the OpenXR session would use the same `nvwgf2um.dll` that's already loaded.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -52,12 +52,19 @@ time, or needs the headset.
 - [x] Harness `wait-log`, and every run's mod log is kept in `logs/modlogs/`.
 
 ## Next: M2 (D3D9 → OpenXR bridge, mono)
-- [ ] **Address-space budget first:** in the hook, create the D3D9 object through
-      `Direct3DCreate9On12` instead (behind an ini switch) and measure gameplay virtual memory
-      against the ~1,335 MB baseline. It must leave room for the OpenXR runtime plus swapchains.
+- [x] **Address-space budget:** `Bridge.D3D9On12=1` works and costs +137 MB, leaving 555 MB
+      free with a largest block of 331 MB (ENGINE-NOTES §5e, `tools/vmmap.py`,
+      `tools/measure-variant.ps1`). Enough to proceed.
+- [x] Device hooks for diagnosis: `IDirect3D9::CreateDevice` (slot 16), `Present` (17),
+      `CreateAdditionalSwapChain` (13), all as verified vtable swaps. The game presents via the
+      device on its render thread.
+- [x] Mod-side backbuffer capture (`frame_capture.cpp`, event `Local\MOHAVR_Capture` →
+      `%TEMP%\MOHAVR\capture.bmp`). The harness prefers it, so screen checks work under 9On12.
+- [ ] Time-box (≤ 2 h): why the window stays white under 9On12 (ENGINE-NOTES §5e). Not blocking.
 - [ ] Hook library for x86 (vcpkg `safetyhook` or `minhook`, x86-windows) with prologue checks.
-- [ ] Hook `IDirect3D9::CreateDevice` (vtable) to force a windowed, headset-sized backbuffer
-      (vsync is already off in windowed mode, ENGINE-NOTES §5b).
+      Not needed yet: vtable swaps have covered everything so far.
+- [ ] `CreateDevice`: force a windowed, headset-sized backbuffer (vsync is already off in
+      windowed mode, ENGINE-NOTES §5b).
 - [ ] OpenXR in the process: the x86 loader (vcpkg `openxr-loader:x86-windows`), plus a
       session on a D3D11 device run through `run-with-openxr-sim.ps1` (x86 simulator).
 - [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
