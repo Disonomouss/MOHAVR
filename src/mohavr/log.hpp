@@ -6,8 +6,8 @@
 
 namespace mohavr::log {
 
-// Opens <dir>\MOHAVR.log, keeping the previous run as MOHAVR.prev.log.
-void Open(const std::wstring& dir);
+// Opens <dir>\<name>.log, keeping the previous run as <name>.prev.log.
+void Open(const std::wstring& dir, const std::wstring& name = L"MOHAVR");
 void Line(const char* fmt, ...);
 double MsSinceStart();
 

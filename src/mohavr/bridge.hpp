@@ -1,0 +1,22 @@
+// Game side of the out-of-process OpenXR bridge (D10). Requires Bridge.D3D9On12=1: every D3D9
+// resource is then a D3D12 resource, so the finished frame can be copied into shared D3D12
+// textures without leaving the GPU. MOHAVR-host.exe (x64) owns OpenXR and reads them.
+//
+// Threads: StartHost() runs on the main thread (from the CreateDevice hook); OnPresent() on the
+// game's render thread. The game's D3D9 device is not multithreaded (flags 0x142), so all D3D9
+// calls happen in OnPresent.
+#pragma once
+#include <string>
+
+struct IDirect3DDevice9;
+
+namespace mohavr::bridge {
+
+// Creates the shared-memory block and launches MOHAVR-host.exe from this DLL's folder.
+void StartHost(const std::wstring& runtimeJson);
+
+// Per Present, before the real Present: lazy setup, then publish the frame if the host is ready
+// for one. Never blocks on the CPU.
+void OnPresent(IDirect3DDevice9* device);
+
+}  // namespace mohavr::bridge

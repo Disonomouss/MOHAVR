@@ -209,6 +209,32 @@ adapter, one 1920×1080 quad swapchain; runtime = the 32-bit OpenXR Simulator):
   point at it. Find the game window by class `LaunchUnrealUWindowsClient` (the harness and
   `focus-game.ps1` now do).
 
+## 5f. The out-of-process bridge (D10, measured 2026-09-25)
+
+`Bridge.D3D9On12=1` + `Bridge.Host=1`, host runtime = the x64 OpenXR Simulator.
+- **Game side** (render thread, first Present): `IDirect3DDevice9On12::GetD3D12Device`, then its
+  own DIRECT queue, 3 allocators, a list, 2 shared fences, a 3-slot ring of shared
+  `B8G8R8A8_UNORM` textures (`ALLOW_RENDER_TARGET | ALLOW_SIMULTANEOUS_ACCESS`, `HEAP_FLAG_SHARED`)
+  and a D3D9 `A8R8G8B8` render target. Ready about 2.4 s into the process.
+- Per published frame: `StretchRect` backbuffer → our RT, `UnwrapUnderlyingResource` onto our
+  queue, `CopyResource` into the slot (**no explicit barriers needed**: the copy works from the
+  unwrapped state), signal the game fence, `ReturnUnderlyingResource` with that fence.
+- **Host side** (x64): handles arrive through `DuplicateHandle` from the game (the values are in
+  the shared block), opened with `ID3D11Device1::OpenSharedResource1` and
+  `ID3D11Device5::OpenSharedFence`. Same GPU LUID (`0000AB90`) for the game and the runtime.
+- **Rate:** frames go 1:1 with the host's XR loop (900 published = 900 received in 15 s, 60 Hz in
+  the simulator). The game skips publishing while the host hasn't acknowledged, never blocks,
+  and still runs uncapped.
+- **Verified content:** the host's readback of received frames gives mean luma 72.6 (main menu)
+  and 56.7. The simulator preview shows the gameplay frame on the quad in both eyes.
+- **Game address space in gameplay:** used 1,543 MB, **free 505 MB, largest block 312 MB**,
+  against 1,493/555/331 MB for 9On12 alone. The bridge costs the game about 50 MB, and OpenXR
+  costs it nothing. (In-process OpenXR had left 297/132 MB.)
+- **Lifecycle:** the host exits by itself when the game exits ("the game exited -- shutting
+  down", exit 0). If the host is missing or fails, the game logs it and runs without VR.
+- The Steam overlay injects into `MOHAVR-host.exe` too (its toast appears over the simulator
+  preview), since the host is a child of a Steam-launched game. Harmless so far.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

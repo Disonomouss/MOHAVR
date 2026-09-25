@@ -15,13 +15,13 @@ LARGE_INTEGER    g_freq{};
 
 }  // namespace
 
-void Open(const std::wstring& dir) {
+void Open(const std::wstring& dir, const std::wstring& name) {
     InitializeCriticalSection(&g_lock);
     QueryPerformanceFrequency(&g_freq);
     QueryPerformanceCounter(&g_t0);
 
-    const std::wstring path = dir + L"\\MOHAVR.log";
-    const std::wstring prev = dir + L"\\MOHAVR.prev.log";
+    const std::wstring path = dir + L"\\" + name + L".log";
+    const std::wstring prev = dir + L"\\" + name + L".prev.log";
     MoveFileExW(path.c_str(), prev.c_str(), MOVEFILE_REPLACE_EXISTING);
     g_file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                          CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr);

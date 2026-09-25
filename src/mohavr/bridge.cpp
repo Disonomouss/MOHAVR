@@ -1,0 +1,219 @@
+#include "bridge.hpp"
+
+#include <windows.h>
+#include <d3d9.h>
+#include <d3d9on12.h>
+#include <d3d12.h>
+
+#include <string>
+
+#include "../common/shared_frame.hpp"
+#include "log.hpp"
+
+namespace mohavr::bridge {
+namespace {
+
+using shared::Header;
+using shared::kRing;
+
+Header* g_hdr     = nullptr;
+HANDLE  g_mapping = nullptr;
+HANDLE  g_host    = nullptr;  // host process handle
+
+// Render-thread state.
+bool                        g_setupTried = false;
+bool                        g_ready      = false;
+IDirect3DDevice9On12*       g_d9on12     = nullptr;
+ID3D12Device*               g_d12        = nullptr;
+ID3D12CommandQueue*         g_queue      = nullptr;
+ID3D12CommandAllocator*     g_alloc[kRing] = {};
+ID3D12GraphicsCommandList*  g_list       = nullptr;
+ID3D12Fence*                g_gameFence  = nullptr;
+ID3D12Fence*                g_hostFence  = nullptr;
+ID3D12Resource*             g_shared[kRing] = {};
+IDirect3DSurface9*          g_rt         = nullptr;  // our copy of the backbuffer (9On12-backed)
+long                        g_presents   = 0;
+bool                        g_hostExitLogged = false;
+
+void SetStatus(const char* msg) {
+    if (g_hdr) strncpy_s(g_hdr->gameStatus, msg, _TRUNCATE);
+}
+
+std::wstring ModuleDir() {
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&ModuleDir), &self);
+    wchar_t path[MAX_PATH];
+    const DWORD n = GetModuleFileNameW(self, path, MAX_PATH);
+    std::wstring s(path, n);
+    return s.substr(0, s.find_last_of(L"\\/"));
+}
+
+bool Fail(const char* what, HRESULT hr) {
+    char msg[128];
+    snprintf(msg, sizeof(msg), "%s failed (0x%08lX)", what, static_cast<unsigned long>(hr));
+    MLOG("bridge: %s -- bridge disabled, game continues", msg);
+    SetStatus(msg);
+    if (g_hdr) InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_hdr->gameState), static_cast<LONG>(shared::GameState::Failed));
+    return false;
+}
+
+bool Setup(IDirect3DDevice9* dev) {
+    HRESULT hr = dev->QueryInterface(__uuidof(IDirect3DDevice9On12), reinterpret_cast<void**>(&g_d9on12));
+    if (FAILED(hr)) return Fail("QueryInterface(IDirect3DDevice9On12) -- is Bridge.D3D9On12 on?", hr);
+    hr = g_d9on12->GetD3D12Device(IID_PPV_ARGS(&g_d12));
+    if (FAILED(hr)) return Fail("GetD3D12Device", hr);
+
+    D3D12_COMMAND_QUEUE_DESC qd{};
+    qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    if (FAILED(hr = g_d12->CreateCommandQueue(&qd, IID_PPV_ARGS(&g_queue)))) return Fail("CreateCommandQueue", hr);
+    for (auto& a : g_alloc)
+        if (FAILED(hr = g_d12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&a)))) return Fail("CreateCommandAllocator", hr);
+    if (FAILED(hr = g_d12->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_alloc[0], nullptr, IID_PPV_ARGS(&g_list))))
+        return Fail("CreateCommandList", hr);
+    g_list->Close();
+    if (FAILED(hr = g_d12->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&g_gameFence)))) return Fail("CreateFence(game)", hr);
+    if (FAILED(hr = g_d12->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&g_hostFence)))) return Fail("CreateFence(host)", hr);
+
+    IDirect3DSurface9* bb = nullptr;
+    D3DSURFACE_DESC bd{};
+    if (FAILED(hr = dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb))) return Fail("GetBackBuffer", hr);
+    bb->GetDesc(&bd);
+    bb->Release();
+    if (FAILED(hr = dev->CreateRenderTarget(bd.Width, bd.Height, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_rt, nullptr)))
+        return Fail("CreateRenderTarget", hr);
+
+    // Shared textures: B8G8R8A8 = D3D9's A8R8G8B8. Simultaneous access: used by two queues in two
+    // processes, and lets COMMON promote to COPY_DEST/COPY_SOURCE without explicit barriers.
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = bd.Width;
+    rd.Height = bd.Height;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+    for (UINT i = 0; i < kRing; ++i) {
+        if (FAILED(hr = g_d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                       IID_PPV_ARGS(&g_shared[i]))))
+            return Fail("CreateCommittedResource(shared)", hr);
+        HANDLE h = nullptr;
+        if (FAILED(hr = g_d12->CreateSharedHandle(g_shared[i], nullptr, GENERIC_ALL, nullptr, &h))) return Fail("CreateSharedHandle(texture)", hr);
+        g_hdr->textureHandles[i] = reinterpret_cast<std::uintptr_t>(h);
+    }
+    HANDLE hg = nullptr, hh = nullptr;
+    if (FAILED(hr = g_d12->CreateSharedHandle(g_gameFence, nullptr, GENERIC_ALL, nullptr, &hg))) return Fail("CreateSharedHandle(game fence)", hr);
+    if (FAILED(hr = g_d12->CreateSharedHandle(g_hostFence, nullptr, GENERIC_ALL, nullptr, &hh))) return Fail("CreateSharedHandle(host fence)", hr);
+
+    const LUID luid = g_d12->GetAdapterLuid();
+    g_hdr->width = bd.Width;
+    g_hdr->height = bd.Height;
+    g_hdr->dxgiFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
+    g_hdr->ring = kRing;
+    g_hdr->adapterLuid = (static_cast<std::uint64_t>(static_cast<std::uint32_t>(luid.HighPart)) << 32) | luid.LowPart;
+    g_hdr->gameFenceHandle = reinterpret_cast<std::uintptr_t>(hg);
+    g_hdr->hostFenceHandle = reinterpret_cast<std::uintptr_t>(hh);
+    MemoryBarrier();
+    InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_hdr->gameState), static_cast<LONG>(shared::GameState::Ready));
+    SetStatus("ready");
+    MLOG("bridge: ready -- %ux%u B8G8R8A8, ring %u, adapter LUID %08lX:%08lX", bd.Width, bd.Height, kRing,
+         static_cast<unsigned long>(luid.HighPart), luid.LowPart);
+    return true;
+}
+
+void Publish(IDirect3DDevice9* dev) {
+    const std::uint64_t published = static_cast<std::uint64_t>(InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), 0, 0));
+    const std::uint64_t ack = static_cast<std::uint64_t>(InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), 0, 0));
+    if (ack != published) return;  // host hasn't taken the last frame yet: skip, never block
+
+    const std::uint64_t n = published + 1;
+    const UINT slot = static_cast<UINT>(n % kRing);
+    // The slot's command allocator is free once our own copy of frame n - kRing has executed.
+    if (n > kRing && g_gameFence->GetCompletedValue() < n - kRing) return;
+
+    IDirect3DSurface9* bb = nullptr;
+    if (FAILED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb))) return;
+    HRESULT hr = dev->StretchRect(bb, nullptr, g_rt, nullptr, D3DTEXF_NONE);
+    bb->Release();
+    if (FAILED(hr)) { if (n <= 3) MLOG("bridge: StretchRect failed 0x%08lX", static_cast<unsigned long>(hr)); return; }
+
+    ID3D12Resource* src = nullptr;
+    hr = g_d9on12->UnwrapUnderlyingResource(g_rt, g_queue, IID_PPV_ARGS(&src));
+    if (FAILED(hr)) { if (n <= 3) MLOG("bridge: UnwrapUnderlyingResource failed 0x%08lX", static_cast<unsigned long>(hr)); return; }
+
+    // Don't overwrite a slot the host may still be reading (GPU-side wait; the host consumes every
+    // published frame, so this always completes).
+    if (n > kRing) g_queue->Wait(g_hostFence, n - kRing);
+    g_alloc[slot]->Reset();
+    g_list->Reset(g_alloc[slot], nullptr);
+    g_list->CopyResource(g_shared[slot], src);
+    g_list->Close();
+    ID3D12CommandList* lists[] = {g_list};
+    g_queue->ExecuteCommandLists(1, lists);
+    g_queue->Signal(g_gameFence, n);
+
+    UINT64 value = n;
+    ID3D12Fence* fence = g_gameFence;
+    g_d9on12->ReturnUnderlyingResource(g_rt, 1, &value, &fence);
+    src->Release();
+
+    InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), static_cast<LONG>(slot));
+    InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), static_cast<LONG64>(n));
+    if (n == 1) MLOG("bridge: first frame published (slot %u)", slot);
+    else if (n % 900 == 0) MLOG("bridge: %llu frames published", static_cast<unsigned long long>(n));
+}
+
+}  // namespace
+
+void StartHost(const std::wstring& runtimeJson) {
+    if (g_hdr) return;
+    const DWORD pid = GetCurrentProcessId();
+    const std::wstring name = L"Local\\MOHAVR_" + std::to_wstring(pid);
+    g_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Header), name.c_str());
+    if (!g_mapping) { MLOG("bridge: CreateFileMapping failed (%lu)", GetLastError()); return; }
+    g_hdr = static_cast<Header*>(MapViewOfFile(g_mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Header)));
+    if (!g_hdr) { MLOG("bridge: MapViewOfFile failed (%lu)", GetLastError()); return; }
+    ZeroMemory(g_hdr, sizeof(Header));
+    g_hdr->magic = shared::kMagic;
+    g_hdr->version = shared::kVersion;
+    g_hdr->gamePid = pid;
+    g_hdr->gameState = static_cast<std::uint32_t>(shared::GameState::Starting);
+
+    const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
+    std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);
+    if (!runtimeJson.empty()) cmd += L" --runtime-json \"" + runtimeJson + L"\"";
+    STARTUPINFOW si{sizeof(si)};
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, ModuleDir().c_str(), &si, &pi)) {
+        MLOG("bridge: could not start MOHAVR-host.exe (error %lu) -- no VR, game continues", GetLastError());
+        SetStatus("host not started");
+        return;
+    }
+    CloseHandle(pi.hThread);
+    g_host = pi.hProcess;
+    MLOG("bridge: started MOHAVR-host.exe pid %lu (shared memory %ls)", pi.dwProcessId, name.c_str());
+}
+
+void OnPresent(IDirect3DDevice9* device) {
+    if (!g_hdr) return;
+    ++g_presents;
+    if (!g_setupTried) {
+        g_setupTried = true;
+        g_ready = Setup(device);
+    }
+    if (!g_ready) return;
+    if (g_host && !g_hostExitLogged && (g_presents % 600) == 0 && WaitForSingleObject(g_host, 0) == WAIT_OBJECT_0) {
+        DWORD code = 0;
+        GetExitCodeProcess(g_host, &code);
+        MLOG("bridge: MOHAVR-host.exe exited (code %lu, status \"%s\") -- no VR, game continues", code, g_hdr->hostStatus);
+        g_hostExitLogged = true;
+    }
+    Publish(device);
+}
+
+}  // namespace mohavr::bridge

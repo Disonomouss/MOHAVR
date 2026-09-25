@@ -23,4 +23,26 @@ simulator never shows.
 
 ---
 
-No rounds yet.
+### Round 1: prepared 2026-09-25, M2 (mono quad through the 64-bit host)
+**Changed:** the game's image now reaches the headset. MOHAVR-host.exe (64-bit) runs OpenXR and
+shows the game on a flat screen floating about 2 m in front of where your head was at start. It
+is not stereo and doesn't follow your head yet: it's a cinema screen.
+
+**How to try it:**
+1. Start Virtual Desktop and connect the headset (it's the system OpenXR runtime).
+2. `tools\deploy.ps1 deploy -Set 'Bridge.D3D9On12=1','Bridge.Host=1'` (RuntimeJson left empty,
+   so the headset runtime is used).
+3. Launch MOHA from Steam normally. The desktop window will be white; that's expected.
+4. Campaign → Continue, then play the parachute landing for a minute.
+5. Quit the game. Then `tools\deploy.ps1 undeploy` (which keeps both logs in `logs\modlogs`).
+
+**Questions:**
+1. Do you see the game on a floating screen in the headset? (yes/no)
+2. Is the image stable, with no flicker or tearing? (yes/no)
+3. Does the game feel as smooth as on the monitor, with no stutter? (yes/no)
+4. Are the colours and brightness right: not washed out, not too dark? (yes/no)
+5. Is the screen too close or too far, too high or too low? (describe)
+
+**Answers:**
+
+**Log received:**

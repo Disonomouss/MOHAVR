@@ -38,8 +38,13 @@ Engine 3 game, 32-bit, Direct3D 9.
 11. **Keep copies of every log before relaunching the game.** The game overwrites its log.
 
 ## Build and deploy
-- `tools/build.ps1` builds `build/x86/dinput8.dll` (the mod) and verifies that it's x86 and
-  exports under plain names.
+- `tools/build.ps1` builds both binaries: `build/x86/dinput8.dll` (the game-side mod, x86,
+  checked for plain-name exports) and `build/x64/MOHAVR-host.exe` (the OpenXR host, x64, D10).
+  vcpkg runs in manifest mode (`vcpkg.json`) with static triplets. `-Arch x86|x64` builds one.
+- The game-to-host contract is `src/common/shared_frame.hpp`, compiled into both. Keep its
+  layout fixed-size (the static_asserts guard x86/x64 equality).
+- The OpenXR runtime for tests is selected by `OpenXR.RuntimeJson` in the ini. With
+  `Bridge.Host=1` it must be the **x64** simulator json (the host is 64-bit).
 - `tools/deploy.ps1 deploy [-Set 'Section.Key=Value']`, `undeploy` and `status`. The mod lives in
   the game's `Binaries` as `dinput8.dll` plus `MOHAVR.ini`. Undeploy keeps its logs and verifies
   the folder is back to its baseline. **Undeploy when a test session ends.**

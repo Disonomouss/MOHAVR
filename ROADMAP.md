@@ -45,7 +45,15 @@ logs and does nothing.
 **Accept:** the log shows init before `Direct3DCreate9`, and a deliberately wrong prologue makes
 the mod stand down cleanly.
 
-### M2. D3D9 → OpenXR bridge, mono — [S] then [H]
+### M2. D3D9 → OpenXR bridge, mono — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+*As built:* D3D9On12 (`Bridge.D3D9On12`), then per-frame copy of the backbuffer into a ring of
+shared D3D12 textures with shared fences. `MOHAVR-host.exe` (x64, D10) opens them by
+`DuplicateHandle` and runs OpenXR (D3D11), showing the frame on a world-locked 16:9 quad. It's
+verified in the simulator preview during gameplay, and the game keeps 505 MB of address space free.
+Still open: the headset check, a desktop mirror (the game's window is white under 9On12), and
+forcing the backbuffer size in `CreateDevice` (moved to M3, where the eye resolution matters).
+
+*Original plan:*
 Hook `Direct3DCreate9` to go through `Direct3DCreate9On12`. Force a windowed, headset-shaped
 backbuffer with vsync off at device creation. Copy the finished frame into a shared D3D12
 texture with a shared fence; on the XR thread (D3D11), copy it into the swapchain. First target:

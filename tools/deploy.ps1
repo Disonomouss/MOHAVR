@@ -4,9 +4,9 @@
     folder exactly as it was.
 
 .DESCRIPTION
-    The mod ships only its own files (standing rule 1): dinput8.dll and MOHAVR.ini. At run time
-    it adds MOHAVR.log / MOHAVR.prev.log beside them. Nothing that was already in the folder is
-    ever modified.
+    The mod ships only its own files (standing rule 1): dinput8.dll, MOHAVR.ini and
+    MOHAVR-host.exe (D10). At run time they add MOHAVR[-host].log / .prev.log beside them.
+    Nothing that was already in the folder is ever modified.
 
     Safety:
       * refuses to overwrite a dinput8.dll it did not deploy (hash recorded in logs\deploy-state.json);
@@ -33,7 +33,8 @@ if ($env:MOHAVR_GAMEDIR) { $gameDir = $env:MOHAVR_GAMEDIR }
 $bin       = Join-Path $gameDir 'UnrealEngine3\Binaries'
 $statePath = Join-Path $root 'logs\deploy-state.json'
 $modLogs   = Join-Path $root 'logs\modlogs'
-$ours      = 'dinput8.dll', 'MOHAVR.ini', 'MOHAVR.log', 'MOHAVR.prev.log'
+$ours      = 'dinput8.dll', 'MOHAVR.ini', 'MOHAVR.log', 'MOHAVR.prev.log',
+             'MOHAVR-host.exe', 'MOHAVR-host.log', 'MOHAVR-host.prev.log'
 New-Item -ItemType Directory -Force (Split-Path $statePath), $modLogs | Out-Null
 
 function Load-State { if (Test-Path $statePath) { Get-Content $statePath -Raw | ConvertFrom-Json } }
@@ -58,6 +59,9 @@ switch ($Action) {
         } else { $baseline = @($s.baseline) }
 
         Copy-Item $src $target -Force
+        $hostSrc = Join-Path $root 'build\x64\MOHAVR-host.exe'
+        if (Test-Path $hostSrc) { Copy-Item $hostSrc (Join-Path $bin 'MOHAVR-host.exe') -Force }
+        else { Write-Host '  (no build\x64\MOHAVR-host.exe -- Bridge.Host will not work; run tools\build.ps1)' }
         $ini = Join-Path $bin 'MOHAVR.ini'
         $text = Get-Content (Join-Path $root 'config\MOHAVR.ini') -Raw
         foreach ($kv in $Set) {
@@ -78,7 +82,8 @@ switch ($Action) {
         Assert-NotRunning
         $s = Load-State
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        foreach ($l in 'MOHAVR.log', 'MOHAVR.prev.log') {
+        if (Get-Process MOHAVR-host -ErrorAction SilentlyContinue) { throw 'MOHAVR-host is still running' }
+        foreach ($l in 'MOHAVR.log', 'MOHAVR.prev.log', 'MOHAVR-host.log', 'MOHAVR-host.prev.log') {
             $p = Join-Path $bin $l
             if (Test-Path $p) { Copy-Item $p (Join-Path $modLogs "$stamp-$l") }
         }

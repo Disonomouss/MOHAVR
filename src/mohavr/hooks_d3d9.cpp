@@ -7,6 +7,7 @@
 #include <atomic>
 
 #include "addresses.hpp"
+#include "bridge.hpp"
 #include "config.hpp"
 #include "frame_capture.hpp"
 #include "log.hpp"
@@ -61,7 +62,9 @@ void LogPresent(const char* what, long n, HRESULT hr) {
 }
 
 HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, const RECT* dst, HWND wnd, const RGNDATA* dirty) {
-    capture::OnPresent(dev);  // before Present: the finished frame is still in the backbuffer
+    // Before Present: the finished frame is still in the backbuffer.
+    capture::OnPresent(dev);
+    bridge::OnPresent(dev);
     const HRESULT hr = g_realPresent(dev, src, dst, wnd, dirty);
     LogPresent("device Present", ++g_presents, hr);
     return hr;
@@ -128,7 +131,10 @@ HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DD
     const int n = ++g_createDeviceCalls;
     const HRESULT hr = g_realCreateDevice(self, adapter, type, focus, flags, pp, out);
     if (SUCCEEDED(hr) && out) HookDevice(*out);
-    if (SUCCEEDED(hr) && g_cfg.xrEnabled) xr::Start(g_cfg.xrRuntimeJson);  // once; own thread
+    if (SUCCEEDED(hr)) {
+        if (g_cfg.bridgeHost && g_useOn12) bridge::StartHost(g_cfg.xrRuntimeJson);  // D10: OpenXR out of process
+        else if (g_cfg.xrEnabled && !g_cfg.bridgeHost) xr::Start(g_cfg.xrRuntimeJson);  // diagnostic, in process
+    }
     // First few calls in full; after that only every 20th (the game's retry loop is 2/s).
     if (n <= 3 || n % 20 == 0) {
         MLOG("CreateDevice #%d adapter %u type %d flags 0x%lX -- %ux%u fmt %d count %u ms %d swap %d windowed %d "

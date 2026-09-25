@@ -70,7 +70,12 @@ is under OneDrive and a copy there would sync. The game rewrites its user ini fi
 restoring after the run, not only before it, is what keeps the player's settings intact
 (lessons §1).
 
-### D10. Run OpenXR in a separate 64-bit host process — Proposed 2026-09-25
+### D10. Run OpenXR in a separate 64-bit host process — Decided 2026-09-25 (user's choice over patching MOHA.exe as large-address-aware)
+*Built and verified the same day:* `MOHAVR-host.exe` shows the game's frames in the simulator. The
+game keeps 505 MB free (largest block 312 MB), against 297/132 MB with OpenXR in-process
+(ENGINE-NOTES §5f). Protocol: `src/common/shared_frame.hpp`.
+
+*Original proposal:*
 **Problem:** MOHA is 32-bit and not large-address-aware, and we may not change the exe
 (standing rule 1). With D3D9On12 plus an in-process OpenXR session, gameplay leaves only 297 MB
 free, with no free block over 132 MB (ENGINE-NOTES §5e). That's before eye render targets and

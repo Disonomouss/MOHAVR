@@ -228,12 +228,20 @@ function Wait-Log([string] $pattern, [int] $timeout) {
 
 # Lessons 1: keep a copy of every log before the next launch can rotate it away.
 function Save-ModLog {
+    # The host (D10) follows the game out; give it a moment, then make sure it's gone.
+    $h = Get-Process MOHAVR-host -ErrorAction SilentlyContinue
+    if ($h) {
+        if (-not $h.WaitForExit(10000)) { Write-Host '  MOHAVR-host still running 10 s after the game -> killing'; Stop-Process -Id $h.Id -Force }
+    }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    New-Item -ItemType Directory -Force (Join-Path $Logs 'modlogs') | Out-Null
     if (Test-Path $ModLog) {
-        $dest = Join-Path $Logs ('modlogs\{0}-run.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
-        New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+        $dest = Join-Path $Logs "modlogs\$stamp-run.log"
         Copy-Item $ModLog $dest
         Write-Host "  mod log kept: $dest"
     }
+    $hostLog = Join-Path $GameBin 'MOHAVR-host.log'
+    if (Test-Path $hostLog) { Copy-Item $hostLog (Join-Path $Logs "modlogs\$stamp-host.log"); Write-Host "  host log kept: logs\modlogs\$stamp-host.log" }
 }
 
 function Restore-UserData {

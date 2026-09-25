@@ -70,6 +70,15 @@ time, or needs the headset.
       x86 simulator selected by `OpenXR.RuntimeJson` (Steam-launched processes don't inherit our
       environment, so the mod sets `XR_RUNTIME_JSON` itself).
 - [x] Measured: 9On12 + XR leaves 297 MB free, largest block 132 MB, which is **too tight**.
-      **D10 (proposed): move OpenXR into a 64-bit host process.** Awaiting the user's decision.
+      **D10 decided: OpenXR in a 64-bit host process.**
+- [x] **Out-of-process bridge** (D10): the game publishes frames into shared D3D12 textures and
+      fences; `MOHAVR-host.exe` (x64, `src/host`) runs OpenXR and shows them on a world-locked
+      quad. The game's frame is visible in the simulator; the game keeps 505 MB free.
+      `tools/build.ps1` builds both, and `tools/deploy.ps1` ships both.
+- [ ] **[H] headset check** of the mono quad through the real runtime (`OpenXR.RuntimeJson`
+      empty = Virtual Desktop). Needs the user and the headset.
+- [ ] Desktop mirror window in the host (the game's own window is white under 9On12).
+- [ ] Quad placement: the LOCAL origin puts it low in the simulator. Recenter or use VIEW-based
+      placement at session start.
 - [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
       shown on a world-locked quad first.

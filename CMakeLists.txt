@@ -1,35 +1,48 @@
 cmake_minimum_required(VERSION 3.20)
 project(MOHAVR LANGUAGES CXX)
 
-# MOHA.exe is 32-bit (ENGINE-NOTES 2); everything loaded into it must be x86 (D2).
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "MOHAVR must be built for x86 -- use tools/build.ps1 (VS dev shell -arch=x86)")
-endif()
+# One source tree, two binaries, chosen by the toolchain's bitness (tools/build.ps1 builds both):
+#   x86 -> dinput8.dll      the game-side mod (MOHA.exe is 32-bit, ENGINE-NOTES 2; D2)
+#   x64 -> MOHAVR-host.exe  the OpenXR host, outside the game's 2 GB address space (D10)
 
-# Static CRT: the proxy must not depend on which VC++ runtime the player has installed.
+# Static CRT: neither binary may depend on which VC++ runtime the player has installed.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-add_library(mohavr SHARED
-    src/mohavr/dllmain.cpp
-    src/mohavr/log.cpp
-    src/mohavr/config.cpp
-    src/mohavr/build_check.cpp
-    src/mohavr/proxy_dinput8.cpp
-    src/mohavr/hooks_d3d9.cpp
-    src/mohavr/frame_capture.cpp
-    src/mohavr/patch.cpp
-    src/mohavr/xr_session.cpp
-    src/mohavr/dinput8.def
-)
-
-# OpenXR loader, linked statically (triplet x86-windows-static via vcpkg manifest mode), so the
-# mod stays a single DLL in the game folder.
+# OpenXR loader, linked statically (x86-windows-static / x64-windows-static via vcpkg manifest).
 find_package(OpenXR CONFIG REQUIRED)
-target_link_libraries(mohavr PRIVATE OpenXR::openxr_loader OpenXR::headers d3d11 dxgi)
 
-# The game loads it as dinput8.dll from its Binaries folder (D5).
-set_target_properties(mohavr PROPERTIES OUTPUT_NAME dinput8)
-target_compile_features(mohavr PRIVATE cxx_std_20)
-target_compile_definitions(mohavr PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
-target_compile_options(mohavr PRIVATE /W4 /permissive- /utf-8)
-target_link_options(mohavr PRIVATE /SAFESEH:NO)
+set(MOHAVR_COMMON_DEFS WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+set(MOHAVR_COMMON_OPTS /W4 /permissive- /utf-8)
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    add_library(mohavr SHARED
+        src/mohavr/dllmain.cpp
+        src/mohavr/log.cpp
+        src/mohavr/config.cpp
+        src/mohavr/build_check.cpp
+        src/mohavr/proxy_dinput8.cpp
+        src/mohavr/hooks_d3d9.cpp
+        src/mohavr/frame_capture.cpp
+        src/mohavr/bridge.cpp
+        src/mohavr/patch.cpp
+        src/mohavr/xr_session.cpp
+        src/mohavr/dinput8.def
+    )
+    # The game loads it as dinput8.dll from its Binaries folder (D5).
+    set_target_properties(mohavr PROPERTIES OUTPUT_NAME dinput8)
+    target_compile_features(mohavr PRIVATE cxx_std_20)
+    target_compile_definitions(mohavr PRIVATE ${MOHAVR_COMMON_DEFS})
+    target_compile_options(mohavr PRIVATE ${MOHAVR_COMMON_OPTS})
+    target_link_options(mohavr PRIVATE /SAFESEH:NO)
+    target_link_libraries(mohavr PRIVATE OpenXR::openxr_loader OpenXR::headers d3d11 d3d12 dxgi)
+else()
+    add_executable(mohavr_host WIN32
+        src/host/main.cpp
+        src/mohavr/log.cpp
+    )
+    set_target_properties(mohavr_host PROPERTIES OUTPUT_NAME MOHAVR-host)
+    target_compile_features(mohavr_host PRIVATE cxx_std_20)
+    target_compile_definitions(mohavr_host PRIVATE ${MOHAVR_COMMON_DEFS})
+    target_compile_options(mohavr_host PRIVATE ${MOHAVR_COMMON_OPTS})
+    target_link_libraries(mohavr_host PRIVATE OpenXR::openxr_loader OpenXR::headers d3d11 dxgi shell32)
+endif()
