@@ -350,6 +350,22 @@ xrLocateViews; the projection uses that eye's FOV widened to the half-viewport a
 - MOHA's menus follow **mouse hover**: a cursor left over an item steals keyboard navigation (the
   harness now parks the cursor on the bottom frame).
 
+**Per-eye view state (headset round 3: "right eye has heavy flickering"):** `ULocalPlayer` members
+by LocalPlayer.uc order: Origin `+0x68`, Size `+0x70`, PlayerPostProcess `+0x78` (a UObject),
+**ViewState `+0x7C`** (FSceneViewState*, vtable `0x114D3730`, ctor `FUN_10A92BA0`),
+ActorVisibilityHistory `+0x80`. The ULocalPlayer ctor `FUN_10C18AF0` does
+`ViewState = AllocateViewState()`: **`AllocateViewState` = `0x10A99220`** (cdecl, no args:
+`GMalloc->Malloc(0x180, 8)` + ctor). With both eyes on one ULocalPlayer, the right eye used the left
+eye's occlusion history. Fix: eye 1 swaps in a second state from AllocateViewState, and Draw restores
+the original. **Measured** (`tools/flicker_metric.py`, 12 captures, still player): shared → right/left
+frame-change ratio **2.79**, pixels changing >40: 1.05% left vs **8.54%** right. Own state → ratio **1.04**,
+1.07% vs 1.11%.
+
+**Also from round 3 (not yet fixed):** the first-person weapon is doubled. It sits a few cm from the
+eyes, so a real IPD gives it a huge disparity; the proper fix is M7 (the controller-held weapon). The
+HUD is drawn at screen positions inside each half, so it lands at different places per eye
+("cross-eyed / edge of view / one eye"): M5, the HUD on its own layer.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

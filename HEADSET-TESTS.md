@@ -79,6 +79,16 @@ tell Claude.
 4. Does the world still stay still when you turn your head? (yes/no)
 5. Is the HUD (compass, health, ammo) readable and comfortable, or does it hurt to look at? (describe)
 
+**Attempt 1 (~19:55):** stereo basically works. Guns are doubled (the equipped gun is seen twice). **The right
+eye flickers heavily.** World size is hard to judge with the flicker. The world stays still. The HUD is hard to read:
+things at the edge of view, in only one eye, or cross-eyed.
+**Findings:** the right-eye flicker came from both eyes sharing one FSceneViewState. Fixed with a second one from
+the engine's AllocateViewState, measured 2.79 → 1.04 (ENGINE-NOTES §5j). The doubled gun is expected until M7
+(controller weapon). The HUD is expected until M5 (HUD layer). The origin was again first taken from VD's
+placeholder, which VD flags as tracked; it recentred 20 ms later, and identity-orientation poses are now ignored.
+
+**Attempt 2:** deployed with the flicker fix (v0.5.1). Focus: is the right eye stable now, and the world size.
+
 **Answers:**
 
 **Log received:**

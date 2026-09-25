@@ -23,6 +23,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.headPosition      = get(L"Camera", L"HeadPosition", c.headPosition);
     c.headsetProjection = get(L"Camera", L"HeadsetProjection", c.headsetProjection);
     c.stereo            = get(L"Camera", L"Stereo", c.stereo);
+    c.stereoViewState   = get(L"Camera", L"StereoViewState", c.stereoViewState);
     {
         wchar_t u[32] = L"";
         GetPrivateProfileStringW(L"Camera", L"UnitsPerMeter", L"50", u, 32, ini.c_str());

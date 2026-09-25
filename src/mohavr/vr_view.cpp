@@ -74,6 +74,8 @@ float        g_thisAspect = 1.0f;    // viewport aspect of THIS view (half width
 bool         g_inStereoDraw = false;
 int          g_eyeCounter = 0;
 void*        g_stereoPlayers[2] = {};
+void*        g_leftViewState = nullptr;   // the player's own FSceneViewState
+void*        g_rightViewState = nullptr;  // ours, for eye 1 (allocated once, lives for the process)
 
 long g_views = 0;
 bool g_loggedProj[2] = {false, false};
@@ -111,6 +113,9 @@ float g_ox = 0, g_oy = 0, g_oz = 0;
 
 void UpdateOrigin(const shared::Header* hdr, const shared::Pose& head) {
     if (!(hdr->viewValid & 2u)) return;  // placeholder pose, not tracked yet
+    // Virtual Desktop flags its pre-tracking placeholder as tracked (round 3: identity orientation
+    // at y = -1.21). An exactly-identity orientation never happens on a real head: skip it.
+    if (head.qx == 0.0f && head.qy == 0.0f && head.qz == 0.0f && head.qw == 1.0f) return;
     const float dx = head.px - g_ox, dy = head.py - g_oy, dz = head.pz - g_oz;
     // More than 1 m from the origin isn't plausible for a seated/standing player: the origin was
     // taken before the headset was on (or the play space moved) -> recentre.
@@ -148,8 +153,10 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     g_inStereoDraw = false;
     arr[0] = savedData;
     arr[1] = 1;
-    // Back to a full-screen player for anything outside Draw.
+    // Back to a full-screen player (and its own view state) for anything outside Draw.
     auto* lp = static_cast<std::uint8_t*>(player);
+    if (g_leftViewState && *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState) == g_rightViewState)
+        *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState) = g_leftViewState;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 1.0f;
@@ -175,6 +182,21 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 0.5f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = 1.0f;
+
+    // Each eye needs its own FSceneViewState (occlusion/visibility history). Sharing the player's
+    // one made the right eye consume the left eye's occlusion results -> heavy right-eye flicker
+    // (headset round 3). Eye 1 gets a second state from the engine's own AllocateViewState.
+    auto* slot = reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState);
+    if (eye == 0) {
+        if (*slot != g_rightViewState) g_leftViewState = *slot;  // follow the engine if it replaces its own
+    } else if (g_cfg.stereoViewState) {
+        if (!g_rightViewState) {
+            using AllocFn = void*(__cdecl*)();
+            g_rightViewState = reinterpret_cast<AllocFn>(addr::kAllocateViewState)();
+            MLOG("stereo: allocated a right-eye FSceneViewState %p (left %p)", g_rightViewState, g_leftViewState);
+        }
+        if (g_rightViewState) *slot = g_rightViewState;
+    }
 }
 
 // --- the view merge hook ------------------------------------------------------------------------

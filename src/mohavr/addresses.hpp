@@ -83,6 +83,17 @@ inline constexpr std::uint8_t   kViewportClientDrawRetBytes[] = {0xC2, 0x08, 0x0
 // ULocalPlayer split-screen rect (fractions of the viewport), read at CalcSceneView entry.
 inline constexpr std::uintptr_t kLocalPlayerOriginX = 0x68, kLocalPlayerOriginY = 0x6C;
 inline constexpr std::uintptr_t kLocalPlayerSizeX   = 0x70, kLocalPlayerSizeY   = 0x74;
+// ULocalPlayer::ViewState (FSceneViewStateInterface*, occlusion/visibility history) -- per view.
+// LocalPlayer.uc member order: Origin, Size, PlayerPostProcess (+0x78), ViewState (+0x7C),
+// ActorVisibilityHistory (+0x80). The ctor (FUN_10C18AF0) does `this->ViewState = AllocateViewState()`
+// (store at 0x10C18B5F: mov [esi+0x7C],eax); vtable of the state 0x114D3730 (runtime + ctor FUN_10A92BA0).
+inline constexpr std::uintptr_t kLocalPlayerViewState = 0x7C;
+// AllocateViewState(): GMalloc->Malloc(0x180, 8) + FSceneViewState ctor; cdecl, no args, returns the state.
+inline constexpr std::uintptr_t kAllocateViewState = 0x10A99220;
+inline constexpr std::uint8_t   kAllocateViewStateBytes[] = {0x64, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x6A, 0xFF, 0x68, 0xAB, 0x6B, 0x1C};
+// The ctor's call + store, proving the +0x7C offset: call AllocateViewState; cmp [esi+78],0; mov [esi+7C],eax
+inline constexpr std::uintptr_t kLocalPlayerCtorViewStateStore = 0x10C18B56;
+inline constexpr std::uint8_t   kLocalPlayerCtorViewStateStoreBytes[] = {0xE8, 0xC5, 0x06, 0xE8, 0xFF, 0x83, 0x7E, 0x78, 0x00, 0x89, 0x46, 0x7C};
 
 // --- FSystemSettings (vtable at 0x116F56B8; ENGINE-NOTES 5i) -----------------------------------
 // FUN_10ECC330 copies MOHAScalabilityOptions' bool bitfield (+0x3C, declaration order) into
@@ -104,6 +115,8 @@ inline constexpr Signature kSignatures[] = {
     {"after FPerspectiveMatrix (constrained)", kProjAfterConstrained, kProjAfterConstrainedBytes, sizeof(kProjAfterConstrainedBytes)},
     {"UGameViewportClient::Draw prologue", kViewportClientDraw, kViewportClientDrawBytes, sizeof(kViewportClientDrawBytes)},
     {"UGameViewportClient::Draw ret 8",    kViewportClientDrawRet, kViewportClientDrawRetBytes, sizeof(kViewportClientDrawRetBytes)},
+    {"AllocateViewState prologue",         kAllocateViewState, kAllocateViewStateBytes, sizeof(kAllocateViewStateBytes)},
+    {"ULocalPlayer ctor ViewState store",  kLocalPlayerCtorViewStateStore, kLocalPlayerCtorViewStateStoreBytes, sizeof(kLocalPlayerCtorViewStateStoreBytes)},
 };
 
 }  // namespace mohavr::addr

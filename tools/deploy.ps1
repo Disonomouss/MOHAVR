@@ -50,7 +50,10 @@ switch ($Action) {
         $s = Load-State
         $target = Join-Path $bin 'dinput8.dll'
         if (Test-Path $target) {
-            if (-not $s -or $s.dllHash -ne (Hash $target)) {
+            $h = Hash $target
+            # Ours if it's what we last deployed, or byte-identical to the current build (an interrupted
+            # deploy). Anything else belongs to someone else: never overwrite it.
+            if ((-not $s -or $s.dllHash -ne $h) -and $h -ne (Hash $src)) {
                 throw "a dinput8.dll that MOHAVR did not deploy is already in $bin -- refusing to overwrite it"
             }
         }
@@ -58,11 +61,8 @@ switch ($Action) {
             $baseline = @(Get-ChildItem $bin -Force | ForEach-Object Name | Where-Object { $ours -notcontains $_ } | Sort-Object)
         } else { $baseline = @($s.baseline) }
 
-        Copy-Item $src $target -Force
-        $hostSrc = Join-Path $root 'build\x64\MOHAVR-host.exe'
-        if (Test-Path $hostSrc) { Copy-Item $hostSrc (Join-Path $bin 'MOHAVR-host.exe') -Force }
-        else { Write-Host '  (no build\x64\MOHAVR-host.exe -- Bridge.Host will not work; run tools\build.ps1)' }
-        $ini = Join-Path $bin 'MOHAVR.ini'
+        # Build the ini (and validate every override) BEFORE touching the game folder, so a bad
+        # -Set can't leave a half-deployed mod behind.
         $text = Get-Content (Join-Path $root 'config\MOHAVR.ini') -Raw
         foreach ($kv in $Set) {
             if ($kv -notmatch '^(\w+)\.(\w+)=(.*)$') { throw "bad -Set '$kv' (use Section.Key=Value)" }
@@ -71,7 +71,12 @@ switch ($Action) {
             if ($text -notmatch $pattern) { throw "ini has no [$sec] $key" }
             $text = [regex]::Replace($text, $pattern, "`${1}$val")
         }
-        [IO.File]::WriteAllText($ini, $text, (New-Object Text.UTF8Encoding($false)))
+
+        Copy-Item $src $target -Force
+        $hostSrc = Join-Path $root 'build\x64\MOHAVR-host.exe'
+        if (Test-Path $hostSrc) { Copy-Item $hostSrc (Join-Path $bin 'MOHAVR-host.exe') -Force }
+        else { Write-Host '  (no build\x64\MOHAVR-host.exe -- Bridge.Host will not work; run tools\build.ps1)' }
+        [IO.File]::WriteAllText((Join-Path $bin 'MOHAVR.ini'), $text, (New-Object Text.UTF8Encoding($false)))
 
         Save-State ([pscustomobject]@{
             deployed = (Get-Date).ToString('o'); dllHash = (Hash $target); iniOverrides = $Set; baseline = $baseline })
