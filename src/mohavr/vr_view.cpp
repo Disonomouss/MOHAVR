@@ -9,6 +9,7 @@
 
 #include "addresses.hpp"
 #include "bridge.hpp"
+#include "game_exec.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "patch.hpp"
@@ -195,10 +196,31 @@ void CommitCinemaFrame() {
     LeaveCriticalSection(&g_lock);
 }
 
+// Weapon.HideViewModel / HideBody: the pawn's own exec functions, re-issued every 3 s (idempotent) so a
+// new pawn (death, level load) gets them too. HideWeapon's flag survives weapon switches.
+void ApplyWeaponCommands(const std::uintptr_t* players) {
+    if (!(g_cfg.hideViewModel || g_cfg.hideBody) || !players || players[1] != 1 || !players[0]) return;
+    static DWORD next = 0;
+    const DWORD now = GetTickCount();
+    if (static_cast<LONG>(now - next) < 0) return;
+    next = now + 3000;
+    const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
+    static int logged = 0;
+    if (g_cfg.hideViewModel) {
+        const bool ok = gexec::Run(player, L"HideWeapon 0");
+        if (logged < 6) { ++logged; MLOG("weapon: 'HideWeapon 0' -> %s", ok ? "handled" : "not handled (no pawn yet?)"); }
+    }
+    if (g_cfg.hideBody) {
+        const bool ok = gexec::Run(player, L"RenderBody 0");
+        if (logged < 6) { ++logged; MLOG("weapon: 'RenderBody 0' -> %s", ok ? "handled" : "not handled (no pawn yet?)"); }
+    }
+}
+
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
+    ApplyWeaponCommands(arr);
     UpdateCinemaMode();
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera

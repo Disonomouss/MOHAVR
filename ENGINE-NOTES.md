@@ -425,6 +425,38 @@ that player's FSceneView (`ESI`, player index in `EDX` at `0x10C1530C`) and:
 MOHA's HUD lays out relative to ClipX/ClipY but draws elements at fixed pixel sizes. Scaling the
 pushed matrix (M00, M11) shrinks everything uniformly, text included.
 
+## 5o. Console commands from the mod, and the shot ray (M7 groundwork, 2026-09-25)
+
+**Exec:** `ULocalPlayer` has an FExec subobject at `+0x3C` (the ctor FUN_10C18AF0 stores vtable
+`0x114F8AB0`). Its slot 0 = `ULocalPlayer::Exec(const TCHAR* Cmd, FOutputDevice& Ar)` `0x10C1A220`,
+thiscall on the subobject. That's the path the game's console takes: the PlayerController, Pawn, Weapon and
+HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) formats and calls vtable slot 1
+`Serialize(const TCHAR*, EName)`, so any MSVC object with a virtual destructor then `Serialize` works as `Ar`
+(src/mohavr/game_exec.cpp). Useful pawn execs (MOHAPlayerPawn.uc):
+- `HideWeapon(bool bWeaponVisible)`: `Weapon.Mesh.SetHidden(!v)` plus `bHidingWeapons`, which survives weapon
+  switches. **Verified.**
+- `RenderBody(bool bShow)`: swaps FPArms material 1 for `ViewModel_Mesh.NoRenderMatInst`.
+- `UpdateGunView(float ViewmodelFOV, float OffsetX, float OffsetY, float OffsetZ)`: the view model's FOV and
+  offset. A candidate for pushing the gun further from the eyes instead of hiding it (M7/M8).
+
+**Shot ray** (Engine/Weapon.uc, MOHAGame/EALAWeapon.uc, Engine/Pawn.uc):
+- `EALAWeapon.InstantFire` → `PerformWeaponTrace(Instigator.GetWeaponStartTraceLocation(self))`;
+  `EndTrace = Start + Vector(GetAdjustedAim(Start)) * GetTraceRange()` → `CalcWeaponFire`.
+- `Pawn.GetWeaponStartTraceLocation` → `Controller.GetPlayerViewPoint(POVLoc, POVRot)`, returning POVLoc: the
+  game's eye. Our CalcSceneView hook changes only the render view, so shots start at the un-tracked eye.
+- `EALAWeapon.GetAdjustedAim` → `Pawn.GetAdjustedAimFor` → `PlayerController.GetAdjustedAimFor`: base =
+  `Pawn.GetBaseAimRotation()` (native table `{"intAPawnexecGetBaseAimRotation", 0x10D39090}` at `0x116158E0`;
+  not yet a Ghidra function), then a forward trace and aim assist (`AimingHelp`), then `AddSpread`, then
+  `MOHAPawn.GetPostAdjustedAimFor`.
+- **Consequence today:** the aim is the controller rotation (body yaw + game pitch). With the head driving
+  pitch visually and `RightStickY=0`, the game pitch stays where it is: shots go level, not where the head
+  looks.
+- **M7 options:** (a) head aim: write the head's pitch (and yaw relative to the body) into
+  `PlayerController.Rotation` (+0xF4) each frame, which is cheap given snap turn's plumbing; (b) hand aim:
+  replace the result of the `execGetBaseAimRotation` native with the right controller's ray (world transform
+  as in the view hook), and the start with the hand position (GetWeaponStartTraceLocation is script: needs a
+  hook on GetPlayerViewPoint or on the script call).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

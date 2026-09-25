@@ -33,6 +33,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudWidth       = getf(L"HUD", L"Width", c.hudWidth, 0.1f, 10.0f);
     c.hudDown        = getf(L"HUD", L"Down", c.hudDown, -2.0f, 2.0f);
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
+    c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
+    c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));
     if (c.cinemaScreen < 0 || c.cinemaScreen > 2) c.cinemaScreen = 0;
 

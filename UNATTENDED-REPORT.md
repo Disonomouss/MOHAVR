@@ -198,10 +198,18 @@ what was learned.
   mono views, no Draw). A relaunch of the same build was fine. Watched in J.
 
 ### H. M7 aiming and the doubled gun — start, time-boxed
-- [ ] Interim for the doubled gun: `Weapon.HideViewModel=1` option (RE the first-person mesh's hidden flag or
-      draw), off by default. [S]: the capture shows no weapon.
-- [ ] RE the shot ray: script `GetAdjustedAim`/`GetWeaponStartTraceLocation` (MOHAWeapon/MOHAPawn), native
-      trace. Write up. BLOCKED if the 2 h box runs out.
+- [x] `Weapon.HideViewModel=1` (default 0) runs the pawn's own exec `HideWeapon 0` through
+      `ULocalPlayer::Exec` (FExec at `LocalPlayer+0x3C`, slot 0 `0x10C1A220`, vtable checked before every
+      call; output goes to MOHAVR.log). It's re-issued every 3 s for new pawns; the pawn's `bHidingWeapons`
+      keeps it hidden across weapon switches. [S] passed: "handled" from the first pawn on, and the capture shows
+      the empty hands with no gun (shot 223122-hideweapon). `Weapon.HideBody=1` = `RenderBody 0` (sleeves).
+      Not visually verified.
+- [x] RE of the shot ray, written up in ENGINE-NOTES §5o. Start = `Pawn.GetWeaponStartTraceLocation` →
+      `Controller.GetPlayerViewPoint` (the game's eye, which our render-only view hook does NOT change).
+      Direction = `Pawn.GetBaseAimRotation()` (native `execGetBaseAimRotation` `0x10D39090`) →
+      `PlayerController.GetAdjustedAimFor` (aim assist) → spread → `MOHAPawn.GetPostAdjustedAimFor`. So shots go
+      along the controller rotation (body yaw + game pitch), not the head. Next steps for M7 are listed there.
+- [ ] [H] round 5: with `HideViewModel=1`, is the view comfortable? (The arms still show.)
 
 ### I. Performance and resolution — [S]
 - [ ] Log the game's frame time (Present-to-Present) and the XR frame time; report averages in gameplay.
