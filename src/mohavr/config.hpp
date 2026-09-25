@@ -7,13 +7,13 @@ namespace mohavr {
 struct Config {
     bool enabled        = true;   // [General] Enabled   -- 0: pure dinput8 proxy, nothing else
     bool hookD3D9       = true;   // [Hooks]   Direct3DCreate9
-    bool d3d9On12       = false;  // [Bridge]  D3D9On12 -- create the game's IDirect3D9 via Direct3DCreate9On12 (M2)
-    bool bridgeHost     = false;  // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)
+    bool d3d9On12       = true;   // [Bridge]  D3D9On12 -- create the game's IDirect3D9 via Direct3DCreate9On12 (M2)
+    bool bridgeHost     = true;   // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)
     bool testWrongBuild = false;  // [Debug]   TestWrongBuild -- pretend the build check failed (M1 acceptance)
-    bool  headTracking      = false;  // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)
+    bool  headTracking      = true;   // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)
     bool  headPosition      = true;   // [Camera] HeadPosition -- also apply head translation (6DoF)
     bool  headsetProjection = true;   // [Camera] HeadsetProjection -- render with the headset's FOV
-    bool  stereo            = false;  // [Camera] Stereo -- two eye views side by side via the engine's split-screen path (M4)
+    bool  stereo            = true;   // [Camera] Stereo -- two eye views side by side via the engine's split-screen path (M4)
     bool  stereoViewState   = true;   // [Camera] StereoViewState -- give the right eye its own FSceneViewState (fixes flicker)
     float unitsPerMeter     = 100.0f; // [Camera] UnitsPerMeter -- 100 per the player in stereo (round 4; ENGINE-NOTES 5i)
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
