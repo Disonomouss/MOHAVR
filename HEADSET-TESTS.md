@@ -113,9 +113,11 @@ minute, adjust again if needed. Quit and tell Claude the value you settled on.
 3. Which world scale looks right? (number)
 4. At that scale, how are your height and the gun (still doubled until M7)? (describe)
 
-**Answers:**
+**Answers (~21:05):** the menu is good. **Height and scale look right at 100.** The gun is hard to judge.
+**Log:** the host loaded the player's saved 100 and the game applied it; the menu opened and closed twice.
+**Verdict: PASSED.** The shipped default is now UnitsPerMeter=100.
 
-**Log received:**
+**Log received:** yes (`logs/modlogs/20260925-210540-*`).
 
 ---
 

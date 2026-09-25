@@ -1,0 +1,172 @@
+# How much of MOHAVR can be built without the player testing
+
+_Written 2026-09-25, end of day 1. For the player, and for the unattended (overnight) Claude session
+that works through the checklist at the bottom._
+
+## 1. Where things stand
+
+Working and headset-verified (Quest 3 via Virtual Desktop):
+
+| | Status |
+|---|---|
+| M0 test rig | Done. A cold start to proven gameplay and back in 30 s, unattended, with the player's data restored. |
+| M1 mod loads safely | Done. An x86 `dinput8.dll` proxy with a build check, verified hooks, and stand-down on any mismatch. |
+| M2 image in the headset | Done. D3D9On12 + shared textures → the 64-bit `MOHAVR-host.exe` runs OpenXR (the game keeps ~495 MB free). |
+| M3 head tracking | Done. World-locked, level horizon, leaning feels good. |
+| M4 stereo | Done in principle. The engine's own split-screen path, per-eye pose/FOV, per-eye view state (flicker fixed). Scale **100** chosen by the player. |
+| In-headset menu | Working. World scale live and saved per player. |
+| Hardening | Alt-tab / device-reset recovery, placeholder-pose rejection, motion blur and DOF off in VR, deploy/undeploy with baseline check. |
+
+Known open issues from the headset:
+- The first-person gun is seen double (it sits centimetres from the eyes, so real IPD gives a huge disparity).
+- The HUD is drawn per eye at screen positions, so it's cross-eyed or at the edge of view.
+- Menus: the 3D backdrop is stereo, but the menu UI is drawn across both eyes.
+- No controller play yet: moving, aiming and firing still use mouse and keyboard.
+- The game's own desktop window is white under 9On12 (there's no desktop mirror).
+
+## 2. What the simulator can and cannot prove
+
+The unattended session has the 64-bit OpenXR Simulator, the game (driven by `tools/harness.ps1`), mod-side
+frame capture, host-side capture, Ghidra (headless), decompiled UnrealScript, and full logs. It has no
+headset and no player.
+
+**Can be proven [S]:**
+- Anything visible in a frame: layouts, what's in which eye, where a quad sits, whether an element is doubled or missing.
+- Logic and state: menu detection, cutscene detection, input mapping reaching the game, settings saved and restored.
+- Numbers: address space, frame rate/time, eye-to-eye consistency (`tools/flicker_metric.py`), stability over long runs.
+- Controller input, by **injection**: the simulator has no controller buttons, so the host gets a test channel
+  (like `tools/menu_cmd.py`) that feeds synthetic controller state through the same code path.
+
+**Needs the player [H]:**
+- Comfort (turning style, vignette, anything that could cause nausea), and how things *feel*: aim, weapon fit, hand positions.
+- Readability and comfortable placement of the HUD and menus.
+- Real-runtime quirks (Virtual Desktop differs from the simulator: tracking flags, controller profiles, timing).
+- Final visual quality: sharpness, shimmer on head motion, stutter.
+
+Rule for the night: build each item to its **[S] acceptance**, ship it **behind an ini switch that's off by
+default** where it could affect comfort, and write the **[H] question** into a new `HEADSET-TESTS.md` round
+for the morning.
+
+## 3. Estimate, milestone by milestone
+
+| Milestone | What remains | Unattended share | Needs the player for |
+|---|---|---|---|
+| **M5 Layers** (menus/cutscenes on a cinema screen, HUD layer) | Detect menu, cutscene and "no pawn" states (RE + script); render mono full-screen in those states and show it on a world-locked screen in the host; find where the HUD is drawn (one-frame device-call trace) and redirect it to its own texture/quad | **~80%** | Screen size/distance, HUD placement and readability |
+| **M6 Controller input** | The host reads Touch controllers → shared block → the game's **XInput** (`XInputGetState` is imported by ordinal; the game already has full gamepad bindings) as a virtual Xbox pad; a remappable table in the ini; injection test channel | **~85%** | Mapping feel, deadzones, turning comfort |
+| **M7 Controller aiming** | RE the shot ray (script `GetAdjustedAim` / native trace); drive aim from the right controller pose; the body follows with a gentle servo | **~55%** | Aim accuracy/feel, the servo |
+| **M8 Hands and weapon** | RE the first-person weapon mesh transform; attach it to the controller pose (this also fixes the doubled gun); per-weapon offsets in the menu | **~40%** | Weapon fit, arm/hand look (many rounds expected) |
+| **M9 Comfort + menu** | Snap/smooth turn, vignette (host-side), seated/standing height offset, recentre, IPD/scale, all in the menu and saved | **~65%** | Every comfort default |
+| **M10 Release** | Install/uninstall script (finds the game, backs up, removes cleanly), README, a zip, shipped defaults = the VR config | **~95%** | A final play-through |
+| Engineering | Desktop mirror window (host), render-resolution option with memory checks, 30–60 min soak runs, death/reload/level-change checks | **~90%** | Sharpness vs. performance choice |
+
+**Overall:** roughly **70% of the remaining work** can be done and [S]-verified unattended. The last 30% is
+tuning that only the player can judge. It's cheap per item, but it takes several headset rounds (M8 above all).
+
+**What limits one night:** reverse engineering is the pacing item (M5 state detection, the HUD split, M7's aim
+ray, M8's weapon mesh), each time-boxed at about 2 h. The realistic overnight target is **M6 fully, M5 mostly,
+plus mirror, recentre and packaging**, with M7 started. Items that hit their time box are marked BLOCKED with
+what was learned.
+
+## 4. Preconditions for the night (please check before sleeping)
+
+- [ ] **Don't let the PC lock or sleep.** The harness drives menus with SendInput and focuses windows; a locked
+      desktop blocks both. (Settings → Power: screen off is fine, sleep = never; screen-saver lock off.)
+- [ ] Steam running and logged in (the harness launches via `steam -applaunch 24840`).
+- [ ] The headset doesn't need to be connected. The night uses the simulator (per-process runtime; Virtual Desktop
+      is untouched).
+- [ ] Nothing else full-screen on the main monitor (the game window must be able to come to the front).
+
+## 5. Standing rules for the unattended session
+
+1. All of `CLAUDE.md`'s standing rules apply, especially: never modify game files; the player's data
+   (MOHA `Config\`/`Saved\` and `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`) is backed up and restored around
+   every run (the harness does this); verify every hook site's bytes before patching.
+2. **Every behaviour change is behind an ini switch**, default **off** if it can affect comfort or
+   gameplay, until the player approves it in a headset round.
+3. **Commit after each checklist item** with its [S] evidence (log lines, captures, metrics) in the message
+   and in ENGINE-NOTES / DECISIONS.
+4. **Time-box research at ~2 h.** When the box runs out: write up what's known, mark the item **BLOCKED (reason)**
+   here, and move to the next item. Don't loop.
+5. Keep the game folder clean between runs (`tools/deploy.ps1 undeploy`). **At the very end, deploy the
+   morning headset configuration** and say so in STATUS.md.
+6. If the game or host crashes: keep the logs (`logs/modlogs`), `tools/harness.ps1 restore`, record it, and
+   continue with a different item. Never leave the game running.
+7. Don't delete or rewrite the player's `MOHAVR.user.ini`; read it only to learn their settings (world scale 100).
+
+## 6. Checklist (in order; each item: [S] acceptance → evidence → commit)
+
+### A. Housekeeping (quick)
+- [x] Round 4 recorded; the World-scale default is 100 (ini + code) — done 2026-09-25 evening.
+- [ ] Shipped defaults for the proven VR path: `D3D9On12=1`, `Host=1`, `HeadTracking=1`, `Stereo=1` (they're
+      headset-proven). [S]: a cycle with the plain shipped ini gives stereo in the simulator.
+- [ ] Prune old `logs/shots` and `logs/backup` (keep the last 20 of each).
+
+### B. Menu additions (host) — [S] via `tools/menu_cmd.py`
+- [ ] **Recentre** item: resets the translation origin and yaw offset (the game side reads a new shared-block
+      field). [S]: after moving the simulated head, recentre brings the view back.
+- [ ] **Seated/standing height offset** item (± 5 cm steps, saved). [S]: the camera height changes in the capture.
+- [ ] Shrink the panel to its content (the empty lower half), and open it slightly below eye level.
+
+### C. Desktop mirror (host) — [S]
+- [ ] A host window showing the left eye (or the game frame), so the monitor isn't white. Off by default
+      (`Bridge.Mirror`). [S]: `capture-window.ps1 -Title "MOHAVR mirror"` shows gameplay.
+
+### D. M6 controller input → virtual Xbox pad — [S] by injection
+- [ ] RE: confirm how the game reads the pad (`XInputGetState` IAT slot, callers `0x10924232`,
+      `0x10922FC1`; ENGINE-NOTES §5a) and the gamepad bindings in `MOHAPlayerInput.uc`.
+- [ ] Host: a Touch action set for gameplay (sticks, triggers, grips, A/B/X/Y, thumbstick clicks), active when
+      the menu is closed. Publish an `XINPUT_GAMEPAD`-shaped state in the shared block (v5).
+- [ ] Game: an IAT hook on `XInputGetState` (ordinal 2) for pad 0, returning the host's state when
+      `Input.Controllers=1`; the real pad passes through otherwise.
+- [ ] Mapping table in the ini (`[Controls]`), with defaults that mirror an Xbox layout.
+- [ ] Host test channel for controller state (`tools/pad_cmd.py`: stick values, button presses with duration).
+- [ ] [S]: injected left stick forward → the player moves (frame difference + position change); right stick → turns;
+      the right trigger fires (muzzle flash or ammo count changes in the HUD capture); the pause menu opens and closes.
+- [ ] Headset question (round 5): the mapping feels right? Stick deadzone OK? Turning comfortable?
+
+### E. Turning comfort — [S] logic, [H] feel
+- [ ] Snap turn (`Comfort.SnapTurn=0|30|45`), implemented in the pad mapping (a right-stick flick → a fixed yaw step
+      through the game's turn input, or by rotating the controller yaw directly if RE finds the rotation field).
+      [S]: one flick = the configured yaw change (logged game yaw).
+- [ ] Menu items for the turn mode.
+
+### F. M5 menus/cutscenes on a cinema screen — [S]
+- [ ] RE/script: detect "in a UI menu" (UIScene active), "cutscene/matinee" (cinematic mode), and "no pawn".
+- [ ] In those states: no stereo split (one full-screen view) and `hasView=0`, so the host shows the frame on a
+      world-locked cinema quad (size and distance in the ini/menu).
+- [ ] [S]: main menu → quad (the capture shows the full menu, not split); gameplay → stereo; the pause menu → quad.
+
+### G. M5 HUD on its own layer — [S] mechanics, [H] placement
+- [ ] RE: a one-frame device-call trace (behind `Debug.TraceFrame=1`) around `UGameViewportClient::Draw`'s second
+      player loop, to find where the HUD starts.
+- [ ] Redirect HUD drawing to a separate render target (mono, once), publish it as a second shared texture,
+      and have the host show it on a quad (fixed in view, lower centre) or hide it (`HUD.Mode=quad|off|game`).
+- [ ] [S]: the eye images no longer contain the HUD; the HUD quad does.
+
+### H. M7 aiming and the doubled gun — start, time-boxed
+- [ ] Interim for the doubled gun: `Weapon.HideViewModel=1` option (RE the first-person mesh's hidden flag or
+      draw), off by default. [S]: the capture shows no weapon.
+- [ ] RE the shot ray: script `GetAdjustedAim`/`GetWeaponStartTraceLocation` (MOHAWeapon/MOHAPawn), native
+      trace. Write up. BLOCKED if the 2 h box runs out.
+
+### I. Performance and resolution — [S]
+- [ ] Log the game's frame time (Present-to-Present) and the XR frame time; report averages in gameplay.
+- [ ] `Render.Scale` option: force a larger backbuffer in `CreateDevice` (for example 1.5× per axis) → measure address
+      space (it must stay > 250 MB free) and frame time. Off by default; the numbers go in ENGINE-NOTES.
+
+### J. Robustness — [S]
+- [ ] A 30-minute soak in gameplay (idle + periodic injected movement) → no leaks (vmmap trend), no errors.
+- [ ] Death/reload (if injectable) and level change: the stereo view state and bridge survive.
+- [ ] A host crash mid-game (kill the host process) → the game keeps running without VR; logged.
+
+### K. M10 packaging — [S]
+- [ ] `release\install.ps1` / `uninstall.ps1` for players: find the game via the Steam library folders, copy
+      dinput8.dll + MOHAVR-host.exe + MOHAVR.ini, back up/restore, refuse if a foreign dinput8.dll exists,
+      clean removal.
+- [ ] `release\README.md`: requirements, install, controls, the menu, known issues.
+- [ ] `tools/package.ps1` → `dist\MOHAVR-<version>.zip`. [S]: install → cycle OK → uninstall → baseline.
+
+### L. Morning handover
+- [ ] HEADSET-TESTS **round 5** written: every [H] question from tonight's items, with the ini switches to try.
+- [ ] STATUS.md updated: done / blocked / next.
+- [ ] **Deploy the round-5 configuration** (Virtual Desktop runtime: `OpenXR.RuntimeJson=` empty), game not running.

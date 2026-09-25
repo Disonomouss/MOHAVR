@@ -84,10 +84,13 @@ address-space budget for D3D9On12.
   asymmetric FOV, in one render pass. About 10 MB extra, and 495 MB still free. Verified in the
   simulator.
 
+- **M4 in the headset:** stereo works and the right-eye flicker is fixed (per-eye FSceneViewState). The
+  in-headset menu (host, ImGui, Touch controls) sets world scale live; the player chose **100**, now the
+  default. Open: the doubled gun (M7/M8), the per-eye HUD (M5), no controller play yet (M6).
+
 ## Next
-1. **[H] Headset round 3** (deployed): depth, comfort, scale (UnitsPerMeter decision), HUD.
-2. M5: layers (menus/cutscenes on a cinema screen, HUD on its own quad).
-3. Desktop mirror; recentre key.
+See **`UNATTENDED-REPORT.md`**: the estimate of what can be done without the player (~70% of the remaining
+work) and the ordered checklist for the overnight session.
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block

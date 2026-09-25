@@ -3,6 +3,12 @@
 Native 6DoF VR mod (OpenXR) for Medal of Honor: Airborne (Steam app 24840): a 2007 Unreal
 Engine 3 game, 32-bit, Direct3D 9.
 
+## Working unattended
+If the player is away (overnight goal): work through `UNATTENDED-REPORT.md` §6 in order, under the rules in
+§5 (switches off by default where comfort is involved, commit per item, 2 h research time box → BLOCKED,
+deploy the morning headset config at the end). Don't wait for answers; write [H] questions into
+HEADSET-TESTS.md.
+
 ## Read first
 - `LESSONS-FOR-NEXT-VR-MOD.md`: lessons from GunVR, the previous project (2005 D3D9 game). Its
   methods and D3D9 → OpenXR plumbing carry over; its engine facts do not. Verify each claim

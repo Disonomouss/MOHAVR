@@ -1,5 +1,8 @@
 # Plan
 
+> **Unattended work (from 2026-09-25 night):** the ordered checklist is in `UNATTENDED-REPORT.md` §6,
+> with the rules for working without the player in §5. It supersedes the "Next" lists below.
+
 The checklist for the current milestone. An unattended session can work through it top to
 bottom. Tick items as they're done, adding a one-line result. A blocked item stays unticked
 and gets marked **BLOCKED**, with the reason (time-box research at about two hours). Stop and

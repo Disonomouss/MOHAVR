@@ -26,7 +26,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.stereoViewState   = get(L"Camera", L"StereoViewState", c.stereoViewState);
     {
         wchar_t u[32] = L"";
-        GetPrivateProfileStringW(L"Camera", L"UnitsPerMeter", L"50", u, 32, ini.c_str());
+        GetPrivateProfileStringW(L"Camera", L"UnitsPerMeter", L"100", u, 32, ini.c_str());
         const float v = static_cast<float>(_wtof(u));
         if (v > 1.0f && v < 1000.0f) c.unitsPerMeter = v;
     }
