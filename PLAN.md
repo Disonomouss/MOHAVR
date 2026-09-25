@@ -80,5 +80,33 @@ time, or needs the headset.
 - [ ] Desktop mirror window in the host (the game's own window is white under 9On12).
 - [ ] Quad placement: the LOCAL origin puts it low in the simulator. Recenter or use VIEW-based
       placement at session start.
+
+## Current: M3 (head tracking and per-eye projection, mono)
+Design (ENGINE-NOTES §5g):
+- **Host → game** (shared block v2, seqlock): each XR frame, `xrLocateViews` at the predicted
+  display time gives the head pose (VIEW in LOCAL) and both eyes' FOV tangents.
+- **Game, game thread:** a safetyhook MidHook at `0x10C19B3C` in `CalcSceneView` gives the final
+  ViewRotation = **game yaw ∘ head orientation** (the game's own pitch and roll are dropped;
+  lessons §3). ViewLocation += yaw-rotated head position × `Camera.UnitsPerMeter`.
+- **Game, projection:** MidHooks at `0x10C19EAB` and `0x10C19DAF` overwrite the matrix at [EAX]
+  with an asymmetric perspective. Mono uses the union of both eyes' FOV, widened horizontally to
+  the viewport's aspect (so no backbuffer resize is needed yet). Near plane stays at 5.0.
+- **Pose/image pairing:** each published frame carries the pose and FOV it was rendered with.
+  Render-thread lag is detected (the Present thread differs from the CalcSceneView thread → use
+  the previous view).
+- **Host:** a projection layer (both eyes get the same image, pose and FOV = the frame's own),
+  replacing the quad. The runtime reprojects.
+- Every piece behind `[Camera]` switches; the prologue and signature bytes are verified before
+  each MidHook (standing rule 4).
+
+Steps:
+- [x] RE: CalcSceneView, GetPlayerViewPoint, FPerspectiveMatrix and hook sites (ENGINE-NOTES §5g).
+- [ ] safetyhook (vcpkg, x86-static, C++23) plus a verified MidHook helper.
+- [ ] Shared block v2: views from the host, per-slot render pose/FOV from the game.
+- [ ] Game: the view and projection hooks; pose pairing.
+- [ ] Host: xrLocateViews, the projection layer.
+- [ ] [S] The simulator head pose drives the game camera (turn 30° → view turns 30°), with the
+      FOV correct and no swim.
+- [ ] [H] Headset round 2.
 - [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
       shown on a world-locked quad first.

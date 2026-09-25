@@ -240,6 +240,29 @@ adapter, one 1920×1080 quad swapchain; runtime = the 32-bit OpenXR Simulator):
   the player's own **fullscreen 2560×1440** mode (`windowed 0`, swap DISCARD), so the bridge works
   fullscreen as well as windowed; the host sizes its swapchain from the shared header.
 
+## 5g. Native view construction: ULocalPlayer::CalcSceneView (RE 2026-09-25, Ghidra)
+
+Found by following the name string `GetPlayerViewPoint` (`0x1152AEA0`) through the engine's
+name-registration table (`FUN_10D7B750`: build FName with `CALL 0x109E2CF0`, store in a global),
+to the FName global `0x116F9280`, and then to its only reader.
+
+| VA | What | Evidence |
+|---|---|---|
+| `0x10B33A80` | `APlayerController::eventGetPlayerViewPoint`. **Register args:** EDI = `FVector* out_Location`, ESI = `FRotator* out_Rotation`, pushed = the controller. `ProcessEvent` is at vtable `+0xF0`. | decompile; FName `0x116F9280`; 9 callers |
+| **`0x10C19910`** | **`ULocalPlayer::CalcSceneView`**. Stack args: `[EBP+8]` = this (ULocalPlayer), `+0xC` = ViewFamily, **`+0x10` = `FVector* ViewLocation`, `+0x14` = `FRotator* ViewRotation`**, `+0x18` = Viewport. Prologue `55 8B EC 83 E4 F0`. | decompile + disasm |
+| `this+0x40` | the PlayerController (`Actor`) | `[EDI+0x40]` then GetPlayerViewPoint |
+| `this+0x68/0x6C/0x70/0x74` | split-screen Origin X/Y and Size X/Y (floats, fractions of the viewport) | multiplied with the viewport's size X/Y |
+| `PC+0x2E4` | `PlayerCamera`; the FOV is `Camera+0x1EC`; flags at `Camera+0x1F0` (bit 2 = constrained aspect, bit 4, bit 0x10); `ConstrainedAspectRatio` = `Camera+0x1F8` | decompile |
+| `PC+0x320` | the FOV used when there is no PlayerCamera | decompile |
+| `0x116DCB78` | "locked view" flag: when set, the location and rotation come from globals `0x116F7AD4` / `0x116F7B78` instead of GetPlayerViewPoint | decompile |
+| **`0x10C19B3C`** | **merge point after the view point is known** (both branches jump here): `8B 77 40  E8 ...` (`MOV ESI,[EDI+0x40]; CALL 0x10BEDFF0`). Hook here to rewrite ViewLocation and ViewRotation through `[EBP+0x10]` and `[EBP+0x14]`. | disasm |
+| `0x10919120` / `0x10918FC0` | `FInverseRotationMatrix` construction / `FMatrix` multiply; the view matrix = T(−Loc) · InvRot(Rot) · axis swap `[0 0 1 0; 1 0 0 0; 0 1 0 0; 0 0 0 1]` | decompile |
+| **`0x10BED9F0`** | **`FPerspectiveMatrix(HalfFOV, Width, Height, MinZ)`**: 4 floats on the stack, **output matrix pointer in ESI**, returned in EAX. Layout (row-major, row vectors): `M00 = 1/tan(h)`, `M11 = (W/H)/tan(h)`, `M22 = 0.999`, `M23 = 1`, `M32 = −MinZ·0.999`, the rest 0. **HalfFOV is horizontal.** Infinite far plane, Z not reversed. | decompile |
+| `0x10C19EA6` → ret `0x10C19EAB` | the normal projection call: `FPerspectiveMatrix(FOV·π/360, W·aspect…, H, 5.0)`. At `0x10C19EAB` (`B9 10 00 00 00`, `MOV ECX,0x10`), EAX points at the fresh matrix, just before it's copied out. | disasm |
+| `0x10C19DAA` → ret `0x10C19DAF` | the constrained-aspect projection call (`Camera+0x1F8` aspect). At `0x10C19DAF` (`8B F0`, `MOV ESI,EAX`) EAX points at the matrix. | disasm |
+| — | **Near clip = 5.0 units**, hard-coded (`0x40A00000`) at both call sites. | disasm |
+| `0x10A96A20` | the `FSceneView` constructor (allocated 0x1E0 bytes) | decompile |
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
