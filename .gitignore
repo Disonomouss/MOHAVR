@@ -1,0 +1,31 @@
+build/
+out/
+.vs/
+*.user
+build.log
+deps/
+__pycache__/
+
+# Derived from game files (unwrapped exe, decompressed packages) -- never commit or ship
+work/
+logs/
+
+# Ghidra project database: large, binary, machine-local
+ghidra-projects/
+
+# Third-party tool clones, each with its own git history and pinned commit (see tools/SETUP.md)
+tools/cheatengine-mcp-bridge/
+tools/ghidra-mcp/
+tools/Ghidrust/
+tools/OpenXR-Simulator/
+tools/OpenXR-Simulator-x86/
+tools/Vulkan-Headers/
+tools/x64dbg-skills/
+tools/x64dbg-env/
+
+# Build outputs of our own small tools
+tools/openxr-sim-smoke/*.exe
+tools/openxr-sim-smoke/*.obj
+
+# Machine-local Claude Code settings
+.claude/settings.local.json

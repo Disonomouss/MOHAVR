@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "ghidra": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-sync",
+        "--directory",
+        "tools/ghidra-mcp",
+        "bridge-mcp-ghidra",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "GHIDRA_MCP_URL": "http://127.0.0.1:8089",
+        "GHIDRA_DEBUGGER_URL": "http://127.0.0.1:8099",
+        "PYTHONIOENCODING": "utf-8"
+      }
+    },
+    "cheatengine": {
+      "command": "tools/cheatengine-mcp-bridge/.venv/Scripts/python.exe",
+      "args": [
+        "tools/cheatengine-mcp-bridge/MCP_Server/mcp_cheatengine.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    },
+    "openxr-simulator": {
+      "command": "tools/OpenXR-Simulator/mcp-server/.venv/Scripts/python.exe",
+      "args": [
+        "tools/OpenXR-Simulator/mcp-server/openxr_simulator_mcp.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    },
+    "x64dbg": {
+      "command": "tools/x64dbg-env/.venv/Scripts/x64dbg-automate-mcp.exe",
+      "args": [],
+      "env": {
+        "X64DBG_PATH": "C:\\Users\\j_tom\\Tools\\x64dbg\\release\\x96dbg.exe",
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}
