@@ -18,6 +18,7 @@
 
 #include <shellapi.h>
 
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -271,6 +272,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     rsci.poseInReferenceSpace.orientation.w = 1.0f;
     XrSpace local = XR_NULL_HANDLE;
     XR_OK(xrCreateReferenceSpace(session, &rsci, &local), "xrCreateReferenceSpace");
+    rsci.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
+    XrSpace viewSpace = XR_NULL_HANDLE;
+    XR_OK(xrCreateReferenceSpace(session, &rsci, &viewSpace), "xrCreateReferenceSpace(VIEW)");
 
     // The frame is B8G8R8A8_UNORM holding gamma-encoded colour, so an sRGB BGRA swapchain shows it
     // correctly via a plain CopyResource (same typeless family).
@@ -289,7 +293,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     swci.width = width;
     swci.height = height;
     swci.faceCount = 1;
-    swci.arraySize = 1;
+    swci.arraySize = 2;  // one slice per eye for the projection layer (M3); the quad uses slice 0
     swci.mipCount = 1;
     XrSwapchain swapchain = XR_NULL_HANDLE;
     XR_OK(xrCreateSwapchain(session, &swci, &swapchain), "xrCreateSwapchain");
@@ -314,6 +318,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
 
     // --- loop -------------------------------------------------------------------------------------
     bool running = false;
+    bool loggedViews = false, loggedProjection = false;
+    mohavr::shared::SlotMeta lastMeta{};  // render pose/fov of the frame in `last`
     std::uint64_t shown = 0;  // last game frame copied into `last`
     long xrFrames = 0;
     long newFrames = 0;
@@ -345,16 +351,66 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
         XR_OK(xrWaitFrame(session, nullptr, &fs), "xrWaitFrame");
         XR_OK(xrBeginFrame(session, nullptr), "xrBeginFrame");
 
+        // Head pose + eye views at the predicted display time -> the game (seqlock, M3).
+        {
+            XrSpaceLocation headLoc{XR_TYPE_SPACE_LOCATION};
+            XrViewLocateInfo vli{XR_TYPE_VIEW_LOCATE_INFO};
+            vli.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+            vli.displayTime = fs.predictedDisplayTime;
+            vli.space = local;
+            XrViewState vs{XR_TYPE_VIEW_STATE};
+            XrView views[2] = {{XR_TYPE_VIEW}, {XR_TYPE_VIEW}};
+            uint32_t viewCount = 0;
+            const bool headOk = XR_SUCCEEDED(xrLocateSpace(viewSpace, local, fs.predictedDisplayTime, &headLoc)) &&
+                                (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+            const bool viewsOk = XR_SUCCEEDED(xrLocateViews(session, &vli, &vs, 2, &viewCount, views)) && viewCount == 2 &&
+                                 (vs.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+            if (headOk && viewsOk) {
+                auto toPose = [](const XrPosef& p) {
+                    return mohavr::shared::Pose{p.position.x, p.position.y, p.position.z,
+                                                p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w};
+                };
+                auto toFov = [](const XrFovf& f) {
+                    return mohavr::shared::Fov{std::tan(f.angleLeft), std::tan(f.angleRight), std::tan(f.angleUp), std::tan(f.angleDown)};
+                };
+                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
+                g_hdr->viewDisplayTime = fs.predictedDisplayTime;
+                g_hdr->head = toPose(headLoc.pose);
+                for (int e = 0; e < 2; ++e) {
+                    g_hdr->eye[e] = toPose(views[e].pose);
+                    g_hdr->eyeFov[e] = toFov(views[e].fov);
+                }
+                g_hdr->viewValid = 1;
+                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
+                if (!loggedViews) {
+                    loggedViews = true;
+                    MLOG("host: views located -- eye fov L(%.1f %.1f %.1f %.1f) R(%.1f %.1f %.1f %.1f) deg, IPD %.1f mm",
+                         views[0].fov.angleLeft * 57.2958f, views[0].fov.angleRight * 57.2958f, views[0].fov.angleUp * 57.2958f,
+                         views[0].fov.angleDown * 57.2958f, views[1].fov.angleLeft * 57.2958f, views[1].fov.angleRight * 57.2958f,
+                         views[1].fov.angleUp * 57.2958f, views[1].fov.angleDown * 57.2958f,
+                         1000.0f * std::sqrt(std::pow(views[1].pose.position.x - views[0].pose.position.x, 2.0f) +
+                                             std::pow(views[1].pose.position.y - views[0].pose.position.y, 2.0f) +
+                                             std::pow(views[1].pose.position.z - views[0].pose.position.z, 2.0f)));
+                }
+            }
+        }
+
         // Take the newest game frame, if there is one we haven't taken (protocol: shared_frame.hpp).
         const std::uint64_t f = static_cast<std::uint64_t>(
             InterlockedCompareExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), 0, 0));
         if (f > shown) {
             const UINT slot = static_cast<UINT>(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), 0, 0));
+            lastMeta = g_hdr->slotMeta[slot % kRing];  // written by the game before it published f
             InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), static_cast<LONG64>(f));
             ctx->Wait(gameFence, f);
             ctx->CopyResource(last, shared[slot % kRing]);
             ctx->Signal(hostFence, f);
             shown = f;
+            if (lastMeta.hasView && !loggedProjection) {
+                loggedProjection = true;
+                MLOG("host: first head-tracked frame -- switching to a projection layer (fov tan L%.3f R%.3f U%.3f D%.3f)",
+                     lastMeta.fov.tanLeft, lastMeta.fov.tanRight, lastMeta.fov.tanUp, lastMeta.fov.tanDown);
+            }
             if (++newFrames == 1) MLOG("host: first game frame received (frame %llu, slot %u)", static_cast<unsigned long long>(f), slot);
             if (newFrames == 1 || newFrames == 300 || newFrames == 1200) {
                 char label[48];
@@ -367,6 +423,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
         }
 
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+        XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+        XrCompositionLayerProjectionView pviews[2] = {{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
+                                                      {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
         const XrCompositionLayerBaseHeader* layers[1];
         uint32_t layerCount = 0;
         if (fs.shouldRender) {
@@ -376,18 +435,39 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
             XrSwapchainImageWaitInfo wi{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
             wi.timeout = XR_INFINITE_DURATION;
             XR_OK(xrWaitSwapchainImage(swapchain, &wi), "xrWaitSwapchainImage");
-            ctx->CopyResource(images[idx].texture, last);
+            for (UINT slice = 0; slice < 2; ++slice)
+                ctx->CopySubresourceRegion(images[idx].texture, D3D11CalcSubresource(0, slice, 1), 0, 0, 0, last, 0, nullptr);
             XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             XR_OK(xrReleaseSwapchainImage(swapchain, &ri), "xrReleaseSwapchainImage");
 
-            layer.space = local;
-            layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-            layer.subImage.swapchain = swapchain;
-            layer.subImage.imageRect = {{0, 0}, {static_cast<int32_t>(width), static_cast<int32_t>(height)}};
-            layer.pose.orientation.w = 1.0f;
-            layer.pose.position = {0.0f, 0.0f, -2.0f};
-            layer.size = {1.6f, 1.6f * static_cast<float>(height) / static_cast<float>(width)};
-            layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
+            const XrRect2Di full{{0, 0}, {static_cast<int32_t>(width), static_cast<int32_t>(height)}};
+            if (lastMeta.hasView) {
+                // Mono projection (M3): both eyes get the same image, submitted with the exact head pose and
+                // FOV it was rendered with -- the runtime reprojects it, so it stays world-locked.
+                const auto& p = lastMeta.pose;
+                const auto& rf = lastMeta.fov;
+                for (uint32_t e = 0; e < 2; ++e) {
+                    pviews[e].pose.position = {p.px, p.py, p.pz};
+                    pviews[e].pose.orientation = {p.qx, p.qy, p.qz, p.qw};
+                    pviews[e].fov = {std::atan(rf.tanLeft), std::atan(rf.tanRight), std::atan(rf.tanUp), std::atan(rf.tanDown)};
+                    pviews[e].subImage.swapchain = swapchain;
+                    pviews[e].subImage.imageRect = full;
+                    pviews[e].subImage.imageArrayIndex = e;
+                }
+                proj.space = local;
+                proj.viewCount = 2;
+                proj.views = pviews;
+                layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);
+            } else {
+                layer.space = local;
+                layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+                layer.subImage.swapchain = swapchain;
+                layer.subImage.imageRect = full;
+                layer.pose.orientation.w = 1.0f;
+                layer.pose.position = {0.0f, 0.0f, -2.0f};
+                layer.size = {1.6f, 1.6f * static_cast<float>(height) / static_cast<float>(width)};
+                layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
+            }
             layerCount = 1;
         }
         XrFrameEndInfo fe{XR_TYPE_FRAME_END_INFO};

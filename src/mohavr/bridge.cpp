@@ -9,6 +9,7 @@
 
 #include "../common/shared_frame.hpp"
 #include "log.hpp"
+#include "vr_view.hpp"
 
 namespace mohavr::bridge {
 namespace {
@@ -162,6 +163,12 @@ void Publish(IDirect3DDevice9* dev) {
     g_d9on12->ReturnUnderlyingResource(g_rt, 1, &value, &fence);
     src->Release();
 
+    // The pose/FOV this image was rendered with (M3); the host submits it with exactly these.
+    shared::SlotMeta meta{};
+    view::MetaForPresentedFrame(meta);
+    g_hdr->slotMeta[slot] = meta;
+    MemoryBarrier();
+
     InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), static_cast<LONG>(slot));
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), static_cast<LONG64>(n));
     if (n == 1) MLOG("bridge: first frame published (slot %u)", slot);
@@ -169,6 +176,8 @@ void Publish(IDirect3DDevice9* dev) {
 }
 
 }  // namespace
+
+shared::Header* SharedHeader() { return g_hdr; }
 
 void StartHost(const std::wstring& runtimeJson) {
     if (g_hdr) return;

@@ -26,11 +26,15 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/bridge.cpp
         src/mohavr/patch.cpp
         src/mohavr/xr_session.cpp
+        src/mohavr/vr_view.cpp
         src/mohavr/dinput8.def
     )
+    # Mid-function hooks with register context (safetyhook needs C++23).
+    find_package(safetyhook CONFIG REQUIRED)
+    target_link_libraries(mohavr PRIVATE safetyhook::safetyhook)
     # The game loads it as dinput8.dll from its Binaries folder (D5).
     set_target_properties(mohavr PROPERTIES OUTPUT_NAME dinput8)
-    target_compile_features(mohavr PRIVATE cxx_std_20)
+    target_compile_features(mohavr PRIVATE cxx_std_23)
     target_compile_definitions(mohavr PRIVATE ${MOHAVR_COMMON_DEFS})
     target_compile_options(mohavr PRIVATE ${MOHAVR_COMMON_OPTS})
     target_link_options(mohavr PRIVATE /SAFESEH:NO)

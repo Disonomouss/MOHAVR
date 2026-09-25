@@ -20,12 +20,33 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 1;
+inline constexpr std::uint32_t kVersion = 2;           // 2: views (host -> game) + per-slot render pose (M3)
 inline constexpr std::uint32_t kRing    = 3;
+
+// OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
+// reference space. The game converts to Unreal units/axes itself.
+struct Pose {
+    float px, py, pz;
+    float qx, qy, qz, qw;
+};
+// Tangents of the view frustum edges: left and down are negative.
+struct Fov {
+    float tanLeft, tanRight, tanUp, tanDown;
+};
+// What a published frame was rendered with -- the host submits it with exactly this pose/fov.
+struct SlotMeta {
+    Pose          pose;
+    Fov           fov;
+    std::uint32_t hasView;  // 0: rendered without head tracking (show on the quad)
+    std::uint32_t pad;
+};
 
 enum class GameState : std::uint32_t { None = 0, Starting = 1, Ready = 2, Failed = 3 };
 enum class HostState : std::uint32_t { None = 0, Starting = 1, Running = 2, Failed = 3, Exited = 4 };
@@ -57,11 +78,44 @@ struct Header {
     volatile std::uint32_t hostState;  // HostState
     char gameStatus[128];              // last notable message, for logs
     char hostStatus[128];
+
+    // --- v2: views, host -> game (seqlock: viewSeq odd while the host writes) -----------------
+    volatile std::uint32_t viewSeq;
+    std::uint32_t          viewValid;  // 1 once the runtime reports tracked views
+    std::int64_t           viewDisplayTime;
+    Pose                   head;       // VIEW space located in LOCAL
+    Pose                   eye[2];     // xrLocateViews, left/right
+    Fov                    eyeFov[2];
+
+    // --- v2: per-slot render metadata, game -> host (written before publishedFrame) ------------
+    SlotMeta               slotMeta[kRing];
 };
 #pragma pack(pop)
 
-static_assert(sizeof(Header) == 368, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Pose) == 28 && sizeof(Fov) == 16 && sizeof(SlotMeta) == 52, "shared structs must be packed identically");
 static_assert(offsetof(Header, publishedFrame) == 80, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, ackFrame) == 96, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, viewSeq) == 368, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, viewDisplayTime) == 376, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, slotMeta) == 500, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 656, "shared::Header layout must match between x86 and x64");
+
+// Seqlock read of the views; false if the host is mid-write (just try again next frame).
+inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {
+    const std::uint32_t s1 = h->viewSeq;
+    if ((s1 & 1u) || !h->viewValid) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    head = h->head;
+    eye[0] = h->eye[0];
+    eye[1] = h->eye[1];
+    fov[0] = h->eyeFov[0];
+    fov[1] = h->eyeFov[1];
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    return h->viewSeq == s1;
+}
 
 }  // namespace mohavr::shared

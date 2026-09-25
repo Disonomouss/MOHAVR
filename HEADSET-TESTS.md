@@ -6,6 +6,31 @@ answerable with yes or no.
 After every session, ask the player for their MOHAVR log; bugs often show up there that the
 simulator never shows.
 
+## Round 2: prepared 2026-09-25, M3 (head tracking, mono)
+**Changed:** your head now moves the camera. Looking around, up and down, and tilting all move
+the view; leaning moves it too. The picture fills your view instead of floating on a screen. It's
+still mono (the same image in both eyes), so it won't look 3D yet; that's M4. Mouse turning still
+turns your body. The rifle stays where your body aims, so it slides away when you look aside, and
+the HUD stays glued to your view. Both are expected for now.
+
+**How to try it:** Claude deploys (`Bridge.D3D9On12=1`, `Bridge.Host=1`, `Camera.HeadTracking=1`,
+RuntimeJson empty). Launch from Steam (the desktop window stays white), then Campaign → Continue.
+Look around slowly during and after the parachute landing, then quickly. Turn with the mouse too.
+Quit, and tell Claude.
+
+**Questions:**
+1. When you turn your head, does the world stay still, rather than swimming or lagging behind? (yes/no)
+2. Does the world look the right size: not giant, not tiny? (yes/no)
+3. Is the horizon level when your head is level? (yes/no)
+4. Any discomfort or eye strain in the first minute? (yes/no; mono is expected to feel flat)
+5. Does leaning your head move the view naturally, not too much or too little? (yes/no)
+
+**Answers:**
+
+**Log received:**
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

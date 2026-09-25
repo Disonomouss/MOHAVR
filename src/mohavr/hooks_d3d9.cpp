@@ -12,6 +12,7 @@
 #include "frame_capture.hpp"
 #include "log.hpp"
 #include "patch.hpp"
+#include "vr_view.hpp"
 #include "xr_session.hpp"
 
 namespace mohavr::hooks {
@@ -132,7 +133,12 @@ HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DD
     const HRESULT hr = g_realCreateDevice(self, adapter, type, focus, flags, pp, out);
     if (SUCCEEDED(hr) && out) HookDevice(*out);
     if (SUCCEEDED(hr)) {
-        if (g_cfg.bridgeHost && g_useOn12) bridge::StartHost(g_cfg.xrRuntimeJson);  // D10: OpenXR out of process
+        if (g_cfg.bridgeHost && g_useOn12) {
+            bridge::StartHost(g_cfg.xrRuntimeJson);  // D10: OpenXR out of process
+            // M3: main thread, before the first CalcSceneView can run.
+            static bool viewInstalled = false;
+            if (!viewInstalled) { viewInstalled = true; view::Install(g_cfg); }
+        }
         else if (g_cfg.xrEnabled && !g_cfg.bridgeHost) xr::Start(g_cfg.xrRuntimeJson);  // diagnostic, in process
     }
     // First few calls in full; after that only every 20th (the game's retry loop is 2/s).

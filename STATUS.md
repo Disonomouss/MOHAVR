@@ -68,9 +68,17 @@ address-space budget for D3D9On12.
 - **M2 done, including the headset:** the player saw the game on the floating screen in a Quest 3
   through Virtual Desktop, at 90 Hz, stable and smooth, with correct colours (HEADSET-TESTS round 1).
 
+- **M3 [S] done:** `ULocalPlayer::CalcSceneView` was reverse-engineered (ENGINE-NOTES §5g). With
+  safetyhook MidHooks, the head pose from the host drives the camera (game yaw + head
+  orientation, head translation), and the projection is the headset's asymmetric FOV. The host
+  submits a projection layer with the frame's own render pose. Verified in the simulator
+  (yaw/pitch/roll correct, each eye filled at 60 FPS).
+
 ## Next
-1. Desktop mirror in the host (the game's own window is white under 9On12 when windowed).
-2. M3: head tracking and per-eye projection (the camera path is known, ENGINE-NOTES §6).
+1. **[H] Headset round 2** (HEADSET-TESTS): world-lock, scale, horizon, comfort.
+2. M4: stereo, rendering each eye. First check UE3's split-screen path (ENGINE-NOTES §6: the stock
+   2P-vertical layout is intact, and CalcSceneView honours per-player Origin/Size).
+3. Desktop mirror; recentre key.
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block

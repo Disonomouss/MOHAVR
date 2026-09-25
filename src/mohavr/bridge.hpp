@@ -8,9 +8,14 @@
 #pragma once
 #include <string>
 
+#include "../common/shared_frame.hpp"
+
 struct IDirect3DDevice9;
 
 namespace mohavr::bridge {
+
+// The shared block, or null before StartHost / if it failed.
+shared::Header* SharedHeader();
 
 // Creates the shared-memory block and launches MOHAVR-host.exe from this DLL's folder.
 void StartHost(const std::wstring& runtimeJson);

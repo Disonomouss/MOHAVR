@@ -46,11 +46,41 @@ inline constexpr std::uintptr_t kIatDirect3DCreate9 = 0x112C6818;
 inline constexpr std::uintptr_t kCreateDeviceCall = 0x1090339A;
 inline constexpr std::uint8_t   kCreateDeviceCallBytes[] = {0xFF, 0xD0};
 
+// --- ULocalPlayer::CalcSceneView (ENGINE-NOTES 5g) ----------------------------------------------
+// Stack args: [EBP+0x10] = FVector* ViewLocation, [EBP+0x14] = FRotator* ViewRotation.
+inline constexpr std::uintptr_t kCalcSceneView = 0x10C19910;
+inline constexpr std::uint8_t   kCalcSceneViewBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0};  // push ebp; mov ebp,esp; and esp,-16
+
+// Merge point after GetPlayerViewPoint / locked view: mov esi,[edi+0x40]; call 0x10BEDFF0 (rel32).
+// MidHook here: the view location/rotation are final and about to be turned into matrices.
+inline constexpr std::uintptr_t kViewPointMerge = 0x10C19B3C;
+inline constexpr std::uint8_t   kViewPointMergeBytes[] = {0x8B, 0x77, 0x40, 0xE8, 0xAC, 0x44, 0xFD, 0xFF};  // read from the exe 2026-09-25
+
+// FPerspectiveMatrix (0x10BED9F0; output ptr in ESI, returned in EAX). Its two call sites in
+// CalcSceneView, and the instruction right after each call (MidHook: EAX -> the new matrix).
+inline constexpr std::uintptr_t kPerspectiveMatrix = 0x10BED9F0;
+inline constexpr std::uintptr_t kProjCallNormal       = 0x10C19EA6;  // call rel32 -> kPerspectiveMatrix
+inline constexpr std::uintptr_t kProjAfterNormal      = 0x10C19EAB;  // mov ecx,0x10
+inline constexpr std::uint8_t   kProjAfterNormalBytes[] = {0xB9, 0x10, 0x00, 0x00, 0x00};
+inline constexpr std::uintptr_t kProjCallConstrained  = 0x10C19DAA;  // call rel32 -> kPerspectiveMatrix
+inline constexpr std::uintptr_t kProjAfterConstrained = 0x10C19DAF;  // mov esi,eax
+inline constexpr std::uint8_t   kProjAfterConstrainedBytes[] = {0x8B, 0xF0};
+
+// The call instructions themselves: E8 + rel32 to kPerspectiveMatrix (targets verified from the exe).
+inline constexpr std::uint8_t kProjCallNormalBytes[]      = {0xE8, 0x45, 0x3B, 0xFD, 0xFF};
+inline constexpr std::uint8_t kProjCallConstrainedBytes[] = {0xE8, 0x41, 0x3C, 0xFD, 0xFF};
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},
     {"thunk Direct3DCreate9",   kThunkDirect3DCreate9,  kThunkDirect3DCreate9Bytes, sizeof(kThunkDirect3DCreate9Bytes)},
     {"CreateDevice call site",  kCreateDeviceCall,      kCreateDeviceCallBytes,     sizeof(kCreateDeviceCallBytes)},
+    {"CalcSceneView prologue",  kCalcSceneView,         kCalcSceneViewBytes,        sizeof(kCalcSceneViewBytes)},
+    {"CalcSceneView view merge", kViewPointMerge,       kViewPointMergeBytes,       sizeof(kViewPointMergeBytes)},
+    {"FPerspectiveMatrix call (normal)",      kProjCallNormal,      kProjCallNormalBytes,      sizeof(kProjCallNormalBytes)},
+    {"after FPerspectiveMatrix (normal)",     kProjAfterNormal,     kProjAfterNormalBytes,     sizeof(kProjAfterNormalBytes)},
+    {"FPerspectiveMatrix call (constrained)", kProjCallConstrained, kProjCallConstrainedBytes, sizeof(kProjCallConstrainedBytes)},
+    {"after FPerspectiveMatrix (constrained)", kProjAfterConstrained, kProjAfterConstrainedBytes, sizeof(kProjAfterConstrainedBytes)},
 };
 
 }  // namespace mohavr::addr

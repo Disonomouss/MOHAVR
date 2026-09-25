@@ -61,7 +61,14 @@ the game's own view on a world-locked quad. Measure address-space headroom (the 
 **Accept [S]:** the frame appears in the simulator's preview window. **[H]:** the image is stable
 and has no stutter.
 
-### M3. Head tracking and per-eye projection — [S] then [H]
+### M3. Head tracking and per-eye projection — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+*As built:* MidHooks in `ULocalPlayer::CalcSceneView` (ENGINE-NOTES §5g/§5h). ViewRotation = game yaw
+∘ head orientation, ViewLocation += head translation (recentred), and the projection = the
+headset's union FOV widened to the viewport aspect. The host locates the views, publishes them
+via a seqlock, and submits a projection layer with each frame's render pose and FOV. Mono. The
+near plane (5.0) is unchanged.
+
+*Original plan:*
 Compose the HMD pose onto the game camera: heading only, with the game keeping pitch and roll
 (lessons §3). Find where UE3 turns `GetPlayerViewPoint`/`GetCameraViewPoint` into native view
 and projection matrices. Rewrite the frustum arguments for the headset's asymmetric

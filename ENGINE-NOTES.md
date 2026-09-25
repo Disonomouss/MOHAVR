@@ -263,6 +263,29 @@ to the FName global `0x116F9280`, and then to its only reader.
 | — | **Near clip = 5.0 units**, hard-coded (`0x40A00000`) at both call sites. | disasm |
 | `0x10A96A20` | the `FSceneView` constructor (allocated 0x1E0 bytes) | decompile |
 
+## 5h. Head tracking and headset projection (M3, measured 2026-09-25, x64 simulator)
+
+- The safetyhook MidHooks at `0x10C19B3C` (view merge), `0x10C19EAB` and `0x10C19DAF` (after
+  FPerspectiveMatrix) install cleanly from the CreateDevice hook, and the build check covers all
+  10 signatures.
+- Axis and rotation mapping verified: OpenXR `(x, y, z)` → Unreal `(−z, x, y)`, FRotator from the
+  head basis the way UE3's `FMatrix::Rotator` does it. Simulator roll +15° gives quaternion
+  z = 0.131, which gives view roll −2,731 units = −15.0°. Yaw +30° (OpenXR: toward −X = left)
+  turns the camera left; pitch +20° looks up. Captures are in `logs/shots/m3-game-*.png`.
+- **The weapon viewmodel follows the body's aim, not the head.** With the head turned it slides out
+  of view. That's expected with a decoupled head, and controllers take over the weapon later (M7).
+- **The HUD is screen-space** and doesn't rotate with the head (roll), so it's due its own layer
+  (M5).
+- Simulator Quest 3 FOV per eye: outer 54.0°, inner 40.0°, up 44.0°, down 54.3°, IPD 64 mm. The
+  union widened to 16:9 gives tangents L/R ±2.093 (about ±64.5°), U 0.965, D −1.390. The image is
+  very wide on the monitor but correct in the eyes.
+- The host's projection layer (both eyes = the same image with the frame's render pose and FOV) is
+  accepted: the simulator shows 60 FPS with each eye filled by the game at a natural perspective.
+- The simulator's LOCAL puts the head at y = 1.7 m, so the game recentres translation on the
+  first tracked pose (translation only).
+- The frame-to-pose pairing uses the render-thread-lag rule (the Present thread differs from the
+  CalcSceneView thread → the previous view). Not yet measured for swim; that's for the headset.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

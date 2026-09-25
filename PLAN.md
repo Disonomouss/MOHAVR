@@ -101,12 +101,16 @@ Design (ENGINE-NOTES §5g):
 
 Steps:
 - [x] RE: CalcSceneView, GetPlayerViewPoint, FPerspectiveMatrix and hook sites (ENGINE-NOTES §5g).
-- [ ] safetyhook (vcpkg, x86-static, C++23) plus a verified MidHook helper.
-- [ ] Shared block v2: views from the host, per-slot render pose/FOV from the game.
-- [ ] Game: the view and projection hooks; pose pairing.
-- [ ] Host: xrLocateViews, the projection layer.
-- [ ] [S] The simulator head pose drives the game camera (turn 30° → view turns 30°), with the
-      FOV correct and no swim.
-- [ ] [H] Headset round 2.
+- [x] safetyhook 0.7 (vcpkg, x86-static, C++23). MidHooks installed after the call-target and
+      signature checks.
+- [x] Shared block v2: views from the host (seqlock), per-slot render pose/FOV from the game.
+- [x] Game: the view and projection hooks; pose pairing; translation recentred on the first pose.
+- [x] Host: xrLocateSpace(VIEW) + xrLocateViews, projection layer (2-slice swapchain), quad
+      fallback.
+- [x] [S] Simulator: yaw, pitch and roll drive the camera correctly (ENGINE-NOTES §5h), and the
+      projection layer fills each eye at a natural perspective at 60 FPS.
+- [ ] [H] Headset round 2: world-lock (no swim), scale, comfort.
+- Later in M3: a recentre key; render only the needed FOV (the widened union wastes pixels); the
+  weapon and HUD follow in M5/M7.
 - [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
       shown on a world-locked quad first.

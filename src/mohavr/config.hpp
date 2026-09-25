@@ -10,6 +10,10 @@ struct Config {
     bool d3d9On12       = false;  // [Bridge]  D3D9On12 -- create the game's IDirect3D9 via Direct3DCreate9On12 (M2)
     bool bridgeHost     = false;  // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)
     bool testWrongBuild = false;  // [Debug]   TestWrongBuild -- pretend the build check failed (M1 acceptance)
+    bool  headTracking      = false;  // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)
+    bool  headPosition      = true;   // [Camera] HeadPosition -- also apply head translation (6DoF)
+    bool  headsetProjection = true;   // [Camera] HeadsetProjection -- render with the headset's FOV
+    float unitsPerMeter     = 50.0f;  // [Camera] UnitsPerMeter -- Unreal units per metre (UE3: 1 uu ~ 2 cm)
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)
     std::wstring xrRuntimeJson;   // [OpenXR]  RuntimeJson -- if set, XR_RUNTIME_JSON for this process only (D3)
 };

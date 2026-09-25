@@ -1,9 +1,13 @@
 {
   "name": "mohavr",
-  "version": "0.2.0",
-  "description": "VR mod for Medal of Honor: Airborne (x86, dinput8 proxy)",
+  "version": "0.3.0",
+  "description": "VR mod for Medal of Honor: Airborne (x86 dinput8 proxy + x64 OpenXR host)",
   "builtin-baseline": "771b0a2e7c473c3a6bee56553be4d5bb32bb653c",
   "dependencies": [
-    "openxr-loader"
+    "openxr-loader",
+    {
+      "name": "safetyhook",
+      "platform": "x86"
+    }
   ]
 }
