@@ -51,6 +51,11 @@ proxy DLL) is loaded before the stub or `WinMain` runs.
 Ghidra's first auto-analysis started at the stub entry and missed this path. These three
 functions were created by hand and saved (2026-09-25).
 
+Other names saved in the Ghidra project (2026-09-25; evidence in §5a/§5b): `InitD3D9Device`
+`0x10902DD0`, `CheckD3D9Caps` `0x10902D10`, `FindClosestDisplayMode` `0x109036E0`,
+`WindowsClientInit` `0x10921B10`, `CreateDIKeyboard` `0x109229F0`, `EnumJoysticksCallback`
+`0x10922F40`.
+
 ## 5. Imports and APIs of interest
 
 | API / DLL | Present | Evidence | Relevance |
@@ -58,10 +63,42 @@ functions were created by hand and saved (2026-09-25).
 | `d3d9.dll`, `Direct3DCreate9` | yes | string scan of the exe | Hook point for the D3D9On12 bridge (lessons §2) |
 | `d3dx9_*` | yes | string scan | |
 | D3D10 (`d3d10`, `D3D10CreateDevice`) | **no** | string scan | There is no D3D10 path to force off |
-| `dinput8`, `DirectInput8Create` | yes | string scan | Keyboard and mouse likely go through DirectInput, so hook `GetDeviceState` (lessons §3); `SendInput` may not reach it |
-| `XINPUT*` | DLL name present; `XInputGetState` not found as a string | string scan | May be imported by ordinal. Unverified. |
+| `dinput8`, `DirectInput8Create` | yes, IAT `0x112C6040` | Ghidra import table | See §5a |
+| `XInputGetState` / `XInputSetState` | yes, **by ordinal** (2 and 3), IAT `0x112C6804` | Ghidra import table | Gamepads are read through XInput. Callers `0x10924232` (in `FUN_10923d70`) and `0x10922FC1` (in `FUN_10922f40`, the DirectInput joystick enumeration callback). |
 | `PhysXLoader` | yes | string scan; DLLs in `Binaries` | |
 | `-log`, `Launch.log` | strings present | string scan | UE3 log available for a log-driven harness. Location not yet observed. |
+
+### 5a. DirectInput devices (Ghidra, GUIDs and data formats read from the exe)
+
+| What | Where | Detail |
+|---|---|---|
+| `IDirectInput8A` | global `0x116AE36C` | `DirectInput8Create(hInst, 0x800, IID_IDirectInput8A @0x1141B66C, ...)` in `FUN_10921b10` (window and input init) |
+| Mouse device | global `0x116AE3CC` | `CreateDevice(GUID_SysMouse @0x1141B5CC)`. `SetDataFormat(@0x1141B39C)` = c_dfDIMouse (16 bytes, 7 objects). `SetProperty` 1 (BUFFERSIZE) and 2. Buffered, so reads probably go through `GetDeviceData`. |
+| Joysticks | — | `EnumDevices(DI8DEVCLASS_GAMECTRL, callback FUN_10922f40)`; the callback also calls XInput |
+| Keyboard device | `FUN_109229f0` | Its own `DirectInput8Create`, then `CreateDevice(GUID_SysKeyboard @0x1141B5BC)`. `SetDataFormat(@0x1141B194)` = c_dfDIKeyboard (256). `SetProperty` 1 (BUFFERSIZE), then Acquire. How it's read, and whether gameplay uses it or window messages, is unverified. |
+
+Implication for M6: hook `IDirectInputDevice8::GetDeviceData` and `GetDeviceState` at the vtable
+(covers both devices, however they're read), plus XInput ordinal 2. `SendInput` probably won't
+reach mouse-look; keyboard is unknown (PLAN harness item).
+
+### 5b. Direct3D 9 device creation (Ghidra)
+
+| What | Where | Detail |
+|---|---|---|
+| `Direct3DCreate9` | IAT `0x112C6818`, thunk `0x10F29C30` | 3 callers: `FUN_10902dd0` (device init), `FUN_10902d10` (caps check: `GetDeviceCaps`, shader version < 3 sets a flag), `FUN_109036e0` (`EnumAdapterModes` for X8R8G8B8, picks the closest resolution) |
+| `IDirect3D9` | global `0x116DE438` | `Direct3DCreate9(D3D_SDK_VERSION 0x20)` |
+| `IDirect3DDevice9` | global `0x116DE43C` | |
+| **CreateDevice call** | **`0x1090339A`** (`CALL EAX`, `EAX = vtbl[0x40]`), in `FUN_10902dd0` | `(adapter 0, D3DDEVTYPE_HAL, hFocusWnd, 0x142, &pp, &0x116DE43C)`. Flags 0x142 = FPU_PRESERVE, HARDWARE_VERTEXPROCESSING, DISABLE_DRIVER_MANAGEMENT. Retried with `Sleep(500)` on DEVICELOST/NOTAVAILABLE. |
+| Present parameters | stack struct, `memset 0x38` just before | BackBuffer W×H from the requested resolution; Format `0x15` (A8R8G8B8); BackBufferCount 1; `Windowed = !fullscreen`; SwapEffect COPY (3) if windowed, DISCARD (1) if fullscreen; EnableAutoDepthStencil 0; Flags 1 (LOCKABLE_BACKBUFFER) |
+| **PresentationInterval** | written at `0x10902FE2` | **IMMEDIATE (0x80000000) when windowed** or when the vsync flag at `0x116CB6E8` is 0; ONE (1) only when fullscreen **and** vsync is on. Windowed mode therefore has no vsync, which is what lessons §2 needs under 9On12. |
+| Device reset | `vtbl[0x40]` on the device (`Reset`), loop in the same function | |
+
+## 5c. Command-line switches recognized (UTF-16 strings in the exe)
+
+`WINDOWED`, `FULLSCREEN`, `ResX=`, `ResY=`, `VSYNC`, `ONETHREAD`, `NOSOUND`, `NOSPLASH`,
+`ABSLOG`, `SEEKFREELOADING`, and `log`/`Launch.log`. Only their presence is verified; the
+behaviour of each still needs confirming on first launch. `ONETHREAD` existing implies this build
+has a separate render thread, which lessons §2 flags for stereo.
 
 ## 6. Content and UnrealScript
 
@@ -80,9 +117,41 @@ to the view target's `Location`/`Rotation`. Evidence: UELib decompile of the dec
 `Engine.xxx`. Native operators appear as `__NFUN_nnn__` (for example 114 and 119 are the
 object `==` and `!=`).
 
+All 2,483 classes are decompiled to `work/script/<Package>/<Class>.uc` by
+`tools/dump-script.ps1` (Core 25, Engine 1,070, GameFramework 24, MOHAGame 1,364; 0 failures).
+
+**Single-player view chain (all UnrealScript):**
+
+| Step | Class.function | Notes |
+|---|---|---|
+| 1 | `MOHAPlayerController` | `CameraClass = MOHAGame.MOHAPlayerCamera` (multiplayer uses `MOHAMultiplayerCamera`) |
+| 2 | `Camera.UpdateCamera(DeltaTime)` | `CheckViewTarget` (native), `UpdateViewTarget`, blends to `PendingViewTarget`, then `ApplyCameraModifiers` |
+| 3 | `MOHAPlayerCamera.UpdateViewTarget` | super, then `Controller(Target).Pawn.CalcCamera(DeltaTime, POV.Location, POV.Rotation, POV.FOV)` |
+| 4 | `MOHAPlayerPawn.CalcCamera` | 7 versions (per state) in `MOHAPlayerPawn.uc`; the pawn class is `MOHASingleplayerPawn` |
+| 5 | `Camera.CameraCache.POV` → `GetCameraViewPoint` → `PlayerController.GetPlayerViewPoint` | Read natively when building the view (native side not yet located) |
+
+Camera modifier: `MOHACamMod_ScreenShake` (screen shake; a comfort option for VR). Defaults:
+`MOHAPlayerCamera.DefaultFOV = 80`. `DefaultPlayer.ini`: `fDefaultViewmodelFOV = 80`,
+`fSprintFOV = 95`. `DefaultWeapon.ini`: per-weapon `PlayerFOV`, `IronsightsTarget{World,Player}FOV`
+and scope FOVs. There are separate world and viewmodel FOVs, and VR must pin both.
+
+**Split-screen: stock UE3, and not overridden by MOHA.** `GameViewportClient` has
+`ESplitScreenType` with `eSST_2P_VERTICAL` (`SplitscreenInfo[2]` = two halves, 0.5 × 1.0, at
+x = 0 and 0.5), plus `CreatePlayer`, `exec DebugCreatePlayer` and `exec SetSplit`.
+`MOHAGameViewportClient` overrides none of that. **Lead for M4 (unverified):** a second
+`LocalPlayer` in 2P-vertical split-screen could give side-by-side stereo in one scene render.
+Whether the PC renderer still draws multiple player views, and what a second player spawns in
+single-player, is untested.
+
 ## 7. Configuration
 
 - `MOHAGame\Config\Default*.ini` exists: Engine, Game, Input, Player, Weapon, AI and others.
+- Display: `[WinDrv.WindowsClient]` has `StartupResolutionX/Y` and `StartupFullscreen`
+  (`BaseEngine.ini`: 1280×720, fullscreen; `DefaultLauncherSettings.ini` "Global" profile:
+  1280×1024, fullscreen). There is no vsync key in any shipped ini; the flag is at `0x116CB6E8`
+  (§5b).
+- Running windowed for the harness should use the command line (`-windowed ResX=… ResY=…`, §5c),
+  so the player's ini is never edited.
 - No user ini or log exists yet; the game has not been run on this machine. The first launch
   should generate the user-level ini. Record its location here.
 
@@ -94,11 +163,11 @@ Nothing measured yet. See §9.
 
 - Where UE3 builds the view and projection matrices natively (`FSceneView`, or the equivalent in
   this 2007 branch). Look for where `GetPlayerViewPoint` results enter native code.
-- Whether this branch supports split-screen or multiple views per frame that stereo could reuse
-  (lessons §2: check before re-running passes).
-- The render thread: is it present and enabled on PC in this build?
+- Whether the renderer draws two `LocalPlayer` views in 2P-vertical split-screen in single-player
+  (§6 lead), and at what cost.
+- The render thread is compiled in (`ONETHREAD` exists, §5c). Is it on by default on PC?
+- How the keyboard is read in gameplay: DirectInput buffered, or window messages (§5a).
 - Near planes: the culler's versus the projection's (lessons §2 warns there may be two).
-- The windowed-mode and resolution ini keys for this build (`ResX`/`ResY`/`Fullscreen` were not
-  found in `DefaultEngine.ini`).
+- Confirm that `-windowed ResX= ResY=` on the command line takes effect (strings exist, §5c).
 - The log location and the log lines that mark "in gameplay" for the harness.
 - Whether `SendInput` reaches the game (DirectInput 8).

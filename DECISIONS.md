@@ -43,6 +43,12 @@ consumes. There is no D3D10 path to worry about (ENGINE-NOTES §5). Keep a syste
 fallback. Risk: the 2 GB address-space limit (the exe is not large-address-aware). Measure how
 much address space D3D9On12 and OpenXR use early.
 
+### D7. The harness runs the game windowed from the command line — Decided 2026-09-25
+It passes `-windowed ResX=… ResY=…` (and `-log`) rather than setting `StartupFullscreen` in an
+ini, so the player's ini is never edited (standing rule 6). Windowed mode also gives an
+IMMEDIATE presentation interval, so no vsync (ENGINE-NOTES §5b). Pending: confirm the switches
+take effect on first launch.
+
 ### D6. Ghidra runs headless by default — Decided 2026-09-25
 `tools/start-ghidra-headless.ps1` serves the analyzed project to the `ghidra` MCP server with no
 GUI, so analysis doesn't depend on someone opening Ghidra.

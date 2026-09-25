@@ -11,19 +11,21 @@ time, or needs the headset.
 ### Needs the user's go-ahead first
 - [ ] First launch of MOHA through Steam, so it creates its user ini and log. Record both
       locations in ENGINE-NOTES §7.
-- [ ] Decide how the game runs windowed: an ini key or the `-windowed` command line. Record
-      the choice in DECISIONS.
+- [x] Decide how the game runs windowed. The command line (`-windowed ResX= ResY=`) never
+      touches the player's ini (D7). Still to confirm on first launch.
 
 ### Static research (can run unattended; no game launch)
-- [ ] Grep the decompiled UnrealScript (`work/decompressed`) for camera, FOV and view code:
-      `Camera`, `GetCameraViewPoint`, `FOVAngle`, `CalcCamera`, split-screen. Dump the key
-      classes to text under `work/script/`.
-- [ ] Read `DefaultEngine.ini`, `DefaultInput.ini` and `DefaultGame.ini`. Record the
-      resolution/windowed/vsync keys and the control table (action → key) in ENGINE-NOTES.
-- [ ] In Ghidra: find the callers of `Direct3DCreate9` and `CreateDevice`, and the
-      presentation-parameters setup. Record the VAs with evidence.
-- [ ] In Ghidra: find the `DirectInput8Create` usage, and whether XInput is imported (by ordinal?).
-- [ ] In Ghidra: find where the log file is opened and the `-log` switch is parsed.
+- [x] Script dump and camera search. All 2,483 classes are in `work/script/`
+      (`tools/dump-script.ps1`). The view chain is mapped, and a stock split-screen lead was
+      found (ENGINE-NOTES §6).
+- [ ] Read `DefaultInput.ini` and record the control table (action → key) in ENGINE-NOTES.
+      *Display keys are done (§7); the control table is still open, and is needed for M6.*
+- [x] `Direct3DCreate9`, `CreateDevice` and the presentation parameters: CreateDevice at
+      `0x1090339A`, and windowed mode means no vsync (ENGINE-NOTES §5b).
+- [x] DirectInput and XInput: mouse and keyboard are DirectInput with buffer sizes set;
+      XInput is imported by ordinal (ENGINE-NOTES §5a).
+- [ ] ~~In Ghidra: find where the log file is opened~~. Replaced: observe the log location on
+      the first launch; that's cheaper and definitive.
 
 ### Harness (after the first launch)
 - [ ] `tools/harness.ps1` for MOHA, adapted from RDR2VR's: launch via Steam (app 24840),

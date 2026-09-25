@@ -19,10 +19,19 @@ test rig)**; see PLAN.md.
 - UnrealScript decompiles. The camera entry point is known: `PlayerController.GetPlayerViewPoint`
   → `PlayerCamera.GetCameraViewPoint` (ENGINE-NOTES §6).
 - Project documents created: CLAUDE.md, ENGINE-NOTES, DECISIONS, ROADMAP, PLAN, HEADSET-TESTS.
+  Git repository initialised (local only).
+- Static research (ENGINE-NOTES §5a–§6):
+  - D3D9 `CreateDevice` call site `0x1090339A`, with the presentation parameters decoded.
+    Windowed mode means no vsync.
+  - Input: DirectInput mouse and keyboard with buffer sizes set; XInput imported by ordinal.
+  - All UnrealScript decompiled (`work/script`). The single-player view chain is mapped down to
+    `MOHAPlayerPawn.CalcCamera`.
+  - Lead for stereo: stock UE3 2P-vertical split-screen is intact.
 
 ## Next
-1. First launch of the game, with the user's go-ahead, to create the user ini and log.
-2. Static research for M1 and M2 (PLAN.md).
+1. First launch of the game, with the user's go-ahead: confirm `-windowed ResX= ResY= -log`,
+   and record the user ini and log locations.
+2. The control table from `DefaultInput.ini` (needed for M6).
 3. The harness.
 
 ## Risks
