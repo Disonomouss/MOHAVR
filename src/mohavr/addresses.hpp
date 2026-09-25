@@ -112,6 +112,19 @@ inline constexpr std::uintptr_t kSysAllowMotionBlur   = 0x116F56D0;
 inline constexpr std::uintptr_t kSysAllowDepthOfField = 0x116F56D4;
 inline constexpr std::uintptr_t kSysScreenPercentage  = 0x116F56F8;  // float, read by CalcSceneView
 
+// UGameViewportClient::Draw, the per-player HUD loop (ENGINE-NOTES 5n): ESI = that player's FSceneView,
+// EDX = the player index. The canvas takes its origin/clip from view+0x1C/0x20 (X, Y) and +0x24/0x28
+// (SizeX, SizeY), then HUD.PostRender runs. `movss xmm0,[esi+24]; movss [esp+90],xmm0`.
+inline constexpr std::uintptr_t kHudViewRead = 0x10C1530C;
+inline constexpr std::uint8_t   kHudViewReadBytes[] = {0xF3, 0x0F, 0x10, 0x46, 0x24, 0xF3, 0x0F, 0x11, 0x84, 0x24, 0x90, 0x00, 0x00, 0x00};
+inline constexpr std::uintptr_t kViewX = 0x1C, kViewY = 0x20, kViewSizeX = 0x24, kViewSizeY = 0x28;
+// ...then it builds the canvas matrix (identity + translation view X/Y) at [ESP+0x130] (16 floats,
+// row-major: M00 +0x130, M11 +0x144, X +0x160, Y +0x164), flushes (FUN_10B17930) and pushes it
+// (FUN_10918FC0(&matrix) on canvas+0xC). Hooked after the flush: `add edi,0Ch; mov esi,edi; call 10C92CE0`.
+inline constexpr std::uintptr_t kHudMatrixPush = 0x10C15440;
+inline constexpr std::uint8_t   kHudMatrixPushBytes[] = {0x83, 0xC7, 0x0C, 0x8B, 0xF7, 0xE8, 0x96, 0xD8, 0x07, 0x00};
+inline constexpr std::uintptr_t kHudMatrixStackOffset = 0x130;
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},
@@ -127,6 +140,8 @@ inline constexpr Signature kSignatures[] = {
     {"UGameViewportClient::Draw ret 8",    kViewportClientDrawRet, kViewportClientDrawRetBytes, sizeof(kViewportClientDrawRetBytes)},
     {"AllocateViewState prologue",         kAllocateViewState, kAllocateViewStateBytes, sizeof(kAllocateViewStateBytes)},
     {"ULocalPlayer ctor ViewState store",  kLocalPlayerCtorViewStateStore, kLocalPlayerCtorViewStateStoreBytes, sizeof(kLocalPlayerCtorViewStateStoreBytes)},
+    {"Draw HUD loop view read",            kHudViewRead, kHudViewReadBytes, sizeof(kHudViewReadBytes)},
+    {"Draw HUD matrix push",               kHudMatrixPush, kHudMatrixPushBytes, sizeof(kHudMatrixPushBytes)},
 };
 
 }  // namespace mohavr::addr

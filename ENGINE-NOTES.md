@@ -410,6 +410,21 @@ HUD is drawn at screen positions inside each half, so it lands at different plac
 - **`PlayerController.Location` (+0xE8) stays at the spawn point** (−1534, −14857, −17720 while the view was at
   7612, −8967, ...): the controller doesn't follow its pawn, so a location test needs the Pawn (offset unknown).
 
+## 5n. The HUD pass in UGameViewportClient::Draw (M5 HUD panel, 2026-09-25)
+
+After the 3D view family is submitted, Draw's second player loop (per player with an Actor) looks up
+that player's FSceneView (`ESI`, player index in `EDX` at `0x10C1530C`) and:
+- sets the Canvas `ClipX/ClipY` (+0x6C/+0x70 ints, later +0x50/+0x54 floats) from `view+0x24/+0x28`
+  (SizeX/SizeY);
+- builds identity plus translation `(view+0x1C, view+0x20)` (X, Y) at `[ESP+0x130]` (after the flush call
+  `FUN_10B17930(canvas)`), and pushes it with `FUN_10918FC0(&m)` on `canvas+0xC` (the transform stack);
+- sets `HUD.Canvas` (`PlayerController+0x344` = myHUD, `HUD+0x3FC` = Canvas), calls `HUD.PostRender`
+  (FName `0x116F8E68`) through ProcessEvent (vtable +0xF0), and clears it;
+- for player 0 only, a second HUD event (`0x116F9824`) and more canvas work.
+
+MOHA's HUD lays out relative to ClipX/ClipY but draws elements at fixed pixel sizes. Scaling the
+pushed matrix (M00, M11) shrinks everything uniformly, text included.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

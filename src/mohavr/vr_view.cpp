@@ -84,6 +84,10 @@ bool  g_cinema = false;           // decided at the start of each Draw, holds un
 bool  g_viewIsPlayers = true;     // last view: the controller's own yaw (not a matinee/menu camera)
 DWORD g_cinemaFlipSince = 0;      // when the wanted mode first differed from g_cinema (debounce)
 
+float g_ipd = 0.064f;             // metres, from the eye poses (HUD placement)
+SafetyHookMid g_hudHook, g_hudMatrixHook;
+float g_hudScalePending = 0.0f;   // set per eye by OnHudView, applied to that eye's canvas matrix
+
 long g_views = 0;
 bool g_loggedProj[2] = {false, false};
 bool g_loggedStereo = false;
@@ -336,6 +340,11 @@ void OnViewPoint(SafetyHookContext& ctx) {
     if (!shared::ReadViews(hdr, head, eye, fov)) return;
     ForceVrSettings();
     UpdateOrigin(hdr, recenterSeq, head);
+    {
+        const float dx = eye[1].px - eye[0].px, dy = eye[1].py - eye[0].py, dz = eye[1].pz - eye[0].pz;
+        const float ipd = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (ipd > 0.04f && ipd < 0.09f) g_ipd = ipd;
+    }
 
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
@@ -434,6 +443,61 @@ void OnViewPoint(SafetyHookContext& ctx) {
              g_thisStereo ? "stereo" : "mono", g_thisEye, p.qx, p.qy, p.qz, p.qw, p.px, p.py, p.pz, rot[0], rot[1], rot[2],
              RadToUnr(gameYaw));
     }
+}
+
+// --- M5: the HUD as one head-locked panel (HUD.Mode=1) --------------------------------------------
+// In a stereo Draw each "player" (eye) gets its HUD on a canvas the size of its half, laid out for a
+// 960-wide screen at that half's edges -- a different place in each eye (round 3: "cross-eyed"). Just
+// before each eye's HUD pass, give its canvas the rectangle where a panel HUD.Width wide, HUD.Distance
+// ahead and HUD.Down below the eyes appears in THAT eye (its own projection and IPD offset): both eyes
+// then fuse one flat HUD at that distance. The 3D views were already handed to the renderer.
+// MOHA's HUD positions its elements by the canvas clip but draws them at fixed pixel sizes, so the
+// canvas gets a virtual clip of panel/Scale and its matrix is scaled by Scale (OnHudMatrix): the HUD
+// lays out on a larger virtual screen and is shrunk uniformly into the panel.
+void OnHudView(SafetyHookContext& ctx) {
+    if (!g_inStereoDraw || g_cfg.hudMode != 1) return;
+    const shared::Header* hdr = bridge::SharedHeader();
+    auto* view = reinterpret_cast<std::uint8_t*>(ctx.esi);
+    if (!hdr || !view || !hdr->width || !hdr->height) return;
+    const int eye = static_cast<int>(ctx.edx & 1);
+    const shared::Fov f = g_building.fov[eye];  // this frame's widened FOV (game thread writes it)
+    if (!(f.tanRight > f.tanLeft) || !(f.tanUp > f.tanDown)) return;
+    const float eyeW = 0.5f * static_cast<float>(hdr->width), H = static_cast<float>(hdr->height);
+    const float D = g_cfg.hudDistance;
+    // Panel centre as seen from this eye: the eye sits +-IPD/2 along the head's right axis.
+    const float ex = (eye == 0 ? -0.5f : 0.5f) * g_ipd;
+    const float tx = -ex / D, ty = -g_cfg.hudDown / D;
+    const float u = (tx - f.tanLeft) / (f.tanRight - f.tanLeft);
+    const float v = (f.tanUp - ty) / (f.tanUp - f.tanDown);
+    // Size: HUD.Width across, 16:9 (the HUD's own layout).
+    const float halfW = 0.5f * g_cfg.hudWidth / D, halfH = halfW * 9.0f / 16.0f;
+    const float pw = eyeW * 2.0f * halfW / (f.tanRight - f.tanLeft);
+    const float ph = H * 2.0f * halfH / (f.tanUp - f.tanDown);
+    const float x = static_cast<float>(eye) * eyeW + u * eyeW - 0.5f * pw;
+    const float y = v * H - 0.5f * ph;
+    const float s = g_cfg.hudScale;
+    *reinterpret_cast<float*>(view + addr::kViewX) = x;
+    *reinterpret_cast<float*>(view + addr::kViewY) = y;
+    *reinterpret_cast<float*>(view + addr::kViewSizeX) = pw / s;
+    *reinterpret_cast<float*>(view + addr::kViewSizeY) = ph / s;
+    g_hudScalePending = s;
+    static int logged = 0;
+    if (logged < 2 && eye == logged) {
+        ++logged;
+        MLOG("hud: eye %d canvas -> x %.0f y %.0f  %.0f x %.0f px, virtual %.0f x %.0f at scale %.2f (panel %.2f m at %.2f m, "
+             "%.2f m down, IPD %.1f mm)", eye, x, y, pw, ph, pw / s, ph / s, s, g_cfg.hudWidth, D, g_cfg.hudDown, g_ipd * 1000.0f);
+    }
+}
+
+void OnHudMatrix(SafetyHookContext& ctx) {
+    if (g_hudScalePending == 0.0f) return;
+    auto* m = reinterpret_cast<float*>(ctx.esp + addr::kHudMatrixStackOffset);
+    // Only an identity-plus-translation matrix, as Draw builds it -- anything else isn't ours to touch.
+    if (m[0] == 1.0f && m[5] == 1.0f && m[10] == 1.0f && m[15] == 1.0f && m[1] == 0.0f && m[4] == 0.0f) {
+        m[0] = g_hudScalePending;
+        m[5] = g_hudScalePending;
+    }
+    g_hudScalePending = 0.0f;
 }
 
 // --- the projection hooks -----------------------------------------------------------------------
@@ -545,6 +609,8 @@ bool Install(const Config& cfg) {
             if (res) {
                 g_drawHook = std::move(*res);
                 MLOG("stereo: inline hook UGameViewportClient::Draw at 0x%08X installed", static_cast<unsigned>(addr::kViewportClientDraw));
+                if (cfg.hudMode == 1 && Hook(g_hudMatrixHook, addr::kHudMatrixPush, OnHudMatrix, "HUD canvas matrix"))
+                    Hook(g_hudHook, addr::kHudViewRead, OnHudView, "HUD canvas (per eye)");
             } else {
                 MLOG("stereo: inline hook on Draw failed (error %d) -- mono", static_cast<int>(res.error().type));
             }

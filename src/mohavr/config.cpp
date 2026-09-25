@@ -22,6 +22,17 @@ Config LoadConfig(const std::wstring& dir) {
     c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
+    c.hudMode        = static_cast<int>(GetPrivateProfileIntW(L"HUD", L"Mode", c.hudMode, ini.c_str())) == 1 ? 1 : 0;
+    auto getf = [&](const wchar_t* sec, const wchar_t* key, float def, float lo, float hi) {
+        wchar_t b[32] = L"";
+        GetPrivateProfileStringW(sec, key, L"", b, 32, ini.c_str());
+        const float v = static_cast<float>(_wtof(b));
+        return b[0] && v >= lo && v <= hi ? v : def;
+    };
+    c.hudDistance    = getf(L"HUD", L"Distance", c.hudDistance, 0.3f, 20.0f);
+    c.hudWidth       = getf(L"HUD", L"Width", c.hudWidth, 0.1f, 10.0f);
+    c.hudDown        = getf(L"HUD", L"Down", c.hudDown, -2.0f, 2.0f);
+    c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));
     if (c.cinemaScreen < 0 || c.cinemaScreen > 2) c.cinemaScreen = 0;
 

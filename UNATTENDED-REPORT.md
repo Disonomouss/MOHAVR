@@ -178,11 +178,24 @@ what was learned.
       so real cutscenes are [H].
 
 ### G. M5 HUD on its own layer — [S] mechanics, [H] placement
-- [ ] RE: a one-frame device-call trace (behind `Debug.TraceFrame=1`) around `UGameViewportClient::Draw`'s second
-      player loop, to find where the HUD starts.
-- [ ] Redirect HUD drawing to a separate render target (mono, once), publish it as a second shared texture,
-      and have the host show it on a quad (fixed in view, lower centre) or hide it (`HUD.Mode=quad|off|game`).
-- [ ] [S]: the eye images no longer contain the HUD; the HUD quad does.
+- [x] RE (ENGINE-NOTES §5n; static, no trace needed): Draw's second per-player loop (`0x10C152xx`) gives each
+      player's Canvas the clip `view+0x24/0x28` and a translation matrix `view+0x1C/0x20` (on the stack at
+      `ESP+0x130`), pushes it, then calls `HUD.PostRender`.
+- [x] **Changed approach** (simpler, and no extra texture or address space): no separate render target. Just
+      before each eye's HUD pass, `HUD.Mode=1` gives that eye's canvas the rectangle where a head-locked panel
+      (`HUD.Width` 2.4 m, `HUD.Distance` 2.0 m ahead, `HUD.Down` 0.1 m below eye level) appears in that eye,
+      from its own projection and IPD offset, so both eyes fuse one flat HUD. MOHA's HUD positions elements by
+      the clip but draws them at fixed pixel sizes, so the canvas gets a virtual clip of panel/`HUD.Scale` and
+      its matrix is scaled by `HUD.Scale` (0.5). Two MidHooks (`0x10C1530C`, `0x10C15440`), both signatures in
+      the build check. `HUD.Mode=0` (default) = unchanged.
+- [x] [S] passed: gameplay capture shows the whole HUD (compass, health, grenades, ammo, weapon icon) laid out
+      normally inside a centred panel in each eye, where each eye sees "2 m straight ahead" (left-eye centre at
+      603 px of its half, right at 357 px: the eyes' FOVs mirror each other; shot 222702-hud2). The canvas is
+      520 × 292 px per eye (virtual 1040 × 585).
+- [ ] [H] round 5: HUD depth and readability (the eye images are 960 px wide, so small text is soft); tune
+      Width/Distance/Scale. A HUD "off" mode isn't done (not needed if the panel works).
+- Note: one launch in this block sat on a black screen for 150 s before the main menu (game responsive, only
+  mono views, no Draw). A relaunch of the same build was fine. Watched in J.
 
 ### H. M7 aiming and the doubled gun — start, time-boxed
 - [ ] Interim for the doubled gun: `Weapon.HideViewModel=1` option (RE the first-person mesh's hidden flag or
