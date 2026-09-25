@@ -263,13 +263,22 @@ void OnPresent(IDirect3DDevice9* device) {
         g_setupTried = true;
         g_ready = Setup(device);
     }
-    if (!g_ready || g_paused) return;
-    if (g_host && !g_hostExitLogged && (g_presents % 600) == 0 && WaitForSingleObject(g_host, 0) == WAIT_OBJECT_0) {
+    // The host gone (exited or killed) must not leave the game on a frozen head pose or a held stick:
+    // mark it exited and withdraw the views and the pad, so everything falls back to the plain game
+    // (mono, the game's own camera, the real XInput pad). Checked every 16 presents (a 0 ms wait).
+    if (g_host && !g_hostExitLogged && (g_presents % 16) == 0 && WaitForSingleObject(g_host, 0) == WAIT_OBJECT_0) {
         DWORD code = 0;
         GetExitCodeProcess(g_host, &code);
-        MLOG("bridge: MOHAVR-host.exe exited (code %lu, status \"%s\") -- no VR, game continues", code, g_hdr->hostStatus);
+        g_hdr->hostState = static_cast<std::uint32_t>(shared::HostState::Exited);
+        g_hdr->padActive = 0;
+        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: nobody reads now
+        g_hdr->viewValid = 0;
+        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));
+        MLOG("bridge: MOHAVR-host.exe exited (code %lu, status \"%s\") -- no VR: views and pad withdrawn, the game "
+             "continues as a normal flat game", code, g_hdr->hostStatus);
         g_hostExitLogged = true;
     }
+    if (g_hostExitLogged) return;
     Publish(device);
 }
 

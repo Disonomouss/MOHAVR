@@ -29,3 +29,6 @@ tools/openxr-sim-smoke/*.obj
 
 # Machine-local Claude Code settings
 .claude/settings.local.json
+
+# Player packages (tools/package.ps1)
+dist/

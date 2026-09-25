@@ -22,6 +22,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
+    c.debugGameCommands = get(L"Debug", L"GameCommands", c.debugGameCommands);
     c.hudMode        = static_cast<int>(GetPrivateProfileIntW(L"HUD", L"Mode", c.hudMode, ini.c_str())) == 1 ? 1 : 0;
     auto getf = [&](const wchar_t* sec, const wchar_t* key, float def, float lo, float hi) {
         wchar_t b[32] = L"";

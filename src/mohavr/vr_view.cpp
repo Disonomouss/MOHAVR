@@ -216,11 +216,40 @@ void ApplyWeaponCommands(const std::uintptr_t* players) {
     }
 }
 
+// Debug.GameCommands: console commands for scripted tests (e.g. "Suicide" for the death/reload test),
+// one per line in %TEMP%\MOHAVR\game_cmd.txt, read and deleted twice a second on the game thread.
+void RunTestCommands(const std::uintptr_t* players) {
+    if (!g_cfg.debugGameCommands || !players || players[1] < 1 || !players[0]) return;
+    static DWORD next = 0;
+    const DWORD now = GetTickCount();
+    if (static_cast<LONG>(now - next) < 0) return;
+    next = now + 500;
+    static std::wstring path;
+    if (path.empty()) {
+        wchar_t tmp[MAX_PATH];
+        const DWORD n = GetTempPathW(MAX_PATH, tmp);
+        path = std::wstring(tmp, n) + L"MOHAVR\\game_cmd.txt";
+    }
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, path.c_str(), L"r, ccs=UTF-8") != 0 || !f) return;
+    wchar_t line[256];
+    const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
+    while (fgetws(line, 256, f)) {
+        line[wcscspn(line, L"\r\n")] = 0;
+        if (!line[0]) continue;
+        const bool ok = gexec::Run(player, line);
+        MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
+    }
+    fclose(f);
+    DeleteFileW(path.c_str());
+}
+
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
+    RunTestCommands(arr);
     UpdateCinemaMode();
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera

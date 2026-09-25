@@ -1,4 +1,4 @@
-// MOHAVR entry. Loaded by the Windows loader as MOHA's dinput8.dll (D5), so this runs before
+﻿// MOHAVR entry. Loaded by the Windows loader as MOHA's dinput8.dll (D5), so this runs before
 // the SteamStub entry and before WinMain -- early enough to hook Direct3DCreate9.
 //
 // DllMain does only loader-lock-safe work: open the log, read the ini, verify the build,
@@ -14,7 +14,7 @@
 #include "render_res.hpp"
 #include "xinput_hook.hpp"
 
-#define MOHAVR_VERSION "0.6.0-menu"
+#define MOHAVR_VERSION "0.7.0"
 
 namespace {
 
