@@ -37,6 +37,15 @@ Engine 3 game, 32-bit, Direct3D 9.
     the code.
 11. **Keep copies of every log before relaunching the game.** The game overwrites its log.
 
+## Build and deploy
+- `tools/build.ps1` builds `build/x86/dinput8.dll` (the mod) and verifies that it's x86 and
+  exports under plain names.
+- `tools/deploy.ps1 deploy [-Set 'Section.Key=Value']`, `undeploy` and `status`. The mod lives in
+  the game's `Binaries` as `dinput8.dll` plus `MOHAVR.ini`. Undeploy keeps its logs and verifies
+  the folder is back to its baseline. **Undeploy when a test session ends.**
+- Engine addresses live only in `src/mohavr/addresses.hpp`; every patch goes through
+  `src/mohavr/patch.cpp` (verify, then write).
+
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
   Other actions: `launch`, `to-gameplay`, `ingame`, `wait <check>`, `state`, `key <keys>`,

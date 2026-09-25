@@ -23,7 +23,21 @@ the player's ini around every run and keeps a copy of every log.
 **Accept:** one command takes a cold machine to live gameplay and back out, unattended, three
 times in a row.
 
-### M1. The mod loads, and stands down safely — [S]
+### M1. The mod loads, and stands down safely — [S] — **DONE 2026-09-25**
+*As built:* `src/mohavr`, an x86 `dinput8.dll` proxy with a static CRT (`tools/build.ps1`). It
+forwards all six dinput8 exports to the system DLL. `DllMain` opens `MOHAVR.log` beside the DLL
+(the previous run is kept as `.prev`), reads `MOHAVR.ini`, and verifies the build (PE timestamp,
+image size, checksum, entry point, plus 4 byte signatures from `addresses.hpp`). It then installs
+a verified IAT hook on `Direct3DCreate9`, which in M1 only logs and passes through.
+`tools/deploy.ps1` deploys and undeploys with baseline verification; the harness waits on mod
+log lines (`wait-log`) and keeps every run's log.
+**Accepted:** init at about 1 ms, then `Direct3DCreate9` through the hook about 730 ms later, and
+gameplay reached. With `Debug.TestWrongBuild=1` the mod logs FAIL and STAND DOWN, installs no
+hook, and the game plays normally. An offline smoke test (`tools/proxy-smoke`) proves stand-down
+and forwarding in a non-MOHA x86 process. The hook library (safetyhook/MinHook) moved to M2, where
+the first inline hook needs it.
+
+*Original plan:*
 The x86 proxy DLL (D5) loads under the wrapped exe, checks the build hash (D4), writes its own
 log (paths anchored to the exe's folder, not the working directory), and reads its ini. It
 installs one trivial hook with prologue verification. With a wrong hash or wrong prologue it

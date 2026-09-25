@@ -140,6 +140,20 @@ has a separate render thread, which lessons §2 flags for stereo.
   the metal frame) and `pausemenu` (tab bar) separate cleanly (0.0 against 25–43 cross-scores).
   Gameplay is proven actively: Esc must open the pause menu.
 
+## 5d. Load order with the MOHAVR proxy (measured in M1, 2026-09-25)
+
+From `MOHAVR.log`, 2 runs:
+- `dinput8.dll` (the proxy) `DllMain` runs on the **main thread** 1–2 ms into the log; init
+  (log, ini, build check, IAT hook) takes about 4 ms. This is before the SteamStub entry.
+- The IAT slot `0x112C6818` holds exactly `d3d9!Direct3DCreate9` at that point: the loader has
+  already bound the exe's imports, and SteamStub does not rebind them afterwards (the hook fires).
+- **`Direct3DCreate9` is called once**, about 730 ms after init, on the main thread, with SDK
+  0x20. The other two callers (§5b) reuse the global `IDirect3D9` at `0x116DE438`.
+- `DirectInput8Create` is called twice, at about 1.64 s and 1.69 s (mouse init, then
+  keyboard), version 0x0800.
+- The proxy costs about 1 MB of virtual memory (1,336–1,337 MB in gameplay, against 1,335 MB
+  without it).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -1,0 +1,48 @@
+#include "build_check.hpp"
+
+#include <windows.h>
+
+#include "addresses.hpp"
+#include "log.hpp"
+#include "patch.hpp"
+
+namespace mohavr {
+
+bool CheckBuild(bool forceFail) {
+    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+    if (base != addr::kImageBase) {
+        MLOG("build check: FAIL -- exe loaded at 0x%08X, expected 0x%08X", base, addr::kImageBase);
+        return false;
+    }
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    const auto* nt  = reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
+
+    const std::uint32_t wantStamp = forceFail ? (addr::kTimeDateStamp ^ 1u) : addr::kTimeDateStamp;
+    struct Field { const char* name; std::uint32_t have, want; } fields[] = {
+        {"TimeDateStamp", nt->FileHeader.TimeDateStamp,          wantStamp},
+        {"SizeOfImage",   nt->OptionalHeader.SizeOfImage,        addr::kSizeOfImage},
+        {"CheckSum",      nt->OptionalHeader.CheckSum,           addr::kCheckSum},
+        {"EntryPoint",    nt->OptionalHeader.AddressOfEntryPoint, addr::kEntryRva},
+    };
+    bool ok = true;
+    for (const auto& f : fields) {
+        if (f.have != f.want) {
+            MLOG("build check: FAIL -- %s is 0x%08X, expected 0x%08X", f.name, f.have, f.want);
+            ok = false;
+        }
+    }
+    for (const auto& s : addr::kSignatures) {
+        if (!patch::BytesMatch(s.va, s.bytes, s.size)) {
+            MLOG("build check: FAIL -- signature '%s' at 0x%08X does not match", s.name, s.va);
+            ok = false;
+        }
+    }
+    if (forceFail) MLOG("build check: Debug.TestWrongBuild=1 -- mismatch simulated");
+    if (ok) {
+        MLOG("build check: OK -- MOHA.exe build 3648 (timestamp 0x%08X, %u signatures)",
+             addr::kTimeDateStamp, static_cast<unsigned>(sizeof(addr::kSignatures) / sizeof(addr::kSignatures[0])));
+    }
+    return ok;
+}
+
+}  // namespace mohavr

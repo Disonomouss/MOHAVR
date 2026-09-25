@@ -16,6 +16,7 @@
     tools/harness.ps1 to-gameplay            # from the main menu: Campaign -> Continue -> proven in gameplay
     tools/harness.ps1 ingame                 # Esc must open the pause menu (then Esc resumes)
     tools/harness.ps1 wait mainmenu 120      # block until the screen matches a named check
+    tools/harness.ps1 wait-log 'regex' 60    # block until the mod's MOHAVR.log has a matching line
     tools/harness.ps1 state                  # which named check matches right now (or black / unknown)
     tools/harness.ps1 key enter              # focus game, press keys (tools/sendkey.ps1 names)
     tools/harness.ps1 shot name              # logs\shots\<time>-name.png
@@ -132,6 +133,33 @@ function Invoke-ToGameplay {
     throw "gameplay not reached within 120 s; last screen $last"
 }
 
+$GameBin = Join-Path ((Get-Content (Join-Path $PSScriptRoot 'gamedir.txt') | Where-Object { $_ -and $_ -notmatch '^\s*#' } | Select-Object -First 1).Trim()) 'UnrealEngine3\Binaries'
+$ModLog  = Join-Path $GameBin 'MOHAVR.log'
+
+# Waits for a line in the mod's own log (D9: once the mod exists, progress comes from its log).
+function Wait-Log([string] $pattern, [int] $timeout) {
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt $timeout) {
+        if (Test-Path $ModLog) {
+            $hit = Select-String -Path $ModLog -Pattern $pattern -CaseSensitive | Select-Object -First 1
+            if ($hit) { Write-Host ("  log after {0:N1}s: {1}" -f ((Get-Date) - $t0).TotalSeconds, $hit.Line); return $true }
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    Write-Host "  TIMEOUT waiting for log /$pattern/ ($timeout s)"
+    return $false
+}
+
+# Lessons 1: keep a copy of every log before the next launch can rotate it away.
+function Save-ModLog {
+    if (Test-Path $ModLog) {
+        $dest = Join-Path $Logs ('modlogs\{0}-run.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+        Copy-Item $ModLog $dest
+        Write-Host "  mod log kept: $dest"
+    }
+}
+
 function Restore-UserData {
     $s = Load-State
     if (-not $s -or -not $s.backup) { Write-Host 'no backup recorded in harness-state.json'; return }
@@ -207,7 +235,13 @@ switch ($Action) {
                 Stop-Process -Id $p.Id -Force; Start-Sleep -Seconds $SteamCooldownSec
             }
         } else { Write-Host 'MOHA not running' }
+        Save-ModLog
         Restore-UserData
+    }
+
+    'wait-log' {
+        $timeout = if ($Arg2) { [int]$Arg2 } else { 60 }
+        if (Wait-Log $Arg1 $timeout) { exit 0 } else { exit 1 }
     }
 
     'restore' { if (Get-Moha) { throw 'quit the game first' }; Restore-UserData }

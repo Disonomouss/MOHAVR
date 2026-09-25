@@ -28,7 +28,13 @@ more reliable than pattern scans. They are safe only because the mod checks the 
 (or size plus timestamp) at start-up, stands down on a mismatch, and verifies each hook's
 prologue bytes.
 
-### D5. Load through a `dinput8.dll` proxy in the game's `Binaries` folder — Proposed
+### D5. Load through a `dinput8.dll` proxy in the game's `Binaries` folder — Decided 2026-09-25
+*Confirmed in M1:* the proxy loads under the wrapped exe. Its `DllMain` runs on the main thread
+at about 1 ms, and the game's first `Direct3DCreate9` call arrives about 730 ms later, through
+our IAT hook. `tools/deploy.ps1` adds only MOHAVR's own files and restores the folder to its
+baseline.
+
+*Original reasoning:*
 It adds a file rather than modifying one. MOHA imports `dinput8` (ENGINE-NOTES §5), so the
 Windows loader maps the proxy before the SteamStub entry and before `WinMain`. That is early
 enough to hook `Direct3DCreate9` and change the device parameters, which lessons §2 requires.

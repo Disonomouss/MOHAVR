@@ -6,7 +6,7 @@ and gets marked **BLOCKED**, with the reason (time-box research at about two hou
 ask the user before any step that touches the game folder, launches the game for the first
 time, or needs the headset.
 
-## Current: M0 (headless test rig), plus the research that M1 and M2 need
+## M0 (headless test rig), plus the research that M1 and M2 need — DONE
 
 ### Needs the user's go-ahead first
 - [x] First launch (done by the user). The user config and saves are under OneDrive
@@ -39,15 +39,26 @@ time, or needs the headset.
 - [x] Screenshots: `capture-window.ps1` (PrintWindow) works for the D3D9 window.
 - [x] **M0 acceptance: 4 of 4 consecutive `cycle` runs OK, about 30 s each.**
 
-## Next: M1 (the mod loads and stands down safely)
-- [ ] CMake project for an x86 `dinput8.dll` proxy that forwards `DirectInput8Create` to the
-      system DLL (D5). Build it with the VS toolchain for x86.
-- [ ] Mod log next to the exe (path from the module handle, not the working directory), plus
-      an ini.
-- [ ] Build check (SHA-256 or size plus timestamp of MOHA.exe, D4); stand down on a mismatch.
-- [ ] Hook library (safetyhook or MinHook, x86 via vcpkg), with prologue verification.
-- [ ] First hook: `Direct3DCreate9` (IAT or inline). Log that it was reached, and confirm the
-      proxy's init runs first.
-- [ ] Deployment script: copy the proxy into `Binaries\`, and remove it again (**needs the
-      user's OK: it adds a file to the game folder**).
-- [ ] Harness: wait on the mod's log lines instead of only screenshots.
+## M1 (the mod loads and stands down safely) — DONE 2026-09-25
+- [x] CMake x86 `dinput8.dll` proxy forwarding all six exports (`tools/build.ps1`, static CRT,
+      /W4 clean).
+- [x] `MOHAVR.log` and `MOHAVR.ini` beside the DLL (module-handle path), with the previous log
+      kept as `.prev`.
+- [x] Build check from the in-memory PE header plus 4 signatures (D4); `Debug.TestWrongBuild`
+      proves stand-down.
+- [ ] ~~Hook library~~. Moved to M2: M1 needed only a verified IAT swap (`patch.cpp`).
+- [x] `Direct3DCreate9` IAT hook, verified before the swap. Reached about 730 ms after init.
+- [x] `tools/deploy.ps1` deploy, undeploy and status (with the user's OK; baseline-verified).
+- [x] Harness `wait-log`, and every run's mod log is kept in `logs/modlogs/`.
+
+## Next: M2 (D3D9 → OpenXR bridge, mono)
+- [ ] **Address-space budget first:** in the hook, create the D3D9 object through
+      `Direct3DCreate9On12` instead (behind an ini switch) and measure gameplay virtual memory
+      against the ~1,335 MB baseline. It must leave room for the OpenXR runtime plus swapchains.
+- [ ] Hook library for x86 (vcpkg `safetyhook` or `minhook`, x86-windows) with prologue checks.
+- [ ] Hook `IDirect3D9::CreateDevice` (vtable) to force a windowed, headset-sized backbuffer
+      (vsync is already off in windowed mode, ENGINE-NOTES §5b).
+- [ ] OpenXR in the process: the x86 loader (vcpkg `openxr-loader:x86-windows`), plus a
+      session on a D3D11 device run through `run-with-openxr-sim.ps1` (x86 simulator).
+- [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
+      shown on a world-locked quad first.

@@ -3,9 +3,11 @@
 _Last updated: 2026-09-25_
 
 ## Where things stand
-**M0 (headless test rig) is done.** `tools/harness.ps1 cycle` goes from a cold start to proven
-gameplay and back in about 30 s, unattended, restoring the player's data. It passed 4 of 4 runs.
-No mod code exists yet. The next milestone is **M1** (PLAN.md).
+**M0 and M1 are done.** The mod exists: an x86 `dinput8.dll` proxy that verifies the exe build,
+logs, and hooks `Direct3DCreate9` through the IAT, standing down cleanly on any mismatch. The
+harness deploys it, drives the game to gameplay, and waits on the mod's log. The mod is currently
+**not deployed**; the game folder matches its baseline. Next: **M2** (PLAN.md), starting with the
+address-space budget for D3D9On12.
 
 ## Done
 - RE/VR toolchain mirrored from RDR2VR and verified (tools/SETUP.md):
@@ -41,9 +43,13 @@ No mod code exists yet. The next milestone is **M1** (PLAN.md).
   leaving **about 700 MB** of the 2 GB. SendInput reaches gameplay. The save resumes
   mid-parachute over the flak tower, giving a deterministic test scene.
 
+- M1 accepted: init about 1 ms into the process, and `Direct3DCreate9` reaches the hook about
+  730 ms later. The stand-down test and the offline smoke test pass, and undeploy restores the
+  folder baseline.
+
 ## Next
-1. M1: an x86 `dinput8.dll` proxy with its own log, build check, and a first verified hook on
-   `Direct3DCreate9`. Deploying it adds a file to the game folder, so it needs the user's OK.
+1. M2: measure `Direct3DCreate9On12`'s address-space cost in gameplay, then CreateDevice and the
+   OpenXR bridge (PLAN.md).
 
 ## Risks
 - **2 GB address space:** the exe is not large-address-aware, and gameplay already uses
