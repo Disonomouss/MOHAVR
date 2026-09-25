@@ -45,7 +45,7 @@ logs and does nothing.
 **Accept:** the log shows init before `Direct3DCreate9`, and a deliberately wrong prologue makes
 the mod stand down cleanly.
 
-### M2. D3D9 → OpenXR bridge, mono — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+### M2. D3D9 → OpenXR bridge, mono — [S] then [H] — **DONE 2026-09-25** ([S] and [H]: Quest 3 via Virtual Desktop, 90 Hz, stable and smooth)
 *As built:* D3D9On12 (`Bridge.D3D9On12`), then per-frame copy of the backbuffer into a ring of
 shared D3D12 textures with shared fences. `MOHAVR-host.exe` (x64, D10) opens them by
 `DuplicateHandle` and runs OpenXR (D3D11), showing the frame on a world-locked 16:9 quad. It's

@@ -3,6 +3,10 @@
 _Last updated: 2026-09-25_
 
 ## Where things stand
+**Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
+the 64-bit host (D10), with the headset round passed. The older paragraphs below are kept for
+history.
+
 **M0 and M1 are done.** The mod exists: an x86 `dinput8.dll` proxy that verifies the exe build,
 logs, and hooks `Direct3DCreate9` through the IAT, standing down cleanly on any mismatch. The
 harness deploys it, drives the game to gameplay, and waits on the mod's log. The mod is currently
@@ -61,10 +65,12 @@ address-space budget for D3D9On12.
   textures and fences, 1:1 with the XR loop, and the gameplay frame shows on the quad in the
   simulator. The game keeps 505 MB free (largest block 312 MB). **M2 [S] done.**
 
+- **M2 done, including the headset:** the player saw the game on the floating screen in a Quest 3
+  through Virtual Desktop, at 90 Hz, stable and smooth, with correct colours (HEADSET-TESTS round 1).
+
 ## Next
-1. **[H]** First headset look at the mono quad through Virtual Desktop (needs the user).
-2. Desktop mirror in the host; quad recentring.
-3. M3: head tracking and per-eye projection (the camera path is known, ENGINE-NOTES §6).
+1. Desktop mirror in the host (the game's own window is white under 9On12 when windowed).
+2. M3: head tracking and per-eye projection (the camera path is known, ENGINE-NOTES §6).
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block

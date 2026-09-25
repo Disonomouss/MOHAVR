@@ -75,8 +75,8 @@ time, or needs the headset.
       fences; `MOHAVR-host.exe` (x64, `src/host`) runs OpenXR and shows them on a world-locked
       quad. The game's frame is visible in the simulator; the game keeps 505 MB free.
       `tools/build.ps1` builds both, and `tools/deploy.ps1` ships both.
-- [ ] **[H] headset check** of the mono quad through the real runtime (`OpenXR.RuntimeJson`
-      empty = Virtual Desktop). Needs the user and the headset.
+- [x] **[H] headset check PASSED** (HEADSET-TESTS round 1, attempt 2): Quest 3 via Virtual
+      Desktop, 90 Hz, stable, smooth, correct colours.
 - [ ] Desktop mirror window in the host (the game's own window is white under 9On12).
 - [ ] Quad placement: the LOCAL origin puts it low in the simulator. Recenter or use VIEW-based
       placement at session start.

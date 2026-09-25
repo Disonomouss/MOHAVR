@@ -43,6 +43,20 @@ is not stereo and doesn't follow your head yet: it's a cinema screen.
 4. Are the colours and brightness right: not washed out, not too dark? (yes/no)
 5. Is the screen too close or too far, too high or too low? (describe)
 
-**Answers:**
+**Attempt 1 (2026-09-25 ~18:40): VOID, the mod was not deployed.** The last deploy had been undone at
+18:33, no MOHAVR logs were written, and the game ran unmodded. The player saw Virtual Desktop's
+streamed desktop, not MOHAVR's quad. Their answers (1 yes, 2 yes, 3 slight stutter, 4 yes,
+5 "directly in front, large but comfortable") describe VD's desktop view, **not** the mod.
+Lesson: Claude deploys and undeploys for headset rounds. Tell the player the check that the mod
+is live: the game's desktop window stays white.
 
-**Log received:**
+**Attempt 2 (2026-09-25 ~18:48):** deployed by Claude with RuntimeJson empty (Virtual Desktop).
+
+**Answers:** 1 yes · 2 yes (stable) · 3 yes (smooth, no stutter) · 4 yes (colours right) · 5 "all good".
+
+**Log received:** yes, `logs/modlogs/20260925-184906-MOHAVR.log` and `-MOHAVR-host.log`. They
+confirm runtime "VirtualDesktopXR" 1.0.10 on a Meta Quest 3, 90 Hz, 98.8% of XR frames carrying a
+new game frame (6,224/6,300), and the game in the player's own fullscreen 2560×1440 mode. 79 s
+session, and the host exited cleanly with the game.
+
+**Verdict: M2 [H] PASSED.**

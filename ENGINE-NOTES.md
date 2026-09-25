@@ -234,6 +234,11 @@ adapter, one 1920×1080 quad swapchain; runtime = the 32-bit OpenXR Simulator):
   down", exit 0). If the host is missing or fails, the game logs it and runs without VR.
 - The Steam overlay injects into `MOHAVR-host.exe` too (its toast appears over the simulator
   preview), since the host is a child of a Steam-launched game. Harmless so far.
+- **Real headset (HEADSET-TESTS round 1, 2026-09-25):** runtime "VirtualDesktopXR" 1.0.10 (x64,
+  the system runtime), system "Meta Quest 3", **90 Hz**, and 98.8% of XR frames carried a new
+  game frame. The player reported the image stable, smooth and correctly coloured. The game ran in
+  the player's own **fullscreen 2560×1440** mode (`windowed 0`, swap DISCARD), so the bridge works
+  fullscreen as well as windowed; the host sizes its swapchain from the shared header.
 
 ## 6. Content and UnrealScript
 
