@@ -45,6 +45,12 @@ inline constexpr std::uintptr_t kIatDirect3DCreate9 = 0x112C6818;
 // against the loaded XInput DLL's ordinal-2 export.
 inline constexpr std::uintptr_t kIatXInputGetState = 0x112C6804;
 
+// Object layout (ENGINE-NOTES 5l): ULocalPlayer+0x40 = Actor (the APlayerController);
+// AActor::Rotation (FRotator: Pitch, Yaw, Roll ints) at +0xF4 -- ULevel::MoveActor (FUN_10B62090,
+// reached from AActor::execSetRotation 0x10D2E9D0) stores the new rotation to actor[0x3D..0x3F].
+inline constexpr std::uintptr_t kLocalPlayerActor = 0x40;
+inline constexpr std::uintptr_t kActorRotation    = 0xF4;
+
 // InitD3D9Device: the CreateDevice call site, CALL EAX with EAX = IDirect3D9 vtbl[0x40]
 // (ENGINE-NOTES 5b). Checked now as a build fingerprint; hooked in M2.
 inline constexpr std::uintptr_t kCreateDeviceCall = 0x1090339A;

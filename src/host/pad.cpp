@@ -193,7 +193,7 @@ void Pad::ReadTests(double now) {
     (void)now;
 }
 
-void Pad::Update(XrSession session, double now, bool neutral, shared::Header* hdr) {
+void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr) {
     now_ = now;
     ReadTests(now);
     if (testActive_ && now >= testUntil_) testActive_ = false;
@@ -227,6 +227,20 @@ void Pad::Update(XrSession session, double now, bool neutral, shared::Header* hd
         };
         read(leftStick_, p.thumbLX, p.thumbLY, true);
         read(rightStick_, p.thumbRX, p.thumbRY, rightY_);
+    }
+
+    // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.
+    if (snapDeg > 0) {
+        const float x = static_cast<float>(p.thumbRX) / 32767.0f;
+        if (!snapArmed_ && std::fabs(x) < 0.3f) snapArmed_ = true;
+        if (snapArmed_ && std::fabs(x) > 0.7f) {
+            snapArmed_ = false;
+            // UE yaw grows clockwise seen from above, so a flick right (+x) is a positive step.
+            const LONG step = static_cast<LONG>(std::lround(snapDeg * 65536.0 / 360.0)) * (x > 0.0f ? 1 : -1);
+            const LONG total = InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(&hdr->snapYawTotal), step) + step;
+            MLOG("pad: snap %s %d deg (total %ld)", x > 0.0f ? "right" : "left", snapDeg, total);
+        }
+        p.thumbRX = 0;
     }
 
     if (published_ && !memcmp(&p, &last_, sizeof(p))) return;  // XInput's packet number changes only with the state

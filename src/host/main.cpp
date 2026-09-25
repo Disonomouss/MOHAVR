@@ -606,7 +606,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
         if (controllers)
             pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
-                       menuOk && menu.Visible(), g_hdr);
+                       menuOk && menu.Visible(), menuOk ? menu.SnapTurnDegrees() : 0, g_hdr);
         if (menuOk && menu.TakeRecenterRequest()) {
             if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {
                 MLOG("host: recentre ignored (%s)", !menuHeadOk ? "no head pose" : "previous recentre still in flight");

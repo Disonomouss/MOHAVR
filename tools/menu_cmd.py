@@ -2,11 +2,11 @@
 
     python tools/menu_cmd.py toggle
     python tools/menu_cmd.py right right right      # world scale +15 (when World scale is selected)
-    python tools/menu_cmd.py toggle down down select   # open, move to Recentre, select it
+    python tools/menu_cmd.py toggle down down down select   # open, move to Recentre, select it
 
 Commands: toggle up down left right select back. The host reads and deletes
 %TEMP%\\MOHAVR\\host_cmd.txt once per XR frame and queues its lines, applying ONE per frame
-(one button press each). Items: World scale, Height, Recentre, Reset world scale, Close;
+(one button press each). Items: World scale, Height, Turning, Recentre, Reset world scale, Close;
 the menu opens on World scale.
 """
 import os

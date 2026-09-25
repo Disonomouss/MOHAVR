@@ -387,6 +387,17 @@ HUD is drawn at screen positions inside each half, so it lands at different plac
   layouts. LB+RB together feed `PressEnterCheat*` (a cheat-code entry mode; the cheat sequences are all
   face buttons).
 
+## 5l. The player's rotation (snap turn, measured 2026-09-25)
+
+- `ULocalPlayer+0x40` = `Actor`, the APlayerController (§5g, the merge point `MOV ESI,[EDI+0x40]`).
+- **`AActor::Rotation` = `+0xF4`** (FRotator: Pitch `+0xF4`, Yaw `+0xF8`, Roll `+0xFC`, ints, 65536 = 360°).
+  Source: the native table entry `{"intAActorexecSetRotation", 0x10D2E9D0}` at `0x116152F0` → `FUN_10CE8310` →
+  `ULevel::MoveActor` `FUN_10B62090(Actor, Delta, NewRotation, ...)`, which compares `NewRotation` with
+  `actor[0x3D..0x3F]` and stores it there.
+- In first person, the view's yaw from `GetPlayerViewPoint` equals the controller's `Rotation.Yaw`, give or
+  take view shake. Adding to it turns the body, movement and aim at once. UE yaw grows clockwise seen from
+  above (a right turn is positive). Verified by snap turn: ±5461 per 30° step, read back through the view.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

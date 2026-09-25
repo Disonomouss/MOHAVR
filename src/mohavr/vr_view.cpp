@@ -239,6 +239,31 @@ void WriteViewState(const float* loc, const int* rot) {
     MoveFileExW(part.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
 }
 
+// Snap turn (Comfort, host menu): the host sums snap steps in hdr->snapYawTotal; each change is added
+// to the PlayerController's Rotation.Yaw once -- the game then turns the body, movement and aim with
+// it. Only while the controller's yaw is the one this view came from (within ~11 degrees: view
+// shake), so a cutscene camera or a vehicle is never touched. `localPlayer` = EDI at the merge point.
+void ApplySnapTurn(const shared::Header* hdr, std::uintptr_t localPlayer, const int* viewRot) {
+    static bool          init = false;
+    static std::int32_t  applied = 0;
+    const std::int32_t   total = hdr->snapYawTotal;
+    if (!init) { init = true; applied = total; }  // a total from before this game session is not a request
+    if (total == applied) return;
+    const std::int32_t delta = total - applied;
+    applied = total;
+    const auto ctrl = localPlayer ? *reinterpret_cast<std::uintptr_t*>(localPlayer + addr::kLocalPlayerActor) : 0;
+    if (!ctrl) return;
+    int* yaw = reinterpret_cast<int*>(ctrl + addr::kActorRotation + 4);
+    const int diff = static_cast<std::int16_t>(static_cast<std::uint16_t>((*yaw - viewRot[1]) & 0xFFFF));
+    static int logged = 0;
+    if (diff < -2048 || diff > 2048) {
+        if (logged++ < 8) MLOG("snap: skipped %+d -- controller yaw %d is not the view's %d (camera/cutscene?)", delta, *yaw, viewRot[1]);
+        return;
+    }
+    *yaw += delta;
+    if (logged++ < 8) MLOG("snap: controller yaw %+d (%.0f deg) -> %d", delta, delta * 360.0 / 65536.0, *yaw);
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -256,6 +281,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
     if (!loc || !rot) return;
     if (g_cfg.debugViewState && g_thisEye == 0) WriteViewState(loc, rot);
+    if (g_thisEye == 0) ApplySnapTurn(hdr, ctx.edi, rot);
 
     const float gameYaw = UnrToRad(rot[1]);
     // Stereo: this eye's own pose (orientation and position); mono: the head.

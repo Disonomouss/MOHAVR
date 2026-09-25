@@ -149,10 +149,16 @@ what was learned.
       vs hold on the menu button work? (Not testable in the simulator: its buttons come only from its window.)
 
 ### E. Turning comfort — [S] logic, [H] feel
-- [ ] Snap turn (`Comfort.SnapTurn=0|30|45`), implemented in the pad mapping (a right-stick flick → a fixed yaw step
-      through the game's turn input, or by rotating the controller yaw directly if RE finds the rotation field).
-      [S]: one flick = the configured yaw change (logged game yaw).
-- [ ] Menu items for the turn mode.
+- [x] Snap turn (`Comfort.SnapTurn=0|30|45`, default 0 = smooth). RE (ENGINE-NOTES §5l): PlayerController =
+      `LocalPlayer+0x40`, `AActor::Rotation` at `+0xF4` (from `ULevel::MoveActor`, reached via `execSetRotation`).
+      The host detects a flick (over 70%, re-armed under 30%), zeroes smooth turning and adds the step to
+      `snapYawTotal` (shared block v6). The game adds each change to the controller's `Rotation.Yaw` once, and
+      only while that yaw is the one the view came from (within about 11°), so cutscene or vehicle cameras are
+      left alone. [S] passed with `Debug.ViewState`: two flicks right and one left at 30° → yaw 16388 → 21849 →
+      27310 → 21849 (exactly ±5461 = 30°); at 45° → +8192.
+- [x] Menu item **Turning** (smooth / snap 30° / snap 45°, saved as `[Comfort] SnapTurn` in the player's ini).
+      [S]: menu → snap 45 → saved; the next flick = +8192.
+- [ ] Headset question (round 5): snap vs smooth, and which step feels right.
 
 ### F. M5 menus/cutscenes on a cinema screen — [S]
 - [ ] RE/script: detect "in a UI menu" (UIScene active), "cutscene/matinee" (cinematic mode), and "no pawn".

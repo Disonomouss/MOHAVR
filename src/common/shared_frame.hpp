@@ -110,6 +110,9 @@ struct Header {
     std::uint16_t          padButtons;     // XINPUT_GAMEPAD_* bits
     std::uint8_t           padLeftTrigger, padRightTrigger;
     std::int16_t           padThumbLX, padThumbLY, padThumbRX, padThumbRY;
+    // Snap turn (Comfort, host -> game): the running sum of snap steps in rotator units (65536 = 360
+    // degrees). The game adds each change to the PlayerController's yaw, once.
+    volatile std::int32_t  snapYawTotal;
 };
 #pragma pack(pop)
 
@@ -121,7 +124,8 @@ static_assert(offsetof(Header, viewDisplayTime) == 376, "shared::Header layout m
 static_assert(offsetof(Header, slotMeta) == 500, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, defaultUnitsPerMeter) == 788, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, padSeq) == 820, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 840, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, snapYawTotal) == 840, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 848, "shared::Header layout must match between x86 and x64");
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {

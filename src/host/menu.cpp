@@ -16,7 +16,8 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kRecenter, kResetScale, kClose, kItemCount };
+constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 
 std::wstring UserIniPath() {
     wchar_t base[MAX_PATH] = L"";
@@ -102,6 +103,18 @@ void Menu::ApplySavedSettings() {
     }
     MLOG("menu: height offset %+.2f m (%s)", h, buf[0] ? "player's saved setting" : "default");
     SetHeightOffset(h, false);
+
+    // Turning: the shipped default is [Comfort] SnapTurn in MOHAVR.ini next to the host.
+    wchar_t exe[MAX_PATH] = L"";
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring shipped(exe);
+    shipped = shipped.substr(0, shipped.find_last_of(L'\\')) + L"\\MOHAVR.ini";
+    const int defSnap = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"SnapTurn", 0, shipped.c_str()));
+    const int saved = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"SnapTurn", -1, iniPath_.c_str()));
+    snapDeg_ = 0;
+    for (int s : kSnapSteps)
+        if (s == (saved >= 0 ? saved : defSnap)) snapDeg_ = s;
+    MLOG("menu: turning %s%d (%s)", snapDeg_ ? "snap " : "smooth ", snapDeg_, saved >= 0 ? "player's saved setting" : "default");
 }
 
 void Menu::SetHeightOffset(float v, bool save) {
@@ -116,7 +129,7 @@ void Menu::Close() {
     if (!visible_) return;
     visible_ = false;
     Save();
-    MLOG("menu: closed (world scale %.1f, height %+.2f m saved)", unitsPerMeter_, heightOffset_);
+    MLOG("menu: closed (world scale %.1f, height %+.2f m, turning %d saved)", unitsPerMeter_, heightOffset_, snapDeg_);
 }
 
 void Menu::SetUnitsPerMeter(float v, bool save) {
@@ -133,6 +146,8 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Camera", L"UnitsPerMeter", buf, iniPath_.c_str());
     swprintf_s(buf, L"%.2f", heightOffset_);
     WritePrivateProfileStringW(L"Camera", L"HeightOffset", buf, iniPath_.c_str());
+    swprintf_s(buf, L"%d", snapDeg_);
+    WritePrivateProfileStringW(L"Comfort", L"SnapTurn", buf, iniPath_.c_str());
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
@@ -167,6 +182,13 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         } else if (selected_ == kHeight) {
             SetHeightOffset(heightOffset_ + dir * kHeightStep, true);
             MLOG("menu: height offset -> %+.2f m", heightOffset_);
+        } else if (selected_ == kTurn) {
+            int i = 0;
+            while (i < 2 && kSnapSteps[i] != snapDeg_) ++i;
+            i = (i + (in.right ? 1 : 2)) % 3;
+            snapDeg_ = kSnapSteps[i];
+            Save();
+            MLOG("menu: turning -> %s %d", snapDeg_ ? "snap" : "smooth", snapDeg_);
         }
     }
     if (in.select) {
@@ -210,6 +232,9 @@ void Menu::Render() {
     ImGui::PopFont();
     snprintf(label, sizeof(label), "Height           <  %+.0f cm  >", heightOffset_ * 100.0f);
     ImGui::Selectable(label, selected_ == kHeight);
+    if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
+    else snprintf(label, sizeof(label), "Turning          <  smooth  >");
+    ImGui::Selectable(label, selected_ == kTurn);
     ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
     snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
     ImGui::Selectable(label, selected_ == kResetScale);

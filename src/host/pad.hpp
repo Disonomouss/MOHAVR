@@ -37,7 +37,9 @@ public:
     void PulseStart() { startUntil_ = now_ + 0.15; }
     // Per XR frame after xrSyncActions with Set() active. `neutral` (the MOHAVR menu is open) publishes
     // a centred pad with nothing pressed, so the game neither moves nor sees a disconnect.
-    void Update(XrSession session, double now, bool neutral, shared::Header* hdr);
+    // `snapDeg` > 0: the right stick's X snaps by that many degrees per flick (hdr->snapYawTotal) instead
+    // of turning smoothly.
+    void Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr);
 
 private:
     enum Src { kNone, kA, kB, kX, kY, kLGrip, kRGrip, kLTrig, kRTrig, kLThumb, kRThumb, kMenu, kSrcCount };
@@ -64,6 +66,7 @@ private:
     double      testUntil_ = 0.0;
     shared::PadState testState_{};
     bool        testActive_ = false;
+    bool        snapArmed_ = true;
 };
 
 }  // namespace mohavr::host

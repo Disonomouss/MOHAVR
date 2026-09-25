@@ -2,8 +2,9 @@
 // quad layer in front of the player when open. The game never renders it -- it costs the game no
 // address space, and it works in menus, cutscenes and gameplay alike.
 //
-// Items: World Scale (live, saved), Height (seated/standing offset, live, saved), Recentre (the host
-// re-creates LOCAL at the head's heading), Reset World Scale, Close.
+// Items: World Scale (live, saved), Height (seated/standing offset, live, saved), Turning (smooth /
+// snap 30 / snap 45, saved; needs Input.Controllers), Recentre (the host re-creates LOCAL at the
+// head's heading), Reset World Scale, Close.
 // Settings are the PLAYER's (lessons 1): %LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini, separate from the
 // shipped defaults, outside the game folder, never touched by deploy/undeploy.
 #pragma once
@@ -46,6 +47,8 @@ public:
     bool TakeRecenterRequest() { const bool r = recenterRequested_; recenterRequested_ = false; return r; }
     // After a recentre the panel's old pose is meaningless: close it.
     void Close();
+    // Turning (Comfort): 0 = smooth, else the snap step in degrees. Used by the virtual pad.
+    int SnapTurnDegrees() const { return snapDeg_; }
 
 private:
     void Render();
@@ -68,6 +71,7 @@ private:
     int                     selected_ = 0;
     float                   unitsPerMeter_ = 100.0f;
     float                   heightOffset_ = 0.0f;   // metres
+    int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
 };
