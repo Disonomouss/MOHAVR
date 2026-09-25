@@ -219,7 +219,7 @@ void OnAfterReset(unsigned width, unsigned height) {
     }
 }
 
-void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int mirror) {
+void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int mirror, bool controllers) {
     if (g_hdr) return;
     InitializeCriticalSection(&g_rtLock);
     g_rtLockInit = true;
@@ -243,6 +243,7 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int 
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);
     if (!runtimeJson.empty()) cmd += L" --runtime-json \"" + runtimeJson + L"\"";
     if (mirror) cmd += L" --mirror " + std::to_wstring(mirror);
+    if (controllers) cmd += L" --controllers 1";
     STARTUPINFOW si{sizeof(si)};
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, ModuleDir().c_str(), &si, &pi)) {

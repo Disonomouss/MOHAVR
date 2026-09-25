@@ -27,6 +27,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/patch.cpp
         src/mohavr/xr_session.cpp
         src/mohavr/vr_view.cpp
+        src/mohavr/xinput_hook.cpp
         src/mohavr/dinput8.def
     )
     # Mid-function hooks with register context (safetyhook needs C++23).
@@ -44,6 +45,7 @@ else()
         src/host/main.cpp
         src/host/menu.cpp
         src/host/mirror.cpp
+        src/host/pad.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).

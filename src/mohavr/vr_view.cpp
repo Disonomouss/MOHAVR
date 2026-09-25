@@ -216,6 +216,29 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
     }
 }
 
+// Debug.ViewState: the game's own camera (before the head is applied) for scripted tests --
+// %TEMP%\MOHAVR\view_state.txt = "x y z yaw pitch" (Unreal units / rotator units), 5 times a second.
+void WriteViewState(const float* loc, const int* rot) {
+    static DWORD next = 0;
+    const DWORD now = GetTickCount();
+    if (static_cast<LONG>(now - next) < 0) return;
+    next = now + 200;
+    static std::wstring path;
+    if (path.empty()) {
+        wchar_t tmp[MAX_PATH];
+        const DWORD n = GetTempPathW(MAX_PATH, tmp);
+        path = std::wstring(tmp, n) + L"MOHAVR";
+        CreateDirectoryW(path.c_str(), nullptr);
+        path += L"\\view_state.txt";
+    }
+    const std::wstring part = path + L".tmp";
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, part.c_str(), L"w") != 0 || !f) return;
+    fprintf(f, "%.1f %.1f %.1f %d %d\n", loc[0], loc[1], loc[2], rot[1] & 0xFFFF, rot[0] & 0xFFFF);
+    fclose(f);
+    MoveFileExW(part.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -232,6 +255,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
     if (!loc || !rot) return;
+    if (g_cfg.debugViewState && g_thisEye == 0) WriteViewState(loc, rot);
 
     const float gameYaw = UnrToRad(rot[1]);
     // Stereo: this eye's own pose (orientation and position); mono: the head.

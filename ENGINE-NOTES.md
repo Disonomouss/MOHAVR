@@ -366,6 +366,27 @@ eyes, so a real IPD gives it a huge disparity; the proper fix is M7 (the control
 HUD is drawn at screen positions inside each half, so it lands at different places per eye
 ("cross-eyed / edge of view / one eye"): M5, the HUD on its own layer.
 
+## 5k. Gamepad input: XInput every frame, pad or no pad (M6, measured 2026-09-25)
+
+- **`WindowsClientInit`** (Ghidra; it holds the only reference to `EnumJoysticksCallback` `0x10922F40`)
+  creates the DirectInput keyboard/mouse and then, **unconditionally**, four joystick slots
+  (`FUN_1092acd0`, array `0x116E2818`, count `0x116E281C`, stride `0x1EC`) with type 4 (XInput), index
+  0–3 and no DirectInput device. Only then does it call `EnumDevices(DI8DEVCLASS_GAMECTRL, callback)`.
+  The callback fills slots only for DirectInput pads that aren't XInput pads.
+- **Per frame**, `FUN_10923D70` (the window's input poll) walks those slots only while
+  `GetFocus() == the game window`. For a slot with no DirectInput device and index < 4 it calls
+  `XInputGetState(index, &state)` through IAT `0x112C6804` (XINPUT1_3.dll ordinal 2, call site
+  `0x10924232`). Types 3/4 map `wButtons` through the button table at `+0x88 → +0xB8..0xC7` and the
+  thumbs/triggers to the `XboxTypeS_*` keys; a trigger counts as a button above 30.
+- So **answering `XInputGetState(0)` is enough** to give the game a pad: no device has to exist and no
+  enumeration has to be faked. Verified: with `Input.Controllers=1` the first poll arrives about 13 s
+  after launch (at the main menu), and injected states move, turn, fire, reload and pause the game.
+- The pad layout is script: `MOHAPlayerInput.uc` `Bindings_Default` (A reload/use/flare, B switch weapon,
+  X crouch, Y jump, LB alt-fire, RB grenade, LT aim, RT fire, LS sprint, RS melee, Start pause/menu,
+  Back scores; LeftX/Y DeadZone 0.3, RightX/Y 0.2). `Bindings_GOW` and `Bindings_Halo` are alternative
+  layouts. LB+RB together feed `PressEnterCheat*` (a cheat-code entry mode; the cheat sequences are all
+  face buttons).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

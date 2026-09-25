@@ -1,6 +1,6 @@
 // MOHAVR-host.exe -- the 64-bit side of the bridge (D10).
 //
-// Started by the game-side mod (dinput8.dll) with:  --game-pid <pid> [--runtime-json "<path>"] [--mirror 1|2]
+// Started by the game-side mod (dinput8.dll) with:  --game-pid <pid> [--runtime-json "<path>"] [--mirror 1|2] [--controllers 1]
 // Owns everything OpenXR: loader, runtime, D3D11 device, swapchains. Receives the game's frames
 // through shared D3D12 textures + fences (src/common/shared_frame.hpp) and shows them on a
 // world-locked quad (M2, mono). Exits when the game exits. Logs to MOHAVR-host.log next to itself.
@@ -28,6 +28,7 @@
 #include "../mohavr/log.hpp"
 #include "menu.hpp"
 #include "mirror.hpp"
+#include "pad.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -147,7 +148,7 @@ void Inspect(ID3D11Device* dev, ID3D11DeviceContext* ctx, ID3D11Texture2D* tex, 
     staging->Release();
 }
 
-int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
+int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool controllers) {
     // --- the game and the shared block -----------------------------------------------------------
     HANDLE game = OpenProcess(SYNCHRONIZE | PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, gamePid);
     if (!game) return Fail("OpenProcess(game)");
@@ -317,6 +318,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
     const bool mirrorOk = mirrorMode && mirror.Init(dev, gamePid, mirrorMode);
 
     XrActionSet menuSet = XR_NULL_HANDLE;
+    mohavr::host::Pad pad;  // Input.Controllers (M6)
     XrAction aToggle = XR_NULL_HANDLE, aStick = XR_NULL_HANDLE, aSelect = XR_NULL_HANDLE, aBack = XR_NULL_HANDLE;
     {
         XrActionSetCreateInfo asci{XR_TYPE_ACTION_SET_CREATE_INFO};
@@ -335,33 +337,41 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
         XR_OK(make(aSelect, "menu_select", "Select", XR_ACTION_TYPE_BOOLEAN_INPUT), "xrCreateAction(select)");
         XR_OK(make(aBack, "menu_back", "Back", XR_ACTION_TYPE_BOOLEAN_INPUT), "xrCreateAction(back)");
         auto path = [&](const char* s) { XrPath p = XR_NULL_PATH; xrStringToPath(instance, s, &p); return p; };
-        // Quest (Touch): left menu button toggles, left stick navigates, either trigger or A selects, B backs out.
-        const XrActionSuggestedBinding touch[] = {
+        if (controllers && !pad.Init(instance, ExeDir() + L"\\MOHAVR.ini")) {
+            MLOG("host: gameplay actions failed -- no virtual pad");
+            controllers = false;
+        }
+        // One suggestion per profile (a second call replaces the first), so the menu's and the pad's
+        // bindings go in together. Quest (Touch): left menu button toggles, left stick navigates,
+        // either trigger or A selects, B backs out.
+        auto suggest = [&](const char* profile, std::vector<XrActionSuggestedBinding> b) {
+            if (controllers) pad.AppendBindings(profile, path, b);
+            if (b.empty()) return;
+            XrInteractionProfileSuggestedBinding sb{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
+            sb.interactionProfile = path(profile);
+            sb.suggestedBindings = b.data();
+            sb.countSuggestedBindings = static_cast<uint32_t>(b.size());
+            if (XR_FAILED(xrSuggestInteractionProfileBindings(instance, &sb))) MLOG("host: %s bindings not accepted", profile);
+        };
+        suggest("/interaction_profiles/oculus/touch_controller", {
             {aToggle, path("/user/hand/left/input/menu/click")},
             {aStick, path("/user/hand/left/input/thumbstick")},
             {aSelect, path("/user/hand/left/input/trigger/value")},
             {aSelect, path("/user/hand/right/input/trigger/value")},
             {aSelect, path("/user/hand/right/input/a/click")},
             {aBack, path("/user/hand/right/input/b/click")},
-        };
-        XrInteractionProfileSuggestedBinding sb{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
-        sb.interactionProfile = path("/interaction_profiles/oculus/touch_controller");
-        sb.suggestedBindings = touch;
-        sb.countSuggestedBindings = static_cast<uint32_t>(std::size(touch));
-        if (XR_FAILED(xrSuggestInteractionProfileBindings(instance, &sb))) MLOG("host: Touch bindings not accepted");
-        const XrActionSuggestedBinding simple[] = {
+        });
+        suggest("/interaction_profiles/valve/index_controller", {});
+        suggest("/interaction_profiles/khr/simple_controller", {
             {aToggle, path("/user/hand/left/input/menu/click")},
             {aSelect, path("/user/hand/right/input/select/click")},
-        };
-        sb.interactionProfile = path("/interaction_profiles/khr/simple_controller");
-        sb.suggestedBindings = simple;
-        sb.countSuggestedBindings = static_cast<uint32_t>(std::size(simple));
-        if (XR_FAILED(xrSuggestInteractionProfileBindings(instance, &sb))) MLOG("host: simple-controller bindings not accepted");
+        });
+        const XrActionSet sets[] = {menuSet, pad.Set()};
         XrSessionActionSetsAttachInfo attach{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
-        attach.countActionSets = 1;
-        attach.actionSets = &menuSet;
+        attach.countActionSets = controllers ? 2 : 1;
+        attach.actionSets = sets;
         XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
-        MLOG("host: menu actions attached (Touch + simple controller)");
+        MLOG("host: actions attached (menu%s; Touch, Index, simple controller)", controllers ? " + gameplay pad" : "");
     }
     // Test channel: %TEMP%\MOHAVR\host_cmd.txt, one command per line (toggle/up/down/left/right/select/back),
     // consumed and deleted each frame -- the simulator can't press controller buttons.
@@ -376,6 +386,16 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
     QueryPerformanceCounter(&qpcLast);
     std::deque<std::string> testCmds;  // from host_cmd.txt, applied one per frame
     float stickHeld[4] = {0, 0, 0, 0};  // up, down, left, right: seconds held (auto-repeat)
+    // With the virtual pad the left menu button is shared: a tap = the game's Start, holding it
+    // (Controls.MenuHoldSeconds) = the MOHAVR menu; a tap also closes the MOHAVR menu when it is open.
+    const float menuHoldSec = [&] {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Controls", L"MenuHoldSeconds", L"0.6", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        const float s = static_cast<float>(_wtof(v));
+        return s > 0.1f && s < 5.0f ? s : 0.6f;
+    }();
+    float menuBtnHeld = 0.0f;
+    bool menuBtnFired = false;
     SetState(HostState::Running, "session created");
 
     // On-request capture of what the host received (the harness's view of the VR side).
@@ -437,10 +457,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
         qpcLast = qpcNow;
         mohavr::host::MenuInput mi;
         {
-            XrActiveActionSet active{menuSet, XR_NULL_PATH};
+            const XrActiveActionSet active[] = {{menuSet, XR_NULL_PATH}, {pad.Set(), XR_NULL_PATH}};
             XrActionsSyncInfo si{XR_TYPE_ACTIONS_SYNC_INFO};
-            si.countActiveActionSets = 1;
-            si.activeActionSets = &active;
+            si.countActiveActionSets = controllers ? 2 : 1;
+            si.activeActionSets = active;
             if (xrSyncActions(session, &si) == XR_SUCCESS) {
                 auto pressed = [&](XrAction a) {
                     XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
@@ -449,7 +469,28 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
                     return XR_SUCCEEDED(xrGetActionStateBoolean(session, &gi, &b)) && b.isActive && b.changedSinceLastSync &&
                            b.currentState;
                 };
-                mi.toggle = pressed(aToggle);
+                if (controllers) {
+                    XrActionStateGetInfo tg{XR_TYPE_ACTION_STATE_GET_INFO};
+                    tg.action = aToggle;
+                    XrActionStateBoolean tb{XR_TYPE_ACTION_STATE_BOOLEAN};
+                    const bool held = XR_SUCCEEDED(xrGetActionStateBoolean(session, &tg, &tb)) && tb.isActive && tb.currentState;
+                    if (held) {
+                        menuBtnHeld += dt;
+                        if (!menuBtnFired && menuBtnHeld >= menuHoldSec) {
+                            mi.toggle = true;
+                            menuBtnFired = true;
+                        }
+                    } else {
+                        if (menuBtnHeld > 0.0f && !menuBtnFired) {
+                            if (menu.Visible()) mi.toggle = true;
+                            else pad.PulseStart();
+                        }
+                        menuBtnHeld = 0.0f;
+                        menuBtnFired = false;
+                    }
+                } else {
+                    mi.toggle = pressed(aToggle);
+                }
                 mi.select = pressed(aSelect);
                 mi.back = pressed(aBack);
                 XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
@@ -563,6 +604,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
         }
 
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
+        if (controllers)
+            pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
+                       menuOk && menu.Visible(), g_hdr);
         if (menuOk && menu.TakeRecenterRequest()) {
             if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {
                 MLOG("host: recentre ignored (%s)", !menuHeadOk ? "no head pose" : "previous recentre still in flight");
@@ -721,10 +765,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     DWORD gamePid = 0;
     std::wstring runtimeJson;
     int mirrorMode = 0;
+    bool controllers = false;
     for (int i = 1; i + 1 < argc; ++i) {
         if (!wcscmp(argv[i], L"--game-pid")) gamePid = static_cast<DWORD>(_wtoi(argv[++i]));
         else if (!wcscmp(argv[i], L"--runtime-json")) runtimeJson = argv[++i];
         else if (!wcscmp(argv[i], L"--mirror")) mirrorMode = _wtoi(argv[++i]);
+        else if (!wcscmp(argv[i], L"--controllers")) controllers = _wtoi(argv[++i]) != 0;
     }
     LocalFree(argv);
     if (!gamePid) { MLOG("host: no --game-pid -- nothing to do"); return 2; }
@@ -732,8 +778,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     if (mirrorMode < 0 || mirrorMode > 2) mirrorMode = 0;
     // The mirror overlays the game window in physical pixels; set before the runtime makes any window.
     if (mirrorMode) SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    MLOG("host: mirror %d", mirrorMode);
-    const int rc = Run(gamePid, runtimeJson, mirrorMode);
+    MLOG("host: mirror %d, controllers %d", mirrorMode, controllers);
+    const int rc = Run(gamePid, runtimeJson, mirrorMode, controllers);
     MLOG("host: exit %d", rc);
     return rc;
 }

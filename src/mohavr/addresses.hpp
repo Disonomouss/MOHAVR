@@ -41,6 +41,10 @@ inline constexpr std::uint8_t   kThunkDirect3DCreate9Bytes[] = {0xFF, 0x25, 0x18
 // IAT slot for d3d9!Direct3DCreate9 (ENGINE-NOTES 5b, Ghidra import table).
 inline constexpr std::uintptr_t kIatDirect3DCreate9 = 0x112C6818;
 
+// IAT slot for XInputGetState (imported by ordinal 2; ENGINE-NOTES 5a/5k). Verified at install time
+// against the loaded XInput DLL's ordinal-2 export.
+inline constexpr std::uintptr_t kIatXInputGetState = 0x112C6804;
+
 // InitD3D9Device: the CreateDevice call site, CALL EAX with EAX = IDirect3D9 vtbl[0x40]
 // (ENGINE-NOTES 5b). Checked now as a build fingerprint; hooked in M2.
 inline constexpr std::uintptr_t kCreateDeviceCall = 0x1090339A;

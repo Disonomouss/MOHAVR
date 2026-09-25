@@ -126,17 +126,27 @@ what was learned.
       `capture-window.ps1` shows gameplay (shot mirror2.png). Candidate default for mode 1 after round 5.
 
 ### D. M6 controller input → virtual Xbox pad — [S] by injection
-- [ ] RE: confirm how the game reads the pad (`XInputGetState` IAT slot, callers `0x10924232`,
-      `0x10922FC1`; ENGINE-NOTES §5a) and the gamepad bindings in `MOHAPlayerInput.uc`.
-- [ ] Host: a Touch action set for gameplay (sticks, triggers, grips, A/B/X/Y, thumbstick clicks), active when
-      the menu is closed. Publish an `XINPUT_GAMEPAD`-shaped state in the shared block (v5).
-- [ ] Game: an IAT hook on `XInputGetState` (ordinal 2) for pad 0, returning the host's state when
-      `Input.Controllers=1`; the real pad passes through otherwise.
-- [ ] Mapping table in the ini (`[Controls]`), with defaults that mirror an Xbox layout.
-- [ ] Host test channel for controller state (`tools/pad_cmd.py`: stick values, button presses with duration).
-- [ ] [S]: injected left stick forward → the player moves (frame difference + position change); right stick → turns;
-      the right trigger fires (muzzle flash or ammo count changes in the HUD capture); the pause menu opens and closes.
-- [ ] Headset question (round 5): the mapping feels right? Stick deadzone OK? Turning comfortable?
+- [x] RE (ENGINE-NOTES §5k): `WindowsClientInit` always creates four XInput joystick slots, so the game
+      calls `XInputGetState(0..3)` every frame while its window has focus, with or without a pad. Answering
+      pad 0 is enough. The pad layout is `MOHAPlayerInput.uc` `Bindings_Default`.
+- [x] Host: a gameplay action set (`src/host/pad.cpp`: sticks, triggers, grips, A/B/X/Y, stick clicks; Touch
+      and Index bindings, suggested together with the menu's), synced while the MOHAVR menu is closed (it
+      publishes a centred, idle pad while the menu is open). Shared block **v6**: a seqlocked `XINPUT_GAMEPAD`.
+      With controllers on, the left menu button is shared: tap = the game's Start, hold 0.6 s = the MOHAVR
+      menu (`Controls.MenuHoldSeconds`).
+- [x] Game: a verified IAT swap of `XInputGetState` (`src/mohavr/xinput_hook.cpp`). The slot must hold the
+      loaded XInput DLL's ordinal 2 (it is XINPUT1_3.dll), else the mod stands down. Pad 0 comes from the host
+      while it runs; everything else is the real XInput. Behind `Input.Controllers=1`, **default 0**.
+- [x] Mapping table `[Controls]` in MOHAVR.ini (read by the host), defaults = MOHA's own pad layout on Touch;
+      right stick Y off (the head drives pitch; `RightStickY=1` turns it on).
+- [x] Test channel: `tools/pad_cmd.py` (`%TEMP%\MOHAVR\pad_cmd.txt`, a queue of timed states). Also
+      `Debug.ViewState=1`: the game camera (x y z yaw pitch) in `%TEMP%\MOHAVR\view_state.txt`, 5 times a second.
+- [x] [S] passed (sim, gameplay, from the game's own camera and HUD): left stick forward 2 s → moved about 733
+      units along the heading; right stick 0.5 s → yaw 16388 → 26048 (about 53°); strafe → sideways; RT 0.4 s →
+      ammo 30 → 27; A → reload (27/103 → 30/100); Start → the pause menu (harness `pausemenu`), Start again →
+      back in game. The first poll came through about 13 s after launch.
+- [ ] Headset question (round 5): the mapping feels right? Stick deadzone OK? Turning comfortable? Does tap
+      vs hold on the menu button work? (Not testable in the simulator: its buttons come only from its window.)
 
 ### E. Turning comfort — [S] logic, [H] feel
 - [ ] Snap turn (`Comfort.SnapTurn=0|30|45`), implemented in the pad mapping (a right-stick flick → a fixed yaw step

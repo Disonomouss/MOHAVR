@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 5;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height
+inline constexpr std::uint32_t kVersion = 6;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -102,6 +102,14 @@ struct Header {
     volatile float         heightOffset;           // host -> game: v5, metres added to the camera height (seated/standing)
     volatile std::uint32_t recenterSeq;            // host -> game: v5, bumped when the host recentres LOCAL space
     float                  reservedSettings[4];
+
+    // --- v6: the virtual Xbox pad, host -> game (M6, Input.Controllers; seqlock: padSeq odd while the
+    // host writes). The game's XInputGetState(0) returns this while padActive (XINPUT_GAMEPAD layout).
+    volatile std::uint32_t padSeq;
+    volatile std::uint32_t padActive;      // 1 = the host drives pad 0; 0 = the real pad 0 passes through
+    std::uint16_t          padButtons;     // XINPUT_GAMEPAD_* bits
+    std::uint8_t           padLeftTrigger, padRightTrigger;
+    std::int16_t           padThumbLX, padThumbLY, padThumbRX, padThumbRY;
 };
 #pragma pack(pop)
 
@@ -112,7 +120,8 @@ static_assert(offsetof(Header, viewSeq) == 368, "shared::Header layout must matc
 static_assert(offsetof(Header, viewDisplayTime) == 376, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, slotMeta) == 500, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, defaultUnitsPerMeter) == 788, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 824, "shared::Header layout must match between x86 and x64");  // 788 + 4 + 4 + 24 = 820, padded to 8
+static_assert(offsetof(Header, padSeq) == 820, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 840, "shared::Header layout must match between x86 and x64");
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {
@@ -130,6 +139,36 @@ inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]
     _ReadWriteBarrier();
 #endif
     return h->viewSeq == s1;
+}
+
+// The virtual pad as XInput lays it out (XINPUT_GAMEPAD, 12 bytes).
+struct PadState {
+    std::uint16_t buttons;
+    std::uint8_t  leftTrigger, rightTrigger;
+    std::int16_t  thumbLX, thumbLY, thumbRX, thumbRY;
+};
+static_assert(sizeof(PadState) == 12, "PadState must match XINPUT_GAMEPAD");
+
+// Seqlock read of the pad; false if the host is mid-write or not driving it. `seq` doubles as the
+// XInput packet number (it changes whenever the state does).
+inline bool ReadPad(const Header* h, PadState& out, std::uint32_t& seq) {
+    const std::uint32_t s1 = h->padSeq;
+    if ((s1 & 1u) || !h->padActive) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    out.buttons = h->padButtons;
+    out.leftTrigger = h->padLeftTrigger;
+    out.rightTrigger = h->padRightTrigger;
+    out.thumbLX = h->padThumbLX;
+    out.thumbLY = h->padThumbLY;
+    out.thumbRX = h->padThumbRX;
+    out.thumbRY = h->padThumbRY;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    seq = s1;
+    return h->padSeq == s1;
 }
 
 }  // namespace mohavr::shared
