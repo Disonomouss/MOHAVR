@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-25 (overnight, end of the unattended checklist)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -88,15 +88,35 @@ address-space budget for D3D9On12.
   in-headset menu (host, ImGui, Touch controls) sets world scale live; the player chose **100**, now the
   default. Open: the doubled gun (M7/M8), the per-eye HUD (M5), no controller play yet (M6).
 
+- **Overnight 2026-09-25 (unattended, UNATTENDED-REPORT.md §6 A–L, all [S] parts done):**
+  - Menu: Recentre, Height, Turning (smooth/snap), smaller panel (shared block v5/v6).
+  - Desktop mirror (`Bridge.Mirror`).
+  - **M6 controllers:** an XInputGetState IAT hook gives the game a virtual Xbox pad from the Touch
+    controllers (`Input.Controllers`, `[Controls]`); move, turn, fire, reload and pause were verified by
+    injection.
+  - **Snap turn** through `PlayerController.Rotation` (+0xF4).
+  - **M5 cinema screen:** menus (cursor count) and cinematic cameras (yaw test) go flat on the host's screen.
+  - **M5 HUD panel:** the per-eye canvas is placed and scaled so both eyes see one panel.
+  - `Weapon.HideViewModel` through the game's own exec (ULocalPlayer::Exec).
+  - The shot ray mapped for M7.
+  - Frame-time logging, and `Render.ResX/ResY` (2880×1620 measured fine).
+  - Host-crash fallback, a 30-min soak, death/reload.
+  - The player package `dist/MOHAVR-0.7.0.zip`, with install/uninstall tested end to end.
+  - Every new feature is behind a switch, off by default; round 5 turns them on for the headset verdict.
+
 ## Next
-See **`UNATTENDED-REPORT.md`**: the estimate of what can be done without the player (~70% of the remaining
-work) and the ordered checklist for the overnight session.
+1. **HEADSET-TESTS round 5** (deployed and ready): the player's verdict on controllers, tap/hold menu, snap
+   turn, cinema screen, HUD panel, mirror and resolution. Then the shipped defaults for the features that pass.
+2. **M7 aiming:** head aim first (write the head's pitch/yaw into the controller rotation), then hand aim through
+   `execGetBaseAimRotation` (ENGINE-NOTES §5o). The gun: `UpdateGunView` offsets vs. hiding.
+3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block
-  312 MB)**. Eye render targets in M3/M4 still come out of this. Re-measure after every addition
+  312 MB)** at the landing, but the 30-min soak went down to **205 MB free (largest block 102 MB)** after the
+  player walked into the town (streaming; it plateaued). Eye render targets in M3/M4 still come out of this. Re-measure after every addition
   with `tools/measure-variant.ps1`.
-- **The desktop window under 9On12 is white.** A mirror window must come from the mod.
+- **The desktop window under 9On12 is white.** Solved by the host mirror (`Bridge.Mirror=1`/`2`).
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.
 - **Input:** DirectInput 8 may not see SendInput, so harness input could need the mod's own

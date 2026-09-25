@@ -264,6 +264,17 @@ what was learned.
       game folder holding the system dinput8.dll → install refused, the folder unchanged.
 
 ### L. Morning handover
-- [ ] HEADSET-TESTS **round 5** written: every [H] question from tonight's items, with the ini switches to try.
-- [ ] STATUS.md updated: done / blocked / next.
-- [ ] **Deploy the round-5 configuration** (Virtual Desktop runtime: `OpenXR.RuntimeJson=` empty), game not running.
+- [x] HEADSET-TESTS **round 5** written: 11 questions covering every [H] item from tonight (controllers,
+      tap/hold menu button, snap turn, Height/Recentre, flat-screen menus and the landing roll, HUD panel,
+      sharpness, mirror, regressions).
+- [x] STATUS.md updated (overnight summary, next steps, the address-space risk after the soak).
+- [x] **Round-5 configuration deployed** at 23:22, game not running, `RuntimeJson=` empty (the headset
+      runtime): `Input.Controllers=1`, `Camera.CinemaScreen=2`, `HUD.Mode=1`, `Bridge.Mirror=1`,
+      `Render.ResX=2880`, `Render.ResY=1620`. Debug switches off. Smoke-tested first in the simulator with the
+      same switches: the game's menus were navigated with the virtual pad into gameplay, the flat screen went
+      on and off, the HUD panel at 780×439 px per eye, the mirror showing gameplay, 3.1 ms per frame. The player's
+      MOHAVR.user.ini was untouched (UnitsPerMeter=100).
+
+**Overnight result:** §6 A–L done; nothing BLOCKED. Every [S] part passed. What only the headset can judge is
+in HEADSET-TESTS round 5.
+

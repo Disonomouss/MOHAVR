@@ -121,6 +121,59 @@ minute, adjust again if needed. Quit and tell Claude the value you settled on.
 
 ---
 
+## Round 5: prepared 2026-09-25 overnight, controllers, menus/HUD, comfort, mirror, resolution
+**Changed** (everything from the overnight checklist; UNATTENDED-REPORT.md has the details):
+- **Play with the Touch controllers** (a virtual Xbox pad). The mapping is MOHA's own pad layout: left stick
+  moves, right stick turns, right trigger fires, left trigger aims, A reload/use, B switch weapon, X crouch,
+  Y jump, grips = alt-fire / grenade, stick clicks = sprint / melee.
+- **The left menu button is now shared: a TAP = the game's pause menu, HOLD it (0.6 s) = the MOHAVR menu.**
+- The MOHAVR menu has new items: **Height** (seated/standing), **Turning** (smooth / snap 30° / snap 45°) and
+  **Recentre** (face forward from where you are). The panel is smaller.
+- **Menus are on a flat screen** in front of you instead of split across the eyes. Cinematic cameras go flat
+  too (mode 2): you may see this during the parachute landing roll.
+- **The HUD is one panel** about 2 m ahead, slightly low, the same in both eyes (no more cross-eyed HUD).
+- **The monitor shows the game** (a mirror of the headset's view over the game window) instead of white.
+- **Sharper image:** the game now renders at 2880×1620 (each eye 1440×1620, was 960×1080).
+- If the VR host ever crashes, the game drops back to a normal flat game instead of freezing the view.
+
+**How to try it:** Claude has deployed this configuration (Virtual Desktop runtime). Start Virtual Desktop,
+launch MOHA from Steam, put the headset on.
+1. Main menu: it should be a flat screen in front of you. Navigate it with the left stick and A (the game's
+   own pad navigation), or the mouse.
+2. Campaign → Continue. During the parachute descent and landing, notice whether the view goes flat for a
+   moment (the landing roll) and whether that's OK.
+3. Play for a few minutes with the controllers: walk, turn, shoot, reload, crouch, jump, throw a grenade.
+4. Tap the left menu button: the game's pause menu (flat screen). Tap again or B to resume.
+5. Hold the left menu button: the MOHAVR menu. Try **Turning** → snap 30 and snap 45 (flick the right stick),
+   **Height**, and **Recentre** (turn your chair first, then Recentre).
+6. Look at the HUD panel (compass bottom left, ammo bottom right).
+7. Quit the game from the pause menu.
+
+**Questions:**
+1. Controllers: does everything in step 3 work? Anything mapped badly or missing? (describe)
+2. Stick feel: are the deadzone and smooth-turn speed OK? (describe)
+3. Tap = pause and hold = MOHAVR menu: does it work reliably? (yes/no)
+4. Turning: smooth, snap 30 or snap 45: which do you prefer? (answer)
+5. Height and Recentre: do they work as expected? (yes/no)
+6. Menus on the flat screen: readable and comfortable, and do they switch back to 3D when you resume? (describe)
+7. The landing roll going flat, and any cutscene you saw: better flat, or leave it 3D? (answer)
+8. HUD panel: readable? At a good depth and size? Too low or high? (describe)
+9. Is the image sharper than before, and still smooth (no stutter)? (describe)
+10. Monitor: does it show the game while you play (not white)? (yes/no)
+11. Anything that got worse compared with round 4? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`: `logs/modlogs/<time>-*`)
+
+**Deployed for this round** (`tools\deploy.ps1 deploy -Set ...`): `Input.Controllers=1`,
+`Camera.CinemaScreen=2`, `HUD.Mode=1`, `Bridge.Mirror=1`, `Render.ResX=2880`, `Render.ResY=1620`
+(RuntimeJson empty, so the headset runtime is used). If anything is bad, Claude can turn single features
+off; each has its own switch. Not on: `Weapon.HideViewModel` (the gun stays; say if
+you want it hidden) and `Comfort.SnapTurn` (choose in the menu).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
