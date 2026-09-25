@@ -11,8 +11,9 @@ time, or needs the headset.
 ### Needs the user's go-ahead first
 - [x] First launch (done by the user). The user config and saves are under OneDrive
       Documents (ENGINE-NOTES §7).
-- [ ] First `-windowed ResX= ResY= -log` launch: confirm the switches work, and record the log
-      location and the log lines that mark menu, loading and gameplay.
+- [x] First `-windowed ResX= ResY= -log` launch. Windowed 1920×1080 works. **No engine log**
+      (a console opens but stays empty), so the harness uses screenshots (D9). Main menu reached,
+      SendInput works in menus, WM_CLOSE works, and the user folder is unchanged (ENGINE-NOTES §5c).
 - [x] Decide how the game runs windowed. The command line (`-windowed ResX= ResY=`) never
       touches the player's ini (D7). Still to confirm on first launch.
 
@@ -33,8 +34,8 @@ time, or needs the headset.
 - [ ] `tools/harness.ps1` for MOHA, adapted from RDR2VR's: launch via Steam (app 24840),
       wait for log lines, quit, kill with a Steam cooldown. Back up and restore the player's
       whole `Config\` **and** `Saved\` (D8).
-- [ ] Check whether `tools/sendkey.ps1` (SendInput) reaches the menus. If not, record it and
-      fall back to the mod's own input injection (M6).
-- [ ] A front-end walk to live gameplay, driven by log lines.
+- [x] `tools/sendkey.ps1` (SendInput) reaches the menus. Gameplay input is still to test.
+- [ ] A front-end walk to live gameplay (Campaign → continue from the save), driven by
+      screenshot checks (D9).
 - [ ] Screenshots: `screenshot.ps1` for the game window and `capture-window.ps1` for the
       simulator preview.

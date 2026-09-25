@@ -96,9 +96,30 @@ reach mouse-look; keyboard is unknown (PLAN harness item).
 ## 5c. Command-line switches recognized (UTF-16 strings in the exe)
 
 `WINDOWED`, `FULLSCREEN`, `ResX=`, `ResY=`, `VSYNC`, `ONETHREAD`, `NOSOUND`, `NOSPLASH`,
-`ABSLOG`, `SEEKFREELOADING`, and `log`/`Launch.log`. Only their presence is verified; the
-behaviour of each still needs confirming on first launch. `ONETHREAD` existing implies this build
+`ABSLOG`, `SEEKFREELOADING`, and `log`/`Launch.log`. `ONETHREAD` existing implies this build
 has a separate render thread, which lessons §2 flags for stereo.
+
+**Measured, first `-log` run (2026-09-25, `steam.exe -applaunch 24840 -windowed ResX=1920 ResY=1080 -log`):**
+- Steam passes the arguments through unchanged: MOHA's command line is
+  `MOHA.exe -windowed "ResX=1920" "ResY=1080" -log`. MOHA.exe starts about 2 s after the call.
+- `-windowed ResX=1920 ResY=1080` works: window class `LaunchUnrealUWindowsClient`, title
+  "Medal of Honor Airborne", **client area 1920×1080**, windowed. **Nothing** in the user
+  folder changed, so the switches don't persist.
+- **`-log` writes no file.** It opens a console window (`ConsoleWindowClass` and a `conhost.exe`
+  child, 160×4000 buffer), but the shipping build prints **nothing** to it (0 lines after
+  about 60 s at the main menu). No `Launch.log` anywhere (game folder, user folder, temp). The
+  engine offers no log lines for the harness to wait on; progress must come from screenshots or
+  the window until the mod writes its own log. `tools/read_game_console.py` reads that console
+  in case some build or switch does print.
+- The main menu is reached by about 60 s (not timed precisely). The menu is Campaign,
+  Multiplayer, Options, Quit, right-aligned at x ≈ 1415 and y ≈ 290/363/433/505 (1920×1080).
+- **SendInput keyboard reaches the menu:** `sendkey.ps1 down` (scan code 0x50) moved the
+  highlight from Campaign to Multiplayer. Gameplay input (DirectInput, §5a) is untested.
+- `capture-window.ps1` (PrintWindow) captures the D3D9 window correctly.
+- `WM_CLOSE` to the main window closes the game cleanly in 0.5 s.
+- **Memory at the main menu:** working set 375 MB, private 579 MB, **virtual 999 MB**, which is
+  half of the 2 GB address space (the exe is not large-address-aware, §2). Gameplay will be
+  higher. This makes the address-space risk concrete for M2.
 
 ## 6. Content and UnrealScript
 
@@ -157,7 +178,7 @@ single-player, is untested.
   - `Config\MOHA{AI,Editor,EditorUserSettings,Engine,Game,Input,Juice,Player,Settings,Weapon}.ini`.
     These are the **player's files**: back them up and restore them around every test.
   - `Saved\MOHASAVEDGAME` (36 KB) and `Saved\Profile`: the player's progress.
-  - No `Logs\` yet. UE3 writes a log only with `-log`, so its location is still to observe.
+  - No `Logs\`. Even `-log` writes no file in this shipping build (§5c).
   - Resolve the path through `SHGetKnownFolderPath(FOLDERID_Documents)`, not `%USERPROFILE%\Documents`.
 - The player's current settings (read-only): `MOHAEngine.ini` / `MOHASettings.ini`
   `[WinDrv.WindowsClient]` fullscreen at 2560×1440. `MOHASettings.ini [MOHAGame.MOHAScalabilityOptions]`
@@ -192,6 +213,8 @@ Nothing measured yet. See §9.
 - The render thread is compiled in (`ONETHREAD` exists, §5c). Is it on by default on PC?
 - How the keyboard is read in gameplay: DirectInput buffered, or window messages (§5a).
 - Near planes: the culler's versus the projection's (lessons §2 warns there may be two).
-- Confirm that `-windowed ResX= ResY=` on the command line takes effect (strings exist, §5c).
-- The log location and the log lines that mark "in gameplay" for the harness.
-- Whether `SendInput` reaches the game (DirectInput 8).
+- A reliable "in gameplay" signal for the harness, since the engine doesn't log (§5c):
+  screenshot heuristics, or a memory read (for example, the local `PlayerController.Pawn` is not
+  none) through Cheat Engine or the mod.
+- Whether `SendInput` reaches gameplay (mouse-look and movement go through DirectInput, §5a).
+- Virtual memory in gameplay, and how much headroom is left below 2 GB.

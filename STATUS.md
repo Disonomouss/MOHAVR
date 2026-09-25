@@ -31,14 +31,20 @@ test rig)**; see PLAN.md.
 - The user config and save folder is located (under OneDrive Documents), and the control table
   is recorded (ENGINE-NOTES §7).
 
+- First instrumented launch (2026-09-25): windowed 1920×1080 works. There's no engine log (D9).
+  SendInput drives the menus, WM_CLOSE quits cleanly, and 999 MB of virtual memory is already
+  used at the main menu. `tools/userdata.ps1` backs up and restores the player's folder
+  (verified byte-identical).
+
 ## Next
-1. First `-windowed ResX= ResY= -log` launch, with the user's go-ahead: confirm the switches,
-   and record the log location and milestone log lines.
-2. The harness (backup and restore of Config and Saved per D8).
+1. The harness (`tools/harness.ps1`): launch, wait for the window and the menu screenshot,
+   walk to gameplay from the save, quit, restore (D8, D9).
+2. Measure virtual memory in gameplay (the 2 GB limit).
 
 ## Risks
-- **2 GB address space:** the exe is not large-address-aware. D3D9On12, the OpenXR runtime and
-  extra render targets all share that space. Measure headroom in M2.
+- **2 GB address space:** the exe is not large-address-aware, and **999 MB of virtual memory is
+  already used at the main menu**. D3D9On12, the OpenXR runtime and extra render targets all
+  share what's left. Measure gameplay usage early.
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.
 - **Input:** DirectInput 8 may not see SendInput, so harness input could need the mod's own

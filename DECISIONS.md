@@ -46,8 +46,15 @@ much address space D3D9On12 and OpenXR use early.
 ### D7. The harness runs the game windowed from the command line — Decided 2026-09-25
 It passes `-windowed ResX=… ResY=…` (and `-log`) rather than setting `StartupFullscreen` in an
 ini, so the player's ini is never edited (standing rule 6). Windowed mode also gives an
-IMMEDIATE presentation interval, so no vsync (ENGINE-NOTES §5b). Pending: confirm the switches
-take effect on first launch.
+IMMEDIATE presentation interval, so no vsync (ENGINE-NOTES §5b). Confirmed 2026-09-25: a
+1920×1080 windowed client area, and nothing persisted to the user folder.
+
+### D9. The harness detects progress from the window and screenshots, then from the mod's log — Decided 2026-09-25
+Lessons §1 says to detect progress from log lines. MOHA's shipping build writes no log, even with
+`-log` (ENGINE-NOTES §5c). Until M1 gives us our own log, the harness uses the process and window
+state plus screenshot checks, for example the main-menu highlight (brightness 255 on the
+selected item). Once the mod exists, it logs its own state transitions (menu, loading, in
+gameplay), and the harness waits on those, as lessons §1 intends.
 
 ### D8. The harness backs up the player's whole user folder — Decided 2026-09-25
 Before every test the harness copies `...\EA Games\Medal of Honor Airborne(tm)\Config\` and
