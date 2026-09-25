@@ -79,10 +79,15 @@ address-space budget for D3D9On12.
   wrongly captured head origin (a placeholder pose). Scale is back at 50 per the player, to revisit
   with stereo.
 
+- **M4 [S] done: true stereo through the engine's own split-screen path** (ENGINE-NOTES §5j). The
+  same local player is drawn twice per Draw, left and right half, each with its own eye pose and
+  asymmetric FOV, in one render pass. About 10 MB extra, and 495 MB still free. Verified in the
+  simulator.
+
 ## Next
-1. M4: stereo. First check UE3's split-screen path (ENGINE-NOTES §6: the stock 2P-vertical layout
-   is intact, and CalcSceneView honours per-player Origin/Size).
-2. Desktop mirror; recentre key.
+1. **[H] Headset round 3** (deployed): depth, comfort, scale (UnitsPerMeter decision), HUD.
+2. M5: layers (menus/cutscenes on a cinema screen, HUD on its own quad).
+3. Desktop mirror; recentre key.
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block

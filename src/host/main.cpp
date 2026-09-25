@@ -318,7 +318,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
 
     // --- loop -------------------------------------------------------------------------------------
     bool running = false;
-    bool loggedViews = false, loggedProjection = false;
+    bool loggedViews = false, loggedProjection = false, loggedStereo = false;
     mohavr::shared::SlotMeta lastMeta{};  // render pose/fov of the frame in `last`
     std::uint64_t shown = 0;  // last game frame copied into `last`
     long xrFrames = 0;
@@ -413,8 +413,16 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
             shown = f;
             if (lastMeta.hasView && !loggedProjection) {
                 loggedProjection = true;
-                MLOG("host: first head-tracked frame -- switching to a projection layer (fov tan L%.3f R%.3f U%.3f D%.3f)",
-                     lastMeta.fov.tanLeft, lastMeta.fov.tanRight, lastMeta.fov.tanUp, lastMeta.fov.tanDown);
+                MLOG("host: first head-tracked frame -- projection layer, %s (eye0 fov tan L%.3f R%.3f U%.3f D%.3f)",
+                     lastMeta.stereo ? "STEREO side by side" : "mono", lastMeta.fov[0].tanLeft, lastMeta.fov[0].tanRight,
+                     lastMeta.fov[0].tanUp, lastMeta.fov[0].tanDown);
+            }
+            if (lastMeta.hasView && lastMeta.stereo && !loggedStereo) {
+                loggedStereo = true;
+                const float ipd = std::sqrt(std::pow(lastMeta.pose[1].px - lastMeta.pose[0].px, 2.0f) +
+                                            std::pow(lastMeta.pose[1].py - lastMeta.pose[0].py, 2.0f) +
+                                            std::pow(lastMeta.pose[1].pz - lastMeta.pose[0].pz, 2.0f));
+                MLOG("host: first stereo frame -- eye separation %.1f mm", ipd * 1000.0f);
             }
             if (++newFrames == 1) MLOG("host: first game frame received (frame %llu, slot %u)", static_cast<unsigned long long>(f), slot);
             if (newFrames == 1 || newFrames == 300 || newFrames == 1200) {
@@ -447,17 +455,28 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
 
             const XrRect2Di full{{0, 0}, {static_cast<int32_t>(width), static_cast<int32_t>(height)}};
             if (lastMeta.hasView) {
-                // Mono projection (M3): both eyes get the same image, submitted with the exact head pose and
-                // FOV it was rendered with -- the runtime reprojects it, so it stays world-locked.
-                const auto& p = lastMeta.pose;
-                const auto& rf = lastMeta.fov;
+                // Every view is submitted with the exact pose and FOV it was rendered with, so the runtime can
+                // reproject it and the world stays locked.
+                //   stereo (M4): left half = eye 0, right half = eye 1, each with its own pose/fov;
+                //   mono   (M3): the whole image, eye 0's pose/fov, in both eyes (slice e).
+                const int32_t half = static_cast<int32_t>(width / 2);
                 for (uint32_t e = 0; e < 2; ++e) {
+                    const uint32_t src = lastMeta.stereo ? e : 0u;
+                    const auto& p = lastMeta.pose[src];
+                    const auto& rf = lastMeta.fov[src];
                     pviews[e].pose.position = {p.px, p.py, p.pz};
                     pviews[e].pose.orientation = {p.qx, p.qy, p.qz, p.qw};
                     pviews[e].fov = {std::atan(rf.tanLeft), std::atan(rf.tanRight), std::atan(rf.tanUp), std::atan(rf.tanDown)};
                     pviews[e].subImage.swapchain = swapchain;
-                    pviews[e].subImage.imageRect = full;
-                    pviews[e].subImage.imageArrayIndex = e;
+                    if (lastMeta.stereo) {
+                        pviews[e].subImage.imageRect = e == 0 ? XrRect2Di{{0, 0}, {half, static_cast<int32_t>(height)}}
+                                                              : XrRect2Di{{half, 0}, {static_cast<int32_t>(width) - half,
+                                                                                      static_cast<int32_t>(height)}};
+                        pviews[e].subImage.imageArrayIndex = 0;
+                    } else {
+                        pviews[e].subImage.imageRect = full;
+                        pviews[e].subImage.imageArrayIndex = e;
+                    }
                 }
                 proj.space = local;
                 proj.viewCount = 2;

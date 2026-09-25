@@ -76,7 +76,14 @@ field of view per eye. Handle both near planes (culler and projection).
 **Accept [S]:** the camera follows scripted head poses. **[H]:** scale and FOV feel right, and
 near objects clip rather than vanish.
 
-### M4. Stereo — [S] then [H]
+### M4. Stereo — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+*As built:* UE3's own split-screen path. An InlineHook on `UGameViewportClient::Draw` makes
+`GamePlayers` list the same ULocalPlayer twice during Draw, and a CalcSceneView entry MidHook gives
+call 0 the left half and call 1 the right half. The view and projection hooks use each eye's own pose
+and FOV. One view family renders both eyes; the host submits the halves as the two projection
+views.
+
+*Original plan:*
 First check whether UE3's own multi-view support (split-screen, scene captures) can render two
 eye views. Only if it can't, re-run the scene pass per eye, saving and restoring
 once-per-frame state between passes. Pair left and right images from the same frame before

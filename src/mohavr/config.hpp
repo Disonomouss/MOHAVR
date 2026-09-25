@@ -13,6 +13,7 @@ struct Config {
     bool  headTracking      = false;  // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)
     bool  headPosition      = true;   // [Camera] HeadPosition -- also apply head translation (6DoF)
     bool  headsetProjection = true;   // [Camera] HeadsetProjection -- render with the headset's FOV
+    bool  stereo            = false;  // [Camera] Stereo -- two eye views side by side via the engine's split-screen path (M4)
     float unitsPerMeter     = 50.0f;  // [Camera] UnitsPerMeter -- 50 per the player (round 2); revisit with stereo (ENGINE-NOTES 5i)
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking

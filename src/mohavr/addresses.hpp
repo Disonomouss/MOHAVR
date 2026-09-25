@@ -70,6 +70,20 @@ inline constexpr std::uint8_t   kProjAfterConstrainedBytes[] = {0x8B, 0xF0};
 inline constexpr std::uint8_t kProjCallNormalBytes[]      = {0xE8, 0x45, 0x3B, 0xFD, 0xFF};
 inline constexpr std::uint8_t kProjCallConstrainedBytes[] = {0xE8, 0x41, 0x3C, 0xFD, 0xFF};
 
+// --- UGameViewportClient::Draw and GEngine->GamePlayers (ENGINE-NOTES 5j) -----------------------
+// Draw(FViewport*, FCanvas*): __thiscall, single exit RET 8. It loops GEngine->GamePlayers twice
+// (scene views: CalcSceneView per player; then per-player drawing) -- M4 stereo doubles the list
+// for the duration of Draw only.
+inline constexpr std::uintptr_t kGEngine              = 0x116DD964;  // UGameEngine* (global)
+inline constexpr std::uintptr_t kGamePlayersOffset    = 0x2A4;       // TArray<ULocalPlayer*>: Data, Num (+4), Max (+8)
+inline constexpr std::uintptr_t kViewportClientDraw   = 0x10C14230;
+inline constexpr std::uint8_t   kViewportClientDrawBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x6A, 0xFF, 0x68, 0x2B, 0x2D, 0x1D, 0x11};
+inline constexpr std::uintptr_t kViewportClientDrawRet = 0x10C17A09;
+inline constexpr std::uint8_t   kViewportClientDrawRetBytes[] = {0xC2, 0x08, 0x00};  // ret 8
+// ULocalPlayer split-screen rect (fractions of the viewport), read at CalcSceneView entry.
+inline constexpr std::uintptr_t kLocalPlayerOriginX = 0x68, kLocalPlayerOriginY = 0x6C;
+inline constexpr std::uintptr_t kLocalPlayerSizeX   = 0x70, kLocalPlayerSizeY   = 0x74;
+
 // --- FSystemSettings (vtable at 0x116F56B8; ENGINE-NOTES 5i) -----------------------------------
 // FUN_10ECC330 copies MOHAScalabilityOptions' bool bitfield (+0x3C, declaration order) into
 // these ints: bit 1 bAllowDepthOfField -> 0x116F56D4, bit 5 bAllowMotionBlur -> 0x116F56D0.
@@ -88,6 +102,8 @@ inline constexpr Signature kSignatures[] = {
     {"after FPerspectiveMatrix (normal)",     kProjAfterNormal,     kProjAfterNormalBytes,     sizeof(kProjAfterNormalBytes)},
     {"FPerspectiveMatrix call (constrained)", kProjCallConstrained, kProjCallConstrainedBytes, sizeof(kProjCallConstrainedBytes)},
     {"after FPerspectiveMatrix (constrained)", kProjAfterConstrained, kProjAfterConstrainedBytes, sizeof(kProjAfterConstrainedBytes)},
+    {"UGameViewportClient::Draw prologue", kViewportClientDraw, kViewportClientDrawBytes, sizeof(kViewportClientDrawBytes)},
+    {"UGameViewportClient::Draw ret 8",    kViewportClientDrawRet, kViewportClientDrawRetBytes, sizeof(kViewportClientDrawRetBytes)},
 };
 
 }  // namespace mohavr::addr

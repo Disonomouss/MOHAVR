@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 2;           // 2: views (host -> game) + per-slot render pose (M3)
+inline constexpr std::uint32_t kVersion = 3;           // 2: views + per-slot render pose (M3); 3: per-eye meta (M4)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -40,12 +40,15 @@ struct Pose {
 struct Fov {
     float tanLeft, tanRight, tanUp, tanDown;
 };
-// What a published frame was rendered with -- the host submits it with exactly this pose/fov.
+// What a published frame was rendered with -- the host submits it with exactly these poses/fovs.
+//   hasView 0: rendered without head tracking (show on the quad)
+//   stereo  0: mono -- the whole image, eye[0] pose/fov, shown to both eyes
+//   stereo  1: side by side -- left half = eye 0, right half = eye 1 (M4)
 struct SlotMeta {
-    Pose          pose;
-    Fov           fov;
-    std::uint32_t hasView;  // 0: rendered without head tracking (show on the quad)
-    std::uint32_t pad;
+    Pose          pose[2];
+    Fov           fov[2];
+    std::uint32_t hasView;
+    std::uint32_t stereo;
 };
 
 enum class GameState : std::uint32_t { None = 0, Starting = 1, Ready = 2, Failed = 3 };
@@ -93,13 +96,13 @@ struct Header {
 };
 #pragma pack(pop)
 
-static_assert(sizeof(Pose) == 28 && sizeof(Fov) == 16 && sizeof(SlotMeta) == 52, "shared structs must be packed identically");
+static_assert(sizeof(Pose) == 28 && sizeof(Fov) == 16 && sizeof(SlotMeta) == 96, "shared structs must be packed identically");
 static_assert(offsetof(Header, publishedFrame) == 80, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, ackFrame) == 96, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, viewSeq) == 368, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, viewDisplayTime) == 376, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, slotMeta) == 500, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 656, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 792, "shared::Header layout must match between x86 and x64");  // 500 + 3*96 = 788, padded to 8
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {

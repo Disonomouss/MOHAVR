@@ -60,6 +60,31 @@ is back to 50 as the player asked.
 
 ---
 
+## Round 3: prepared 2026-09-25, M4 (stereo)
+**Changed:** real 3D. Each eye now gets its own view, rendered by the game's own split-screen system
+with that eye's position and field of view. The HUD appears in each eye. Scale is back at 50 as
+you asked, and the head-height bug is fixed (the origin now comes from real tracking only).
+Menus: the background is 3D, and the menu text is drawn across both eyes, which will look wrong.
+Menus move to a floating screen in M5.
+
+**How to try it:** Claude has deployed (`Camera.Stereo=1` + head tracking + host, RuntimeJson
+empty). Launch from Steam (white desktop window), then Campaign → Continue. During the parachute
+and after landing, look at near objects (your rifle, rubble) and far ones (the tower). Quit and
+tell Claude.
+
+**Questions:**
+1. Does it look 3D, with depth and near things clearly nearer? (yes/no)
+2. Is it comfortable to look at: no double vision, no eye strain? (yes/no)
+3. World size now, with stereo: too big, too small, or right? (and your height compared to other soldiers)
+4. Does the world still stay still when you turn your head? (yes/no)
+5. Is the HUD (compass, health, ammo) readable and comfortable, or does it hurt to look at? (describe)
+
+**Answers:**
+
+**Log received:**
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

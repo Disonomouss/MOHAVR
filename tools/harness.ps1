@@ -59,6 +59,18 @@ public static class Win {
     // The game's own window, by class. Process.MainWindowHandle is NOT reliable: with OpenXR on,
     // the simulator's preview window lives in the same process and can be picked instead.
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+    [StructLayout(LayoutKind.Sequential)] public struct PT { public int X, Y; }
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref PT p);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    // Park the cursor at a client-area point (1920x1080 client coordinates) that no menu item covers:
+    // MOHA's menus follow mouse hover, so a cursor left over an item steals keyboard navigation.
+    public static void ParkCursor(IntPtr hwnd, int cx, int cy) {
+        SetProcessDPIAware();
+        PT p; p.X = cx; p.Y = cy;
+        ClientToScreen(hwnd, ref p);
+        SetCursorPos(p.X, p.Y);
+    }
     public static IntPtr FindGameWindow(uint pid) {
         IntPtr found = IntPtr.Zero;
         EnumWindows(delegate(IntPtr h, IntPtr l) {
@@ -189,6 +201,9 @@ function Test-InGame {
 
 function Invoke-ToGameplay {
     if (-not (Wait-State 'mainmenu' 150)) { throw 'main menu not reached' }
+    # Cursor onto the bottom metal frame (no menu item there, on either menu) -- hover beats keys.
+    $p = Get-Moha
+    if ($p) { [MohaHarness.Win]::ParkCursor([MohaHarness.Win]::FindGameWindow([uint32]$p.Id), 1700, 1000) }
     Send-Keys 'enter'                                   # Campaign is highlighted by default
     if (-not (Wait-State 'campaignmenu' 20)) { throw 'campaign menu not reached' }
     Send-Keys 'down'                                    # New -> Continue

@@ -45,24 +45,39 @@ inline float Dot(const Vec3& a, const Vec3& b) { return a.x * b.x + a.y * b.y + 
 
 // --- state --------------------------------------------------------------------------------------
 Config g_cfg;
-SafetyHookMid g_viewHook;
-SafetyHookMid g_projHookNormal;
-SafetyHookMid g_projHookConstrained;
+SafetyHookMid    g_viewHook;
+SafetyHookMid    g_projHookNormal;
+SafetyHookMid    g_projHookConstrained;
+SafetyHookMid    g_calcEntryHook;   // M4: CalcSceneView entry -> which eye, split-screen rect
+SafetyHookInline g_drawHook;        // M4: UGameViewportClient::Draw -> two players during Draw
 
-// The view the game thread applied in the current CalcSceneView, and the previous one (render
-// thread lag, ENGINE-NOTES 5e). Written on the game thread, read on the render thread.
-struct AppliedView {
-    shared::Pose pose;      // head pose used (OpenXR, LOCAL)
-    shared::Fov  fov;       // projection actually used (after widening)
-    DWORD        thread;    // game thread that computed it
+// The views the game thread applied this frame and last frame (render-thread lag, ENGINE-NOTES
+// 5e). Written on the game thread, read on the render thread.
+struct AppliedFrame {
+    shared::Pose pose[2];
+    shared::Fov  fov[2];
+    bool         stereo;
+    DWORD        thread;
     bool         valid;
 };
 CRITICAL_SECTION g_lock;
-AppliedView g_current{}, g_previous{};
-bool g_thisViewActive = false;   // head tracking applied in the CalcSceneView in progress
-shared::Fov g_mono{};            // union FOV for this view (before widening)
+AppliedFrame g_building{}, g_current{}, g_previous{};
+
+// Per CalcSceneView call (game thread only).
+bool         g_thisViewActive = false;
+int          g_thisEye = 0;          // 0 = left, 1 = right (mono: 0)
+bool         g_thisStereo = false;
+shared::Fov  g_thisFov{};            // before widening
+float        g_thisAspect = 1.0f;    // viewport aspect of THIS view (half width in stereo)
+
+// Stereo draw state (game thread only).
+bool         g_inStereoDraw = false;
+int          g_eyeCounter = 0;
+void*        g_stereoPlayers[2] = {};
+
 long g_views = 0;
-bool g_loggedProj = false;
+bool g_loggedProj[2] = {false, false};
+bool g_loggedStereo = false;
 
 // Motion blur / depth of field off while head tracking (FSystemSettings ints, ENGINE-NOTES 5i).
 // Re-asserted every view because the game re-applies its scalability options. Only ever writes
@@ -90,6 +105,78 @@ void ForceVrSettings() {
         disabled = true;
 }
 
+// Translation origin (OpenXR LOCAL), taken from the first TRACKED head pose (see OnViewPoint).
+bool  g_haveOrigin = false;
+float g_ox = 0, g_oy = 0, g_oz = 0;
+
+void UpdateOrigin(const shared::Header* hdr, const shared::Pose& head) {
+    if (!(hdr->viewValid & 2u)) return;  // placeholder pose, not tracked yet
+    const float dx = head.px - g_ox, dy = head.py - g_oy, dz = head.pz - g_oz;
+    // More than 1 m from the origin isn't plausible for a seated/standing player: the origin was
+    // taken before the headset was on (or the play space moved) -> recentre.
+    const bool implausible = g_haveOrigin && (dx * dx + dy * dy + dz * dz) > 1.0f;
+    if (!g_haveOrigin || implausible) {
+        MLOG("view: head position origin %s at (%.3f %.3f %.3f) m", g_haveOrigin ? "RECENTRED (head >1 m from origin)" : "set",
+             head.px, head.py, head.pz);
+        g_haveOrigin = true;
+        g_ox = head.px; g_oy = head.py; g_oz = head.pz;
+    }
+}
+
+// --- M4: UGameViewportClient::Draw -- make the engine draw two players (one per eye) ----------
+// Only for the duration of Draw, GEngine->GamePlayers points at our 2-entry array holding the
+// same ULocalPlayer twice; the real array is untouched and restored on return.
+void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
+    const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
+    auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
+    shared::Header* hdr = bridge::SharedHeader();
+    const bool want = g_cfg.headTracking && g_cfg.stereo && hdr && (hdr->viewValid & 1u) && arr && arr[1] == 1 && arr[0];
+    if (!want) {
+        g_drawHook.thiscall<void>(self, viewport, canvas);
+        return;
+    }
+    void* player = *reinterpret_cast<void**>(arr[0]);
+    g_stereoPlayers[0] = g_stereoPlayers[1] = player;
+    const std::uintptr_t savedData = arr[0];
+    arr[0] = reinterpret_cast<std::uintptr_t>(g_stereoPlayers);
+    arr[1] = 2;
+    g_inStereoDraw = true;
+    g_eyeCounter = 0;
+
+    g_drawHook.thiscall<void>(self, viewport, canvas);
+
+    g_inStereoDraw = false;
+    arr[0] = savedData;
+    arr[1] = 1;
+    // Back to a full-screen player for anything outside Draw.
+    auto* lp = static_cast<std::uint8_t*>(player);
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = 0.0f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 1.0f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = 1.0f;
+    if (!g_loggedStereo) {
+        g_loggedStereo = true;
+        MLOG("stereo: first two-player Draw -- %d CalcSceneView calls", g_eyeCounter);
+    }
+}
+
+// CalcSceneView entry: stack arg 1 = ULocalPlayer* (this). In a stereo Draw, the first call is
+// the left eye, the second the right: give each half of the viewport.
+void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
+    g_thisEye = 0;
+    g_thisStereo = false;
+    if (!g_inStereoDraw) return;
+    auto* lp = *reinterpret_cast<std::uint8_t**>(ctx.esp + 4);
+    if (!lp) return;
+    const int eye = g_eyeCounter++ & 1;
+    g_thisEye = eye;
+    g_thisStereo = true;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = eye ? 0.5f : 0.0f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 0.5f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = 1.0f;
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -100,15 +187,18 @@ void OnViewPoint(SafetyHookContext& ctx) {
     shared::Fov fov[2];
     if (!shared::ReadViews(hdr, head, eye, fov)) return;
     ForceVrSettings();
+    UpdateOrigin(hdr, head);
 
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
     if (!loc || !rot) return;
 
     const float gameYaw = UnrToRad(rot[1]);
+    // Stereo: this eye's own pose (orientation and position); mono: the head.
+    const shared::Pose& p = g_thisStereo ? eye[g_thisEye] : head;
 
-    // Head basis in Unreal axes, then turned by the game's yaw (body heading).
-    const Vec3 fXr = QuatRotate(head, 0, 0, -1), rXr = QuatRotate(head, 1, 0, 0), uXr = QuatRotate(head, 0, 1, 0);
+    // View basis in Unreal axes, then turned by the game's yaw (body heading).
+    const Vec3 fXr = QuatRotate(p, 0, 0, -1), rXr = QuatRotate(p, 1, 0, 0), uXr = QuatRotate(p, 0, 1, 0);
     const Vec3 F = YawRotate(XrToUe(fXr.x, fXr.y, fXr.z), gameYaw);
     const Vec3 R = YawRotate(XrToUe(rXr.x, rXr.y, rXr.z), gameYaw);
     const Vec3 U = YawRotate(XrToUe(uXr.x, uXr.y, uXr.z), gameYaw);
@@ -122,94 +212,105 @@ void OnViewPoint(SafetyHookContext& ctx) {
     rot[1] = RadToUnr(yaw);
     rot[2] = RadToUnr(roll);
 
-    // Translation is relative to an origin taken from the first TRACKED head pose (runtimes differ:
-    // the simulator's LOCAL puts the head at y = 1.7 m, real runtimes near 0, and Virtual Desktop
-    // reports a placeholder at y = -1.187 before tracking starts -- headset round 2).
-    static bool haveOrigin = false;
-    static float ox = 0, oy = 0, oz = 0;
-    const bool posTracked = (hdr->viewValid & 2u) != 0;
-    if (g_cfg.headPosition && posTracked) {
-        const float dx = head.px - ox, dy = head.py - oy, dz = head.pz - oz;
-        // More than 1 m from the origin isn't plausible for a seated/standing player: the origin was
-        // taken before the headset was on (or the play space moved) -> recentre.
-        const bool implausible = haveOrigin && (dx * dx + dy * dy + dz * dz) > 1.0f;
-        if (!haveOrigin || implausible) {
-            MLOG("view: head position origin %s at (%.3f %.3f %.3f) m", haveOrigin ? "RECENTRED (head >1 m from origin)" : "set",
-                 head.px, head.py, head.pz);
-            haveOrigin = true;
-            ox = head.px; oy = head.py; oz = head.pz;
-        }
-    }
-    if (g_cfg.headPosition && haveOrigin) {
-        const Vec3 p = YawRotate(XrToUe(head.px - ox, head.py - oy, head.pz - oz), gameYaw);
+    // Translation relative to the origin; in stereo the eye position carries the IPD offset.
+    if (g_cfg.headPosition && g_haveOrigin) {
+        const Vec3 d = YawRotate(XrToUe(p.px - g_ox, p.py - g_oy, p.pz - g_oz), gameYaw);
         const float s = g_cfg.unitsPerMeter;
-        loc[0] += p.x * s;
-        loc[1] += p.y * s;
-        loc[2] += p.z * s;
+        loc[0] += d.x * s;
+        loc[1] += d.y * s;
+        loc[2] += d.z * s;
     }
 
-    // Mono: one render that covers both eyes.
-    g_mono.tanLeft = fov[0].tanLeft < fov[1].tanLeft ? fov[0].tanLeft : fov[1].tanLeft;
-    g_mono.tanRight = fov[0].tanRight > fov[1].tanRight ? fov[0].tanRight : fov[1].tanRight;
-    g_mono.tanUp = fov[0].tanUp > fov[1].tanUp ? fov[0].tanUp : fov[1].tanUp;
-    g_mono.tanDown = fov[0].tanDown < fov[1].tanDown ? fov[0].tanDown : fov[1].tanDown;
+    if (g_thisStereo) {
+        g_thisFov = fov[g_thisEye];
+    } else {
+        // Mono: one render that covers both eyes.
+        g_thisFov.tanLeft = fov[0].tanLeft < fov[1].tanLeft ? fov[0].tanLeft : fov[1].tanLeft;
+        g_thisFov.tanRight = fov[0].tanRight > fov[1].tanRight ? fov[0].tanRight : fov[1].tanRight;
+        g_thisFov.tanUp = fov[0].tanUp > fov[1].tanUp ? fov[0].tanUp : fov[1].tanUp;
+        g_thisFov.tanDown = fov[0].tanDown < fov[1].tanDown ? fov[0].tanDown : fov[1].tanDown;
+    }
 
+    // Record what this view was rendered with (the projection hook refines the FOV). A frame is
+    // complete after eye 1 (stereo) or the single view (mono).
     EnterCriticalSection(&g_lock);
-    g_previous = g_current;
-    g_current.pose = head;
-    g_current.fov = g_mono;  // projection hook refines this with the widened FOV
-    g_current.thread = GetCurrentThreadId();
-    g_current.valid = true;
+    g_building.pose[g_thisEye] = p;
+    g_building.fov[g_thisEye] = g_thisFov;
+    g_building.stereo = g_thisStereo;
+    if (!g_thisStereo) {
+        g_building.pose[1] = p;
+        g_building.fov[1] = g_thisFov;
+    }
     LeaveCriticalSection(&g_lock);
     g_thisViewActive = true;
 
-    if (++g_views == 1 || g_views % 2000 == 0) {
-        MLOG("view #%ld: head q(%.3f %.3f %.3f %.3f) p(%.3f %.3f %.3f) -> rot P%d Y%d R%d (game yaw %d)", g_views,
-             head.qx, head.qy, head.qz, head.qw, head.px, head.py, head.pz, rot[0], rot[1], rot[2], RadToUnr(gameYaw));
+    if (++g_views == 1 || g_views % 4000 == 0) {
+        MLOG("view #%ld (%s eye %d): pose q(%.3f %.3f %.3f %.3f) p(%.3f %.3f %.3f) -> rot P%d Y%d R%d (game yaw %d)", g_views,
+             g_thisStereo ? "stereo" : "mono", g_thisEye, p.qx, p.qy, p.qz, p.qw, p.px, p.py, p.pz, rot[0], rot[1], rot[2],
+             RadToUnr(gameYaw));
     }
 }
 
 // --- the projection hooks -----------------------------------------------------------------------
+void CommitFrameIfComplete() {
+    // Called after the projection of each view: mono completes on its only view, stereo on eye 1.
+    if (g_thisStereo && g_thisEye != 1) return;
+    // With stereo running, the only views that describe the presented image are the two computed
+    // inside the stereo Draw. CalcSceneView is also called outside Draw (FUN_10B224E0, one mono
+    // view per frame) -- those must not overwrite the stereo record.
+    if (!g_thisStereo && g_drawHook && g_cfg.stereo) return;
+    EnterCriticalSection(&g_lock);
+    g_previous = g_current;
+    g_current = g_building;
+    g_current.thread = GetCurrentThreadId();
+    g_current.valid = true;
+    LeaveCriticalSection(&g_lock);
+}
+
 void OnProjection(SafetyHookContext& ctx) {
-    if (!g_thisViewActive || !g_cfg.headsetProjection) return;
+    if (!g_thisViewActive) return;
     shared::Header* hdr = bridge::SharedHeader();
     if (!hdr || !hdr->width || !hdr->height) return;
     auto* m = reinterpret_cast<float*>(ctx.eax);  // 4x4 row-major, row vectors (ENGINE-NOTES 5g)
     if (!m) return;
 
-    // Widen the union FOV to the viewport's aspect, so the whole backbuffer is used and nothing
-    // inside the eyes' FOV is cut: grow the short axis around its centre.
-    shared::Fov f = g_mono;
-    const float aspect = static_cast<float>(hdr->width) / static_cast<float>(hdr->height);
-    const float w = f.tanRight - f.tanLeft, h = f.tanUp - f.tanDown;
-    if (w < aspect * h) {
-        const float cx = 0.5f * (f.tanRight + f.tanLeft), hw = 0.5f * aspect * h;
-        f.tanLeft = cx - hw;
-        f.tanRight = cx + hw;
-    } else {
-        const float cy = 0.5f * (f.tanUp + f.tanDown), hh = 0.5f * w / aspect;
-        f.tanDown = cy - hh;
-        f.tanUp = cy + hh;
+    if (g_cfg.headsetProjection) {
+        // Widen to this view's aspect (half the viewport in stereo) so its whole rect is used and
+        // nothing inside the eye's FOV is cut: grow the short axis around its centre.
+        shared::Fov f = g_thisFov;
+        const float aspect = (g_thisStereo ? 0.5f : 1.0f) * static_cast<float>(hdr->width) / static_cast<float>(hdr->height);
+        const float w = f.tanRight - f.tanLeft, h = f.tanUp - f.tanDown;
+        if (w < aspect * h) {
+            const float cx = 0.5f * (f.tanRight + f.tanLeft), hw = 0.5f * aspect * h;
+            f.tanLeft = cx - hw;
+            f.tanRight = cx + hw;
+        } else {
+            const float cy = 0.5f * (f.tanUp + f.tanDown), hh = 0.5f * w / aspect;
+            f.tanDown = cy - hh;
+            f.tanUp = cy + hh;
+        }
+        // Asymmetric perspective; depth terms (m[10], m[11], m[14]) stay as the engine built them
+        // (near 5.0, infinite far) so culling and depth precision are unchanged.
+        m[0] = 2.0f / (f.tanRight - f.tanLeft);
+        m[1] = 0.0f;
+        m[4] = 0.0f;
+        m[5] = 2.0f / (f.tanUp - f.tanDown);
+        m[8] = -(f.tanRight + f.tanLeft) / (f.tanRight - f.tanLeft);
+        m[9] = -(f.tanUp + f.tanDown) / (f.tanUp - f.tanDown);
+
+        EnterCriticalSection(&g_lock);
+        g_building.fov[g_thisEye] = f;
+        if (!g_thisStereo) g_building.fov[1] = f;
+        LeaveCriticalSection(&g_lock);
+
+        if (!g_loggedProj[g_thisEye]) {
+            g_loggedProj[g_thisEye] = true;
+            MLOG("projection (%s eye %d): FOV L%.3f R%.3f U%.3f D%.3f, widened to %.3f aspect -> L%.3f R%.3f U%.3f D%.3f",
+                 g_thisStereo ? "stereo" : "mono", g_thisEye, g_thisFov.tanLeft, g_thisFov.tanRight, g_thisFov.tanUp,
+                 g_thisFov.tanDown, aspect, f.tanLeft, f.tanRight, f.tanUp, f.tanDown);
+        }
     }
-
-    // Asymmetric perspective; depth terms (m[10], m[11], m[14]) stay as the engine built them
-    // (near 5.0, infinite far) so culling and depth precision are unchanged.
-    m[0] = 2.0f / (f.tanRight - f.tanLeft);
-    m[1] = 0.0f;
-    m[4] = 0.0f;
-    m[5] = 2.0f / (f.tanUp - f.tanDown);
-    m[8] = -(f.tanRight + f.tanLeft) / (f.tanRight - f.tanLeft);
-    m[9] = -(f.tanUp + f.tanDown) / (f.tanUp - f.tanDown);
-
-    EnterCriticalSection(&g_lock);
-    g_current.fov = f;
-    LeaveCriticalSection(&g_lock);
-
-    if (!g_loggedProj) {
-        g_loggedProj = true;
-        MLOG("projection: headset FOV L%.3f R%.3f U%.3f D%.3f (union), widened to %.3f aspect -> L%.3f R%.3f U%.3f D%.3f",
-             g_mono.tanLeft, g_mono.tanRight, g_mono.tanUp, g_mono.tanDown, aspect, f.tanLeft, f.tanRight, f.tanUp, f.tanDown);
-    }
+    CommitFrameIfComplete();
 }
 
 bool CheckCall(std::uintptr_t va, std::uintptr_t target) {
@@ -247,9 +348,22 @@ bool Install(const Config& cfg) {
         return false;
     }
     if (!Hook(g_viewHook, addr::kViewPointMerge, OnViewPoint, "view merge")) return false;
-    if (cfg.headsetProjection) {
-        Hook(g_projHookNormal, addr::kProjAfterNormal, OnProjection, "projection (normal)");
-        Hook(g_projHookConstrained, addr::kProjAfterConstrained, OnProjection, "projection (constrained)");
+    // The projection hooks also close each frame's pose record, so they're always installed;
+    // Camera.HeadsetProjection=0 just leaves the engine's matrix alone.
+    Hook(g_projHookNormal, addr::kProjAfterNormal, OnProjection, "projection (normal)");
+    Hook(g_projHookConstrained, addr::kProjAfterConstrained, OnProjection, "projection (constrained)");
+
+    if (cfg.stereo) {
+        if (Hook(g_calcEntryHook, addr::kCalcSceneView, OnCalcSceneViewEntry, "CalcSceneView entry")) {
+            auto res = safetyhook::InlineHook::create(reinterpret_cast<void*>(addr::kViewportClientDraw),
+                                                      reinterpret_cast<void*>(&Hook_Draw));
+            if (res) {
+                g_drawHook = std::move(*res);
+                MLOG("stereo: inline hook UGameViewportClient::Draw at 0x%08X installed", static_cast<unsigned>(addr::kViewportClientDraw));
+            } else {
+                MLOG("stereo: inline hook on Draw failed (error %d) -- mono", static_cast<int>(res.error().type));
+            }
+        }
     }
     return true;
 }
@@ -257,11 +371,14 @@ bool Install(const Config& cfg) {
 bool MetaForPresentedFrame(shared::SlotMeta& meta) {
     EnterCriticalSection(&g_lock);
     // With UE3's render thread the frame being presented was computed one game frame earlier.
-    const AppliedView& v = (g_current.valid && g_current.thread == GetCurrentThreadId()) ? g_current : g_previous;
+    const AppliedFrame& v = (g_current.valid && g_current.thread == GetCurrentThreadId()) ? g_current : g_previous;
     const bool ok = v.valid;
     if (ok) {
-        meta.pose = v.pose;
-        meta.fov = v.fov;
+        for (int e = 0; e < 2; ++e) {
+            meta.pose[e] = v.pose[e];
+            meta.fov[e] = v.fov[e];
+        }
+        meta.stereo = v.stereo ? 1u : 0u;
     }
     LeaveCriticalSection(&g_lock);
     meta.hasView = ok ? 1u : 0u;

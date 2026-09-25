@@ -320,6 +320,36 @@ so the mod releases its own before the game's Reset. A new window in the game pr
 simulator preview, when the host runs the simulator) can steal focus from a fullscreen game and
 lose the device too.
 
+## 5j. Stereo through the engine's split-screen path (M4, measured 2026-09-25)
+
+**RE:** `GEngine` = global `0x116DD964`; `GEngine+0x2A4` = `TArray<ULocalPlayer*> GamePlayers`
+(Data, Num `+0x2A8`, Max `+0x2AC`). There are two CalcSceneView callers, both looping over
+GamePlayers:
+- `0x10C14230` **UGameViewportClient::Draw(FViewport*, FCanvas*)**: `__thiscall`, single exit
+  `RET 8`, 64 KB. Loop 1 (`0x10C146A8`) calls CalcSceneView per player and collects the views into
+  one view family (rendered in one pass). Loop 2 (`0x10C15275`) does per-player drawing (HUD).
+- `0x10B224E0`: a second loop outside Draw (one mono view per frame). Its purpose isn't known yet;
+  it must not overwrite the stereo pose record.
+
+**Method (no allocation, engine array untouched):** a safetyhook InlineHook on Draw points
+`GamePlayers.Data` at a static 2-entry array holding the same ULocalPlayer twice (Num = 2), calls
+the original, then restores Data, Num = 1 and the player's Origin/Size = (0,0)/(1,1). A MidHook
+at CalcSceneView entry (`0x10C19910`, `this` = `[ESP+4]`) makes call 0 the left eye (Origin 0,
+Size 0.5×1) and call 1 the right eye (Origin 0.5). The view hook uses that eye's own pose from
+xrLocateViews; the projection uses that eye's FOV widened to the half-viewport aspect.
+
+**Results (x64 simulator, gameplay):**
+- Side-by-side eyes in one backbuffer, with correct asymmetric frusta: left eye tan L −1.376,
+  R 0.839 (54°/40°); widening to 0.889 aspect only grows U/D 0.965/−1.390 → 1.034/−1.459.
+- **The HUD is drawn in both halves** (the per-player loop draws it per eye).
+- Eye separation 64.0 mm (the simulator IPD). 890 of 900 XR frames carry a new game frame (60 Hz).
+- **Memory: used 1,553 MB, free 495 MB, largest block 294 MB** (mono: 1,543/505/312). Two views
+  cost about 10 MB, because they render in one family.
+- Menus: the 3D backdrop renders in stereo, while the UIScene menu is drawn once over the full
+  screen (M5: cinema screen for menus).
+- MOHA's menus follow **mouse hover**: a cursor left over an item steals keyboard navigation (the
+  harness now parks the cursor on the bottom frame).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
