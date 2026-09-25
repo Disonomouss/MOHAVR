@@ -380,7 +380,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                     g_hdr->eye[e] = toPose(views[e].pose);
                     g_hdr->eyeFov[e] = toFov(views[e].fov);
                 }
-                g_hdr->viewValid = 1;
+                // Position TRACKED, not just VALID: before the headset reports real tracking, runtimes
+                // hand out a placeholder pose (Virtual Desktop: identity at y = -1.187), which the game
+                // must not take as its origin (headset round 2: the camera ended up ~1.2 m too high).
+                const bool posTracked = (headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) &&
+                                        (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT);
+                g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
                 if (!loggedViews) {
                     loggedViews = true;

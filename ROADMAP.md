@@ -61,7 +61,7 @@ the game's own view on a world-locked quad. Measure address-space headroom (the 
 **Accept [S]:** the frame appears in the simulator's preview window. **[H]:** the image is stable
 and has no stutter.
 
-### M3. Head tracking and per-eye projection — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+### M3. Head tracking and per-eye projection — [S] then [H] — **DONE 2026-09-25** (headset round 2: world-lock, horizon, leaning good; haze fixed by disabling motion blur; scale revisited in M4)
 *As built:* MidHooks in `ULocalPlayer::CalcSceneView` (ENGINE-NOTES §5g/§5h). ViewRotation = game yaw
 ∘ head orientation, ViewLocation += head translation (recentred), and the projection = the
 headset's union FOV widened to the viewport aspect. The host locates the views, publishes them

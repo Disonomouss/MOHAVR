@@ -74,11 +74,15 @@ address-space budget for D3D9On12.
   submits a projection layer with the frame's own render pose. Verified in the simulator
   (yaw/pitch/roll correct, each eye filled at 60 FPS).
 
+- **M3 done, including the headset** (round 2): world-locked, level horizon, leaning feels good.
+  Headset testing also found and fixed an alt-tab hang (device Reset), haze from motion blur, and a
+  wrongly captured head origin (a placeholder pose). Scale is back at 50 per the player, to revisit
+  with stereo.
+
 ## Next
-1. **[H] Headset round 2** (HEADSET-TESTS): world-lock, scale, horizon, comfort.
-2. M4: stereo, rendering each eye. First check UE3's split-screen path (ENGINE-NOTES §6: the stock
-   2P-vertical layout is intact, and CalcSceneView honours per-player Origin/Size).
-3. Desktop mirror; recentre key.
+1. M4: stereo. First check UE3's split-screen path (ENGINE-NOTES §6: the stock 2P-vertical layout
+   is intact, and CalcSceneView honours per-player Origin/Size).
+2. Desktop mirror; recentre key.
 
 ## Risks
 - **2 GB address space:** with the D10 host, gameplay leaves **505 MB free (largest block

@@ -122,16 +122,25 @@ void OnViewPoint(SafetyHookContext& ctx) {
     rot[1] = RadToUnr(yaw);
     rot[2] = RadToUnr(roll);
 
-    if (g_cfg.headPosition) {
-        // Translation is relative to where the head was when tracking started (runtimes differ:
-        // the simulator's LOCAL puts the head at y = 1.7 m, real runtimes near 0).
-        static bool haveOrigin = false;
-        static float ox = 0, oy = 0, oz = 0;
-        if (!haveOrigin) {
+    // Translation is relative to an origin taken from the first TRACKED head pose (runtimes differ:
+    // the simulator's LOCAL puts the head at y = 1.7 m, real runtimes near 0, and Virtual Desktop
+    // reports a placeholder at y = -1.187 before tracking starts -- headset round 2).
+    static bool haveOrigin = false;
+    static float ox = 0, oy = 0, oz = 0;
+    const bool posTracked = (hdr->viewValid & 2u) != 0;
+    if (g_cfg.headPosition && posTracked) {
+        const float dx = head.px - ox, dy = head.py - oy, dz = head.pz - oz;
+        // More than 1 m from the origin isn't plausible for a seated/standing player: the origin was
+        // taken before the headset was on (or the play space moved) -> recentre.
+        const bool implausible = haveOrigin && (dx * dx + dy * dy + dz * dz) > 1.0f;
+        if (!haveOrigin || implausible) {
+            MLOG("view: head position origin %s at (%.3f %.3f %.3f) m", haveOrigin ? "RECENTRED (head >1 m from origin)" : "set",
+                 head.px, head.py, head.pz);
             haveOrigin = true;
             ox = head.px; oy = head.py; oz = head.pz;
-            MLOG("view: head position origin set at (%.3f %.3f %.3f) m", ox, oy, oz);
         }
+    }
+    if (g_cfg.headPosition && haveOrigin) {
         const Vec3 p = YawRotate(XrToUe(head.px - ox, head.py - oy, head.pz - oz), gameYaw);
         const float s = g_cfg.unitsPerMeter;
         loc[0] += p.x * s;

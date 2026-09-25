@@ -46,11 +46,17 @@ its Reset loop.
   with depth of field (FSystemSettings, ENGINE-NOTES §5i). The remaining suspect is resolution:
   the mono union FOV spreads 1440 px over the whole eye.
 
-**Attempt 3:** deployed ~19:20 with the fixes. Answers pending.
+**Attempt 3 (~19:25):** deployed with the fixes.
+**Answers:** 1 world stays still · 2 **world too big: "I am now double the height of other soldiers"**,
+player's call: back to 50, revisit with stereo · 3 horizon level · 4 **haze gone** · 5 leaning feels good.
+**Log** (`logs/modlogs/20260925-193943-*`): the head-position origin was captured from Virtual Desktop's
+**placeholder pose** (identity orientation, y = −1.187 m) before tracking started. The real head
+then sat ~1.19 m above the origin, lifting the camera ~119 units. That, more than the scale,
+explains "double height". Fixed in v0.4.2: the origin is taken only from a pose with position
+TRACKED (host flag), with an auto-recentre if the head is >1 m from the origin. `UnitsPerMeter`
+is back to 50 as the player asked.
 
-**Answers:**
-
-**Log received:**
+**Verdict: M3 [H] PASSED** (world-lock, horizon, haze, leaning). Scale is deferred to M4 by the player.
 
 ---
 

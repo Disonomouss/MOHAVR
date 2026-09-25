@@ -81,7 +81,8 @@ struct Header {
 
     // --- v2: views, host -> game (seqlock: viewSeq odd while the host writes) -----------------
     volatile std::uint32_t viewSeq;
-    std::uint32_t          viewValid;  // 1 once the runtime reports tracked views
+    std::uint32_t          viewValid;  // bit 0: orientation valid (views usable); bit 1: head position TRACKED
+                                       // (not a placeholder -- safe to take as the translation origin)
     std::int64_t           viewDisplayTime;
     Pose                   head;       // VIEW space located in LOCAL
     Pose                   eye[2];     // xrLocateViews, left/right

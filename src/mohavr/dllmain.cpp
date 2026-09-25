@@ -12,7 +12,7 @@
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
 
-#define MOHAVR_VERSION "0.4.1-m3b"
+#define MOHAVR_VERSION "0.4.2-m3c"
 
 namespace {
 
