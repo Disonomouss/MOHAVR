@@ -28,11 +28,13 @@ test rig)**; see PLAN.md.
     `MOHAPlayerPawn.CalcCamera`.
   - Lead for stereo: stock UE3 2P-vertical split-screen is intact.
 
+- The user config and save folder is located (under OneDrive Documents), and the control table
+  is recorded (ENGINE-NOTES §7).
+
 ## Next
-1. First launch of the game, with the user's go-ahead: confirm `-windowed ResX= ResY= -log`,
-   and record the user ini and log locations.
-2. The control table from `DefaultInput.ini` (needed for M6).
-3. The harness.
+1. First `-windowed ResX= ResY= -log` launch, with the user's go-ahead: confirm the switches,
+   and record the log location and milestone log lines.
+2. The harness (backup and restore of Config and Saved per D8).
 
 ## Risks
 - **2 GB address space:** the exe is not large-address-aware. D3D9On12, the OpenXR runtime and

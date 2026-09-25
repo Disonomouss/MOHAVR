@@ -49,6 +49,14 @@ ini, so the player's ini is never edited (standing rule 6). Windowed mode also g
 IMMEDIATE presentation interval, so no vsync (ENGINE-NOTES §5b). Pending: confirm the switches
 take effect on first launch.
 
+### D8. The harness backs up the player's whole user folder — Decided 2026-09-25
+Before every test the harness copies `...\EA Games\Medal of Honor Airborne(tm)\Config\` and
+`Saved\` (the save game and profile) into the project's `logs\backup\<timestamp>\`, and restores
+them afterwards. The backup goes into the project, not beside the originals, because that folder
+is under OneDrive and a copy there would sync. The game rewrites its user ini files on exit, so
+restoring after the run, not only before it, is what keeps the player's settings intact
+(lessons §1).
+
 ### D6. Ghidra runs headless by default — Decided 2026-09-25
 `tools/start-ghidra-headless.ps1` serves the analyzed project to the `ghidra` MCP server with no
 GUI, so analysis doesn't depend on someone opening Ghidra.

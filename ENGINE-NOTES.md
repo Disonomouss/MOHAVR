@@ -152,8 +152,32 @@ single-player, is untested.
   (§5b).
 - Running windowed for the harness should use the command line (`-windowed ResX=… ResY=…`, §5c),
   so the player's ini is never edited.
-- No user ini or log exists yet; the game has not been run on this machine. The first launch
-  should generate the user-level ini. Record its location here.
+- **User folder** (created by the game on first run; Documents is redirected to OneDrive here):
+  `C:\Users\j_tom\OneDrive\Documents\EA Games\Medal of Honor Airborne(tm)\`
+  - `Config\MOHA{AI,Editor,EditorUserSettings,Engine,Game,Input,Juice,Player,Settings,Weapon}.ini`.
+    These are the **player's files**: back them up and restore them around every test.
+  - `Saved\MOHASAVEDGAME` (36 KB) and `Saved\Profile`: the player's progress.
+  - No `Logs\` yet. UE3 writes a log only with `-log`, so its location is still to observe.
+  - Resolve the path through `SHGetKnownFolderPath(FOLDERID_Documents)`, not `%USERPROFILE%\Documents`.
+- The player's current settings (read-only): `MOHAEngine.ini` / `MOHASettings.ini`
+  `[WinDrv.WindowsClient]` fullscreen at 2560×1440. `MOHASettings.ini [MOHAGame.MOHAScalabilityOptions]`
+  has `ForceVSync = False` and `ScreenPercentage = 100.0`, with motion blur, depth of field and
+  bloom on. `ForceVSync` is probably what drives the flag at `0x116CB6E8` (unverified).
+  The hardware the game detected: RTX 4070 Ti, 24 logical cores, 64 GB RAM.
+- **Control table** (`MOHAInput.ini [Engine.PlayerInput]`, 66 bindings; `DefaultInput.ini` has
+  38). Actions map to commands, and keys map to actions:
+  - Movement axes `aBaseY`/`aStrafe` (W/S/A/D), look `aMouseX`/`aMouseY`; `Duck`/`Crouch`
+    (`bCrouch`), `Walking` (`bRun`).
+  - Weapons: `FireWeapon` (`bFire | StartFire | MouseFire`), `Ironsights` (RMB, `bAim`),
+    `Reload` (R), `Melee` (F; `AirDropMeleePress`), `SwitchGrenade` (G), `SwitchPistol`,
+    `SwitchPrimary` and `SwitchSecondary` (1/2/3), `ZoomIn`/`ZoomOut` (X/Z, scroll wheel),
+    `AltWeaponFireToggle` (MMB).
+  - MOHA-specific: `FlareChuteJumpMultiCmd` (Space: flare the parachute, jump, trigger),
+    `SprintIronsightsMove` (`bSprint`), `UseAction` (E; also `SkipBriefing`).
+  - **Gamepad bindings are not in any ini.** They're handled in `MOHAPlayerInput.uc` (98
+    `XboxTypeS_*` references).
+- Native functions worth a look for M7 (from the UELib export comments in
+  `MOHAPlayerController.uc`): `execReticuleActorTrace`, `execGetReticuleState`.
 
 ## 8. Rendering
 
