@@ -229,16 +229,39 @@ what was learned.
 - [ ] [H] round 5: try `Render.ResX=2880 Render.ResY=1620`: sharper? Still smooth?
 
 ### J. Robustness — [S]
-- [ ] A 30-minute soak in gameplay (idle + periodic injected movement) → no leaks (vmmap trend), no errors.
-- [ ] Death/reload (if injectable) and level change: the stereo view state and bridge survive.
-- [ ] A host crash mid-game (kill the host process) → the game keeps running without VR; logged.
+- [x] **30-minute soak** (`tools/soak.ps1`: gameplay; every 30 s it injects forward/back/turn; every 60 s it
+      samples address space; round-5-like config: controllers, cinema screen, HUD panel, mirror). **Passed:**
+      no crash, **0 suspicious lines** in both logs, clean quit, user data restored byte-identical
+      (`logs/soak-20260925-224623.csv`). **Address space, a risk to watch:** free went 503 → 448 → 398 → 337 MB
+      in the first 3 minutes. The movement walked the player off the flak tower top into the town, which the
+      game streamed in. After that it held in a band of **1,683–1,843 MB used (205–365 MB free)** and was flat
+      for minutes while the player stood still (up and down, no linear growth: streaming, not a per-frame
+      leak). It ended at **205 MB free, largest free block 102 MB** (it started at 308). Follow-up: a control
+      run without D3D9On12 on the same route (9On12 likely costs extra per streamed texture), and in-memory
+      texture-pool limits if long sessions get close to 2 GB.
+- [x] **Death/reload:** `Suicide` through `tools/game_cmd.py` (Debug.GameCommands) → death camera → checkpoint
+      reload → stereo, HUD panel and bridge carried on (views, capture; shot 224449-death).
+- [x] **Host crash:** killing `MOHAVR-host.exe` mid-game → the game noticed within the same second (it now
+      checks every 16 presents), marked the host exited, withdrew the views and the pad, and carried on as a
+      normal flat game (full-screen mono, its own HUD, gun back; pause menu works; 296 fps). Before this fix,
+      a dead host left the head pose frozen and the last pad state held (a held stick would keep walking).
+- Also seen once in this session: a launch that stayed on a black screen for 150 s (see G). Not seen again in
+  about 15 later launches.
 
 ### K. M10 packaging — [S]
-- [ ] `release\install.ps1` / `uninstall.ps1` for players: find the game via the Steam library folders, copy
-      dinput8.dll + MOHAVR-host.exe + MOHAVR.ini, back up/restore, refuse if a foreign dinput8.dll exists,
-      clean removal.
-- [ ] `release\README.md`: requirements, install, controls, the menu, known issues.
-- [ ] `tools/package.ps1` → `dist\MOHAVR-<version>.zip`. [S]: install → cycle OK → uninstall → baseline.
+- [x] `release/install.ps1` + `install.cmd`: finds the game through Steam (registry + every
+      `libraryfolders.vdf` library) or `-GameDir`; copies dinput8.dll, MOHAVR-host.exe and MOHAVR.ini; refuses if
+      a dinput8.dll without MOHAVR's marker is there (another mod); saves a changed MOHAVR.ini to
+      `%LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous`; records `%LOCALAPPDATA%\MOHAVR\install.json`.
+      `release/uninstall.ps1` + `.cmd`: removes only MOHAVR's files (only a MOHAVR dinput8.dll); keeps the
+      player's settings unless `-RemoveSettings`.
+- [x] `release/README.md` (for players): requirements, install, play, controls table, menu, settings worth
+      trying, known issues, uninstall, logs.
+- [x] `tools/package.ps1` → `dist/MOHAVR-0.7.0.zip` (1,986 KB; refuses a RuntimeJson in the shipped ini).
+      [S] passed: unzip → `install.ps1` found the game through Steam and installed 3 files → harness cycle
+      OK in 32 s on the installed 0.7.0 (ini pointed at the simulator for the test) → `uninstall.ps1` removed
+      5 files → the Binaries listing equals the pre-deploy baseline (7 entries) and install.json is gone. A fake
+      game folder holding the system dinput8.dll → install refused, the folder unchanged.
 
 ### L. Morning handover
 - [ ] HEADSET-TESTS **round 5** written: every [H] question from tonight's items, with the ini switches to try.
