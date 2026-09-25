@@ -51,6 +51,23 @@ using System.Runtime.InteropServices;
 namespace MohaHarness {
 public static class Win {
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr h, System.Text.StringBuilder s, int n);
+    // The game's own window, by class. Process.MainWindowHandle is NOT reliable: with OpenXR on,
+    // the simulator's preview window lives in the same process and can be picked instead.
+    public static IntPtr FindGameWindow(uint pid) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr h, IntPtr l) {
+            uint p; GetWindowThreadProcessId(h, out p);
+            if (p != pid) return true;
+            var c = new System.Text.StringBuilder(64); GetClassNameW(h, c, 64);
+            if (c.ToString() == "LaunchUnrealUWindowsClient") { found = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }}
 '@
 }
@@ -119,8 +136,7 @@ function Take-Shot([string] $name = 'shot') {
         if ($p) {
             & (Join-Path $PSScriptRoot 'focus-game.ps1') 6>$null | Out-Null
             Start-Sleep -Milliseconds 150
-            $p.Refresh()
-            [MohaHarness.Client]::Save($p.MainWindowHandle, $out)
+            [MohaHarness.Client]::Save([MohaHarness.Win]::FindGameWindow([uint32]$p.Id), $out)
         }
     }
     $out
@@ -240,7 +256,7 @@ switch ($Action) {
         while (-not $p -and ((Get-Date) - $t0).TotalSeconds -lt 90) { Start-Sleep -Milliseconds 500; $p = Get-Moha }
         if (-not $p) { throw 'MOHA did not start within 90 s (Steam dialog?) -- user data NOT touched, run restore anyway' }
         while (((Get-Date) - $t0).TotalSeconds -lt 120) {
-            $p.Refresh(); if ($p.MainWindowHandle -ne [IntPtr]::Zero -and $p.MainWindowTitle -like 'Medal of Honor*') { break }
+            if ([MohaHarness.Win]::FindGameWindow([uint32]$p.Id) -ne [IntPtr]::Zero) { break }
             Start-Sleep -Milliseconds 500
         }
         $s = Load-State; $s.pid = $p.Id; Save-State $s
@@ -285,8 +301,9 @@ switch ($Action) {
     'quit' {
         $p = Get-Moha
         if ($p) {
-            $p.Refresh()
-            [void][MohaHarness.Win]::PostMessageW($p.MainWindowHandle, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+            $hwnd = [MohaHarness.Win]::FindGameWindow([uint32]$p.Id)
+            if ($hwnd -eq [IntPtr]::Zero) { Write-Host 'game window not found' }
+            else { [void][MohaHarness.Win]::PostMessageW($hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
             $t0 = Get-Date
             while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 30) { Start-Sleep -Milliseconds 500; $p.Refresh() }
             if ($p.HasExited) { Write-Host ("closed cleanly in {0:N1}s" -f ((Get-Date) - $t0).TotalSeconds) }

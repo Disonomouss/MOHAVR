@@ -18,8 +18,14 @@ add_library(mohavr SHARED
     src/mohavr/hooks_d3d9.cpp
     src/mohavr/frame_capture.cpp
     src/mohavr/patch.cpp
+    src/mohavr/xr_session.cpp
     src/mohavr/dinput8.def
 )
+
+# OpenXR loader, linked statically (triplet x86-windows-static via vcpkg manifest mode), so the
+# mod stays a single DLL in the game folder.
+find_package(OpenXR CONFIG REQUIRED)
+target_link_libraries(mohavr PRIVATE OpenXR::openxr_loader OpenXR::headers d3d11 dxgi)
 
 # The game loads it as dinput8.dll from its Binaries folder (D5).
 set_target_properties(mohavr PROPERTIES OUTPUT_NAME dinput8)

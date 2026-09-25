@@ -188,7 +188,26 @@ From `MOHAVR.log`, 2 runs:
 
   The NVIDIA D3D12 user-mode driver `nvwgf2um.dll` (58 MB) replaces `nvd3dum.dll` (44 MB), plus
   `D3D12Core.dll` and more mapped and private memory. `nvgpucomp32.dll` (85 MB) is loaded in both.
-  A D3D11 device for the OpenXR session would use the same `nvwgf2um.dll` that's already loaded.
+
+**The OpenXR session in-process** (M2 step 1: static loader, D3D11 device on the runtime's
+adapter, one 1920×1080 quad swapchain; runtime = the 32-bit OpenXR Simulator):
+- Works: the session goes READY → SYNCHRONIZED → VISIBLE → FOCUSED about 100 ms after the
+  thread starts, and submits at 60 Hz. The quad shows in both eyes of the simulator preview.
+- **Address space in gameplay:**
+
+| configuration | used | free | largest free blocks |
+|---|---|---|---|
+| plain D3D9 | 1,356 MB | 692 MB | 496 / 134 MB |
+| D3D9On12 | 1,493 MB | 555 MB | 331 / 134 MB |
+| plain D3D9 + XR session | 1,622 MB | 426 MB | 231 / 132 MB |
+| **D3D9On12 + XR session** | **1,751 MB** | **297 MB** | **132 / 108 MB** |
+
+  The OpenXR side costs about 258 MB on top of 9On12, before any eye render targets or shared
+  textures. **Too tight to build the renderer on** (see D10). The simulator runtime's own
+  footprint (its preview renderer, D3DCompiler_47) is included and differs from a real runtime's.
+- The simulator's preview window belongs to the game process, so `Process.MainWindowHandle` can
+  point at it. Find the game window by class `LaunchUnrealUWindowsClient` (the harness and
+  `focus-game.ps1` now do).
 
 ## 6. Content and UnrealScript
 

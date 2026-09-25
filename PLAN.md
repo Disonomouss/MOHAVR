@@ -65,7 +65,11 @@ time, or needs the headset.
       Not needed yet: vtable swaps have covered everything so far.
 - [ ] `CreateDevice`: force a windowed, headset-sized backbuffer (vsync is already off in
       windowed mode, ENGINE-NOTES §5b).
-- [ ] OpenXR in the process: the x86 loader (vcpkg `openxr-loader:x86-windows`), plus a
-      session on a D3D11 device run through `run-with-openxr-sim.ps1` (x86 simulator).
+- [x] OpenXR in the process: static x86 loader (vcpkg manifest, `x86-windows-static`), a D3D11
+      device on the runtime's adapter, a session and a test-pattern quad. **Works** against the
+      x86 simulator selected by `OpenXR.RuntimeJson` (Steam-launched processes don't inherit our
+      environment, so the mod sets `XR_RUNTIME_JSON` itself).
+- [x] Measured: 9On12 + XR leaves 297 MB free, largest block 132 MB, which is **too tight**.
+      **D10 (proposed): move OpenXR into a 64-bit host process.** Awaiting the user's decision.
 - [ ] Per-frame copy of the backbuffer into a shared texture, then the XR thread's swapchain,
       shown on a world-locked quad first.

@@ -7,9 +7,11 @@
 #include <atomic>
 
 #include "addresses.hpp"
+#include "config.hpp"
 #include "frame_capture.hpp"
 #include "log.hpp"
 #include "patch.hpp"
+#include "xr_session.hpp"
 
 namespace mohavr::hooks {
 namespace {
@@ -20,6 +22,7 @@ using PFN_Direct3DCreate9On12 = IDirect3D9*(WINAPI*)(UINT, D3D9ON12_ARGS*, UINT)
 PFN_Direct3DCreate9     g_real     = nullptr;
 PFN_Direct3DCreate9On12 g_realOn12 = nullptr;
 bool                    g_useOn12  = false;
+Config                  g_cfg;
 std::atomic<int>        g_calls{0};
 
 // --- IDirect3D9::CreateDevice (vtable slot 16) -------------------------------------------
@@ -125,6 +128,7 @@ HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DD
     const int n = ++g_createDeviceCalls;
     const HRESULT hr = g_realCreateDevice(self, adapter, type, focus, flags, pp, out);
     if (SUCCEEDED(hr) && out) HookDevice(*out);
+    if (SUCCEEDED(hr) && g_cfg.xrEnabled) xr::Start(g_cfg.xrRuntimeJson);  // once; own thread
     // First few calls in full; after that only every 20th (the game's retry loop is 2/s).
     if (n <= 3 || n % 20 == 0) {
         MLOG("CreateDevice #%d adapter %u type %d flags 0x%lX -- %ux%u fmt %d count %u ms %d swap %d windowed %d "
@@ -194,7 +198,9 @@ IDirect3D9* WINAPI Hook_Direct3DCreate9(UINT sdkVersion) {
 
 }  // namespace
 
-bool InstallDirect3DCreate9(bool useD3D9On12) {
+bool InstallDirect3DCreate9(const Config& cfg) {
+    g_cfg = cfg;
+    const bool useD3D9On12 = cfg.d3d9On12;
     HMODULE d3d9 = GetModuleHandleW(L"d3d9.dll");
     if (!d3d9) {
         MLOG("hook Direct3DCreate9: d3d9.dll not loaded yet -- standing down");

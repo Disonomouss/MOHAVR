@@ -12,7 +12,7 @@
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
 
-#define MOHAVR_VERSION "0.2.0-m2a"
+#define MOHAVR_VERSION "0.2.1-m2b"
 
 namespace {
 
@@ -47,7 +47,7 @@ void Init(HMODULE self) {
         MLOG("STAND DOWN: MOHA.exe is not the pinned build -- no hooks installed, game runs unmodded");
         return;
     }
-    if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg.d3d9On12);
+    if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
     MLOG("init done in DllMain (%.1f ms)", mohavr::log::MsSinceStart());
 }
 

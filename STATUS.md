@@ -53,14 +53,19 @@ address-space budget for D3D9On12.
   menus. The mod captures the backbuffer for the harness. Open issue: under 9On12 the game's
   window stays white (not blocking).
 
+- **OpenXR runs inside MOHA** (static x86 loader, D3D11 session, a test quad visible in the
+  simulator), but with 9On12 it leaves only 297 MB free (largest block 132 MB), too tight to
+  build the renderer on. D10 proposes moving OpenXR into a 64-bit host process.
+
 ## Next
-1. M2: an OpenXR session in the process (x86 loader, D3D11), then copy the frame to a quad
-   (PLAN.md).
+1. Decide D10 (out-of-process OpenXR host) with the user. Then build the shared-texture
+   handoff: game (9On12, per-eye copy into shared D3D12 textures plus a fence) → host (OpenXR).
 
 ## Risks
-- **2 GB address space:** with D3D9On12, gameplay uses 1,493 MB, leaving **555 MB free (largest
-  block 331 MB)** for the OpenXR loader and runtime, a D3D11 device and the swapchains. Re-measure
-  after each addition with `tools/measure-variant.ps1`.
+- **2 GB address space (the dominant risk):** 9On12 alone leaves 555 MB free (largest block
+  331 MB); 9On12 plus an in-process OpenXR session leaves **297 MB (largest 132 MB)**. D10's
+  host process is the proposed answer. Re-measure after every addition with
+  `tools/measure-variant.ps1`.
 - **The desktop window under 9On12 is white.** A mirror window must come from the mod.
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.

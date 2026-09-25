@@ -70,6 +70,26 @@ is under OneDrive and a copy there would sync. The game rewrites its user ini fi
 restoring after the run, not only before it, is what keeps the player's settings intact
 (lessons §1).
 
+### D10. Run OpenXR in a separate 64-bit host process — Proposed 2026-09-25
+**Problem:** MOHA is 32-bit and not large-address-aware, and we may not change the exe
+(standing rule 1). With D3D9On12 plus an in-process OpenXR session, gameplay leaves only 297 MB
+free, with no free block over 132 MB (ENGINE-NOTES §5e). That's before eye render targets and
+before heavier levels.
+**Proposal:** the game process keeps only what must be there (the 9On12 hooks, the per-eye
+copies into *shared* D3D12 textures, and a shared fence). A 64-bit `MOHAVR-host.exe` (started by
+the mod) opens those textures and fence by NT handle and owns everything else: the OpenXR loader
+and runtime, the D3D11/D3D12 device, the swapchains, the desktop mirror window (which also covers
+the white-window issue), and in time controller input. Poses and settings flow back through a
+small shared-memory block.
+**Why:** it removes the roughly 258 MB OpenXR cost from the game's address space entirely,
+isolates runtime crashes from the game, and gives the runtime a normal 64-bit process.
+Cross-process shared textures and fences are standard D3D12 and cost no copies. Lessons §2's
+zero-copy path is kept; only the consumer side moves.
+**Costs:** a second binary, an IPC protocol, and lifecycle handling (host started, stopped, or
+crashed). There is about one frame of extra latency risk if not pipelined with care.
+**The in-process session stays** behind `OpenXR.Enabled` as a diagnostic, and is what proved the
+plumbing.
+
 ### D6. Ghidra runs headless by default — Decided 2026-09-25
 `tools/start-ghidra-headless.ps1` serves the analyzed project to the `ghidra` MCP server with no
 GUI, so analysis doesn't depend on someone opening Ghidra.
