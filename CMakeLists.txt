@@ -43,6 +43,7 @@ else()
     add_executable(mohavr_host WIN32
         src/host/main.cpp
         src/host/menu.cpp
+        src/host/mirror.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).

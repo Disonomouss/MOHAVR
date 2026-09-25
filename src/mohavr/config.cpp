@@ -17,6 +17,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.hookD3D9       = get(L"Hooks", L"Direct3DCreate9", c.hookD3D9);
     c.d3d9On12       = get(L"Bridge", L"D3D9On12", c.d3d9On12);
     c.bridgeHost     = get(L"Bridge", L"Host", c.bridgeHost);
+    c.bridgeMirror   = static_cast<int>(GetPrivateProfileIntW(L"Bridge", L"Mirror", c.bridgeMirror, ini.c_str()));
+    if (c.bridgeMirror < 0 || c.bridgeMirror > 2) c.bridgeMirror = 0;
     c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
 
     c.headTracking      = get(L"Camera", L"HeadTracking", c.headTracking);
@@ -37,9 +39,10 @@ Config LoadConfig(const std::wstring& dir) {
     GetPrivateProfileStringW(L"OpenXR", L"RuntimeJson", L"", buf, MAX_PATH, ini.c_str());
     c.xrRuntimeJson = buf;
 
-    MLOG("config: %s -- Enabled=%d Hooks.Direct3DCreate9=%d Bridge.D3D9On12=%d Bridge.Host=%d OpenXR.Enabled=%d "
-         "OpenXR.RuntimeJson=%s Debug.TestWrongBuild=%d",
-         present ? "MOHAVR.ini" : "no MOHAVR.ini, defaults", c.enabled, c.hookD3D9, c.d3d9On12, c.bridgeHost, c.xrEnabled,
+    MLOG("config: %s -- Enabled=%d Hooks.Direct3DCreate9=%d Bridge.D3D9On12=%d Bridge.Host=%d Bridge.Mirror=%d "
+         "OpenXR.Enabled=%d OpenXR.RuntimeJson=%s Debug.TestWrongBuild=%d",
+         present ? "MOHAVR.ini" : "no MOHAVR.ini, defaults", c.enabled, c.hookD3D9, c.d3d9On12, c.bridgeHost, c.bridgeMirror,
+         c.xrEnabled,
          c.xrRuntimeJson.empty() ? "(system runtime)" : "(set)", c.testWrongBuild);
     MLOG("config: Camera.HeadTracking=%d HeadPosition=%d HeadsetProjection=%d Stereo=%d UnitsPerMeter=%.1f "
          "DisableMotionBlur=%d DisableDepthOfField=%d", c.headTracking, c.headPosition, c.headsetProjection, c.stereo,

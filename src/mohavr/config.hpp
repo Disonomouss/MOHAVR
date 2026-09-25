@@ -8,6 +8,7 @@ struct Config {
     bool enabled        = true;   // [General] Enabled   -- 0: pure dinput8 proxy, nothing else
     bool hookD3D9       = true;   // [Hooks]   Direct3DCreate9
     bool d3d9On12       = true;   // [Bridge]  D3D9On12 -- create the game's IDirect3D9 via Direct3DCreate9On12 (M2)
+    int  bridgeMirror   = 0;      // [Bridge]  Mirror -- the host's desktop mirror: 0 off, 1 over the game window, 2 own window
     bool bridgeHost     = true;   // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)
     bool testWrongBuild = false;  // [Debug]   TestWrongBuild -- pretend the build check failed (M1 acceptance)
     bool  headTracking      = true;   // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)

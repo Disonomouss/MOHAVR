@@ -157,7 +157,7 @@ HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DD
     if (SUCCEEDED(hr) && out) HookDevice(*out);
     if (SUCCEEDED(hr)) {
         if (g_cfg.bridgeHost && g_useOn12) {
-            bridge::StartHost(g_cfg.xrRuntimeJson, g_cfg.unitsPerMeter);  // D10: OpenXR out of process
+            bridge::StartHost(g_cfg.xrRuntimeJson, g_cfg.unitsPerMeter, g_cfg.bridgeMirror);  // D10: OpenXR out of process
             // M3: main thread, before the first CalcSceneView can run.
             static bool viewInstalled = false;
             if (!viewInstalled) { viewInstalled = true; view::Install(g_cfg); }

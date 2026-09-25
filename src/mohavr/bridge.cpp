@@ -219,7 +219,7 @@ void OnAfterReset(unsigned width, unsigned height) {
     }
 }
 
-void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter) {
+void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int mirror) {
     if (g_hdr) return;
     InitializeCriticalSection(&g_rtLock);
     g_rtLockInit = true;
@@ -242,6 +242,7 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter) {
     const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);
     if (!runtimeJson.empty()) cmd += L" --runtime-json \"" + runtimeJson + L"\"";
+    if (mirror) cmd += L" --mirror " + std::to_wstring(mirror);
     STARTUPINFOW si{sizeof(si)};
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, ModuleDir().c_str(), &si, &pi)) {

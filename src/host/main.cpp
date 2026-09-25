@@ -1,6 +1,6 @@
 // MOHAVR-host.exe -- the 64-bit side of the bridge (D10).
 //
-// Started by the game-side mod (dinput8.dll) with:  --game-pid <pid> [--runtime-json "<path>"]
+// Started by the game-side mod (dinput8.dll) with:  --game-pid <pid> [--runtime-json "<path>"] [--mirror 1|2]
 // Owns everything OpenXR: loader, runtime, D3D11 device, swapchains. Receives the game's frames
 // through shared D3D12 textures + fences (src/common/shared_frame.hpp) and shows them on a
 // world-locked quad (M2, mono). Exits when the game exits. Logs to MOHAVR-host.log next to itself.
@@ -27,6 +27,7 @@
 #include "../common/shared_frame.hpp"
 #include "../mohavr/log.hpp"
 #include "menu.hpp"
+#include "mirror.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -146,7 +147,7 @@ void Inspect(ID3D11Device* dev, ID3D11DeviceContext* ctx, ID3D11Texture2D* tex, 
     staging->Release();
 }
 
-int Run(DWORD gamePid, const std::wstring& runtimeJson) {
+int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode) {
     // --- the game and the shared block -----------------------------------------------------------
     HANDLE game = OpenProcess(SYNCHRONIZE | PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, gamePid);
     if (!game) return Fail("OpenProcess(game)");
@@ -310,6 +311,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     mohavr::host::Menu menu;
     const bool menuOk = menu.Init(dev, ctx, session, fmt, g_hdr);
     if (menuOk) menu.ApplySavedSettings();
+
+    // --- desktop mirror (Bridge.Mirror) -----------------------------------------------------------
+    mohavr::host::Mirror mirror;
+    const bool mirrorOk = mirrorMode && mirror.Init(dev, gamePid, mirrorMode);
 
     XrActionSet menuSet = XR_NULL_HANDLE;
     XrAction aToggle = XR_NULL_HANDLE, aStick = XR_NULL_HANDLE, aSelect = XR_NULL_HANDLE, aBack = XR_NULL_HANDLE;
@@ -687,6 +692,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
             }
         }
+        if (mirrorOk) mirror.Update(ctx, last, lastMeta, shown > 0);
         XrFrameEndInfo fe{XR_TYPE_FRAME_END_INFO};
         fe.displayTime = fs.predictedDisplayTime;
         fe.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -714,14 +720,20 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     DWORD gamePid = 0;
     std::wstring runtimeJson;
+    int mirrorMode = 0;
     for (int i = 1; i + 1 < argc; ++i) {
         if (!wcscmp(argv[i], L"--game-pid")) gamePid = static_cast<DWORD>(_wtoi(argv[++i]));
         else if (!wcscmp(argv[i], L"--runtime-json")) runtimeJson = argv[++i];
+        else if (!wcscmp(argv[i], L"--mirror")) mirrorMode = _wtoi(argv[++i]);
     }
     LocalFree(argv);
     if (!gamePid) { MLOG("host: no --game-pid -- nothing to do"); return 2; }
     MLOG("host: game pid %lu", gamePid);
-    const int rc = Run(gamePid, runtimeJson);
+    if (mirrorMode < 0 || mirrorMode > 2) mirrorMode = 0;
+    // The mirror overlays the game window in physical pixels; set before the runtime makes any window.
+    if (mirrorMode) SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    MLOG("host: mirror %d", mirrorMode);
+    const int rc = Run(gamePid, runtimeJson, mirrorMode);
     MLOG("host: exit %d", rc);
     return rc;
 }

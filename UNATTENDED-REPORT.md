@@ -115,8 +115,15 @@ what was learned.
       per frame (before, "down down" moved one row).
 
 ### C. Desktop mirror (host) — [S]
-- [ ] A host window showing the left eye (or the game frame), so the monitor isn't white. Off by default
+- [x] A host window showing the left eye (or the game frame), so the monitor isn't white. Off by default
       (`Bridge.Mirror`). [S]: `capture-window.ps1 -Title "MOHAVR mirror"` shows gameplay.
+      Done (`src/host/mirror.cpp`): `Bridge.Mirror=1` = a click-through overlay kept on the game's client area
+      while the game is in front; `=2` = its own movable window. Shows the centre of the left eye, cropped to
+      the window's shape, with no shaders (DXGI stretches). [S] passed, checked with `tools/mirror_check.py`:
+      mode 1 → the screen over the game shows gameplay (white fraction 0.001, was 1.0), the overlay rect equals
+      the game's client rect, WindowFromPoint at the centre hits the game (click-through), hidden while the game
+      is minimised and back after; menus, Continue and the pause menu still take input. Mode 2 →
+      `capture-window.ps1` shows gameplay (shot mirror2.png). Candidate default for mode 1 after round 5.
 
 ### D. M6 controller input → virtual Xbox pad — [S] by injection
 - [ ] RE: confirm how the game reads the pad (`XInputGetState` IAT slot, callers `0x10924232`,
