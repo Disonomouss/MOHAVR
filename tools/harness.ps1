@@ -30,7 +30,8 @@ param(
     [Parameter(Position = 1)] [string] $Arg1,
     [Parameter(Position = 2)] [string] $Arg2,
     [int] $Width  = 1920,
-    [int] $Height = 1080
+    [int] $Height = 1080,
+    [switch] $Fullscreen   # exclusive fullscreen instead of windowed (device-loss tests; takes over the screen)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +58,7 @@ public static class Win {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr h, System.Text.StringBuilder s, int n);
     // The game's own window, by class. Process.MainWindowHandle is NOT reliable: with OpenXR on,
     // the simulator's preview window lives in the same process and can be picked instead.
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     public static IntPtr FindGameWindow(uint pid) {
         IntPtr found = IntPtr.Zero;
         EnumWindows(delegate(IntPtr h, IntPtr l) {
@@ -259,7 +261,8 @@ switch ($Action) {
         if ($s -and -not $s.restored) { throw "previous run's backup $($s.backup) was never restored -- run 'restore' first" }
         $backup = (& (Join-Path $PSScriptRoot 'userdata.ps1') backup | Select-Object -Last 1)
         Save-State ([pscustomobject]@{ backup = $backup; restored = $false; launched = (Get-Date).ToString('o'); pid = 0 })
-        & $SteamExe -applaunch $AppId -windowed "ResX=$Width" "ResY=$Height" -log
+        $mode = if ($Fullscreen) { '-fullscreen' } else { '-windowed' }
+        & $SteamExe -applaunch $AppId $mode "ResX=$Width" "ResY=$Height" -log
         $t0 = Get-Date; $p = $null
         while (-not $p -and ((Get-Date) - $t0).TotalSeconds -lt 90) { Start-Sleep -Milliseconds 500; $p = Get-Moha }
         if (-not $p) { throw 'MOHA did not start within 90 s (Steam dialog?) -- user data NOT touched, run restore anyway' }
@@ -322,6 +325,18 @@ switch ($Action) {
         } else { Write-Host 'MOHA not running' }
         Save-ModLog
         Restore-UserData
+    }
+
+    'alttab' {
+        # What a player's alt-tab does to a fullscreen game: lose focus/minimise, then come back.
+        $p = Get-Moha; if (-not $p) { throw 'MOHA is not running' }
+        $hwnd = [MohaHarness.Win]::FindGameWindow([uint32]$p.Id)
+        [void][MohaHarness.Win]::ShowWindow($hwnd, 6)   # SW_MINIMIZE
+        $away = if ($Arg1) { [int]$Arg1 } else { 4 }
+        Write-Host "  game minimised for $away s"
+        Start-Sleep -Seconds $away
+        & (Join-Path $PSScriptRoot 'focus-game.ps1') 6>$null | Out-Null
+        Write-Host "  game restored (focus exit $LASTEXITCODE)"
     }
 
     'wait-log' {

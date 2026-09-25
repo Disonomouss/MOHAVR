@@ -286,6 +286,40 @@ to the FName global `0x116F9280`, and then to its only reader.
 - The frame-to-pose pairing uses the render-thread-lag rule (the Present thread differs from the
   CalcSceneView thread → the previous view). Not yet measured for swim; that's for the headset.
 
+## 5i. Settings, scale, device loss (2026-09-25)
+
+**FSystemSettings** (vtable at `0x116F56B8`, filled by `FUN_10A7BF10` defaults, then
+`FUN_10ECC330(MOHAScalabilityOptions*)`): MOHAScalabilityOptions is a `native` class, and its bool
+bitfield at `+0x3C` (declaration order) is copied to ints:
+
+| bit | option | global |
+|---|---|---|
+| 0 | bAllowBloom | `0x116F56D8` |
+| 1 | **bAllowDepthOfField** | **`0x116F56D4`** |
+| 2 | bAllowDynamicLights | `0x116F56C4` |
+| 3 | bAllowDynamicShadows | `0x116F56C8` |
+| 4 | bAllowLightEnvironmentShadows | `0x116F56CC` |
+| 5 | **bAllowMotionBlur** | **`0x116F56D0`** |
+| 6 | bMinspecCull | `0x116F56FC` |
+| 11 | bTickLODAnims | `0x116F5700` |
+| float `+0x5C` | ScreenPercentage (if > 25) | `0x116F56F8` (read by CalcSceneView) |
+
+MOHA's script also toggles `WorldInfo.GameModified_bTurnOffMotionBlur` (sprint, some states).
+With `Camera.DisableMotionBlur/DepthOfField` the mod zeroes the two ints each view; this was
+logged working in gameplay.
+
+**Scale:** `MOHAPlayerPawn` CylinderComponent CollisionHeight = 96 (half-height, so 192 units
+standing; radius 40). `DefaultPlayer.ini` StanceCollisionHeights = 96 / 49 / 27 (stand, crouch,
+prone). The camera comes from mesh socket `Cam`. So **about 100 units per metre (1 unit ≈ 1 cm)**, not
+UE3's usual 2 cm.
+
+**Device loss:** alt-tab from exclusive fullscreen → `Present` returns `0x88760868`
+(`D3DERR_DEVICELOST`) → the game calls `IDirect3DDevice9::Reset` (vtable 16) **on the main thread**
+(Present is on the render thread). D3D9 refuses Reset while any D3DPOOL_DEFAULT resource exists,
+so the mod releases its own before the game's Reset. A new window in the game process (the
+simulator preview, when the host runs the simulator) can steal focus from a fullscreen game and
+lose the device too.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

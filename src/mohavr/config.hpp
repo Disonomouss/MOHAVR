@@ -13,7 +13,9 @@ struct Config {
     bool  headTracking      = false;  // [Camera] HeadTracking -- head pose drives the view (M3; needs Bridge.Host)
     bool  headPosition      = true;   // [Camera] HeadPosition -- also apply head translation (6DoF)
     bool  headsetProjection = true;   // [Camera] HeadsetProjection -- render with the headset's FOV
-    float unitsPerMeter     = 50.0f;  // [Camera] UnitsPerMeter -- Unreal units per metre (UE3: 1 uu ~ 2 cm)
+    float unitsPerMeter     = 100.0f; // [Camera] UnitsPerMeter -- MOHA: ~1 uu = 1 cm (192 uu soldier, ENGINE-NOTES 5i)
+    bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
+    bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)
     std::wstring xrRuntimeJson;   // [OpenXR]  RuntimeJson -- if set, XR_RUNTIME_JSON for this process only (D3)
 };

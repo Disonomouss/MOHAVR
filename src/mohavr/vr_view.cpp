@@ -64,6 +64,32 @@ shared::Fov g_mono{};            // union FOV for this view (before widening)
 long g_views = 0;
 bool g_loggedProj = false;
 
+// Motion blur / depth of field off while head tracking (FSystemSettings ints, ENGINE-NOTES 5i).
+// Re-asserted every view because the game re-applies its scalability options. Only ever writes
+// 0 over a value that is 0 or 1 -- anything else means the address is wrong: stop touching it.
+void ForceVrSettings() {
+    static bool disabled = false;
+    if (disabled) return;
+    auto force = [](std::uintptr_t va, bool want, const char* what) {
+        if (!want) return true;
+        auto* p = reinterpret_cast<volatile int*>(va);
+        const int v = *p;
+        if (v != 0 && v != 1) {
+            MLOG("view: %s at 0x%08X holds %d (expected 0/1) -- not touching FSystemSettings", what, static_cast<unsigned>(va), v);
+            return false;
+        }
+        if (v == 1) {
+            *p = 0;
+            static int logged = 0;
+            if (logged++ < 4) MLOG("view: %s forced off (FSystemSettings 0x%08X)", what, static_cast<unsigned>(va));
+        }
+        return true;
+    };
+    if (!force(addr::kSysAllowMotionBlur, g_cfg.noMotionBlur, "motion blur") ||
+        !force(addr::kSysAllowDepthOfField, g_cfg.noDepthOfField, "depth of field"))
+        disabled = true;
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -73,6 +99,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     shared::Pose head, eye[2];
     shared::Fov fov[2];
     if (!shared::ReadViews(hdr, head, eye, fov)) return;
+    ForceVrSettings();
 
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);

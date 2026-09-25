@@ -25,6 +25,29 @@ Quit, and tell Claude.
 4. Any discomfort or eye strain in the first minute? (yes/no; mono is expected to feel flat)
 5. Does leaning your head move the view naturally, not too much or too little? (yes/no)
 
+**Attempt 1 (~19:05): VOID.** Not deployed; Claude asked instead of deploying (process fixed:
+Claude deploys immediately).
+
+**Attempt 2 (~19:10):** deployed. Answers: 1 **world stays still** · 2 **world looks larger than it
+should** · 3 horizon fine · 4 **some tearing when moving the head, making things look hazy** ·
+5 not tested: after alt-tabbing out to read the questions, the player couldn't get back in or click
+anything, and Claude had to kill the game.
+Logs (`logs/modlogs/20260925-191356-*`): alt-tab → `Present` = `D3DERR_DEVICELOST`, and the game hung in
+its Reset loop.
+**Findings and fixes (v0.4.1):**
+- **Hang:** D3D9 refuses `Reset` while any D3DPOOL_DEFAULT resource exists, including the
+  bridge's copy render target. Fixed with an `IDirect3DDevice9::Reset` hook that releases it first
+  and recreates it after. Verified in fullscreen with a scripted alt-tab: Reset → S_OK, frames flow again.
+- **Larger world:** `UnitsPerMeter` was 50 (the "UE3 = 2 cm" assumption). MOHA's soldier is 192 units
+  tall (CollisionHeight 96), so about 100 units per metre. Head translation was half what it should
+  be. The default is now 100.
+- **Haze/tearing on head motion:** the game's motion blur (on in the player's settings) blurs by
+  camera motion, which head motion now is. It's now forced off in memory while head tracking, along
+  with depth of field (FSystemSettings, ENGINE-NOTES §5i). The remaining suspect is resolution:
+  the mono union FOV spreads 1440 px over the whole eye.
+
+**Attempt 3:** deployed ~19:20 with the fixes. Answers pending.
+
 **Answers:**
 
 **Log received:**

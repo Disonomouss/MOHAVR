@@ -24,10 +24,12 @@ Config LoadConfig(const std::wstring& dir) {
     c.headsetProjection = get(L"Camera", L"HeadsetProjection", c.headsetProjection);
     {
         wchar_t u[32] = L"";
-        GetPrivateProfileStringW(L"Camera", L"UnitsPerMeter", L"50", u, 32, ini.c_str());
+        GetPrivateProfileStringW(L"Camera", L"UnitsPerMeter", L"100", u, 32, ini.c_str());
         const float v = static_cast<float>(_wtof(u));
         if (v > 1.0f && v < 1000.0f) c.unitsPerMeter = v;
     }
+    c.noMotionBlur   = get(L"Camera", L"DisableMotionBlur", c.noMotionBlur);
+    c.noDepthOfField = get(L"Camera", L"DisableDepthOfField", c.noDepthOfField);
     c.xrEnabled      = get(L"OpenXR", L"Enabled", c.xrEnabled);
     wchar_t buf[MAX_PATH] = L"";
     GetPrivateProfileStringW(L"OpenXR", L"RuntimeJson", L"", buf, MAX_PATH, ini.c_str());
@@ -37,8 +39,9 @@ Config LoadConfig(const std::wstring& dir) {
          "OpenXR.RuntimeJson=%s Debug.TestWrongBuild=%d",
          present ? "MOHAVR.ini" : "no MOHAVR.ini, defaults", c.enabled, c.hookD3D9, c.d3d9On12, c.bridgeHost, c.xrEnabled,
          c.xrRuntimeJson.empty() ? "(system runtime)" : "(set)", c.testWrongBuild);
-    MLOG("config: Camera.HeadTracking=%d HeadPosition=%d HeadsetProjection=%d UnitsPerMeter=%.1f", c.headTracking,
-         c.headPosition, c.headsetProjection, c.unitsPerMeter);
+    MLOG("config: Camera.HeadTracking=%d HeadPosition=%d HeadsetProjection=%d UnitsPerMeter=%.1f DisableMotionBlur=%d "
+         "DisableDepthOfField=%d", c.headTracking, c.headPosition, c.headsetProjection, c.unitsPerMeter, c.noMotionBlur,
+         c.noDepthOfField);
     if (c.bridgeHost && !c.d3d9On12) MLOG("config: Bridge.Host=1 needs Bridge.D3D9On12=1 -- the host will not be started");
     if (c.headTracking && !c.bridgeHost) MLOG("config: Camera.HeadTracking=1 needs Bridge.Host=1 (the host supplies the head pose)");
     if (c.bridgeHost && c.xrEnabled) MLOG("config: Bridge.Host=1 and OpenXR.Enabled=1 -- using the host; in-process OpenXR is off");

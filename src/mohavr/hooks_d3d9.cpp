@@ -43,6 +43,7 @@ using PFN_Present = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, const RECT*, 
 using PFN_CreateAdditionalSwapChain = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, D3DPRESENT_PARAMETERS*, IDirect3DSwapChain9**);
 using PFN_SwapChainPresent = HRESULT(STDMETHODCALLTYPE*)(IDirect3DSwapChain9*, const RECT*, const RECT*, HWND, const RGNDATA*, DWORD);
 constexpr int kSlotCreateAdditionalSwapChain = 13;
+constexpr int kSlotReset                     = 16;
 constexpr int kSlotPresent                   = 17;
 constexpr int kSlotSwapChainPresent          = 3;
 
@@ -60,6 +61,25 @@ void LogPresent(const char* what, long n, HRESULT hr) {
     } else if (n <= 3 || n % 600 == 0) {
         MLOG("%s #%ld -> 0x%08lX", what, n, static_cast<unsigned long>(hr));
     }
+}
+
+// --- IDirect3DDevice9::Reset (slot 16) -----------------------------------------------------------
+// Alt-tab out of fullscreen loses the device; the game then loops on Reset, which D3D9 refuses
+// while ANY D3DPOOL_DEFAULT resource exists -- including the bridge's own render target. Found in
+// headset round 2 (the game hung). Release ours first, recreate lazily after.
+using PFN_Reset = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, D3DPRESENT_PARAMETERS*);
+PFN_Reset        g_realReset = nullptr;
+std::atomic<int> g_resets{0};
+
+HRESULT STDMETHODCALLTYPE Hook_Reset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp) {
+    bridge::OnBeforeReset();
+    const HRESULT hr = g_realReset(dev, pp);
+    const int n = ++g_resets;
+    if (n <= 5 || FAILED(hr))
+        MLOG("Reset #%d %ux%u windowed %d -> 0x%08lX", n, pp ? pp->BackBufferWidth : 0, pp ? pp->BackBufferHeight : 0,
+             pp ? pp->Windowed : 0, static_cast<unsigned long>(hr));
+    if (SUCCEEDED(hr)) bridge::OnAfterReset(pp ? pp->BackBufferWidth : 0, pp ? pp->BackBufferHeight : 0);
+    return hr;
 }
 
 HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, const RECT* dst, HWND wnd, const RGNDATA* dirty) {
@@ -125,6 +145,9 @@ void HookDevice(IDirect3DDevice9* dev) {
     if (!g_realCreateSwapChain)
         HookVtableSlot(dev, kSlotCreateAdditionalSwapChain, reinterpret_cast<void*>(&Hook_CreateAdditionalSwapChain),
                        reinterpret_cast<void**>(&g_realCreateSwapChain), "IDirect3DDevice9::CreateAdditionalSwapChain");
+    if (!g_realReset)
+        HookVtableSlot(dev, kSlotReset, reinterpret_cast<void*>(&Hook_Reset), reinterpret_cast<void**>(&g_realReset),
+                       "IDirect3DDevice9::Reset");
 }
 
 HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DDEVTYPE type, HWND focus,

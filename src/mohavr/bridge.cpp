@@ -35,6 +35,15 @@ ID3D12Resource*             g_shared[kRing] = {};
 IDirect3DSurface9*          g_rt         = nullptr;  // our copy of the backbuffer (9On12-backed)
 long                        g_presents   = 0;
 bool                        g_hostExitLogged = false;
+bool                        g_paused     = false;  // backbuffer size changed by a Reset
+// Reset runs on the main thread, Present on the render thread (ENGINE-NOTES 5e): g_rt is shared.
+CRITICAL_SECTION            g_rtLock;
+bool                        g_rtLockInit = false;
+
+struct RtGuard {
+    RtGuard() { EnterCriticalSection(&g_rtLock); }
+    ~RtGuard() { LeaveCriticalSection(&g_rtLock); }
+};
 
 void SetStatus(const char* msg) {
     if (g_hdr) strncpy_s(g_hdr->gameStatus, msg, _TRUNCATE);
@@ -137,6 +146,15 @@ void Publish(IDirect3DDevice9* dev) {
     // The slot's command allocator is free once our own copy of frame n - kRing has executed.
     if (n > kRing && g_gameFence->GetCompletedValue() < n - kRing) return;
 
+    RtGuard guard;
+    if (!g_rt) {  // released for a device Reset; recreate at the (unchanged) size
+        if (FAILED(dev->CreateRenderTarget(g_hdr->width, g_hdr->height, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_rt, nullptr))) {
+            g_rt = nullptr;
+            return;
+        }
+        MLOG("bridge: render target recreated after device reset");
+    }
+
     IDirect3DSurface9* bb = nullptr;
     if (FAILED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb))) return;
     HRESULT hr = dev->StretchRect(bb, nullptr, g_rt, nullptr, D3DTEXF_NONE);
@@ -179,8 +197,32 @@ void Publish(IDirect3DDevice9* dev) {
 
 shared::Header* SharedHeader() { return g_hdr; }
 
+void OnBeforeReset() {
+    if (!g_rtLockInit) return;
+    RtGuard guard;
+    if (g_rt) {
+        g_rt->Release();
+        g_rt = nullptr;
+        MLOG("bridge: released render target for device Reset");
+    }
+}
+
+void OnAfterReset(unsigned width, unsigned height) {
+    if (!g_hdr || !g_ready || !width || !height) return;
+    if (width != g_hdr->width || height != g_hdr->height) {
+        if (!g_paused) MLOG("bridge: Reset changed the backbuffer to %ux%u (was %ux%u) -- bridge paused (restart the game)",
+                            width, height, g_hdr->width, g_hdr->height);
+        g_paused = true;
+    } else if (g_paused) {
+        MLOG("bridge: backbuffer back to %ux%u -- bridge resumed", width, height);
+        g_paused = false;
+    }
+}
+
 void StartHost(const std::wstring& runtimeJson) {
     if (g_hdr) return;
+    InitializeCriticalSection(&g_rtLock);
+    g_rtLockInit = true;
     const DWORD pid = GetCurrentProcessId();
     const std::wstring name = L"Local\\MOHAVR_" + std::to_wstring(pid);
     g_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Header), name.c_str());
@@ -215,7 +257,7 @@ void OnPresent(IDirect3DDevice9* device) {
         g_setupTried = true;
         g_ready = Setup(device);
     }
-    if (!g_ready) return;
+    if (!g_ready || g_paused) return;
     if (g_host && !g_hostExitLogged && (g_presents % 600) == 0 && WaitForSingleObject(g_host, 0) == WAIT_OBJECT_0) {
         DWORD code = 0;
         GetExitCodeProcess(g_host, &code);

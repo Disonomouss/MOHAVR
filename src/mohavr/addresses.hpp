@@ -70,6 +70,13 @@ inline constexpr std::uint8_t   kProjAfterConstrainedBytes[] = {0x8B, 0xF0};
 inline constexpr std::uint8_t kProjCallNormalBytes[]      = {0xE8, 0x45, 0x3B, 0xFD, 0xFF};
 inline constexpr std::uint8_t kProjCallConstrainedBytes[] = {0xE8, 0x41, 0x3C, 0xFD, 0xFF};
 
+// --- FSystemSettings (vtable at 0x116F56B8; ENGINE-NOTES 5i) -----------------------------------
+// FUN_10ECC330 copies MOHAScalabilityOptions' bool bitfield (+0x3C, declaration order) into
+// these ints: bit 1 bAllowDepthOfField -> 0x116F56D4, bit 5 bAllowMotionBlur -> 0x116F56D0.
+inline constexpr std::uintptr_t kSysAllowMotionBlur   = 0x116F56D0;
+inline constexpr std::uintptr_t kSysAllowDepthOfField = 0x116F56D4;
+inline constexpr std::uintptr_t kSysScreenPercentage  = 0x116F56F8;  // float, read by CalcSceneView
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},

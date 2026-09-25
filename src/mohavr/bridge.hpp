@@ -24,4 +24,10 @@ void StartHost(const std::wstring& runtimeJson);
 // for one. Never blocks on the CPU.
 void OnPresent(IDirect3DDevice9* device);
 
+// Device reset (alt-tab from fullscreen): D3D9 refuses Reset while our D3DPOOL_DEFAULT render
+// target exists, so release it before and recreate it lazily after. A size change pauses the
+// bridge (the shared textures and the host's swapchain have the old size).
+void OnBeforeReset();
+void OnAfterReset(unsigned width, unsigned height);
+
 }  // namespace mohavr::bridge

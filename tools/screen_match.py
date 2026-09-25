@@ -49,8 +49,13 @@ def main(argv):
 
     shot = Image.open(argv[0])
     if shot.size != (1920, 1080):
-        print(f"screenshot is {shot.size}, checks are for 1920x1080")
-        return 2
+        # UE3's UI scales with the resolution, so any 16:9 frame compares after resizing.
+        w, h = shot.size
+        if abs(w / h - 16 / 9) > 0.01:
+            print(f"screenshot is {shot.size}; checks are for 16:9 (1920x1080)")
+            print("state: unknown")
+            return 2
+        shot = shot.convert("RGB").resize((1920, 1080), Image.BILINEAR)
     idx = load_index()
     if len(argv) > 1:
         c = idx[argv[1]]
