@@ -97,15 +97,22 @@ what was learned.
 
 ### A. Housekeeping (quick)
 - [x] Round 4 recorded; the World-scale default is 100 (ini + code) — done 2026-09-25 evening.
-- [ ] Shipped defaults for the proven VR path: `D3D9On12=1`, `Host=1`, `HeadTracking=1`, `Stereo=1` (they're
-      headset-proven). [S]: a cycle with the plain shipped ini gives stereo in the simulator.
-- [ ] Prune old `logs/shots` and `logs/backup` (keep the last 20 of each).
+- [x] Shipped defaults for the proven VR path: `D3D9On12=1`, `Host=1`, `HeadTracking=1`, `Stereo=1`. Done: a cycle with
+      the shipped ini (only the simulator RuntimeJson set) gives stereo at scale 100 (log 20260925-213049). (1ad40f7)
+- [x] Pruned `logs/shots` (71 → 20) and `logs/backup` (33 → 20).
 
 ### B. Menu additions (host) — [S] via `tools/menu_cmd.py`
-- [ ] **Recentre** item: resets the translation origin and yaw offset (the game side reads a new shared-block
-      field). [S]: after moving the simulated head, recentre brings the view back.
-- [ ] **Seated/standing height offset** item (± 5 cm steps, saved). [S]: the camera height changes in the capture.
-- [ ] Shrink the panel to its content (the empty lower half), and open it slightly below eye level.
+- [x] **Recentre** item: the host re-creates LOCAL at the head's heading and x/z, keeps the old space for frames
+      already rendered in it, and bumps `recenterSeq` (shared block v5) only after publishing new-space views; the
+      game reads the sequence before the views and takes a new origin. [S] passed: head turned 30° and moved 0.3 m →
+      Recentre → the new origin is (0, 1.7, 0) and the view faces the same way as at yaw 0 (screenshots
+      213956-s0 / 213958-s1 / 214002-s2). The OpenXR Simulator ignored `poseInReferenceSpace`; it now honours it
+      (local, uncommitted-to-upstream change in `tools/OpenXR-Simulator/src/runtime.cpp`; its own tests pass).
+- [x] **Height** item (± 5 cm steps, ±60 cm, saved as `HeightOffset` in the player's ini). [S] passed: +20 cm
+      raises the camera and 0 returns it exactly (shots h0/h20/h0b). The gun doesn't follow the offset (it hangs
+      off the pawn's eye) — part of the M7/M8 weapon work.
+- [x] Panel shrunk to 1024×480, opens 15 cm below eye level. `tools/menu_cmd.py` batches now apply one command
+      per frame (before, "down down" moved one row).
 
 ### C. Desktop mirror (host) — [S]
 - [ ] A host window showing the left eye (or the game frame), so the monitor isn't white. Off by default

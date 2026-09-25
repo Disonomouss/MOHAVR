@@ -111,7 +111,16 @@ void ForceVrSettings() {
 bool  g_haveOrigin = false;
 float g_ox = 0, g_oy = 0, g_oz = 0;
 
-void UpdateOrigin(const shared::Header* hdr, const shared::Pose& head) {
+// `recenterSeq` must be read BEFORE the views: the host publishes views in its new LOCAL space
+// first and bumps the sequence after, so a new sequence always comes with new-space views.
+void UpdateOrigin(const shared::Header* hdr, std::uint32_t recenterSeq, const shared::Pose& head) {
+    // The host's Recentre (menu) re-creates its LOCAL space; poses jump, so take a fresh origin.
+    static std::uint32_t seenRecenter = 0;
+    if (recenterSeq != seenRecenter) {
+        seenRecenter = recenterSeq;
+        if (g_haveOrigin) MLOG("view: recentre #%u from the host -- taking a new position origin", seenRecenter);
+        g_haveOrigin = false;
+    }
     if (!(hdr->viewValid & 2u)) return;  // placeholder pose, not tracked yet
     // Virtual Desktop flags its pre-tracking placeholder as tracked (round 3: identity orientation
     // at y = -1.21, for ~20 ms). A real head is never exactly identity -- but the simulator's default
@@ -215,9 +224,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
 
     shared::Pose head, eye[2];
     shared::Fov fov[2];
+    const std::uint32_t recenterSeq = hdr->recenterSeq;
     if (!shared::ReadViews(hdr, head, eye, fov)) return;
     ForceVrSettings();
-    UpdateOrigin(hdr, head);
+    UpdateOrigin(hdr, recenterSeq, head);
 
     auto* loc = *reinterpret_cast<float**>(ctx.ebp + 0x10);
     auto* rot = *reinterpret_cast<int**>(ctx.ebp + 0x14);
@@ -265,6 +275,14 @@ void OnViewPoint(SafetyHookContext& ctx) {
         loc[0] += d.x * s;
         loc[1] += d.y * s;
         loc[2] += d.z * s;
+    }
+    // Seated/standing height offset from the menu (metres, player setting).
+    {
+        const float h = hdr->heightOffset;
+        if (h > -1.0f && h < 1.0f && h != 0.0f) {
+            const float live = hdr->unitsPerMeter;
+            loc[2] += h * ((live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter);
+        }
     }
 
     if (g_thisStereo) {

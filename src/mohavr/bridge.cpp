@@ -236,6 +236,8 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter) {
     g_hdr->gameState = static_cast<std::uint32_t>(shared::GameState::Starting);
     g_hdr->defaultUnitsPerMeter = defaultUnitsPerMeter;
     g_hdr->unitsPerMeter = 0.0f;  // until the host applies the player's saved value
+    g_hdr->heightOffset = 0.0f;
+    g_hdr->recenterSeq = 0;
 
     const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);

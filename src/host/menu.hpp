@@ -2,7 +2,8 @@
 // quad layer in front of the player when open. The game never renders it -- it costs the game no
 // address space, and it works in menus, cutscenes and gameplay alike.
 //
-// Items (first version): World Scale (live, saved), Reset World Scale, Close.
+// Items: World Scale (live, saved), Height (seated/standing offset, live, saved), Recentre (the host
+// re-creates LOCAL at the head's heading), Reset World Scale, Close.
 // Settings are the PLAYER's (lessons 1): %LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini, separate from the
 // shipped defaults, outside the game folder, never touched by deploy/undeploy.
 #pragma once
@@ -41,9 +42,15 @@ public:
     // The quad layer for this frame (only when Visible()).
     const XrCompositionLayerBaseHeader* Layer(XrSpace local);
 
+    // True once after the player chose Recentre; the host then re-creates its LOCAL space.
+    bool TakeRecenterRequest() { const bool r = recenterRequested_; recenterRequested_ = false; return r; }
+    // After a recentre the panel's old pose is meaningless: close it.
+    void Close();
+
 private:
     void Render();
     void SetUnitsPerMeter(float v, bool save);
+    void SetHeightOffset(float v, bool save);
     void Save();
 
     ID3D11Device*           dev_ = nullptr;
@@ -53,13 +60,15 @@ private:
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
-    int                     width_ = 1024, height_ = 640;
+    int                     width_ = 1024, height_ = 480;
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
     bool                    visible_ = false;
     bool                    rendered_ = false;  // at least one image released since opening
     int                     selected_ = 0;
-    float                   unitsPerMeter_ = 50.0f;
+    float                   unitsPerMeter_ = 100.0f;
+    float                   heightOffset_ = 0.0f;   // metres
+    bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
 };
 

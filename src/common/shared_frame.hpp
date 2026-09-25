@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 4;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings
+inline constexpr std::uint32_t kVersion = 5;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -99,7 +99,9 @@ struct Header {
     // the player's saved settings and the menu. 0 = not set (the game keeps its own value).
     float                  defaultUnitsPerMeter;   // game -> host: the shipped/ini default
     volatile float         unitsPerMeter;          // host -> game: live world scale (Unreal units per metre)
-    float                  reservedSettings[6];
+    volatile float         heightOffset;           // host -> game: v5, metres added to the camera height (seated/standing)
+    volatile std::uint32_t recenterSeq;            // host -> game: v5, bumped when the host recentres LOCAL space
+    float                  reservedSettings[4];
 };
 #pragma pack(pop)
 

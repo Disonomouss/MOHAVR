@@ -1,11 +1,13 @@
 """Send test commands to MOHAVR-host's in-headset menu (the simulator can't press controller buttons).
 
     python tools/menu_cmd.py toggle
-    python tools/menu_cmd.py right right right      # world scale +15
-    python tools/menu_cmd.py down select            # e.g. move to Reset and select it
+    python tools/menu_cmd.py right right right      # world scale +15 (when World scale is selected)
+    python tools/menu_cmd.py toggle down down select   # open, move to Recentre, select it
 
 Commands: toggle up down left right select back. The host reads and deletes
-%TEMP%\\MOHAVR\\host_cmd.txt once per XR frame, so send one batch at a time and wait ~0.2 s.
+%TEMP%\\MOHAVR\\host_cmd.txt once per XR frame and queues its lines, applying ONE per frame
+(one button press each). Items: World scale, Height, Recentre, Reset world scale, Close;
+the menu opens on World scale.
 """
 import os
 import sys

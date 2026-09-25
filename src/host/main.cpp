@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -368,6 +369,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     LARGE_INTEGER qpf, qpcLast;
     QueryPerformanceFrequency(&qpf);
     QueryPerformanceCounter(&qpcLast);
+    std::deque<std::string> testCmds;  // from host_cmd.txt, applied one per frame
     float stickHeld[4] = {0, 0, 0, 0};  // up, down, left, right: seconds held (auto-repeat)
     SetState(HostState::Running, "session created");
 
@@ -387,6 +389,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
     bool loggedViews = false, loggedProjection = false, loggedStereo = false;
     mohavr::shared::SlotMeta lastMeta{};  // render pose/fov of the frame in `last`
     std::uint64_t shown = 0;  // last game frame copied into `last`
+    // Recentre (menu): `local` is re-created at the head's heading and floor position. Frames the game
+    // rendered with views from the old space are still submitted in it (`prevLocal`) until they are
+    // through; recenterSeq is bumped only once views in the new space are published (shared_frame.hpp).
+    XrSpace prevLocal = XR_NULL_HANDLE;
+    std::uint64_t prevLocalUntil = 0;  // game frames <= this were rendered in prevLocal
+    bool recenterBumpPending = false;
     long xrFrames = 0;
     long newFrames = 0;
     while (GameAlive(game)) {
@@ -463,18 +471,24 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                 char line[64];
                 while (fgets(line, sizeof(line), cf)) {
                     const std::string c(line, strcspn(line, "\r\n "));
-                    if (c == "toggle") mi.toggle = true;
-                    else if (c == "up") mi.up = true;
-                    else if (c == "down") mi.down = true;
-                    else if (c == "left") mi.left = true;
-                    else if (c == "right") mi.right = true;
-                    else if (c == "select") mi.select = true;
-                    else if (c == "back") mi.back = true;
-                    if (!c.empty()) MLOG("host: test command '%s'", c.c_str());
+                    if (!c.empty()) testCmds.push_back(c);
                 }
                 fclose(cf);
             }
             DeleteFileW(cmdPath.c_str());
+        }
+        // One command per frame, like one button press each ("down down" moves two rows).
+        if (!testCmds.empty()) {
+            const std::string c = testCmds.front();
+            testCmds.pop_front();
+            if (c == "toggle") mi.toggle = true;
+            else if (c == "up") mi.up = true;
+            else if (c == "down") mi.down = true;
+            else if (c == "left") mi.left = true;
+            else if (c == "right") mi.right = true;
+            else if (c == "select") mi.select = true;
+            else if (c == "back") mi.back = true;
+            MLOG("host: test command '%s'", c.c_str());
         }
 
         // Head pose + eye views at the predicted display time -> the game (seqlock, M3).
@@ -520,6 +534,16 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                                         (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT);
                 g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
+                if (recenterBumpPending) {
+                    recenterBumpPending = false;
+                    // Anything published up to now (plus a frame the game may be rendering with views it
+                    // read before this point) used the old space.
+                    prevLocalUntil = static_cast<std::uint64_t>(InterlockedCompareExchange64(
+                                         reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), 0, 0)) + 2;
+                    const LONG seq = InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->recenterSeq));
+                    MLOG("host: recentre #%ld published (old-space frames up to %llu)", seq,
+                        static_cast<unsigned long long>(prevLocalUntil));
+                }
                 if (!loggedViews) {
                     loggedViews = true;
                     MLOG("host: views located -- eye fov L(%.1f %.1f %.1f %.1f) R(%.1f %.1f %.1f %.1f) deg, IPD %.1f mm",
@@ -534,6 +558,36 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
         }
 
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
+        if (menuOk && menu.TakeRecenterRequest()) {
+            if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {
+                MLOG("host: recentre ignored (%s)", !menuHeadOk ? "no head pose" : "previous recentre still in flight");
+            } else {
+                // New LOCAL = the head's heading (yaw only) at its x/z; y stays (the game re-takes its origin).
+                const auto& q = menuHead.orientation;
+                const float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
+                const float yaw = std::atan2(-fx, -fz);  // R_y(yaw) * (0,0,-1) = (fx, 0, fz)
+                XrReferenceSpaceCreateInfo rc{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
+                rc.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+                rc.poseInReferenceSpace.orientation = {0.0f, std::sin(yaw * 0.5f), 0.0f, std::cos(yaw * 0.5f)};
+                rc.poseInReferenceSpace.position = {menuHead.position.x, 0.0f, menuHead.position.z};
+                XrSpace fresh = XR_NULL_HANDLE;
+                if (XR_SUCCEEDED(xrCreateReferenceSpace(session, &rc, &fresh))) {
+                    prevLocal = local;
+                    prevLocalUntil = ~0ull;  // set when the bump is published
+                    local = fresh;
+                    recenterBumpPending = true;
+                    MLOG("host: recentre -- new LOCAL at yaw %.1f deg, x %.2f z %.2f", yaw * 57.2958f,
+                        menuHead.position.x, menuHead.position.z);
+                } else {
+                    MLOG("host: recentre failed (xrCreateReferenceSpace)");
+                }
+            }
+            menu.Close();
+        }
+        if (prevLocal != XR_NULL_HANDLE && shown > prevLocalUntil) {
+            xrDestroySpace(prevLocal);
+            prevLocal = XR_NULL_HANDLE;
+        }
 
         // Take the newest game frame, if there is one we haven't taken (protocol: shared_frame.hpp).
         const std::uint64_t f = static_cast<std::uint64_t>(
@@ -613,7 +667,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson) {
                         pviews[e].subImage.imageArrayIndex = e;
                     }
                 }
-                proj.space = local;
+                proj.space = (prevLocal != XR_NULL_HANDLE && shown <= prevLocalUntil) ? prevLocal : local;
                 proj.viewCount = 2;
                 proj.views = pviews;
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);

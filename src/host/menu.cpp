@@ -15,7 +15,8 @@ namespace mohavr::host {
 namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
-constexpr int   kItemCount = 3;  // 0 World Scale, 1 Reset, 2 Close
+constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
+enum Item { kWorldScale, kHeight, kRecenter, kResetScale, kClose, kItemCount };
 
 std::wstring UserIniPath() {
     wchar_t base[MAX_PATH] = L"";
@@ -92,6 +93,30 @@ void Menu::ApplySavedSettings() {
     }
     MLOG("menu: world scale %.1f (%s; default %.1f)", v, buf[0] ? "player's saved setting" : "default", def);
     SetUnitsPerMeter(v, false);
+
+    float h = 0.0f;
+    GetPrivateProfileStringW(L"Camera", L"HeightOffset", L"", buf, 32, iniPath_.c_str());
+    if (buf[0]) {
+        const float s = static_cast<float>(_wtof(buf));
+        if (s >= kHeightMin && s <= kHeightMax) h = s;
+    }
+    MLOG("menu: height offset %+.2f m (%s)", h, buf[0] ? "player's saved setting" : "default");
+    SetHeightOffset(h, false);
+}
+
+void Menu::SetHeightOffset(float v, bool save) {
+    v = v < kHeightMin ? kHeightMin : (v > kHeightMax ? kHeightMax : v);
+    v = std::round(v / kHeightStep) * kHeightStep;  // no float drift from repeated steps
+    heightOffset_ = v;
+    if (hdr_) hdr_->heightOffset = v;
+    if (save) Save();
+}
+
+void Menu::Close() {
+    if (!visible_) return;
+    visible_ = false;
+    Save();
+    MLOG("menu: closed (world scale %.1f, height %+.2f m saved)", unitsPerMeter_, heightOffset_);
 }
 
 void Menu::SetUnitsPerMeter(float v, bool save) {
@@ -106,6 +131,8 @@ void Menu::Save() {
     wchar_t buf[32];
     swprintf_s(buf, L"%.1f", unitsPerMeter_);
     WritePrivateProfileStringW(L"Camera", L"UnitsPerMeter", buf, iniPath_.c_str());
+    swprintf_s(buf, L"%.2f", heightOffset_);
+    WritePrivateProfileStringW(L"Camera", L"HeightOffset", buf, iniPath_.c_str());
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
@@ -119,32 +146,39 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (!headValid || len < 1e-3f) { fx = 0.0f; fz = -1.0f; } else { fx /= len; fz /= len; }
             const float yaw = std::atan2(-fx, -fz);  // rotation about +Y so the panel faces the head
             panelPose_.orientation = {0.0f, std::sin(yaw * 0.5f), 0.0f, std::cos(yaw * 0.5f)};
-            panelPose_.position = {head.position.x + fx * 1.0f, head.position.y - 0.1f, head.position.z + fz * 1.0f};
+            panelPose_.position = {head.position.x + fx * 1.0f, head.position.y - 0.15f, head.position.z + fz * 1.0f};
             selected_ = 0;
             rendered_ = false;
             MLOG("menu: opened");
         } else {
-            Save();
-            MLOG("menu: closed (world scale %.1f saved)", unitsPerMeter_);
+            visible_ = true;  // Close() only acts on a visible menu
+            Close();
         }
     }
     if (!visible_) return;
 
     if (in.up) selected_ = (selected_ + kItemCount - 1) % kItemCount;
     if (in.down) selected_ = (selected_ + 1) % kItemCount;
-    if (selected_ == 0 && (in.left || in.right)) {
-        SetUnitsPerMeter(unitsPerMeter_ + (in.right ? kScaleStep : -kScaleStep), true);
-        MLOG("menu: world scale -> %.1f", unitsPerMeter_);
+    if (in.left || in.right) {
+        const float dir = in.right ? 1.0f : -1.0f;
+        if (selected_ == kWorldScale) {
+            SetUnitsPerMeter(unitsPerMeter_ + dir * kScaleStep, true);
+            MLOG("menu: world scale -> %.1f", unitsPerMeter_);
+        } else if (selected_ == kHeight) {
+            SetHeightOffset(heightOffset_ + dir * kHeightStep, true);
+            MLOG("menu: height offset -> %+.2f m", heightOffset_);
+        }
     }
     if (in.select) {
-        if (selected_ == 1) {
-            const float def = (hdr_ && hdr_->defaultUnitsPerMeter > 1.0f) ? hdr_->defaultUnitsPerMeter : 50.0f;
+        if (selected_ == kRecenter) {
+            recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
+            MLOG("menu: recentre requested");
+        } else if (selected_ == kResetScale) {
+            const float def = (hdr_ && hdr_->defaultUnitsPerMeter > 1.0f) ? hdr_->defaultUnitsPerMeter : 100.0f;
             SetUnitsPerMeter(def, true);
             MLOG("menu: world scale reset to %.1f", def);
-        } else if (selected_ == 2) {
-            visible_ = false;
-            Save();
-            MLOG("menu: closed (world scale %.1f saved)", unitsPerMeter_);
+        } else if (selected_ == kClose) {
+            Close();
             return;
         }
     }
@@ -170,13 +204,16 @@ void Menu::Render() {
                               : 64.0f;
     char label[128];
     snprintf(label, sizeof(label), "World scale      <  %.0f  >", unitsPerMeter_);
-    ImGui::Selectable(label, selected_ == 0);
+    ImGui::Selectable(label, selected_ == kWorldScale);
     ImGui::PushFont(nullptr, 28.0f);
     ImGui::TextDisabled("   higher = smaller world   (eyes %.1f units apart)", ipdMm * unitsPerMeter_ / 1000.0f);
     ImGui::PopFont();
-    snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 50.0f);
-    ImGui::Selectable(label, selected_ == 1);
-    ImGui::Selectable("Close", selected_ == 2);
+    snprintf(label, sizeof(label), "Height           <  %+.0f cm  >", heightOffset_ * 100.0f);
+    ImGui::Selectable(label, selected_ == kHeight);
+    ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
+    snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
+    ImGui::Selectable(label, selected_ == kResetScale);
+    ImGui::Selectable("Close", selected_ == kClose);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Left stick: choose / adjust    Trigger: select    Menu: close");
