@@ -5,6 +5,7 @@
 #include <d3d9on12.h>
 
 #include <atomic>
+#include <intrin.h>
 
 #include "addresses.hpp"
 #include "bridge.hpp"
@@ -134,6 +135,64 @@ HRESULT STDMETHODCALLTYPE Hook_SwapChainPresent(IDirect3DSwapChain9* sc, const R
     return hr;
 }
 
+// --- SetViewport (47) / SetScissorRect (75): Debug.TraceScissor -----------------------------------
+// Diagnostics only: logs viewport changes and scissor rects with a stack scan (MOHA has no frame
+// pointers). This is how the decal scissor's caller -- and the right-eye decal bug -- was found
+// (ENGINE-NOTES 5r).
+using PFN_SetViewport = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, const D3DVIEWPORT9*);
+using PFN_SetScissorRect = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, const RECT*);
+constexpr int kSlotSetViewport    = 47;
+constexpr int kSlotSetScissorRect = 75;
+PFN_SetViewport    g_realSetViewport = nullptr;
+PFN_SetScissorRect g_realSetScissorRect = nullptr;
+D3DVIEWPORT9       g_viewport{};
+std::atomic<int>   g_scissorTrace{0};
+
+HRESULT STDMETHODCALLTYPE Hook_SetViewport(IDirect3DDevice9* dev, const D3DVIEWPORT9* vp) {
+    // Debug.TraceScissor: after 45 s (gameplay), the viewport changes of a few frames.
+    static DWORD start = GetTickCount();
+    static int traced = 0;
+    if (g_cfg.debugTraceScissor && vp && GetTickCount() - start > 45000 && traced < 120 &&
+        (vp->X != g_viewport.X || vp->Y != g_viewport.Y || vp->Width != g_viewport.Width || vp->Height != g_viewport.Height)) {
+        ++traced;
+        MLOG("viewport: (%lu,%lu) %lux%lu z %.2f-%.2f (present #%ld)", vp->X, vp->Y, vp->Width, vp->Height, vp->MinZ,
+             vp->MaxZ, g_presents.load());
+    }
+    if (vp) g_viewport = *vp;
+    return g_realSetViewport(dev, vp);
+}
+
+HRESULT STDMETHODCALLTYPE Hook_SetScissorRect(IDirect3DDevice9* dev, const RECT* r) {
+    if (!r) return g_realSetScissorRect(dev, r);
+    const D3DVIEWPORT9 vp = g_viewport;
+    const LONG vx0 = static_cast<LONG>(vp.X), vy0 = static_cast<LONG>(vp.Y);
+    const LONG vx1 = vx0 + static_cast<LONG>(vp.Width), vy1 = vy0 + static_cast<LONG>(vp.Height);
+    const bool offsetVp = vx0 > 0 || vy0 > 0;
+    const bool misses = r->right <= vx0 || r->left >= vx1 || r->bottom <= vy0 || r->top >= vy1;
+    if (g_cfg.debugTraceScissor && g_scissorTrace < 80) {
+        static DWORD start = GetTickCount();
+        if (GetTickCount() - start > 45000) {
+            ++g_scissorTrace;
+            // No frame pointers in MOHA's code: scan the stack for values inside MOHA.exe's image instead
+            // (return addresses among them; the first is the RHI wrapper).
+            std::uintptr_t found[8] = {};
+            int nf = 0;
+            const auto* sp = reinterpret_cast<const std::uintptr_t*>(_AddressOfReturnAddress());
+            for (int i = 0; i < 400 && nf < 8; ++i) {
+                const std::uintptr_t v = sp[i];
+                if (v >= 0x10901000 && v < 0x112C0000) found[nf++] = v;
+            }
+            MLOG("scissor: rect (%ld,%ld)-(%ld,%ld) with viewport (%ld,%ld)-(%ld,%ld)%s -- stack %08X %08X %08X %08X %08X %08X %08X %08X",
+                 r->left, r->top, r->right, r->bottom, vx0, vy0, vx1, vy1, misses ? " MISSES" : "",
+                 static_cast<unsigned>(found[0]), static_cast<unsigned>(found[1]), static_cast<unsigned>(found[2]),
+                 static_cast<unsigned>(found[3]), static_cast<unsigned>(found[4]), static_cast<unsigned>(found[5]),
+                 static_cast<unsigned>(found[6]), static_cast<unsigned>(found[7]));
+        }
+    }
+    (void)offsetVp;
+    return g_realSetScissorRect(dev, r);
+}
+
 bool HookVtableSlot(void* obj, int slot, void* hook, void** real, const char* what) {
     auto** vtbl = *reinterpret_cast<void***>(obj);
     void* current = vtbl[slot];
@@ -184,6 +243,12 @@ void HookDevice(IDirect3DDevice9* dev) {
     if (!g_realReset)
         HookVtableSlot(dev, kSlotReset, reinterpret_cast<void*>(&Hook_Reset), reinterpret_cast<void**>(&g_realReset),
                        "IDirect3DDevice9::Reset");
+    if (g_cfg.debugTraceScissor && !g_realSetScissorRect) {
+        if (HookVtableSlot(dev, kSlotSetViewport, reinterpret_cast<void*>(&Hook_SetViewport),
+                           reinterpret_cast<void**>(&g_realSetViewport), "IDirect3DDevice9::SetViewport"))
+            HookVtableSlot(dev, kSlotSetScissorRect, reinterpret_cast<void*>(&Hook_SetScissorRect),
+                           reinterpret_cast<void**>(&g_realSetScissorRect), "IDirect3DDevice9::SetScissorRect");
+    }
 }
 
 HRESULT STDMETHODCALLTYPE Hook_CreateDevice(IDirect3D9* self, UINT adapter, D3DDEVTYPE type, HWND focus,

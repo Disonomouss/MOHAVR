@@ -16,7 +16,11 @@ unsigned g_calls = 0;
 LRESULT CALLBACK Proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_WINDOWPOSCHANGING && lp) {
         auto* pos = reinterpret_cast<WINDOWPOS*>(lp);
-        if (!(pos->flags & SWP_NOSIZE) && (pos->cx != g_w || pos->cy != g_h)) {
+        // Minimizing (and restoring from it) is not a resize the game renders at: let Windows have it.
+        // Forcing the full size onto a minimized window left the game in an odd state after restoring
+        // (headset round 7: "like looking through a glass bowl").
+        const bool minimized = (GetWindowLongW(h, GWL_STYLE) & WS_MINIMIZE) != 0;
+        if (!minimized && !(pos->flags & SWP_NOSIZE) && (pos->cx != g_w || pos->cy != g_h)) {
             if (g_refused++ < 10) MLOG("window: refused a resize to %dx%d (kept %dx%d, the render size)", pos->cx, pos->cy, g_w, g_h);
             pos->cx = g_w;
             pos->cy = g_h;

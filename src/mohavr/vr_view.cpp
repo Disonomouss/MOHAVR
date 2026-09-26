@@ -301,10 +301,12 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
     if (!g_inStereoDraw) return;
     auto* lp = *reinterpret_cast<std::uint8_t**>(ctx.esp + 4);
     if (!lp) return;
-    const int eye = g_eyeCounter++ & 1;
+    // Debug.SwapEyeOrder: render the right eye first (experiment: which eye does per-frame-once work).
+    const int eye = (g_eyeCounter++ & 1) ^ (g_cfg.debugSwapEyes ? 1 : 0);
     g_thisEye = eye;
     g_thisStereo = true;
-    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = eye ? 0.5f : 0.0f;
+    // Debug.SwapHalves (experiment): the left eye in the right half and vice versa; the host swaps back.
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = (eye ^ (g_cfg.debugSwapHalves ? 1 : 0)) ? 0.5f : 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 0.5f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = 1.0f;
@@ -567,6 +569,74 @@ void OnHudMatrix(SafetyHookContext& ctx) {
     g_hudScalePending = 0.0f;
 }
 
+// --- Render.DecalFix: decals in the right eye (ENGINE-NOTES 5r) ----------------------------------
+// The engine's decal screen-box test (kDecalScreenBox) projects to absolute pixels but clamps to
+// [0, SizeX]: in a view that starts at x = SizeX (our right eye) the box collapses and the decal is culled
+// (headset round 7: bullet holes in the left eye only). For such views, the entry hook sets the view's
+// X/Y to 0 for this one call (the render thread's own FViewInfo) and swaps the return address for a stub
+// that restores X/Y and moves the resulting box back by them -- so the culling works and the scissor rect
+// the caller builds from the box lands on the right half.
+SafetyHookMid g_decalHook;
+struct DecalCall {
+    std::uintptr_t view = 0;
+    float*         mn = nullptr;
+    float*         mx = nullptr;
+    float          x = 0.0f, y = 0.0f;
+    std::uintptr_t ret = 0;  // the caller's return address (0 = no call pending)
+    DWORD          thread = 0;
+};
+DecalCall g_decal;
+long g_decalFixed = 0;
+
+std::uintptr_t __cdecl DecalPost(int result) {
+    auto* view = reinterpret_cast<std::uint8_t*>(g_decal.view);
+    *reinterpret_cast<float*>(view + addr::kViewX) = g_decal.x;
+    *reinterpret_cast<float*>(view + addr::kViewY) = g_decal.y;
+    if (result) {
+        g_decal.mn[0] += g_decal.x;
+        g_decal.mn[1] += g_decal.y;
+        g_decal.mx[0] += g_decal.x;
+        g_decal.mx[1] += g_decal.y;
+        if (g_decalFixed++ == 0)
+            MLOG("decals: a right-eye decal box kept (offset %.0f,%.0f) -- decals show in both eyes", g_decal.x, g_decal.y);
+    }
+    const std::uintptr_t ret = g_decal.ret;
+    g_decal.ret = 0;
+    return ret;
+}
+
+// Reached by the function's own RET 0x10 (its arguments are gone; EAX = its result).
+__declspec(naked) void DecalPostStub() {
+    __asm {
+        push eax            // keep the result
+        push eax            // DecalPost(result)
+        call DecalPost
+        add  esp, 4
+        mov  ecx, eax       // the caller's return address (ECX is caller-saved)
+        pop  eax
+        jmp  ecx
+    }
+}
+
+void OnDecalScreenBox(SafetyHookContext& ctx) {
+    auto* sp = reinterpret_cast<std::uintptr_t*>(ctx.esp);  // [0] return, [1] ?, [2] view, [3] min, [4] max
+    const std::uintptr_t view = sp[2];
+    if (!view || !sp[3] || !sp[4] || g_decal.ret) return;  // not re-entrant (it never is)
+    auto* v = reinterpret_cast<std::uint8_t*>(view);
+    const float x = *reinterpret_cast<float*>(v + addr::kViewX), y = *reinterpret_cast<float*>(v + addr::kViewY);
+    if (x == 0.0f && y == 0.0f) return;  // the left eye (or a mono view): the engine's math is right
+    g_decal.view = view;
+    g_decal.mn = reinterpret_cast<float*>(sp[3]);
+    g_decal.mx = reinterpret_cast<float*>(sp[4]);
+    g_decal.x = x;
+    g_decal.y = y;
+    g_decal.ret = sp[0];
+    g_decal.thread = GetCurrentThreadId();
+    *reinterpret_cast<float*>(v + addr::kViewX) = 0.0f;
+    *reinterpret_cast<float*>(v + addr::kViewY) = 0.0f;
+    sp[0] = reinterpret_cast<std::uintptr_t>(&DecalPostStub);
+}
+
 // --- the projection hooks -----------------------------------------------------------------------
 void CommitFrameIfComplete() {
     // Called after the projection of each view: mono completes on its only view, stereo on eye 1.
@@ -669,6 +739,7 @@ bool Install(const Config& cfg) {
     Hook(g_projHookNormal, addr::kProjAfterNormal, OnProjection, "projection (normal)");
     Hook(g_projHookConstrained, addr::kProjAfterConstrained, OnProjection, "projection (constrained)");
 
+    if (cfg.stereo && cfg.decalFix) Hook(g_decalHook, addr::kDecalScreenBox, OnDecalScreenBox, "decal screen box (right-eye decals)");
     if (cfg.stereo) {
         if (Hook(g_calcEntryHook, addr::kCalcSceneView, OnCalcSceneViewEntry, "CalcSceneView entry")) {
             auto res = safetyhook::InlineHook::create(reinterpret_cast<void*>(addr::kViewportClientDraw),
@@ -696,7 +767,7 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta) {
             meta.pose[e] = v.pose[e];
             meta.fov[e] = v.fov[e];
         }
-        meta.stereo = v.stereo ? 1u : 0u;
+        meta.stereo = v.stereo ? (g_cfg.debugSwapHalves ? 2u : 1u) : 0u;  // 2: halves swapped (experiment)
     }
     LeaveCriticalSection(&g_lock);
     meta.hasView = ok ? 1u : 0u;

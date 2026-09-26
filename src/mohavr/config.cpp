@@ -23,6 +23,9 @@ Config LoadConfig(const std::wstring& dir) {
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
     c.debugGameCommands = get(L"Debug", L"GameCommands", c.debugGameCommands);
+    c.debugSwapEyes  = get(L"Debug", L"SwapEyeOrder", c.debugSwapEyes);
+    c.debugSwapHalves = get(L"Debug", L"SwapHalves", c.debugSwapHalves);
+    c.debugTraceScissor = get(L"Debug", L"TraceScissor", c.debugTraceScissor);
     c.hudMode        = static_cast<int>(GetPrivateProfileIntW(L"HUD", L"Mode", c.hudMode, ini.c_str())) == 1 ? 1 : 0;
     auto getf = [&](const wchar_t* sec, const wchar_t* key, float def, float lo, float hi) {
         wchar_t b[32] = L"";
@@ -37,6 +40,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
+    c.decalFix       = get(L"Render", L"DecalFix", c.decalFix);
     if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
     c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);

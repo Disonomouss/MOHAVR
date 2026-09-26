@@ -129,6 +129,13 @@ inline constexpr std::uintptr_t kHudMatrixPush = 0x10C15440;
 inline constexpr std::uint8_t   kHudMatrixPushBytes[] = {0x83, 0xC7, 0x0C, 0x8B, 0xF7, 0xE8, 0x96, 0xD8, 0x07, 0x00};
 inline constexpr std::uintptr_t kHudMatrixStackOffset = 0x130;
 
+// A decal's screen box (ENGINE-NOTES 5r): stdcall (EAX = an input, stack: ?, FSceneView*, float* min,
+// float* max), RET 0x10, returns nonzero if the box is on screen. It projects to ABSOLUTE pixels (it adds
+// view+0x1C/0x20) but clamps to [0, SizeX] x [0, SizeY] -- so for a view at x = SizeX (the right eye) the
+// box collapses and every decal is culled. 5 callers (decals on each receiver kind).
+inline constexpr std::uintptr_t kDecalScreenBox = 0x10A2ABB0;
+inline constexpr std::uint8_t   kDecalScreenBoxBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x81, 0xEC, 0x44, 0x01, 0x00, 0x00};
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},
@@ -146,6 +153,7 @@ inline constexpr Signature kSignatures[] = {
     {"ULocalPlayer ctor ViewState store",  kLocalPlayerCtorViewStateStore, kLocalPlayerCtorViewStateStoreBytes, sizeof(kLocalPlayerCtorViewStateStoreBytes)},
     {"Draw HUD loop view read",            kHudViewRead, kHudViewReadBytes, sizeof(kHudViewReadBytes)},
     {"Draw HUD matrix push",               kHudMatrixPush, kHudMatrixPushBytes, sizeof(kHudMatrixPushBytes)},
+    {"decal screen box",                   kDecalScreenBox, kDecalScreenBoxBytes, sizeof(kDecalScreenBoxBytes)},
 };
 
 }  // namespace mohavr::addr

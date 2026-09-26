@@ -744,7 +744,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     pviews[e].fov = {std::atan(rf.tanLeft), std::atan(rf.tanRight), std::atan(rf.tanUp), std::atan(rf.tanDown)};
                     pviews[e].subImage.swapchain = swapchain;
                     if (lastMeta.stereo) {
-                        pviews[e].subImage.imageRect = e == 0 ? XrRect2Di{{0, 0}, {half, static_cast<int32_t>(height)}}
+                        const bool leftHalf = (e == 0) != (lastMeta.stereo == 2);  // 2 = halves swapped (experiment)
+                        pviews[e].subImage.imageRect = leftHalf ? XrRect2Di{{0, 0}, {half, static_cast<int32_t>(height)}}
                                                               : XrRect2Di{{half, 0}, {static_cast<int32_t>(width) - half,
                                                                                       static_cast<int32_t>(height)}};
                         pviews[e].subImage.imageArrayIndex = 0;

@@ -484,6 +484,26 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   backbuffer only once the game has finished sizing it (checked from Present).
 - The pause screen (Esc/Start) is a tabbed Objectives / Options / Save & Load panel; B or Start closes it.
 
+## 5r. Decals are culled in any view that doesn't start at x = 0 (headset round 7, 2026-09-26)
+
+- **Symptom:** bullet holes only in the left eye. Holes show only in the half at x = 0: swapping the render
+  order of the eyes changed nothing, and swapping the halves (left eye drawn on the right) moved the holes to
+  the other eye. Not the per-eye FSceneViewState (the shared state behaves the same), not the scissor, and not
+  the viewport (both traced at the D3D9 level: `Debug.TraceScissor`).
+- **The decal pass:** `FUN_10C36D70` walks the decal list (`this+0xA4/0xA8`). For each decal it calls
+  `FUN_10A2ABB0` (the screen box), skips the decal if that returns 0, and otherwise turns the box into the
+  scissor rect (`SetScissorRect` = device vtable `+0x12C`) and enables `D3DRS_SCISSORTESTENABLE` (`0xAE`).
+  Found with a stack scan from a `SetScissorRect` hook (MOHA has no frame pointers): the first MOHA address
+  above the call was always `0x10C36EAF`.
+- **`FUN_10A2ABB0`** (stdcall, `RET 0x10`; EAX is an input (`MOV ESI,EAX`); stack: ?, `FSceneView*`, `float* min`,
+  `float* max`): projects the decal's 8 corners with `x = SizeX/2 + view.X + ...` (absolute pixels) but clamps
+  min/max to `[0, SizeX]` / `[0, SizeY]`. With `view.X = 1440` and `SizeX = 1440`, both ends clamp to 1440 → empty
+  → culled. Five callers (decals on each receiver kind: `0x10B964DE`, `0x10B968E8`, `0x10C36A06`, `0x10C36E46`,
+  `0x10D23E02`).
+- **Fix** (`Render.DecalFix`, src/mohavr/vr_view.cpp): a MidHook at the function's entry. When view X/Y != 0 it
+  zeroes them for this call and replaces the return address with a stub that restores them and adds X/Y to
+  the box. Only the render thread's own view is touched, for the length of one call.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

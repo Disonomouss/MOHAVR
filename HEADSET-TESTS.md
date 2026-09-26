@@ -270,6 +270,49 @@ Continue into play; pause → B → resume → A jumps (+121).
 3. After tab-out and dragging the window: any double vision? (yes/no)
 4. Anything else odd? (describe)
 
+**Answers (2026-09-26, ~18:08):**
+1. A selects / B backs out in menus: yes.
+2. A/B normal in play right after the pause menu: yes.
+3. No longer double vision after tab-out + moving the window, but **"like looking through a glass bowl"**.
+4. **Bullet holes in walls only appear in the left eye.**
+
+**Log received:** yes (`logs/modlogs/20260926-181009-*`). The only lock event was a refused resize to 160×28:
+the window being **minimized**. The lock forced the full size onto a minimized window. XR stayed at 90 Hz and
+game frames kept coming after the restore.
+
+**Found and fixed (simulator):**
+- **Glass bowl (likely):** the lock no longer touches a minimized window (minimize and restore pass
+  through). Simulator: minimize → restore → client back to 2880×1620, stereo normal. The distortion itself
+  didn't reproduce in the simulator, so this is the probable cause, not a proven one.
+- **Bullet holes, left eye only:** reproduced (holes in one eye). The engine's decal screen-box test
+  (`0x10A2ABB0`) projects to absolute pixels but clamps to `[0, SizeX]`, so every decal is culled in a view
+  that starts at x = 1440. Experiments proved it: swapping the eye order made no difference; swapping the
+  halves moved the holes to the other eye. Fix `Render.DecalFix` (default 1): for such a view, the function
+  runs with the view's X at 0 and its box is shifted back. Simulator: the same hole cluster now shows in both
+  eyes (ENGINE-NOTES §5r).
+
+**Deployed for this round:** the shipped defaults, no overrides.
+
+---
+
+## Round 8: prepared 2026-09-26, bullet holes in both eyes; minimize/restore
+**Changed:**
+- Bullet holes (and other decals, like scorch marks) now show in **both** eyes.
+- Minimizing the game (or tabbing away so it minimizes) no longer fights the window-size lock. That's the
+  likely cause of the "glass bowl" look after tabbing back.
+
+**How to try it:** Claude has deployed. Launch as usual.
+1. Shoot a wall up close: are the holes in both eyes?
+2. Tab out the way you did last time (and minimize the game if that's what happened), move the window, tab
+   back in.
+
+**Questions:**
+1. Bullet holes in both eyes? (yes/no)
+2. After tabbing out and back: normal, double vision, or the glass-bowl look? (describe)
+3. If the glass bowl is back: is it the whole view or only part of it, does it go away if you pause/unpause,
+   and how did you leave the game (Alt+Tab, Windows key, taskbar, Virtual Desktop menu)? (describe)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
