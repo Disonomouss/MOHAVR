@@ -36,6 +36,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
+    c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
     if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
     c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);

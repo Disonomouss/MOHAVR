@@ -76,6 +76,20 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
             parse(kTargetDefaults[t], map_[t]);
         }
     }
+    // The menu layout: the gameplay mapping with the face buttons as labelled (the game's menus select with
+    // Xbox A and back out with Xbox B).
+    static const wchar_t* kMenuKeys[] = {L"A", L"B", L"X", L"Y"};
+    static const wchar_t* kMenuDefaults[] = {L"a", L"b", L"x", L"y"};
+    for (int t = 0; t < tCount; ++t)
+        for (int i = 0; i < kMaxSources; ++i) mapMenu_[t][i] = map_[t][i];
+    for (int t = tA; t <= tY; ++t) {
+        wchar_t v[64] = L"";
+        GetPrivateProfileStringW(L"ControlsMenu", kMenuKeys[t], kMenuDefaults[t], v, 64, ini.c_str());
+        if (!parse(v, mapMenu_[t])) {
+            MLOG("pad: [ControlsMenu] %ls=%ls has an unknown input -- using %ls", kMenuKeys[t], v, kMenuDefaults[t]);
+            parse(kMenuDefaults[t], mapMenu_[t]);
+        }
+    }
     auto stick = [&](const wchar_t* key, const wchar_t* def) {
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"Controls", key, def, v, 16, ini.c_str());
@@ -196,8 +210,20 @@ void Pad::ReadRaw(XrSession s, Raw& r) const {
 }
 
 // Controller input -> Xbox pad, through [Controls].
-shared::PadState Pad::Map(const Raw& in) {
+shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     Raw r = in;
+    // Switching layouts (a game menu opened or closed): anything still held is ignored until released, so
+    // the A that selected "Resume" doesn't also jump once the menu is gone.
+    if (menuLayout != menuLayout_) {
+        menuLayout_ = menuLayout;
+        for (int i = 0; i < kSrcCount; ++i) blocked_[i] = r.src[i] > 0.5f;
+        MLOG("pad: %s layout", menuLayout ? "menu" : "gameplay");
+    }
+    for (int i = 0; i < kSrcCount; ++i) {
+        if (blocked_[i] && r.src[i] <= 0.5f) blocked_[i] = false;
+        if (blocked_[i]) r.src[i] = 0.0f;
+    }
+    const auto& map = menuLayout ? mapMenu_ : map_;
     r.src[kMenu] = now_ < startUntil_ ? 1.0f : 0.0f;  // the menu-button tap (main.cpp)
     // Right-stick flicks: a push past 70% down/up = a 0.15 s press; re-armed once back under 30%.
     const float fy[2] = {-r.ry, r.ry};
@@ -213,7 +239,7 @@ shared::PadState Pad::Map(const Raw& in) {
 
     auto value = [&](int t) {
         float v = 0.0f;
-        for (Src s : map_[t])
+        for (Src s : map[t])
             if (s != kNone) v = std::max(v, r.src[s]);
         return v;
     };
@@ -348,7 +374,7 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         Raw r{};
         if (testActive_) r = test_.rawIn;
         else ReadRaw(session, r);
-        p = Map(r);
+        p = Map(r, hdr->gameUiMenu != 0);
     }
 
     // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.

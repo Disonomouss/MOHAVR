@@ -13,6 +13,7 @@
 #include "log.hpp"
 #include "patch.hpp"
 #include "vr_view.hpp"
+#include "window_lock.hpp"
 #include "xr_session.hpp"
 
 namespace mohavr::hooks {
@@ -113,6 +114,11 @@ void TrackFrameTime() {
 
 HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, const RECT* dst, HWND wnd, const RGNDATA* dirty) {
     TrackFrameTime();
+    // The stereo pair must fill the backbuffer: keep the game window at the size it renders.
+    if (g_cfg.lockWindow) {
+        const auto* hdr = bridge::SharedHeader();
+        if (hdr && hdr->width) winlock::Watch(hdr->width, hdr->height);
+    }
     // Before Present: the finished frame is still in the backbuffer.
     capture::OnPresent(dev);
     bridge::OnPresent(dev);

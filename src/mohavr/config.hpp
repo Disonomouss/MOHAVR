@@ -16,6 +16,7 @@ struct Config {
     float hudScale      = 0.5f;   // [HUD] Scale -- the HUD's own pixel size inside the panel (1 = as designed)
     int  renderResX     = 2880;      // [Render] ResX/ResY -- the game's resolution (windowed), 0 = the game's own (M9)
     int  renderResY     = 1620;
+    bool lockWindow     = true;   // [Render] LockWindow -- keep the game window at its render size (stereo split)
     bool aimHeadPitch   = true;   // [Aim] HeadPitch -- the player's pitch (gun, shots) follows the head
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
     bool hideBody       = false;  // [Weapon] HideBody -- hide the first-person body/sleeves (RenderBody exec)

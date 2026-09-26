@@ -55,6 +55,7 @@ mouse and keyboard instead, set `Input.Controllers=0` in `MOHAVR.ini`.
 | Left menu button (hold) | MOHAVR menu |
 
 B and the right grip both press the game's reload/use button; the game decides which action happens.
+In the game's menus the face buttons work as labelled: A selects, B goes back.
 The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
 ## The in-headset menu

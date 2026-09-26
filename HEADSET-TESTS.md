@@ -226,11 +226,55 @@ you want it hidden) and `Comfort.SnapTurn` (choose in the menu).
 5. After tab-out and back: any double vision? (yes/no)
 6. Anything worse than round 5? (describe)
 
+**Answers (2026-09-26, ~17:40):**
+1. Title screen at eye level: yes.
+2. New buttons: yes. **Can the A button select in menus?**
+3. Sprint toggle: good.
+4. The gun aims up and down (with the head).
+5. **Double vision repeated** (after tab-out + moving the window).
+
+**Log received:** yes (`logs/modlogs/20260926-174244-*`). The tab-out is 17:38:22–34, with a 1.1 s stall while
+the window was dragged; no device reset.
+
+**Found (simulator, reproduced):** the game window at 2880×1620 is bigger than the 2560×1440 desktop. Dragging it
+lets Windows shrink it to fit, and UE3 then draws the viewport into the top-left of the unchanged 2880×1620
+backbuffer, so each half the host sends to an eye holds parts of both eyes. **Fixed:** `Render.LockWindow`
+(default 1) subclasses the game window once its client equals the backbuffer and refuses size changes (moves
+are fine). Verified: a resize to 1936×1119 → refused, client stays 2880×1620, stereo intact. **A in menus:**
+while a game menu is open (the cursor test) the pad uses `[ControlsMenu]` (A select, B back, X/Y as
+labelled). Held buttons are ignored across the switch. Verified: title screen → A Campaign → down → A
+Continue into play; pause → B → resume → A jumps (+121).
+
+**Verdict: PASSED** except the double vision (fixed now, round 7).
+
+**Deployed for this round:** the shipped defaults, no overrides (RuntimeJson empty = the headset runtime).
+
+---
+
+## Round 7: prepared 2026-09-26, double vision after moving the window; A in menus
+**Changed:**
+- The game window can no longer be resized (it can still be moved). Resizing it was what caused the double
+  vision after tabbing out and moving it.
+- In the game's menus, the face buttons work as labelled: **A selects, B goes back**. In play they're your
+  layout again (A jump, B reload, ...). A button you're still holding when a menu opens or closes is ignored
+  until you let go.
+
+**How to try it:** Claude has deployed. Launch as usual.
+1. Title screen: use the left stick and **A** to pick Campaign → Continue; B to go back a screen.
+2. In play, tap the menu button (pause), then B to resume, then A: you should jump (not select anything).
+3. Tab out, drag the game window around (try to make it smaller too), tab back in.
+
+**Questions:**
+1. A selects and B backs out in the game's menus? (yes/no)
+2. After leaving the pause menu, do A/B work normally in play right away? (yes/no)
+3. After tab-out and dragging the window: any double vision? (yes/no)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults, no overrides (RuntimeJson empty = the headset runtime).
+**Deployed for this round:** the shipped defaults, no overrides.
 
 ---
 

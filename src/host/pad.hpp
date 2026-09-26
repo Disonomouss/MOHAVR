@@ -6,7 +6,8 @@
 // A jump, B reload/use, right grip use, Y switch weapon, X grenade, right-stick flick down crouch
 // (a stance toggle in MOHA), left-stick click sprint (latched), triggers aim/fire, left grip alt fire,
 // right-stick click melee, a TAP of the left menu button Start (holding it opens the MOHAVR menu;
-// main.cpp). Right stick Y is not an axis by default: the head drives pitch.
+// main.cpp). Right stick Y is not an axis by default: the head drives pitch. While one of the game's menus is
+// open (hdr->gameUiMenu) a menu layout applies instead ([ControlsMenu]: A select, B back, X, Y as labelled).
 //
 // Test channel (the simulator has no controllers): %TEMP%\MOHAVR\pad_cmd.txt, one state per line,
 // played in order, each for its duration -- tools/pad_cmd.py writes it.
@@ -62,13 +63,16 @@ private:
     };
 
     void  ReadRaw(XrSession s, Raw& r) const;
-    shared::PadState Map(const Raw& r);
+    shared::PadState Map(const Raw& r, bool menuLayout);
     void  ReadTests(double now);
 
     XrActionSet set_ = XR_NULL_HANDLE;
     XrAction    stick_[2]{};           // left, right thumbstick
     XrAction    src_[kSrcCount]{};     // real controller actions (none for kNone, kMenu and the flicks)
     Src         map_[tCount][kMaxSources]{};
+    Src         mapMenu_[tCount][kMaxSources]{};  // while a game menu is open ([ControlsMenu]: A selects, B backs out)
+    bool        menuLayout_ = false;
+    bool        blocked_[kSrcCount]{};  // held across a layout switch: ignored until released
     bool        sprintToggle_ = true;  // [Controls] SprintToggle: a click latches LS (sprint) until clicked again or you stop
     bool        sprintLatched_ = false, sprintSrcWas_ = false;
     double      sprintStillSince_ = -1.0;

@@ -472,6 +472,18 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
 - The simulator paces xrWaitFrame at its preview window's 60 Hz after the first ~15 s, so XR timing from the
   simulator isn't representative.
 
+## 5q. The game window and the viewport size (headset rounds 5–6, 2026-09-26)
+
+- UE3's viewport follows the window's client size, but in windowed mode it does **not** Reset the device when
+  the window shrinks. It draws into the top-left client-sized part of the unchanged backbuffer. The stereo pair
+  then no longer fills the backbuffer, and the host's fixed half-split mixes both eyes (seen as double vision).
+- A window bigger than the desktop (2880×1620 on 2560×1440) is shrunk by Windows when the user drags it
+  (reproduced with `WM_ENTERSIZEMOVE` + `SetWindowPos` + `WM_EXITSIZEMOVE`; a plain move doesn't resize).
+- The device's creation window isn't the final one to lock: at CreateDevice the game's window was still
+  2580×1460. The game's top-level window has class `LaunchUnrealUWindowsClient`; its client equals the
+  backbuffer only once the game has finished sizing it (checked from Present).
+- The pause screen (Esc/Start) is a tabbed Objectives / Options / Save & Load panel; B or Start closes it.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

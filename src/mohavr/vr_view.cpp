@@ -160,14 +160,17 @@ void UpdateOrigin(const shared::Header* hdr, std::uint32_t recenterSeq, const sh
 // --- M4: UGameViewportClient::Draw -- make the engine draw two players (one per eye) ----------
 // Only for the duration of Draw, GEngine->GamePlayers points at our 2-entry array holding the
 // same ULocalPlayer twice; the real array is untouched and restored on return.
-void UpdateCinemaMode() {
-    if (!g_cfg.cinemaScreen) return;
-    // A UI menu shows the Windows cursor: UE3 raises this thread's ShowCursor count to >= 0 for menus and
-    // drops it below 0 in play (measured: main menu 0, pause menu 0, gameplay -1). Read it without ever
-    // showing the cursor: decrement, then restore.
+// A UI menu shows the Windows cursor: UE3 raises this thread's ShowCursor count to >= 0 for menus and
+// drops it below 0 in play (measured: main menu 0, pause menu 0, gameplay -1). Read it without ever
+// showing the cursor: decrement, then restore. Game thread (the one that owns the window).
+bool UiMenuOpen() {
     const int cursor = ShowCursor(FALSE) + 1;
     ShowCursor(TRUE);
-    const bool menu = cursor >= 0;
+    return cursor >= 0;
+}
+
+void UpdateCinemaMode(bool menu) {
+    if (!g_cfg.cinemaScreen) return;
     const bool camera = g_cfg.cinemaScreen >= 2 && !g_viewIsPlayers;
     const bool want = menu || camera;
     const DWORD now = GetTickCount();
@@ -250,7 +253,9 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
     RunTestCommands(arr);
-    UpdateCinemaMode();
+    const bool uiMenu = UiMenuOpen();
+    if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
+    UpdateCinemaMode(uiMenu);
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera
         CommitCinemaFrame();
