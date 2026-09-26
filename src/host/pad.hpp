@@ -1,11 +1,12 @@
 // The virtual Xbox pad (M6, Input.Controllers): the headset's controllers -> an XINPUT_GAMEPAD in the
 // shared block, which the game-side XInputGetState hook hands to MOHA as pad 0.
 //
-// The mapping is [Controls] in MOHAVR.ini (next to the host). Defaults follow MOHA's own pad layout
-// (MOHAPlayerInput.uc Bindings_Default) on Touch 1:1: sticks -> sticks, triggers -> LT (aim) / RT
-// (fire), grips -> LB / RB, A B X Y -> A B X Y, stick clicks -> LS (sprint) / RS (melee), a TAP of
-// the left menu button -> Start (holding it opens the MOHAVR menu instead; main.cpp). Right stick Y
-// is off by default: the head already drives pitch.
+// The mapping is [Controls] in MOHAVR.ini (next to the host): each Xbox control takes one or more
+// controller inputs. Defaults (the player's layout from headset round 5, on MOHA's own pad bindings):
+// A jump, B reload/use, right grip use, Y switch weapon, X grenade, right-stick flick down crouch
+// (a stance toggle in MOHA), left-stick click sprint (latched), triggers aim/fire, left grip alt fire,
+// right-stick click melee, a TAP of the left menu button Start (holding it opens the MOHAVR menu;
+// main.cpp). Right stick Y is not an axis by default: the head drives pitch.
 //
 // Test channel (the simulator has no controllers): %TEMP%\MOHAVR\pad_cmd.txt, one state per line,
 // played in order, each for its duration -- tools/pad_cmd.py writes it.
@@ -42,20 +43,37 @@ public:
     void Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr);
 
 private:
-    enum Src { kNone, kA, kB, kX, kY, kLGrip, kRGrip, kLTrig, kRTrig, kLThumb, kRThumb, kMenu, kSrcCount };
+    // Controller inputs. kMenu is the tap of the menu button (main.cpp owns it); kRFlickDown/Up are short
+    // pulses when the right stick is flicked down/up (derived from its Y, which isn't a stick axis by default).
+    enum Src { kNone, kA, kB, kX, kY, kLGrip, kRGrip, kLTrig, kRTrig, kLThumb, kRThumb, kMenu, kRFlickDown, kRFlickUp,
+               kSrcCount };
     enum Target { tA, tB, tX, tY, tLB, tRB, tLS, tRS, tStart, tBack, tUp, tDown, tLeft, tRight, tLT, tRT, tCount };
+    static constexpr int kMaxSources = 4;  // per Xbox control ("A=b,rgrip")
+    // What the controllers did this frame, before the mapping.
+    struct Raw {
+        float src[kSrcCount]{};
+        float lx = 0, ly = 0, rx = 0, ry = 0;
+    };
     struct Test {
-        shared::PadState state{};
+        shared::PadState state{};  // an Xbox pad state, used as is ...
+        bool             raw = false;
+        Raw              rawIn{};  // ... or (raw=1) controller input that goes through the mapping
         double           dur = 0.0;
     };
 
-    float Value(XrSession s, Src src) const;
+    void  ReadRaw(XrSession s, Raw& r) const;
+    shared::PadState Map(const Raw& r);
     void  ReadTests(double now);
 
     XrActionSet set_ = XR_NULL_HANDLE;
     XrAction    stick_[2]{};           // left, right thumbstick
-    XrAction    src_[kSrcCount]{};     // boolean/float sources (kMenu has none: main.cpp owns the menu button)
-    Src         map_[tCount]{};
+    XrAction    src_[kSrcCount]{};     // real controller actions (none for kNone, kMenu and the flicks)
+    Src         map_[tCount][kMaxSources]{};
+    bool        sprintToggle_ = true;  // [Controls] SprintToggle: a click latches LS (sprint) until clicked again or you stop
+    bool        sprintLatched_ = false, sprintSrcWas_ = false;
+    double      sprintStillSince_ = -1.0;
+    bool        flickArmed_[2] = {true, true};  // down, up
+    double      flickUntil_[2] = {0.0, 0.0};
     int         leftStick_ = 0, rightStick_ = 1;  // which thumbstick feeds each Xbox stick (-1 = none)
     bool        rightY_ = false;
     double      now_ = 0.0, startUntil_ = 0.0;
@@ -64,7 +82,7 @@ private:
     std::wstring testPath_;
     std::deque<Test> tests_;
     double      testUntil_ = 0.0;
-    shared::PadState testState_{};
+    Test        test_{};
     bool        testActive_ = false;
     bool        snapArmed_ = true;
 };

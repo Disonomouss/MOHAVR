@@ -73,6 +73,9 @@ HEADSET-TESTS.md.
 - It **always** backs up the player's `Config\` and `Saved\` before launching and restores them
   after quitting (D8). If a run dies, run `tools/harness.ps1 restore` before anything else; the
   next `launch` refuses to start until then.
+- **The screen checks only work at 1920×1080**, because MOHA's UI is fixed-pixel. The shipped ini renders at
+  2880×1620 (`Render.ResX/ResY`), so for harness runs deploy with `-Set 'Render.ResX=0','Render.ResY=0'` (plus
+  the simulator's `OpenXR.RuntimeJson`).
 - The engine writes no log, so screen state comes from `tools/screen_match.py` checks in
   `tools/harness-ref/` (D9). Add a new screen with
   `python tools/screen_match.py --add NAME shot.png X0 Y0 X1 Y1`, using a static UI area.

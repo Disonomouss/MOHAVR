@@ -104,10 +104,17 @@ address-space budget for D3D9On12.
   - The player package `dist/MOHAVR-0.7.0.zip`, with install/uninstall tested end to end.
   - Every new feature is behind a switch, off by default; round 5 turns them on for the headset verdict.
 
+- **Headset round 5 passed (2026-09-26):** controllers, tap/hold menu button, smooth/snap turning,
+  Height/Recentre, menus on the flat screen, HUD panel, 2880×1620 (steady 90 Hz in the headset), mirror.
+  All are now shipped defaults (cutscenes stay 3D, per the player). Follow-ups done and simulator-proven:
+  - the player's control layout: multi-input bindings, right-stick flick = crouch, sprint toggle;
+  - Aim.HeadPitch (the controller's pitch from the head: gun and shots follow the head vertically);
+  - the title-screen height from a tracked pose.
+
 ## Next
-1. **HEADSET-TESTS round 5** (deployed and ready): the player's verdict on controllers, tap/hold menu, snap
-   turn, cinema screen, HUD panel, mirror and resolution. Then the shipped defaults for the features that pass.
-2. **M7 aiming:** head aim first (write the head's pitch/yaw into the controller rotation), then hand aim through
+1. **HEADSET-TESTS round 6** (deployed): the new layout, head-pitch aim, the tab-out double vision, the
+   title-screen height.
+2. **M7 aiming, next steps:** yaw (where the head or hand points, not the body) and hand aim through
    `execGetBaseAimRotation` (ENGINE-NOTES §5o). The gun: `UpdateGunView` offsets vs. hiding.
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 

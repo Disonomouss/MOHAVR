@@ -81,7 +81,7 @@ try {
 
     Write-Host "MOHAVR installed into $bin"
     Write-Host 'Start your VR runtime (e.g. Virtual Desktop), then start the game from Steam as usual.'
-    Write-Host 'The game window on the monitor stays white while the mod runs -- that is expected (see README).'
+    Write-Host 'The monitor shows the headset view while the game is in front (see README).'
     exit 0
 }
 catch {

@@ -29,26 +29,32 @@ changes nothing.
 3. Put the headset on. The picture appears in front of you. Once you are in the game, the world is in 3D
    and follows your head.
 
-The game's own window on the monitor stays **white** while the mod runs. That is expected. Set
-`Bridge.Mirror=1` in `MOHAVR.ini` to show the headset's view there instead.
+The monitor shows what the headset shows (a mirror over the game's window), while the game is in front.
 
 ## Controls
 
-The default is to play with a normal Xbox controller or mouse and keyboard. To play with the VR
-controllers, set `Input.Controllers=1` in `MOHAVR.ini`. The mapping follows the game's own gamepad
-layout:
+You play with the VR controllers. Aiming up and down follows your head. To use an Xbox controller or
+mouse and keyboard instead, set `Input.Controllers=0` in `MOHAVR.ini`.
 
 | Controller | Game |
 |---|---|
 | Left stick | Move |
-| Right stick | Turn (smooth, or snap: see the menu) |
+| Left stick click | Sprint (click to start, click again or stop moving to stop) |
+| Right stick left/right | Turn (smooth, or snap: see the menu) |
+| Right stick flicked down | Crouch / stand up |
 | Right trigger | Fire |
 | Left trigger | Aim down the sights |
-| A / B / X / Y | Reload/use / switch weapon / crouch / jump |
-| Left grip / right grip | Alternate fire / grenade |
-| Left / right stick click | Sprint / melee |
+| A | Jump |
+| B | Reload |
+| Right grip | Interact (doors, pick-ups) |
+| Y | Switch weapon |
+| X | Grenade |
+| Left grip | Alternate fire |
+| Right stick click | Melee |
 | Left menu button (tap) | Pause |
+| Left menu button (hold) | MOHAVR menu |
 
+B and the right grip both press the game's reload/use button; the game decides which action happens.
 The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
 ## The in-headset menu
@@ -63,24 +69,26 @@ left stick to move and change values, and the trigger or A to select. B closes i
 
 Your choices are saved in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and kept across updates.
 
-## Settings worth trying (`MOHAVR.ini`)
+## Settings (`MOHAVR.ini`)
+
+These are on by default: VR controllers, menus on a flat screen in front of you, the HUD as one panel, the
+headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may want to change:
 
 | Setting | What it does |
 |---|---|
-| `Camera.CinemaScreen=1` | Shows menus on a flat screen in front of you instead of split across your eyes. Set it to `2` to show cutscenes that way too. |
-| `HUD.Mode=1` | Shows the HUD (compass, ammo) as one panel in front of you. Adjust it with `Width`, `Distance`, `Down` and `Scale`. |
-| `Weapon.HideViewModel=1` | Hides the first-person gun, which can look doubled in VR. |
-| `Render.ResX=2880`, `Render.ResY=1620` | Renders at a higher resolution for a sharper image. |
-| `Bridge.Mirror=1` | Mirrors the headset's view on the monitor. |
+| `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880×1620). Lower it (for example 1920×1080) if the game stutters. |
+| `Camera.CinemaScreen=2` | Also shows cutscenes on the flat screen (default `1`: menus only). |
+| `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
+| `Weapon.HideViewModel=1` | Hides the first-person gun. |
+| `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
+| `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |
 
 ## Known issues
 
-- **Aiming follows your body, not your head or hands.** Shots go where the game's crosshair would point
-  (straight ahead of your body), not where you look. Controller aiming is the next big step.
+- **Aiming:** up/down follows your head, but left/right follows your body (the direction you turn with the
+  stick), not where you look or point. Controller aiming is the next big step.
 - The first-person gun sits very close to your eyes and can look doubled. `Weapon.HideViewModel=1` hides
   it.
-- The HUD and menus look odd in stereo unless `HUD.Mode=1` and `Camera.CinemaScreen=1` are set.
-- Each eye renders at half the game's resolution. Use `Render.ResX/ResY` for a sharper image.
 
 ## Uninstall
 

@@ -411,6 +411,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // runtimes (Virtual Desktop) and on the floor on others (the simulator).
     float screenY = 0.0f;
     bool screenUp = false;
+    bool screenYReal = false;  // screenY came from a really tracked head pose
     SetState(HostState::Running, "session created");
 
     // On-request capture of what the host received (the harness's view of the VR side).
@@ -573,6 +574,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         XrPosef menuHead{};
         menuHead.orientation.w = 1.0f;
         bool menuHeadOk = false;
+        bool headTrackedReal = false;  // position tracked and not a runtime placeholder (the flat screen's height)
         {
             XrSpaceLocation headLoc{XR_TYPE_SPACE_LOCATION};
             XrViewLocateInfo vli{XR_TYPE_VIEW_LOCATE_INFO};
@@ -611,6 +613,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 const bool posTracked = (headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) &&
                                         (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT);
                 g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
+                const auto& hq = headLoc.pose.orientation;
+                headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
                 if (recenterBumpPending) {
                     recenterBumpPending = false;
@@ -754,9 +758,18 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 proj.views = pviews;
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);
             } else {
+                // At the head's height when the screen appears -- from a really tracked pose: at start-up Virtual
+                // Desktop hands out a placeholder about 1.2 m low (round 5: the title screen was far below). If
+                // the screen went up on such a pose, or the head is now 40 cm off, follow the tracked height.
                 if (!screenUp) {
                     screenUp = true;
+                    screenYReal = false;
                     if (menuHeadOk) screenY = menuHead.position.y;
+                }
+                if (headTrackedReal && (!screenYReal || std::fabs(menuHead.position.y - screenY) > 0.4f)) {
+                    if (screenYReal) MLOG("host: flat screen height follows the head (%.2f -> %.2f m)", screenY, menuHead.position.y);
+                    screenY = menuHead.position.y;
+                    screenYReal = true;
                 }
                 layer.space = local;
                 layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;

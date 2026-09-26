@@ -23,10 +23,17 @@ constexpr std::uint16_t kBits[] = {
 constexpr const wchar_t* kTargetKeys[] = {L"A",     L"B",    L"X",      L"Y",        L"LB",       L"RB",
                                           L"LS",    L"RS",   L"Start",  L"Back",     L"DPadUp",   L"DPadDown",
                                           L"DPadLeft", L"DPadRight", L"LT", L"RT"};
-constexpr const wchar_t* kTargetDefaults[] = {L"a",    L"b",    L"x",    L"y",    L"lgrip", L"rgrip", L"lthumb", L"rthumb",
-                                              L"menu", L"none", L"none", L"none", L"none",  L"none",  L"ltrigger", L"rtrigger"};
-constexpr const wchar_t* kSrcNames[] = {L"none",     L"a",      L"b",      L"x",      L"y",    L"lgrip",
-                                        L"rgrip",    L"ltrigger", L"rtrigger", L"lthumb", L"rthumb", L"menu"};
+// Defaults (headset round 5, the player's choice) on top of MOHA's own pad layout (MOHAPlayerInput.uc):
+// Xbox A = reload/use/flare -> B and the right grip; Xbox B = switch weapon -> Y; Xbox X = crouch (a press
+// toggles the stance) -> a flick of the right stick down; Xbox Y = jump -> A; RB = grenade -> X;
+// LB = alt fire -> left grip; LS = sprint (latched, SprintToggle) -> left stick click; RS = melee.
+constexpr const wchar_t* kTargetDefaults[] = {L"b,rgrip", L"y",    L"rflickdown", L"a",    L"lgrip", L"x",
+                                              L"lthumb",  L"rthumb", L"menu",     L"none", L"none",  L"none",
+                                              L"none",    L"none",   L"ltrigger", L"rtrigger"};
+constexpr const wchar_t* kSrcNames[] = {L"none",   L"a",      L"b",        L"x",        L"y",      L"lgrip",
+                                        L"rgrip",  L"ltrigger", L"rtrigger", L"lthumb", L"rthumb", L"menu",
+                                        L"rflickdown", L"rflickup"};
+static_assert(sizeof(kSrcNames) / sizeof(kSrcNames[0]) == 14, "one name per Src");
 
 std::int16_t Axis(float v) {
     v = std::clamp(v, -1.0f, 1.0f);
@@ -34,22 +41,40 @@ std::int16_t Axis(float v) {
 }
 std::uint8_t Trigger(float v) { return static_cast<std::uint8_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); }
 
+int SrcByName(const std::wstring& n) {
+    for (int s = 0; s < static_cast<int>(sizeof(kSrcNames) / sizeof(kSrcNames[0])); ++s)
+        if (!_wcsicmp(n.c_str(), kSrcNames[s])) return s;
+    return -1;
+}
+
 }  // namespace
 
 bool Pad::Init(XrInstance instance, const std::wstring& ini) {
-    // [Controls] -- unknown names fall back to the default (and say so).
-    for (int t = 0; t < tCount; ++t) {
-        wchar_t v[32] = L"";
-        GetPrivateProfileStringW(L"Controls", kTargetKeys[t], kTargetDefaults[t], v, 32, ini.c_str());
-        int found = -1;
-        for (int s = 0; s < kSrcCount; ++s)
-            if (!_wcsicmp(v, kSrcNames[s])) found = s;
-        if (found < 0) {
-            MLOG("pad: [Controls] %ls=%ls is not a control -- using %ls", kTargetKeys[t], v, kTargetDefaults[t]);
-            for (int s = 0; s < kSrcCount; ++s)
-                if (!_wcsicmp(kTargetDefaults[t], kSrcNames[s])) found = s;
+    // [Controls] Target=src[,src...] -- unknown names fall back to the default (and say so).
+    auto parse = [&](const wchar_t* list, Src (&out)[kMaxSources]) {
+        for (auto& o : out) o = kNone;
+        std::wstring s(list);
+        int n = 0;
+        size_t p = 0;
+        while (p <= s.size() && n < kMaxSources) {
+            const size_t c = std::min(s.find(L',', p), s.size());
+            std::wstring name = s.substr(p, c - p);
+            name.erase(0, name.find_first_not_of(L' '));
+            name.erase(name.find_last_not_of(L' ') + 1);
+            const int src = SrcByName(name);
+            if (src < 0) return false;
+            if (src != kNone) out[n++] = static_cast<Src>(src);
+            p = c + 1;
         }
-        map_[t] = static_cast<Src>(found);
+        return true;
+    };
+    for (int t = 0; t < tCount; ++t) {
+        wchar_t v[64] = L"";
+        GetPrivateProfileStringW(L"Controls", kTargetKeys[t], kTargetDefaults[t], v, 64, ini.c_str());
+        if (!parse(v, map_[t])) {
+            MLOG("pad: [Controls] %ls=%ls has an unknown input -- using %ls", kTargetKeys[t], v, kTargetDefaults[t]);
+            parse(kTargetDefaults[t], map_[t]);
+        }
     }
     auto stick = [&](const wchar_t* key, const wchar_t* def) {
         wchar_t v[16] = L"";
@@ -59,6 +84,7 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
     leftStick_ = stick(L"LeftStick", L"left");
     rightStick_ = stick(L"RightStick", L"right");
     rightY_ = GetPrivateProfileIntW(L"Controls", L"RightStickY", 0, ini.c_str()) != 0;
+    sprintToggle_ = GetPrivateProfileIntW(L"Controls", L"SprintToggle", 1, ini.c_str()) != 0;
 
     XrActionSetCreateInfo asci{XR_TYPE_ACTION_SET_CREATE_INFO};
     strcpy_s(asci.actionSetName, "mohavr_play");
@@ -94,12 +120,21 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
 
     std::string m;
     for (int t = 0; t < tCount; ++t) {
-        char b[48];
-        snprintf(b, sizeof(b), "%s%ls=%ls", t ? " " : "", kTargetKeys[t], kSrcNames[map_[t]]);
+        m += t ? " " : "";
+        char b[16];
+        snprintf(b, sizeof(b), "%ls=", kTargetKeys[t]);
         m += b;
+        bool first = true;
+        for (Src s : map_[t]) {
+            if (s == kNone) continue;
+            snprintf(b, sizeof(b), "%s%ls", first ? "" : ",", kSrcNames[s]);
+            m += b;
+            first = false;
+        }
+        if (first) m += "none";
     }
-    MLOG("pad: gameplay actions ready -- %s LeftStick=%d RightStick=%d RightStickY=%d", m.c_str(), leftStick_,
-         rightStick_, rightY_);
+    MLOG("pad: gameplay actions ready -- %s LeftStick=%d RightStick=%d RightStickY=%d SprintToggle=%d", m.c_str(),
+         leftStick_, rightStick_, rightY_, sprintToggle_);
     return true;
 }
 
@@ -135,20 +170,95 @@ void Pad::AppendBindings(const std::string& profile, const std::function<XrPath(
     }
 }
 
-float Pad::Value(XrSession s, Src src) const {
-    if (src == kNone) return 0.0f;
-    if (src == kMenu) return now_ < startUntil_ ? 1.0f : 0.0f;  // the menu-button tap (main.cpp)
-    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
-    gi.action = src_[src];
-    if (src == kLGrip || src == kRGrip || src == kLTrig || src == kRTrig) {
-        XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
-        return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+// The controllers as they are this frame (buttons 0/1, grips and triggers 0..1, sticks -1..1).
+void Pad::ReadRaw(XrSession s, Raw& r) const {
+    for (int i = 0; i < kSrcCount; ++i) {
+        if (!src_[i]) continue;
+        XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+        gi.action = src_[i];
+        if (i == kLGrip || i == kRGrip || i == kLTrig || i == kRTrig) {
+            XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
+            r.src[i] = XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+        } else {
+            XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
+            r.src[i] = XR_SUCCEEDED(xrGetActionStateBoolean(s, &gi, &b)) && b.isActive && b.currentState ? 1.0f : 0.0f;
+        }
     }
-    XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
-    return XR_SUCCEEDED(xrGetActionStateBoolean(s, &gi, &b)) && b.isActive && b.currentState ? 1.0f : 0.0f;
+    for (int w = 0; w < 2; ++w) {
+        XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+        gi.action = stick_[w];
+        XrActionStateVector2f v{XR_TYPE_ACTION_STATE_VECTOR2F};
+        if (XR_SUCCEEDED(xrGetActionStateVector2f(s, &gi, &v)) && v.isActive) {
+            (w ? r.rx : r.lx) = v.currentState.x;
+            (w ? r.ry : r.ly) = v.currentState.y;
+        }
+    }
 }
 
-// Lines: "lx=0 ly=1 rx=0 ry=0 lt=0 rt=1 buttons=a,start dur=2" (unset = 0 / none).
+// Controller input -> Xbox pad, through [Controls].
+shared::PadState Pad::Map(const Raw& in) {
+    Raw r = in;
+    r.src[kMenu] = now_ < startUntil_ ? 1.0f : 0.0f;  // the menu-button tap (main.cpp)
+    // Right-stick flicks: a push past 70% down/up = a 0.15 s press; re-armed once back under 30%.
+    const float fy[2] = {-r.ry, r.ry};
+    for (int d = 0; d < 2; ++d) {
+        if (!flickArmed_[d] && fy[d] < 0.3f) flickArmed_[d] = true;
+        if (flickArmed_[d] && fy[d] > 0.7f) {
+            flickArmed_[d] = false;
+            flickUntil_[d] = now_ + 0.15;
+        }
+    }
+    r.src[kRFlickDown] = now_ < flickUntil_[0] ? 1.0f : 0.0f;
+    r.src[kRFlickUp] = now_ < flickUntil_[1] ? 1.0f : 0.0f;
+
+    auto value = [&](int t) {
+        float v = 0.0f;
+        for (Src s : map_[t])
+            if (s != kNone) v = std::max(v, r.src[s]);
+        return v;
+    };
+    shared::PadState p{};
+    for (int t = 0; t < tCount - 2; ++t)
+        if (value(t) > 0.5f) p.buttons |= kBits[t];
+    p.leftTrigger = Trigger(value(tLT));
+    p.rightTrigger = Trigger(value(tRT));
+    const float sx[2] = {r.lx, r.rx}, sy[2] = {r.ly, r.ry};
+    if (leftStick_ >= 0) {
+        p.thumbLX = Axis(sx[leftStick_]);
+        p.thumbLY = Axis(sy[leftStick_]);
+    }
+    if (rightStick_ >= 0) {
+        p.thumbRX = Axis(sx[rightStick_]);
+        if (rightY_) p.thumbRY = Axis(sy[rightStick_]);
+    }
+
+    // Sprint toggle: a click latches LS (MOHA's sprint is hold-to-sprint); another click, or letting the
+    // move stick rest for 0.3 s, releases it.
+    if (sprintToggle_) {
+        const bool src = (p.buttons & kBits[tLS]) != 0;
+        if (src && !sprintSrcWas_) {
+            sprintLatched_ = !sprintLatched_;
+            MLOG("pad: sprint %s", sprintLatched_ ? "on" : "off");
+        }
+        sprintSrcWas_ = src;
+        const float mx = static_cast<float>(p.thumbLX) / 32767.0f, my = static_cast<float>(p.thumbLY) / 32767.0f;
+        if (sprintLatched_ && mx * mx + my * my < 0.04f) {
+            if (sprintStillSince_ < 0.0) sprintStillSince_ = now_;
+            if (now_ - sprintStillSince_ > 0.3) {
+                sprintLatched_ = false;
+                MLOG("pad: sprint off (stopped moving)");
+            }
+        } else {
+            sprintStillSince_ = -1.0;
+        }
+        p.buttons = static_cast<std::uint16_t>((p.buttons & ~kBits[tLS]) | (sprintLatched_ ? kBits[tLS] : 0));
+    }
+    return p;
+}
+
+// Lines: "lx=0 ly=1 rx=0 ry=0 lt=0 rt=1 buttons=a,start dur=2" = an Xbox pad state as is (unset = 0 / none);
+// with raw=1 the values are controller input instead ("raw=1 ry=-1 press=b,rgrip dur=0.2") and go through
+// the mapping, so [Controls], the flicks and the sprint toggle can be tested.
 void Pad::ReadTests(double now) {
     if (GetFileAttributesW(testPath_.c_str()) == INVALID_FILE_ATTRIBUTES) return;
     FILE* f = nullptr;
@@ -157,32 +267,52 @@ void Pad::ReadTests(double now) {
         while (fgets(line, sizeof(line), f)) {
             Test t;
             t.dur = 0.5;
+            float lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
+            std::string buttons, press;
             char* ctx = nullptr;
             for (char* tok = strtok_s(line, " \t\r\n", &ctx); tok; tok = strtok_s(nullptr, " \t\r\n", &ctx)) {
                 char* eq = strchr(tok, '=');
                 if (!eq) continue;
                 *eq = 0;
                 const char* v = eq + 1;
-                if (!strcmp(tok, "lx")) t.state.thumbLX = Axis(static_cast<float>(atof(v)));
-                else if (!strcmp(tok, "ly")) t.state.thumbLY = Axis(static_cast<float>(atof(v)));
-                else if (!strcmp(tok, "rx")) t.state.thumbRX = Axis(static_cast<float>(atof(v)));
-                else if (!strcmp(tok, "ry")) t.state.thumbRY = Axis(static_cast<float>(atof(v)));
-                else if (!strcmp(tok, "lt")) t.state.leftTrigger = Trigger(static_cast<float>(atof(v)));
-                else if (!strcmp(tok, "rt")) t.state.rightTrigger = Trigger(static_cast<float>(atof(v)));
+                if (!strcmp(tok, "lx")) lx = static_cast<float>(atof(v));
+                else if (!strcmp(tok, "ly")) ly = static_cast<float>(atof(v));
+                else if (!strcmp(tok, "rx")) rx = static_cast<float>(atof(v));
+                else if (!strcmp(tok, "ry")) ry = static_cast<float>(atof(v));
+                else if (!strcmp(tok, "lt")) lt = static_cast<float>(atof(v));
+                else if (!strcmp(tok, "rt")) rt = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "dur")) t.dur = atof(v);
-                else if (!strcmp(tok, "buttons")) {
-                    static const char* names[] = {"a", "b", "x", "y", "lb", "rb", "ls", "rs", "start", "back",
-                                                  "up", "down", "left", "right"};
-                    std::string list(v);
-                    size_t p = 0;
-                    while (p <= list.size()) {
-                        const size_t c = std::min(list.find(',', p), list.size());
-                        const std::string name = list.substr(p, c - p);
-                        for (int i = 0; i < 14; ++i)
-                            if (name == names[i]) t.state.buttons |= kBits[i];
-                        p = c + 1;
-                    }
+                else if (!strcmp(tok, "raw")) t.raw = atoi(v) != 0;
+                else if (!strcmp(tok, "buttons")) buttons = v;
+                else if (!strcmp(tok, "press")) press = v;
+            }
+            auto each = [](const std::string& list, auto fn) {
+                size_t p = 0;
+                while (p < list.size()) {
+                    const size_t c = std::min(list.find(',', p), list.size());
+                    fn(list.substr(p, c - p));
+                    p = c + 1;
                 }
+            };
+            if (t.raw) {
+                t.rawIn.lx = lx; t.rawIn.ly = ly; t.rawIn.rx = rx; t.rawIn.ry = ry;
+                t.rawIn.src[kLTrig] = lt;
+                t.rawIn.src[kRTrig] = rt;
+                each(press, [&](const std::string& n) {
+                    const int s = SrcByName(std::wstring(n.begin(), n.end()));
+                    if (s > 0) t.rawIn.src[s] = 1.0f;
+                });
+            } else {
+                t.state.thumbLX = Axis(lx); t.state.thumbLY = Axis(ly);
+                t.state.thumbRX = Axis(rx); t.state.thumbRY = Axis(ry);
+                t.state.leftTrigger = Trigger(lt);
+                t.state.rightTrigger = Trigger(rt);
+                static const char* names[] = {"a", "b", "x", "y", "lb", "rb", "ls", "rs", "start", "back",
+                                              "up", "down", "left", "right"};
+                each(buttons, [&](const std::string& n) {
+                    for (int i = 0; i < 14; ++i)
+                        if (n == names[i]) t.state.buttons |= kBits[i];
+                });
             }
             tests_.push_back(t);
         }
@@ -198,35 +328,27 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
     ReadTests(now);
     if (testActive_ && now >= testUntil_) testActive_ = false;
     if (!testActive_ && !tests_.empty()) {
-        testState_ = tests_.front().state;
-        testUntil_ = now + tests_.front().dur;
+        test_ = tests_.front();
+        testUntil_ = now + test_.dur;
         tests_.pop_front();
         testActive_ = true;
-        MLOG("pad: test state buttons 0x%04X L(%d,%d) R(%d,%d) LT %u RT %u for %.2f s", testState_.buttons,
-             testState_.thumbLX, testState_.thumbLY, testState_.thumbRX, testState_.thumbRY, testState_.leftTrigger,
-             testState_.rightTrigger, testUntil_ - now);
+        if (test_.raw)
+            MLOG("pad: raw test input L(%.2f,%.2f) R(%.2f,%.2f) for %.2f s", test_.rawIn.lx, test_.rawIn.ly, test_.rawIn.rx,
+                 test_.rawIn.ry, test_.dur);
+        else
+            MLOG("pad: test state buttons 0x%04X L(%d,%d) R(%d,%d) LT %u RT %u for %.2f s", test_.state.buttons,
+                 test_.state.thumbLX, test_.state.thumbLY, test_.state.thumbRX, test_.state.thumbRY,
+                 test_.state.leftTrigger, test_.state.rightTrigger, test_.dur);
     }
 
     shared::PadState p{};
-    if (testActive_) {
-        p = testState_;
-    } else if (!neutral) {
-        for (int t = 0; t < tCount - 2; ++t)
-            if (Value(session, map_[t]) > 0.5f) p.buttons |= kBits[t];
-        p.leftTrigger = Trigger(Value(session, map_[tLT]));
-        p.rightTrigger = Trigger(Value(session, map_[tRT]));
-        auto read = [&](int which, std::int16_t& x, std::int16_t& y, bool useY) {
-            if (which < 0) return;
-            XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
-            gi.action = stick_[which];
-            XrActionStateVector2f v{XR_TYPE_ACTION_STATE_VECTOR2F};
-            if (XR_SUCCEEDED(xrGetActionStateVector2f(session, &gi, &v)) && v.isActive) {
-                x = Axis(v.currentState.x);
-                if (useY) y = Axis(v.currentState.y);
-            }
-        };
-        read(leftStick_, p.thumbLX, p.thumbLY, true);
-        read(rightStick_, p.thumbRX, p.thumbRY, rightY_);
+    if (testActive_ && !test_.raw) {
+        p = test_.state;
+    } else if (testActive_ || !neutral) {
+        Raw r{};
+        if (testActive_) r = test_.rawIn;
+        else ReadRaw(session, r);
+        p = Map(r);
     }
 
     // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.

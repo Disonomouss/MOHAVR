@@ -34,9 +34,10 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudWidth       = getf(L"HUD", L"Width", c.hudWidth, 0.1f, 10.0f);
     c.hudDown        = getf(L"HUD", L"Down", c.hudDown, -2.0f, 2.0f);
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
-    c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", 0, ini.c_str()));
-    c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", 0, ini.c_str()));
+    c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
+    c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
+    c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));

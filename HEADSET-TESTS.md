@@ -162,15 +162,75 @@ launch MOHA from Steam, put the headset on.
 10. Monitor: does it show the game while you play (not white)? (yes/no)
 11. Anything that got worse compared with round 4? (describe)
 
-**Answers:** (the player's words)
+**Answers (2026-09-26, ~17:00):**
+1. Controls need remapping: jump A, reload B, crouch = flick the right stick down, sprint a toggle instead of
+   hold, switch weapon Y, grenade X, interact the right grip. Other bindings can wait.
+2. Deadzone and turn speed are OK for now.
+3. Tap = pause / hold = menu: works.
+4. **Smooth** turning is best; the snaps are good options.
+5. Height and Recentre: yes.
+6. Flat-screen menus work well. At the first title screen the player was way higher than the screen; it was
+   in front of them when they returned to the title screen to exit.
+7. Cutscenes/landing roll: **leave in 3D**; comfort can be refined later.
+8. HUD panel: good.
+9. Image better and smooth.
+10. Monitor shows the game: yes.
+11. The gun got stuck aiming up. After tabbing out (and moving the window while out) and back in: cross-eyed
+    double vision.
 
-**Log received:** (after `tools\deploy.ps1 undeploy`: `logs/modlogs/<time>-*`)
+**Log received:** yes (`logs/modlogs/20260926-170931-*`). XR steady at 90 Hz; snap turns, the Recentre
+and the menu logged; 55 s of flat screen while tabbed out; no device reset or resize.
+
+**Verdict: PASSED** (controllers, menu button, turning, Height/Recentre, menus on the screen, HUD, sharpness,
+mirror). Shipped defaults now: Input.Controllers=1, Camera.CinemaScreen=1, HUD.Mode=1, Bridge.Mirror=1,
+Render 2880×1620. **Follow-ups (round 6):** the new layout; the gun/double vision fixed with Aim.HeadPitch
+(stray mouse input changed the game's pitch, which the view ignores but the gun follows; tab-out + window
+move didn't reproduce in the simulator at 1080p or 2880×1620); the title-screen height (it came from Virtual
+Desktop's untracked start-up pose).
 
 **Deployed for this round** (`tools\deploy.ps1 deploy -Set ...`): `Input.Controllers=1`,
 `Camera.CinemaScreen=2`, `HUD.Mode=1`, `Bridge.Mirror=1`, `Render.ResX=2880`, `Render.ResY=1620`
 (RuntimeJson empty, so the headset runtime is used). If anything is bad, Claude can turn single features
 off; each has its own switch. Not on: `Weapon.HideViewModel` (the gun stays; say if
 you want it hidden) and `Comfort.SnapTurn` (choose in the menu).
+
+---
+
+## Round 6: prepared 2026-09-26, the new control layout, head-pitch aim, title-screen height
+**Changed:**
+- **Controls, as you asked:** A jump, B reload, right grip interact, Y switch weapon, X grenade, **flick the
+  right stick down = crouch / stand**, **left stick click = sprint toggle** (click again, or stop moving, to
+  stop). Triggers, left grip (alt fire), right stick click (melee) and the menu button are as before.
+  (B and the right grip both press the game's reload/use button, so the game picks reload or interact.)
+- **Aim up/down follows your head.** The game's pitch is now taken from the headset, so the gun no longer
+  drifts up, and shots go up/down where you look. Left/right still follows your body.
+- The flat screen at the title screen is placed at your real head height (it used Virtual Desktop's start-up
+  placeholder before).
+- Now the defaults (no special setup): controllers, menus on the flat screen (cutscenes stay 3D), HUD panel,
+  mirror, 2880×1620.
+
+**How to try it:** Claude has deployed. Start Virtual Desktop, launch MOHA from Steam, headset on.
+1. Title screen: is it at eye level from the start?
+2. Campaign → Continue. After landing: jump (A), crouch and stand (flick right stick down twice), sprint (click
+   left stick while moving forward, then click again), switch weapon (Y), grenade (X, then fire), reload (B),
+   open a door or pick something up (right grip).
+3. Look up and down while shooting at something: does the gun point where you look, and do the shots land
+   there (up/down)?
+4. Tab out, move the window, tab back in (like last time): any double vision?
+
+**Questions:**
+1. Title screen at eye level at start? (yes/no)
+2. Do all the new buttons do what they should? Anything to change? (describe)
+3. Sprint toggle: comfortable? Does it stop when it should? (describe)
+4. Does the gun stay pointing where you look, and do shots go up/down where you look? (yes/no)
+5. After tab-out and back: any double vision? (yes/no)
+6. Anything worse than round 5? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults, no overrides (RuntimeJson empty = the headset runtime).
 
 ---
 

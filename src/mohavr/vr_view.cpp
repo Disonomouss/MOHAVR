@@ -348,8 +348,10 @@ void WriteViewState(const float* loc, const int* rot, std::uintptr_t localPlayer
     const auto ctrl = localPlayer ? *reinterpret_cast<std::uintptr_t*>(localPlayer + addr::kLocalPlayerActor) : 0;
     const float* cl = ctrl ? reinterpret_cast<const float*>(ctrl + addr::kActorRotation - 12) : nullptr;
     const int cyaw = ctrl ? *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4) : 0;
-    fprintf(f, "%.1f %.1f %.1f %d %d cursor %d %lu ctrl %.1f %.1f %.1f %d\n", loc[0], loc[1], loc[2], rot[1] & 0xFFFF,
-            rot[0] & 0xFFFF, cursorCount, ci.flags, cl ? cl[0] : 0.0f, cl ? cl[1] : 0.0f, cl ? cl[2] : 0.0f, cyaw & 0xFFFF);
+    const int cpitch = ctrl ? *reinterpret_cast<const int*>(ctrl + addr::kActorRotation) : 0;
+    fprintf(f, "%.1f %.1f %.1f %d %d cursor %d %lu ctrl %.1f %.1f %.1f %d pitch %d\n", loc[0], loc[1], loc[2],
+            rot[1] & 0xFFFF, rot[0] & 0xFFFF, cursorCount, ci.flags, cl ? cl[0] : 0.0f, cl ? cl[1] : 0.0f,
+            cl ? cl[2] : 0.0f, cyaw & 0xFFFF, cpitch & 0xFFFF);
     fclose(f);
     MoveFileExW(part.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
 }
@@ -409,6 +411,15 @@ void OnViewPoint(SafetyHookContext& ctx) {
             const int cyaw = *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4);
             const int diff = static_cast<std::int16_t>(static_cast<std::uint16_t>((cyaw - rot[1]) & 0xFFFF));
             g_viewIsPlayers = diff >= -2048 && diff <= 2048;
+            // Aim.HeadPitch: the controller's pitch follows the head. The view takes its pitch from the head
+            // anyway, but the gun model and the shot direction follow the controller rotation (ENGINE-NOTES
+            // 5o); left alone, stray mouse movement (tab-out, dragging the window) tilted the gun up in front
+            // of the eyes (headset round 5). Only for the player's own view, never a cutscene camera.
+            if (g_cfg.aimHeadPitch && !g_cinema && g_viewIsPlayers) {
+                const Vec3 f = QuatRotate(head, 0.0f, 0.0f, -1.0f);  // LOCAL is gravity-aligned: +Y up
+                const float pitch = std::atan2(f.y, std::sqrt(f.x * f.x + f.z * f.z));
+                *reinterpret_cast<int*>(ctrl + addr::kActorRotation) = RadToUnr(pitch) & 0xFFFF;
+            }
         }
         if (!g_cinema) ApplySnapTurn(hdr, ctx.edi, rot);
     }
