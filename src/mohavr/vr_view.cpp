@@ -529,6 +529,19 @@ void OnHudView(SafetyHookContext& ctx) {
     auto* view = reinterpret_cast<std::uint8_t*>(ctx.esi);
     if (!hdr || !view || !hdr->width || !hdr->height) return;
     const int eye = static_cast<int>(ctx.edx & 1);
+    {
+        // Diagnostics (headset round 8, "glass bowl" after tabbing back): log whenever an eye's view rect
+        // changes -- the engine's own, before the HUD placement below rewrites it.
+        static float seen[2][4] = {};
+        static int logged = 0;
+        const float* r = reinterpret_cast<const float*>(view + addr::kViewX);
+        if ((r[0] != seen[eye][0] || r[1] != seen[eye][1] || r[2] != seen[eye][2] || r[3] != seen[eye][3]) && logged < 40) {
+            ++logged;
+            MLOG("diag: eye %d view rect x %.0f y %.0f  %.0f x %.0f (was %.0f %.0f %.0f %.0f)", eye, r[0], r[1], r[2], r[3],
+                 seen[eye][0], seen[eye][1], seen[eye][2], seen[eye][3]);
+            for (int i = 0; i < 4; ++i) seen[eye][i] = r[i];
+        }
+    }
     const shared::Fov f = g_building.fov[eye];  // this frame's widened FOV (game thread writes it)
     if (!(f.tanRight > f.tanLeft) || !(f.tanUp > f.tanDown)) return;
     const float eyeW = 0.5f * static_cast<float>(hdr->width), H = static_cast<float>(hdr->height);
@@ -689,6 +702,19 @@ void OnProjection(SafetyHookContext& ctx) {
         if (!g_thisStereo) g_building.fov[1] = f;
         LeaveCriticalSection(&g_lock);
 
+        {
+            // Diagnostics: log whenever this eye's final FOV changes (by more than rounding).
+            static shared::Fov seenF[2] = {};
+            static int loggedF = 0;
+            const shared::Fov& o = seenF[g_thisEye];
+            if (loggedF < 40 && (std::fabs(o.tanLeft - f.tanLeft) > 1e-3f || std::fabs(o.tanRight - f.tanRight) > 1e-3f ||
+                                 std::fabs(o.tanUp - f.tanUp) > 1e-3f || std::fabs(o.tanDown - f.tanDown) > 1e-3f)) {
+                ++loggedF;
+                MLOG("diag: %s eye %d FOV L%.3f R%.3f U%.3f D%.3f (aspect %.3f)", g_thisStereo ? "stereo" : "mono", g_thisEye,
+                     f.tanLeft, f.tanRight, f.tanUp, f.tanDown, aspect);
+                seenF[g_thisEye] = f;
+            }
+        }
         if (!g_loggedProj[g_thisEye]) {
             g_loggedProj[g_thisEye] = true;
             MLOG("projection (%s eye %d): FOV L%.3f R%.3f U%.3f D%.3f, widened to %.3f aspect -> L%.3f R%.3f U%.3f D%.3f",

@@ -313,6 +313,46 @@ game frames kept coming after the restore.
    and how did you leave the game (Alt+Tab, Windows key, taskbar, Virtual Desktop menu)? (describe)
 4. Anything else odd? (describe)
 
+**Answers (2026-09-26, ~18:55):**
+1. Bullet holes in both eyes: **yes**.
+2. The glass-bowl look is back. The player left with a **double press of the Quest menu button** (Virtual
+   Desktop's "back to the desktop") and took a Quest screenshot
+   (`%TEMP%\VirtualDesktop.Android-20260926-185331.jpg`): a normal-looking eye image with a strip of a second
+   view at its right edge.
+
+**Log received:** yes (`logs/modlogs/20260926-185818-*`). The game kept rendering stereo views throughout
+(`stereo eye 0/1`). The tab-out shows as flat-screen mode 18:52:16–30. The session never left FOCUSED except a
+12 ms blip at 18:54:05. No resize or minimize.
+
+**Not reproduced:** in the simulator, focus loss and return (window, minimize, move) leaves the composited
+headset view normal. The strip at the right edge may just be Virtual Desktop's screenshot covering more than
+the eye image (sampling past its edge), so it doesn't by itself show the fault. **Next:** change logging added
+(game: each eye's view rect and final FOV; host: stereo/hasView and the submitted FOVs, and the runtime's own
+eye FOVs) to catch what changes. Round 9 = reproduce with a screenshot before and after.
+
+**Verdict:** bullet holes **PASSED**; glass bowl open.
+
+**Deployed for this round:** the shipped defaults, no overrides.
+
+---
+
+## Round 9: prepared 2026-09-26, "glass bowl" diagnostics
+**Changed:** nothing you'll notice. The mod now logs what changes in the picture it sends (field of view, eye
+rectangles), so the log can show what goes wrong when you come back from the desktop.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Before leaving: take a Quest screenshot while everything looks right.
+2. Leave exactly as last time (double press the Quest menu button), do what you normally do on the desktop,
+   come back.
+3. If the glass bowl appears: take another screenshot, then pause and unpause (menu button tap) and say whether
+   that changes anything. Keep playing ~30 s, then quit.
+4. Tell Claude the times roughly (or just the screenshot file names).
+
+**Questions:**
+1. Did the glass bowl appear? (yes/no)
+2. Did pause/unpause change it? (yes/no)
+3. What did you do on the desktop (click the game window, move it, other apps)? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

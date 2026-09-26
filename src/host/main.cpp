@@ -613,6 +613,22 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 const bool posTracked = (headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) &&
                                         (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT);
                 g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
+                {
+                    // Diagnostics (headset round 8): the runtime's own eye FOVs, whenever they change.
+                    static XrFovf seenFov[2] = {};
+                    static int loggedFov = 0;
+                    for (int e = 0; e < 2 && loggedFov < 20; ++e) {
+                        const XrFovf& a = views[e].fov;
+                        const XrFovf& b = seenFov[e];
+                        if (std::fabs(a.angleLeft - b.angleLeft) > 1e-3f || std::fabs(a.angleRight - b.angleRight) > 1e-3f ||
+                            std::fabs(a.angleUp - b.angleUp) > 1e-3f || std::fabs(a.angleDown - b.angleDown) > 1e-3f) {
+                            ++loggedFov;
+                            MLOG("diag: runtime eye %d fov L%.1f R%.1f U%.1f D%.1f deg", e, a.angleLeft * 57.2958f,
+                                 a.angleRight * 57.2958f, a.angleUp * 57.2958f, a.angleDown * 57.2958f);
+                            seenFov[e] = a;
+                        }
+                    }
+                }
                 const auto& hq = headLoc.pose.orientation;
                 headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
@@ -680,6 +696,24 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (f > shown) {
             const UINT slot = static_cast<UINT>(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), 0, 0));
             lastMeta = g_hdr->slotMeta[slot % kRing];  // written by the game before it published f
+            {
+                // Diagnostics (headset round 8): log whenever what we submit changes kind or FOV.
+                static mohavr::shared::SlotMeta seen{};
+                static int logged = 0;
+                auto differs = [](const mohavr::shared::Fov& a, const mohavr::shared::Fov& b) {
+                    return std::fabs(a.tanLeft - b.tanLeft) > 1e-3f || std::fabs(a.tanRight - b.tanRight) > 1e-3f ||
+                           std::fabs(a.tanUp - b.tanUp) > 1e-3f || std::fabs(a.tanDown - b.tanDown) > 1e-3f;
+                };
+                if (logged < 60 && (lastMeta.hasView != seen.hasView || lastMeta.stereo != seen.stereo ||
+                                    differs(lastMeta.fov[0], seen.fov[0]) || differs(lastMeta.fov[1], seen.fov[1]))) {
+                    ++logged;
+                    MLOG("diag: frame %llu hasView %u stereo %u  eye0 L%.3f R%.3f U%.3f D%.3f  eye1 L%.3f R%.3f U%.3f D%.3f",
+                         static_cast<unsigned long long>(f), lastMeta.hasView, lastMeta.stereo, lastMeta.fov[0].tanLeft,
+                         lastMeta.fov[0].tanRight, lastMeta.fov[0].tanUp, lastMeta.fov[0].tanDown, lastMeta.fov[1].tanLeft,
+                         lastMeta.fov[1].tanRight, lastMeta.fov[1].tanUp, lastMeta.fov[1].tanDown);
+                    seen = lastMeta;
+                }
+            }
             InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), static_cast<LONG64>(f));
             ctx->Wait(gameFence, f);
             ctx->CopyResource(last, shared[slot % kRing]);

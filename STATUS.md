@@ -112,9 +112,9 @@ address-space budget for D3D9On12.
   - the title-screen height from a tracked pose.
 
 ## Next
-1. **HEADSET-TESTS round 8** (deployed): bullet holes in both eyes (the engine culled decals in any view not at
-   x = 0; fixed, ENGINE-NOTES §5r) and minimize/restore with the window lock (the likely "glass bowl"). Rounds 6–7
-   passed otherwise: layout, sprint toggle, head pitch, A/B in menus, no more double vision.
+1. **HEADSET-TESTS round 9** (deployed): diagnostics for the "glass bowl" after returning from Virtual Desktop's
+   desktop (not reproduced in the simulator). Round 8: bullet holes in both eyes passed (engine decal-culling
+   bug, ENGINE-NOTES §5r).
 2. **M7 aiming, next steps:** yaw (where the head or hand points, not the body) and hand aim through
    `execGetBaseAimRotation` (ENGINE-NOTES §5o). The gun: `UpdateGunView` offsets vs. hiding.
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
