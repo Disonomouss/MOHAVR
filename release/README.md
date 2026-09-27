@@ -58,6 +58,22 @@ B and the right grip both press the game's reload/use button; the game decides w
 In the game's menus the face buttons work as labelled: A selects, B goes back.
 The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
+**Hand features** (being tested; turn them on in `MOHAVR.ini`: `Holsters.Enabled`, `Hands.Foregrip`,
+`Hands.ReloadGesture`, `Hands.Throw`):
+
+| Do this | Game |
+|---|---|
+| Squeeze a grip with the hand over your right shoulder | Long gun 1 |
+| ... over your left shoulder | Long gun 2 |
+| ... at your right hip | Pistol |
+| ... at your left hip | Grenade |
+| Squeeze the other hand's grip at the gun's foregrip | Hold the gun with two hands (it points through that hand) |
+| Squeeze the other hand's grip at the gun's magazine | Reload |
+| Swing and let go of the trigger with a grenade | Throw it (a slow release throws the game's way) |
+
+Either hand can draw, and the hand that draws holds the gun: its trigger fires. A short buzz tells you your hand
+is at a holster or the foregrip.
+
 ## The in-headset menu
 
 Hold the left menu button to open the menu (with `Input.Controllers=0`, a tap is enough). Use the
@@ -66,8 +82,11 @@ left stick to move and change values, and the trigger or A to select. B closes i
 - **World scale**: how big the world feels (higher = smaller).
 - **Height**: raise or lower yourself for seated or standing play.
 - **Turning**: smooth, snap 30° or snap 45°.
-- **Gun fit**: fits the gun you're holding to your hand. Move it forward/back, left/right and up/down, tilt it, and
-  shift the aim line (the red dot) until it runs along the barrel. Each gun keeps its own fit; B goes back.
+- **Sticks**: move with the left stick and turn with the right, or the other way round.
+- **Gun hand**: the hand that holds the gun when you start (drawing from a holster changes it).
+- **Gun fit**: fits the gun you're holding to your hand. Move it forward/back, left/right and up/down, tilt it,
+  shift the aim line (the red dot) until it runs along the barrel, and place the foregrip. Each gun keeps its own
+  fit; B goes back.
 - **Recentre**: face forward from where you are now.
 
 Your choices are saved in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and kept across updates.
@@ -93,7 +112,7 @@ headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may
 - **Aiming:** you aim with the right controller (the red dot). The HUD's crosshair still marks the middle of
   your view, not your aim.
 - The gun is drawn in your hand, but both arms move with it as one piece, so they can look detached from your
-  body.
+  body. In your left hand the gun is still held by a right arm reaching across.
 
 ## Uninstall
 

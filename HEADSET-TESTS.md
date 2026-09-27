@@ -488,11 +488,52 @@ aim straight away, and the saved fit came back when the gun did.
 3. Was the Gun fit page easy to use; is anything missing (a step too big or small, another adjustment)? (describe)
 4. After fitting, do the shots land where the barrel points? (yes/no)
 
+**Answers:** not played -- the player asked for the hand features first; round 14 carries these questions.
+
+**Deployed for this round:** the shipped defaults (now `Weapon.ViewModel=2`, `Aim.RayUp=8`), no overrides.
+
+---
+
+## Round 14: prepared 2026-09-27 night, hand features (the player's list) + round 13
+**Changed** (all [S]-proven in the simulator; the new ones are switched on for this round only):
+- **Holsters:** squeeze a grip with your hand over your **right shoulder** = long gun 1, **left shoulder** = long gun 2,
+  **right hip** = pistol, **left hip** = grenade. **Either hand can draw; the hand that draws holds the gun** -- the gun
+  is drawn at it and its trigger fires. A short buzz tells you the hand is at a holster.
+- **Foregrip:** with the gun in one hand, squeeze the other hand's grip at the gun's foregrip (about 30 cm ahead) to
+  hold it with two hands -- the gun then points from your gun hand through the other. Where the foregrip sits is
+  adjustable per gun in Gun fit ("Foregrip forward", "Foregrip up / down").
+- **Reload gesture:** the other hand's grip squeezed at the gun's magazine (just under and ahead of the gun hand).
+- **Throwing grenades:** with a grenade in hand, swing and let go of the trigger -- it flies with your hand's speed and
+  direction (x1.5). A slow release (under 1 m/s) throws the game's own way.
+- **Menu:** "Sticks" (move with the right stick and turn with the left) and "Gun hand" (the hand at start).
+- From round 13 (not played yet): the aim along the barrel (8 cm above the controller) and the **Gun fit** page.
+- Known: in your left hand the gun is still held by a right arm reaching across (the arms model is right-handed).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Draw each weapon from its holster, with each hand. Switch hands by drawing with the other one.
+2. Hold the rifle with two hands via the foregrip; aim, shoot. Try the Gun fit foregrip settings if it's off.
+3. Reload with the other hand at the magazine.
+4. Draw a grenade (left hip) and throw it overhand, underhand, softly.
+5. Round 13: look along the pistol's and the rifle's barrel at the red dot; fix it in Gun fit if needed.
+6. Try Sticks swapped for a minute.
+
+**Questions:**
+1. Holsters: do the four spots sit where you expect; do they trigger when you mean them to and not otherwise? (describe)
+2. The hand that draws holds the gun: does that work in play; is the right arm reaching across OK for now? (describe)
+3. Foregrip: does two-handed aiming work and feel steady; is the foregrip point in the right place? (describe)
+4. Reload gesture: does it trigger reliably, and only when you mean it? (yes/no, describe)
+5. Grenades: do they go where and as far as you throw them? Too weak / too strong (ThrowScale)? (describe)
+6. Sticks swap and Gun hand in the menu: work as expected? (yes/no)
+7. (Round 13) Before adjusting, did the pistol's barrel line up with the red dot? (yes / low / high) And the rifle's?
+8. (Round 13) Was the Gun fit page easy to use; anything missing? After fitting, do shots land where the barrel points?
+9. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults (now `Weapon.ViewModel=2`, `Aim.RayUp=8`), no overrides.
+**Deployed for this round:** the shipped defaults plus `Holsters.Enabled=1`, `Hands.Foregrip=1`,
+`Hands.ReloadGesture=1`, `Hands.Throw=1`.
 
 ---
 

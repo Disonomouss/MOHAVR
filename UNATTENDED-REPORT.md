@@ -339,8 +339,16 @@ items go into **round 14**. Deploy round 14 only at the end, as the morning conf
 - [x] Built (`Hands.Throw`, throwing.cpp; host: the gun hand's velocity at the trigger release, shared block v10).
       [S] (log 20260927-225415): test release (0, 3, -8) m/s -> the grenade's velocity (-1, 1979, 279) became
       (0, 1200, 450) units/s; ~6.4 m ahead a second later. Slow releases keep the game's throw.
-### S. Handover
-- [ ] HEADSET-TESTS round 14 (everything above that passed [S]; questions for each; if round 13 has no answers yet,
-      fold its questions in -- the testing replaces the round-13 deployment), STATUS, ENGINE-NOTES, README
-      (controls: holsters, foregrip, reload gesture, stick swap, gun hand), commit, deploy round 14 (shipped defaults,
-      no RuntimeJson), undeploy nothing else. Summary at the end of this section.
+### S. Handover -- DONE
+- [x] HEADSET-TESTS round 14 written (all of the above, plus round 13's questions: round 13 was not played), STATUS,
+      ENGINE-NOTES (5v reflection and throwing, 5w hands), README (hand features table, Sticks / Gun hand / Gun fit
+      foregrip in the menu, the left-hand arm note), committed.
+- [x] **Round 14 deployed** (2026-09-27 ~23:00, game not running, `RuntimeJson=` empty = the headset runtime): the
+      shipped defaults plus `Holsters.Enabled=1`, `Hands.Foregrip=1`, `Hands.ReloadGesture=1`, `Hands.Throw=1`; debug
+      switches off. The player's MOHAVR.user.ini was restored byte-identical after every simulator run.
+
+**Checklist 2 result:** M–S done, nothing BLOCKED. Every [S] part passed in the simulator: the one-handed aim
+unchanged; foregrip (10 cm lift -> aim z 0.32 vs 0.316 expected); holsters with both hands (Colt45, Stg44, MKII
+grenade, BAR) with the gun hand following the drawing hand and the left trigger firing; the reload gesture; the stick
+swap (the right stick walked 6.8 m); throwing by hand (the grenade's velocity replaced by the hand's). What only the
+headset can judge is in round 14.
