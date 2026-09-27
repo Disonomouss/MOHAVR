@@ -278,3 +278,63 @@ what was learned.
 **Overnight result:** §6 A–L done; nothing BLOCKED. Every [S] part passed. What only the headset can judge is
 in HEADSET-TESTS round 5.
 
+## 7. Checklist 2 (2026-09-27 evening): the player's hand features, in order
+
+The player's list (their words): "foregrip use on guns for left hand (position adjustable in menu). Holster system,
+right shoulder = long gun 1, left = long gun 2, right hip = pistol, right = grenade [read as: left hip = grenade --
+ask in the round], ability to swap joystick functions (right becomes move, left becomes turn). Ability to use left
+hand as main gun hand and right as foregrip, throwable grenades, manual reloading."
+Same rules as §5. The player plays **round 13** first (already deployed: Gun fit page, aim along the barrel); these
+items go into **round 14**. Deploy round 14 only at the end, as the morning configuration.
+
+**State when this list was written (commit "WIP hands"):** both binaries build. Written but NOT wired in yet:
+- `src/common/shared_frame.hpp` v9: `gunFlags`, `gunPose`, `aimRay` (host -> game in the view seqlock, `ReadGun`),
+  `cmdSeq` + `cmd[64]` (host -> game console command). `GunFit` gained `foreFwd`/`foreUp` (host-only fields).
+- `src/host/hands.cpp/.hpp`: the gun hand's pose (fit angle), two-handed foregrip, the aim line, holster zones
+  (`[Holsters]`: RightShoulder=SwitchPrimary, LeftShoulder=SwitchSecondary, RightHip=SwitchPistol,
+  LeftHip=SwitchGrenade -- the game's own MOHAPlayerController execs), the reload gesture (other hand's grip at the
+  magazine -> `Reload`), haptic pulses, consumed grips.
+- `src/host/pad.cpp/.hpp`: `GripValue` (raw-test aware), `SetConsumed`, `Pulse` (haptic actions bound on Touch and
+  Index), `SetSwapSticks`, `SetLeftHanded` (swap triggers and grips), test poses `hand=l|r,x,y,z,yaw,pitch`
+  (metres, head-heading frame) besides `aim=yaw,pitch`.
+
+### M. Wire the hands module in -- [S]
+- [ ] main.cpp: `Hands::Init`; each frame after LocateHands (inside the view seqlock) run `Hands::Update` (grips from
+      `pad.GripValue`, the menu's fit, leftHanded, gestures = !menu.Visible() && !gameUiMenu); publish gunFlags /
+      gunPose / aimRay; `pad.SetConsumed`; `pad.Pulse`; a command -> `cmd` then bump `cmdSeq`. The reticle uses
+      `aimRay` directly (drop its own angle/offset math).
+- [ ] Game: viewmodel.cpp takes `ReadGun` (gunPose -> PoseFrameToWorld, then the fit's grip) instead of hand + angle;
+      GunRay = aimRay via PoseToWorld. vr_view Hook_Draw runs a new `cmd` once via `gexec::Run` (like RunTestCommands).
+- [ ] [S]: the aim/gun behave exactly as in round 13 with one hand (same logs as the round-13 simulator test).
+
+### N. Foregrip (two hands) -- [S] logic, [H] feel
+- [ ] Menu Gun fit page: "Foregrip forward/back", "Foregrip up/down" (cm; defaults per ini `[Hands] ForeFwd=30,
+      ForeUp=0`; saved with the fit -- extend the `[GunFit]` value to 8 numbers, reading old 6-number entries).
+- [ ] [S]: test left hand placed at the foregrip point + `raw=1 press=lgrip dur=3` -> log "foregrip taken"; move the
+      left test hand 10 cm up -> the gun and the aim ray pitch up by atan(10/30); the left grip doesn't press LB.
+
+### O. Holsters -- [S] logic, [H] feel
+- [ ] [S]: test right hand at the right shoulder spot + `press=rgrip` -> 'SwitchPrimary' runs in the game and the
+      weapon key changes; the same for the other spots (log the weapon key before/after). The grip doesn't reload.
+- [ ] Ask in round 14 whether "right = grenade" meant left hip; spots adjustable in the ini.
+
+### P. Stick swap and left-handed -- [S]
+- [ ] Menu main page: "Sticks < move left | move right >" and "Gun hand < right | left >", saved in the player's ini
+      ([Controls] SwapSticks, LeftHanded), applied via `pad.SetSwapSticks/SetLeftHanded` and Hands' leftHanded.
+      Left-handed also means the aim hand: the host's aimSource and the game's Aim.Mode must follow (publish the gun
+      hand; the game's aim uses gunPose/aimRay anyway once item M is done).
+- [ ] [S]: raw test with the physical right stick -> the pad's left stick moves; left-handed: left trigger fires,
+      the gun is drawn at the left test hand. The arms model stays right-handed (mirroring = later research).
+
+### Q. Reload gesture -- [S] logic, [H] feel
+- [ ] [S]: left test hand at the magazine point (8 cm below, 10 cm ahead of the gun hand) + press=lgrip -> 'Reload'.
+
+### R. Throwable grenades -- research, time-boxed 2 h
+- [ ] Find where the grenade's toss velocity is made (EALAGrenade / projectile spawn; the throw is RB = X on Touch).
+      Goal: the throw's direction and speed from the hand's motion at release. Write up in ENGINE-NOTES; build only if
+      the hook point is clear. Otherwise BLOCKED with what's known.
+
+### S. Handover
+- [ ] HEADSET-TESTS round 14 (everything above that passed [S]; questions for each), STATUS, ENGINE-NOTES, README
+      (controls: holsters, foregrip, reload gesture, stick swap, gun hand), commit, deploy round 14 (shipped defaults,
+      no RuntimeJson), undeploy nothing else. Summary at the end of this section.

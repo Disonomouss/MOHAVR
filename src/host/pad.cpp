@@ -127,7 +127,9 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
     };
     for (const auto& d : defs) ok = ok && make(src_[d.s], d.name, d.loc, d.type);
     ok = ok && make(aim_[0], "left_aim", "Left hand aim", XR_ACTION_TYPE_POSE_INPUT) &&
-         make(aim_[1], "right_aim", "Right hand aim", XR_ACTION_TYPE_POSE_INPUT);
+         make(aim_[1], "right_aim", "Right hand aim", XR_ACTION_TYPE_POSE_INPUT) &&
+         make(haptic_[0], "left_haptic", "Left vibration", XR_ACTION_TYPE_VIBRATION_OUTPUT) &&
+         make(haptic_[1], "right_haptic", "Right vibration", XR_ACTION_TYPE_VIBRATION_OUTPUT);
     if (!ok) return false;
 
     wchar_t tmp[MAX_PATH];
@@ -160,6 +162,8 @@ void Pad::AppendBindings(const std::string& profile, const std::function<XrPath(
     if (profile == "/interaction_profiles/oculus/touch_controller" || profile == "/interaction_profiles/valve/index_controller") {
         add(aim_[0], "/user/hand/left/input/aim/pose");
         add(aim_[1], "/user/hand/right/input/aim/pose");
+        add(haptic_[0], "/user/hand/left/output/haptic");
+        add(haptic_[1], "/user/hand/right/output/haptic");
     }
     if (profile == "/interaction_profiles/oculus/touch_controller") {
         add(stick_[0], "/user/hand/left/input/thumbstick");
@@ -218,6 +222,19 @@ void Pad::ReadRaw(XrSession s, Raw& r) const {
 // Controller input -> Xbox pad, through [Controls].
 shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     Raw r = in;
+    // Grips a hand gesture used (holster, foregrip, reload) don't also press their mapped button.
+    if (consumed_[0]) r.src[kLGrip] = 0.0f;
+    if (consumed_[1]) r.src[kRGrip] = 0.0f;
+    // Player options: right stick moves, left turns (the flicks go with the turning stick); left-handed: the gun
+    // hand's trigger fires and its grip uses, as the right ones do by default.
+    if (swapSticks_) {
+        std::swap(r.lx, r.rx);
+        std::swap(r.ly, r.ry);
+    }
+    if (leftHanded_) {
+        std::swap(r.src[kLTrig], r.src[kRTrig]);
+        std::swap(r.src[kLGrip], r.src[kRGrip]);
+    }
     // Switching layouts (a game menu opened or closed): anything still held is ignored until released, so
     // the A that selected "Resume" doesn't also jump once the menu is gone.
     if (menuLayout != menuLayout_) {
@@ -311,14 +328,25 @@ void Pad::ReadTests(double now) {
                 if (!strcmp(tok, "aim")) {
                     // "aim=yaw,pitch" (degrees) or "aim=off": a test right-hand aim pose, until changed.
                     aimLine = true;
-                    testAim_ = strcmp(v, "off") != 0;
                     float y = 0.0f, p = 0.0f;
-                    if (testAim_ && sscanf_s(v, "%f,%f", &y, &p) >= 1) {
-                        testAimYaw_ = y;
-                        testAimPitch_ = p;
+                    if (strcmp(v, "off") != 0 && sscanf_s(v, "%f,%f", &y, &p) >= 1) {
+                        testPose_[1] = {true, 0.2f, -0.3f, 0.3f, y, p};
+                        MLOG("pad: test aim yaw %.1f pitch %.1f deg (right hand)", y, p);
+                    } else {
+                        testPose_[0].on = testPose_[1].on = false;
+                        MLOG("pad: test poses off");
                     }
-                    if (testAim_) MLOG("pad: test aim yaw %.1f pitch %.1f deg (right hand)", testAimYaw_, testAimPitch_);
-                    else MLOG("pad: test aim off");
+                } else if (!strcmp(tok, "hand")) {
+                    // "hand=l|r,x,y,z,yaw,pitch": that hand at x right, y up, z ahead of the head (m), turned yaw/pitch.
+                    aimLine = true;
+                    char which = 0;
+                    TestPose tp{true, 0, 0, 0, 0, 0};
+                    if (sscanf_s(v, "%c,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch) >= 4) {
+                        const int h = (which == 'l' || which == 'L') ? 0 : 1;
+                        testPose_[h] = tp;
+                        MLOG("pad: test %s hand at %.2f %.2f %.2f m, yaw %.1f pitch %.1f", h ? "right" : "left", tp.x, tp.y,
+                             tp.z, tp.yaw, tp.pitch);
+                    }
                 }
                 else if (!strcmp(tok, "lx")) lx = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "ly")) ly = static_cast<float>(atof(v));
@@ -453,23 +481,46 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
             valid |= 1u << h;
         }
     }
-    if (testAim_) {
+    for (int h = 0; h < 2; ++h) {
+        const TestPose& tp = testPose_[h];
+        if (!tp.on) continue;
         // The head's heading (yaw only), then the test pose in that frame.
         const auto& q = head.orientation;
         const float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
         const float heading = std::atan2(-fx, -fz);  // R_y(heading) * (0,0,-1) = (fx, 0, fz)
         const float sh = std::sin(heading), ch = std::cos(heading);
         // right = (cos, 0, -sin), forward = (-sin, 0, -cos)
-        out[1].position = {head.position.x + 0.2f * ch - 0.3f * sh, head.position.y - 0.3f,
-                           head.position.z - 0.2f * sh - 0.3f * ch};
-        const float yaw = heading - testAimYaw_ * 0.0174533f;  // positive test yaw = to the right
-        const float pitch = testAimPitch_ * 0.0174533f;        // positive = up
+        out[h].position = {head.position.x + tp.x * ch - tp.z * sh, head.position.y + tp.y,
+                           head.position.z - tp.x * sh - tp.z * ch};
+        const float yaw = heading - tp.yaw * 0.0174533f;  // positive test yaw = to the right
+        const float pitch = tp.pitch * 0.0174533f;        // positive = up
         const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cx = std::cos(pitch * 0.5f),
                     sx = std::sin(pitch * 0.5f);
-        out[1].orientation = {cy * sx, cx * sy, -sy * sx, cy * cx};  // R_y(yaw) * R_x(pitch)
-        valid |= 2u;
+        out[h].orientation = {cy * sx, cx * sy, -sy * sx, cy * cx};  // R_y(yaw) * R_x(pitch)
+        valid |= 1u << h;
     }
     return valid;
+}
+
+float Pad::GripValue(XrSession s, int hand) const {
+    const Src src = hand ? kRGrip : kLGrip;
+    if (testActive_ && test_.raw) return test_.rawIn.src[src];
+    if (!src_[src]) return 0.0f;
+    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+    gi.action = src_[src];
+    XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
+    return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+}
+
+void Pad::Pulse(XrSession s, int hand) const {
+    if (!haptic_[hand]) return;
+    XrHapticActionInfo hi{XR_TYPE_HAPTIC_ACTION_INFO};
+    hi.action = haptic_[hand];
+    XrHapticVibration v{XR_TYPE_HAPTIC_VIBRATION};
+    v.duration = 30000000;  // 30 ms
+    v.frequency = XR_FREQUENCY_UNSPECIFIED;
+    v.amplitude = 0.5f;
+    xrApplyHapticFeedback(s, &hi, reinterpret_cast<const XrHapticBaseHeader*>(&v));
 }
 
 }  // namespace mohavr::host

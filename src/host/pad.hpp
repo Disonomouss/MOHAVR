@@ -45,10 +45,20 @@ public:
 
     // M7: the controllers' aim poses (/input/aim/pose). CreateSpaces once the action sets are attached.
     bool CreateSpaces(XrSession session);
-    // Both aim poses in `space` at `t`; the result's bit 0/1 = left/right valid. A test aim from
-    // pad_cmd.txt ("aim=yaw,pitch" in degrees; "aim=off") replaces the right hand with a pose 20 cm right,
-    // 30 cm below and 30 cm ahead of `head`, turned by yaw/pitch from the head's heading.
+    // Both aim poses in `space` at `t`; the result's bit 0/1 = left/right valid. Test poses from pad_cmd.txt
+    // replace a hand: "aim=yaw,pitch" (degrees) = the right hand 20 cm right, 30 cm below and 30 cm ahead of `head`,
+    // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch" = that hand at x right, y up, z ahead
+    // (metres, heading frame); "aim=off" = both real again.
     std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
+
+    // M8 (hands.cpp): a hand's squeeze 0..1 (a raw test state's while one plays); grips a gesture used are kept
+    // from the mapping until released; a short haptic pulse.
+    float GripValue(XrSession s, int hand) const;
+    void  SetConsumed(bool left, bool right) { consumed_[0] = left; consumed_[1] = right; }
+    void  Pulse(XrSession s, int hand) const;
+    // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
+    void  SetSwapSticks(bool on) { swapSticks_ = on; }
+    void  SetLeftHanded(bool on) { leftHanded_ = on; }
 
 private:
     // Controller inputs. kMenu is the tap of the menu button (main.cpp owns it); kRFlickDown/Up are short
@@ -78,8 +88,11 @@ private:
     XrAction    src_[kSrcCount]{};     // real controller actions (none for kNone, kMenu and the flicks)
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
-    bool        testAim_ = false;      // pad_cmd.txt "aim=yaw,pitch"
-    float       testAimYaw_ = 0.0f, testAimPitch_ = 0.0f;  // degrees
+    XrAction    haptic_[2]{};          // left, right vibration
+    struct TestPose { bool on; float x, y, z, yaw, pitch; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
+    TestPose    testPose_[2]{};
+    bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
+    bool        swapSticks_ = false, leftHanded_ = false;
     Src         map_[tCount][kMaxSources]{};
     Src         mapMenu_[tCount][kMaxSources]{};  // while a game menu is open ([ControlsMenu]: A selects, B backs out)
     bool        menuLayout_ = false;
