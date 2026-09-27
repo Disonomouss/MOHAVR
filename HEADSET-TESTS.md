@@ -390,9 +390,14 @@ Maximizing was what shrank the picture and gave the glass bowl. Minimizing and m
 1. Any glass bowl or double vision after coming back? (yes/no)
 2. Anything else odd? (describe)
 
-**Answers:** (the player's words)
+**Answers (2026-09-27, ~18:30):** "Fixed".
 
-**Log received:** (after `tools\deploy.ps1 undeploy`)
+**Log received:** yes (`logs/modlogs/20260927-183010-*`). The lock took hold at 2896×1659 (client 2880×1620), the
+maximize button was removed on the window's own thread, and the eye view rects stayed 1440×1620 for the whole
+session (no change logged after the first frame). No refusal was logged, so with the button gone nothing even
+asked to maximize.
+
+**Verdict:** glass bowl **PASSED**. `Render.LockWindow=1` stays the default.
 
 **Deployed for this round:** the shipped defaults, no overrides.
 
