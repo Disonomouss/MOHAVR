@@ -57,6 +57,14 @@ public:
     // M8 (hands.cpp): a hand's squeeze 0..1 (a raw test state's while one plays); grips a gesture used are kept
     // from the mapping until released; a short haptic pulse.
     float GripValue(XrSession s, int hand) const;
+    float TriggerValue(XrSession s, int hand) const;  // likewise, the physical hand's trigger
+    // A test throw (pad_cmd.txt "throwvel=x,y,z", m/s LOCAL): used for the next grenade release instead of the hand's.
+    bool  TakeTestThrow(float (&v)[3]) {
+        if (!testThrow_) return false;
+        testThrow_ = false;
+        for (int i = 0; i < 3; ++i) v[i] = testThrowVel_[i];
+        return true;
+    }
     void  SetConsumed(bool left, bool right) { consumed_[0] = left; consumed_[1] = right; }
     void  Pulse(XrSession s, int hand) const;
     // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
@@ -95,6 +103,8 @@ private:
     struct TestPose { bool on; float x, y, z, yaw, pitch; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
+    bool        testThrow_ = false;
+    float       testThrowVel_[3]{};
     bool        swapSticks_ = false, leftHanded_ = false;
     Src         map_[tCount][kMaxSources]{};
     Src         mapMenu_[tCount][kMaxSources]{};  // while a game menu is open ([ControlsMenu]: A selects, B backs out)

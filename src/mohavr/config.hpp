@@ -22,6 +22,8 @@ struct Config {
     int  aimMode        = 3;      // [Aim] Mode -- 0 the game's (body yaw), 1 head, 2 left hand, 3 right hand (M7)
     float aimRayUp      = 8.0f;   // [Aim] RayUp -- cm the hand's aim ray is raised to the gun's barrel (ViewModel=2 only)
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
+    bool throwByHand    = false;  // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)
+    float throwScale    = 1.5f;   // [Hands] ThrowScale -- times the hand's speed
     int  viewModel      = 2;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
     float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)
                                                      // put at the controller (fwd/right/up)
@@ -31,6 +33,7 @@ struct Config {
     bool debugSwapEyes  = false;  // [Debug] SwapEyeOrder -- draw the right eye first (experiments only)
     bool debugSwapHalves = false; // [Debug] SwapHalves -- left eye in the right half (experiments only)
     bool debugTraceScissor = false;  // [Debug] TraceScissor -- log scissor rects set while the viewport is offset
+    bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
     bool debugGameCommands = false;  // [Debug] GameCommands -- run console commands from %TEMP%\MOHAVR\game_cmd.txt (tests)
     int  bridgeMirror   = 1;      // [Bridge]  Mirror -- the host's desktop mirror: 0 off, 1 over the game window, 2 own window
     bool bridgeHost     = true;   // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)

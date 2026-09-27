@@ -65,9 +65,9 @@ void Hands::Init(const std::wstring& ini) {
     defaultFit_ = {{iniFloat(L"Weapon", L"GripX", 34.0f), iniFloat(L"Weapon", L"GripY", 11.0f), iniFloat(L"Weapon", L"GripZ", -17.0f)},
                    0.0f, iniFloat(L"Aim", L"RayUp", 8.0f), 0.0f, iniFloat(L"Hands", L"ForeFwd", 30.0f),
                    iniFloat(L"Hands", L"ForeUp", 0.0f)};
-    holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
-    foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
-    reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
+    holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 0, ini.c_str()) != 0;
+    foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 0, ini.c_str()) != 0;
+    reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 0, ini.c_str()) != 0;
     MLOG("hands: holsters %d (%s / %s / %s / %s), foregrip %d, reload gesture %d", holsters_, zones_[0].command.c_str(),
          zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(), foregrip_, reloadGesture_);
 }
@@ -181,6 +181,53 @@ Hands::Output Hands::Update(const Input& in) {
         out.aimRay.position = {start.x, start.y, start.z};
     }
     for (int h = 0; h < 2; ++h) out.consumed[h] = held_[h] && consumed_[h];
+
+    // Throwing: remember where each hand was; when the gun hand's trigger lets go of a grenade, its velocity over the
+    // last ~0.1 s is the throw (the game gives it to the grenade the release spawns).
+    for (int h = 0; h < 2; ++h) {
+        if (!(in.valid & (1u << h))) continue;
+        Sample& s = hist_[h][histNext_[h]];
+        histNext_[h] = (histNext_[h] + 1) % 16;
+        s.t = in.now;
+        s.p[0] = in.aim[h].position.x;
+        s.p[1] = in.aim[h].position.y;
+        s.p[2] = in.aim[h].position.z;
+    }
+    if (in.testThrow) {  // kept for the next release
+        testThrow_ = true;
+        for (int i = 0; i < 3; ++i) testThrowVel_[i] = in.testThrowVel[i];
+    }
+    const float trig = in.trigger[g];
+    if (!triggerHeld_ && trig > 0.5f) triggerHeld_ = true;
+    if (triggerHeld_ && trig < 0.3f) {
+        triggerHeld_ = false;
+        if (in.grenade && gunOk) {
+            float v[3] = {0.0f, 0.0f, 0.0f};
+            if (testThrow_) {
+                testThrow_ = false;
+                for (int i = 0; i < 3; ++i) v[i] = testThrowVel_[i];
+            } else {
+                // The newest sample and the one closest to 0.1 s before it.
+                const Sample& now = hist_[g][(histNext_[g] + 15) % 16];
+                const Sample* then = nullptr;
+                for (int k = 2; k < 16; ++k) {
+                    const Sample& c = hist_[g][(histNext_[g] + 16 - k) % 16];
+                    if (c.t <= 0.0 || now.t - c.t > 0.2) break;
+                    then = &c;
+                    if (now.t - c.t >= 0.1) break;
+                }
+                if (then && now.t > then->t)
+                    for (int i = 0; i < 3; ++i) v[i] = static_cast<float>((now.p[i] - then->p[i]) / (now.t - then->t));
+            }
+            const float speed = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            MLOG("hands: grenade released at %.1f m/s (%.1f %.1f %.1f)%s", speed, v[0], v[1], v[2],
+                 speed >= minThrowSpeed_ ? " -> thrown by the hand" : " -> too slow: the game's own throw");
+            if (speed >= minThrowSpeed_) {
+                out.thrown = true;
+                for (int i = 0; i < 3; ++i) out.throwVel[i] = v[i];
+            }
+        }
+    }
     return out;
 }
 

@@ -55,6 +55,7 @@ public:
     bool GunInHand() const { return gunInHand_; }
     // Controls (the player's, saved): right stick moves / left turns; the gun hand at start (a draw changes it).
     bool SwapSticks() const { return swapSticks_; }
+    const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
     bool StartLeft() const { return startLeft_; }
 
 private:

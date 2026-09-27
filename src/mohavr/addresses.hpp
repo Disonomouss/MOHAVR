@@ -181,6 +181,11 @@ inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshC
 inline constexpr std::uintptr_t kGNamesData   = 0x116F4A54;
 inline constexpr std::uintptr_t kNameEntryString = 0x10;
 inline constexpr std::uintptr_t kObjectOuter  = 0x28, kObjectName = 0x2C, kObjectClass = 0x34;
+// Reflection (ENGINE-NOTES 5v; Debug.Reflect probe 2026-09-27): ObjectArchetype +0x38 ends UObject (0x3C). UField:
+// SuperField +0x3C, Next +0x40. UStruct: Children +0x4C, PropertiesSize +0x50. UProperty: ArrayDim +0x44,
+// ElementSize +0x48, PropertyFlags +0x4C, Offset +0x64 -- verified: Actor.Location 0xE8 and Rotation 0xF4 (known),
+// Velocity 0x100, Pawn.InvManager 0x3A4, Pawn.Weapon 0x3A8.
+inline constexpr std::uintptr_t kFieldSuper = 0x3C, kFieldNext = 0x40, kStructChildren = 0x4C, kPropertyOffset = 0x64;
 
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},

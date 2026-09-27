@@ -667,6 +667,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
                     hin.startLeft = menuOk && menu.StartLeft();
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
+                    for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);
+                    hin.grenade = menuOk && menu.WeaponKey().find("Grenade") != std::string::npos;
+                    hin.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
+                    hin.testThrow = pad.TakeTestThrow(hin.testThrowVel);
                     handsOut = hands.Update(hin);
                     g_hdr->gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
                     g_hdr->gunPose = toPose(handsOut.gun);
@@ -679,6 +683,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         std::memcpy(g_hdr->cmd, handsOut.command.c_str(), n);
                         g_hdr->cmd[n] = 0;
                         InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
+                    }
+                    if (handsOut.thrown) {
+                        for (int i = 0; i < 3; ++i) g_hdr->throwVel[i] = handsOut.throwVel[i];
+                        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->throwSeq));
                     }
                     for (int h = 0; h < 2; ++h)
                         if (handsOut.pulse[h]) pad.Pulse(session, h);

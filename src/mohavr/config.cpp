@@ -26,6 +26,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.debugSwapEyes  = get(L"Debug", L"SwapEyeOrder", c.debugSwapEyes);
     c.debugSwapHalves = get(L"Debug", L"SwapHalves", c.debugSwapHalves);
     c.debugTraceScissor = get(L"Debug", L"TraceScissor", c.debugTraceScissor);
+    c.debugReflect   = get(L"Debug", L"Reflect", c.debugReflect);
     c.hudMode        = static_cast<int>(GetPrivateProfileIntW(L"HUD", L"Mode", c.hudMode, ini.c_str())) == 1 ? 1 : 0;
     auto getf = [&](const wchar_t* sec, const wchar_t* key, float def, float lo, float hi) {
         wchar_t b[32] = L"";
@@ -48,6 +49,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.aimRayUp       = getf(L"Aim", L"RayUp", c.aimRayUp, -30.0f, 30.0f);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
+    c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
+    c.throwScale     = getf(L"Hands", L"ThrowScale", c.throwScale, 0.2f, 5.0f);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

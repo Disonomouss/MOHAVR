@@ -332,11 +332,13 @@ items go into **round 14**. Deploy round 14 only at the end, as the morning conf
 ### Q. Reload gesture -- [S] DONE, [H] feel
 - [x] [S]: left test hand at the magazine point + lgrip -> "hands: reload gesture" -> the game's 'Reload' handled.
 
-### R. Throwable grenades -- research, time-boxed 2 h
-- [ ] Find where the grenade's toss velocity is made (EALAGrenade / projectile spawn; the throw is RB = X on Touch).
-      Goal: the throw's direction and speed from the hand's motion at release. Write up in ENGINE-NOTES; build only if
-      the hook point is clear. Otherwise BLOCKED with what's known.
-
+### R. Throwable grenades -- research DONE (~1 h), built, [S] DONE, [H] feel
+- [x] The throw (ENGINE-NOTES 5v): EALAGrenade.ProjectileFire spawns SpawnedExplosive at release and sets its velocity
+      (body yaw, aim pitch, speed from the analog trigger). Reflection found: UField/UStruct/UProperty layout
+      (Offset +0x64, checked on Location/Rotation), so properties are read by name (`names::PropertyOffset`).
+- [x] Built (`Hands.Throw`, throwing.cpp; host: the gun hand's velocity at the trigger release, shared block v10).
+      [S] (log 20260927-225415): test release (0, 3, -8) m/s -> the grenade's velocity (-1, 1979, 279) became
+      (0, 1200, 450) units/s; ~6.4 m ahead a second later. Slow releases keep the game's throw.
 ### S. Handover
 - [ ] HEADSET-TESTS round 14 (everything above that passed [S]; questions for each; if round 13 has no answers yet,
       fold its questions in -- the testing replaces the round-13 deployment), STATUS, ENGINE-NOTES, README

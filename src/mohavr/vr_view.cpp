@@ -10,6 +10,7 @@
 #include "addresses.hpp"
 #include "aim.hpp"
 #include "bridge.hpp"
+#include "throwing.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
@@ -548,6 +549,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi) {
         viewmodel::OnPlayerView();  // first: the aim follows the gun's barrel
         aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_world.base);
+        throwing::OnPlayerView();
     }
 
     if (++g_views == 1 || g_views % 4000 == 0) {
@@ -825,6 +827,8 @@ bool Install(const Config& cfg) {
     }
     aim::Install(cfg);        // M7: needs the view hook (PoseToWorld)
     viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
+    throwing::Configure(cfg);
+    MLOG("throw: Hands.Throw=%d (x%.2f)", cfg.throwByHand, cfg.throwScale);
     return true;
 }
 
@@ -849,6 +853,16 @@ bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float&
     float axes[3][3];
     if (!PoseFrameToWorld(p, pos, axes, unitsPerMeter)) return false;
     for (int i = 0; i < 3; ++i) fwd[i] = axes[0][i];
+    return true;
+}
+
+bool VectorToWorld(const float (&xr)[3], float (&ue)[3]) {
+    if (!g_world.valid) return false;
+    const float s = UnitsPerMeter(bridge::SharedHeader());
+    const Vec3 d = YawRotate(XrToUe(xr[0], xr[1], xr[2]), g_world.yaw);
+    ue[0] = d.x * s;
+    ue[1] = d.y * s;
+    ue[2] = d.z * s;
     return true;
 }
 

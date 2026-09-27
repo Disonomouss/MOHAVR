@@ -36,6 +36,12 @@ public:
         shared::GunFit fit;         // the weapon in hand's
         bool           startLeft;   // the gun hand until a hand draws (the menu's Gun hand); a change applies at once
         bool           gestures;    // false while a menu is open (the MOHAVR menu or the game's)
+        // Throwing: the triggers, whether the weapon in hand is a grenade, the time (s), and a test velocity.
+        float          trigger[2];
+        bool           grenade;
+        double         now;
+        bool           testThrow;
+        float          testThrowVel[3];
     };
     struct Output {
         int         gunHand = 1;    // 0 left, 1 right: the hand that drew last (the pad's fire side follows it)
@@ -44,6 +50,8 @@ public:
         std::string command;        // to run in the game this frame ("" none)
         bool        consumed[2]{};  // grips kept from the pad
         bool        pulse[2]{};     // haptic pulse this frame
+        bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
+        float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };
     Output Update(const Input& in);
     // The fit without a menu: the shipped defaults ([Aim] RayUp, [Hands] ForeFwd/ForeUp).
@@ -64,6 +72,14 @@ private:
     bool  twoHanded_ = false;
     int   inZone_[2] = {-1, -1};
     bool  nearFore_ = false;
+    // Throwing: recent positions of each hand (for its velocity at release), the gun hand's trigger state.
+    struct Sample { double t; float p[3]; };
+    Sample hist_[2][16]{};
+    int    histNext_[2]{};
+    bool   triggerHeld_ = false;
+    bool   testThrow_ = false;     // a test velocity waiting for the next release
+    float  testThrowVel_[3]{};
+    float  minThrowSpeed_ = 1.0f;  // m/s: slower releases keep the game's own trigger-strength throw
     int   gunHand_ = 1;
     int   lastStart_ = -1;       // the start setting last applied
     shared::GunFit defaultFit_{};

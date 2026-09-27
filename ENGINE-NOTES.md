@@ -578,6 +578,44 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   Verified [S]: the menu's aim line +2 cm → the game's ray +2 units; angle +10° → ray direction z 0.17; the saved fit
   reloads when the gun comes back into hand.
 
+## 5v. Reflection (script properties by name), and throwing grenades (2026-09-27, simulator)
+
+- **Layout** (`Debug.Reflect` probe on the player's pawn): ObjectArchetype `+0x38` ends UObject (`0x3C`). **UField:
+  SuperField `+0x3C`, Next `+0x40`** (early UE3: SuperField lives in UField). **UStruct: Children `+0x4C`**,
+  PropertiesSize `+0x50` (`0xB58` for MOHASingleplayerPawn). **UProperty: ArrayDim `+0x44`, ElementSize `+0x48`,
+  PropertyFlags `+0x4C`, Offset `+0x64`**. Checked against the known ones: Actor.Location `0xE8`, Rotation `0xF4`.
+  Found: Actor.Velocity `0x100`, Pawn.InvManager `0x3A4`, Pawn.Weapon `0x3A8`,
+  `MOHA_MKIIFragGrenade.SpawnedExplosive` `0x4D4`. `names::PropertyOffset(object, "Name")` walks the class chain
+  and caches per class, so the mod can use any script property without hard-coding its offset.
+- **The throw** (EALAGrenade.uc): the fire trigger's analog value (`GetFireAxis`, lagged) is `ThrowStrength`. On
+  release `ProjectileFire` spawns the projectile (`SpawnedExplosive`, pooled: the same actor can come back), yaw =
+  the pawn's body yaw, pitch from the aim plus `DirectionOffset`, speed = `ExplosiveSpeed + ThrowStrength·(Max −
+  ExplosiveSpeed)`, plus the pawn's velocity × `ExplosivePawnVelocityScale`. It starts at the arms' `Camera` bone.
+- **Hand throw** (`Hands.Throw`, src/mohavr/throwing.cpp): the host sends the gun hand's velocity over the last
+  ~0.1 s when its trigger lets go of a grenade (shared block v10). When the grenade weapon's SpawnedExplosive is a
+  new projectile (another actor, or the pooled one with a velocity we didn't write) within 300 units of the eye, its
+  Velocity becomes the hand's velocity mapped into the world × `Hands.ThrowScale`, plus the pawn's velocity.
+  Releases under 1 m/s keep the game's own throw.
+- **Verified [S]:** a test release of (0, 3, −8) m/s → the grenade's velocity (−1, 1979, 279) became (0, 1200, 450)
+  units/s, 12 units from the eye, and it lay ~6.4 m ahead a second later.
+
+## 5w. Hands: gun hand, foregrip, holsters, reload gesture (2026-09-27, simulator)
+
+- The host (src/host/hands.cpp) works out the gun from both controllers each XR frame and publishes it in the view
+  seqlock (shared block v9): gunPose (the gun hand's aim pose, pitched by the fit's angle, turned by the foregrip),
+  aimRay (offset by the fit's aim line), gunFlags (valid, two-handed, left). The game maps them like the eyes
+  (viewmodel.cpp) and aims along aimRay.
+- **Gun hand:** the hand that draws from a holster; the menu's Gun hand is the start. The pad's triggers and grips
+  follow it (left gun hand: the left trigger fires).
+- **Holsters** (`[Holsters]`, off until round 14): spots from the head in its heading frame (shoulders 20 cm out,
+  22 cm down, 8 cm back; hips 22 cm out, 65 cm down), radius 16 cm; a grip squeeze there runs the game's own
+  `SwitchPrimary` / `SwitchSecondary` / `SwitchPistol` / `SwitchGrenade` (MOHAPlayerController execs) through the
+  command channel (cmdSeq → gexec on the game thread).
+- **Foregrip:** the other hand's grip within 12 cm of the fit's foregrip point; while held, the gun turns so that
+  point lies on that hand (long guns: the point ≥ 15 cm ahead). **Reload:** the other hand's grip at the magazine
+  (8 cm below, 10 cm ahead of the gun hand) → `Reload`. A grip used by a gesture is kept from the pad until
+  released; a 30 ms pulse marks entering a spot or the foregrip.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -336,6 +336,13 @@ void Pad::ReadTests(double now) {
                         testPose_[0].on = testPose_[1].on = false;
                         MLOG("pad: test poses off");
                     }
+                } else if (!strcmp(tok, "throwvel")) {
+                    aimLine = true;
+                    if (sscanf_s(v, "%f,%f,%f", &testThrowVel_[0], &testThrowVel_[1], &testThrowVel_[2]) == 3) {
+                        testThrow_ = true;
+                        MLOG("pad: test throw velocity %.1f %.1f %.1f m/s (the next grenade release)", testThrowVel_[0],
+                             testThrowVel_[1], testThrowVel_[2]);
+                    }
                 } else if (!strcmp(tok, "hand")) {
                     // "hand=l|r,x,y,z,yaw,pitch": that hand at x right, y up, z ahead of the head (m), turned yaw/pitch.
                     aimLine = true;
@@ -507,6 +514,16 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
 
 float Pad::GripValue(XrSession s, int hand) const {
     const Src src = hand ? kRGrip : kLGrip;
+    if (testActive_ && test_.raw) return test_.rawIn.src[src];
+    if (!src_[src]) return 0.0f;
+    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+    gi.action = src_[src];
+    XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
+    return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+}
+
+float Pad::TriggerValue(XrSession s, int hand) const {
+    const Src src = hand ? kRTrig : kLTrig;
     if (testActive_ && test_.raw) return test_.rawIn.src[src];
     if (!src_[src]) return 0.0f;
     XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};

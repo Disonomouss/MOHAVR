@@ -160,6 +160,11 @@ void UpdateWeaponKey(shared::Header* hdr) {
     if (static_cast<LONG>(now - nextCheck) < 0) return;
     nextCheck = now + 250;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    static bool probed = false;
+    if (g_cfg.debugReflect && pawn && !probed) {
+        probed = true;
+        names::ProbeReflection(pawn);
+    }
     std::uintptr_t gun = 0;
     DWORD newest = 0;
     for (auto& p : g_parts) {

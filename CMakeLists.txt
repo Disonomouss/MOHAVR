@@ -30,6 +30,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/aim.cpp
         src/mohavr/viewmodel.cpp
         src/mohavr/names.cpp
+        src/mohavr/throwing.cpp
         src/mohavr/xinput_hook.cpp
         src/mohavr/game_exec.cpp
         src/mohavr/render_res.cpp
