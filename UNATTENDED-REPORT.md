@@ -335,6 +335,7 @@ items go into **round 14**. Deploy round 14 only at the end, as the morning conf
       the hook point is clear. Otherwise BLOCKED with what's known.
 
 ### S. Handover
-- [ ] HEADSET-TESTS round 14 (everything above that passed [S]; questions for each), STATUS, ENGINE-NOTES, README
+- [ ] HEADSET-TESTS round 14 (everything above that passed [S]; questions for each; if round 13 has no answers yet,
+      fold its questions in -- the testing replaces the round-13 deployment), STATUS, ENGINE-NOTES, README
       (controls: holsters, foregrip, reload gesture, stick swap, gun hand), commit, deploy round 14 (shipped defaults,
       no RuntimeJson), undeploy nothing else. Summary at the end of this section.
