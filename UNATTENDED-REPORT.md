@@ -281,8 +281,7 @@ in HEADSET-TESTS round 5.
 ## 7. Checklist 2 (2026-09-27 evening): the player's hand features, in order
 
 The player's list (their words): "foregrip use on guns for left hand (position adjustable in menu). Holster system,
-right shoulder = long gun 1, left = long gun 2, right hip = pistol, right = grenade [read as: left hip = grenade --
-ask in the round], ability to swap joystick functions (right becomes move, left becomes turn). Ability to use left
+right shoulder = long gun 1, left = long gun 2, right hip = pistol, right = grenade [confirmed: left hip = grenade], ability to swap joystick functions (right becomes move, left becomes turn). Ability to use left
 hand as main gun hand and right as foregrip, throwable grenades, manual reloading."
 Same rules as §5. The player plays **round 13** first (already deployed: Gun fit page, aim along the barrel); these
 items go into **round 14**. Deploy round 14 only at the end, as the morning configuration.
@@ -313,19 +312,28 @@ items go into **round 14**. Deploy round 14 only at the end, as the morning conf
 - [ ] [S]: test left hand placed at the foregrip point + `raw=1 press=lgrip dur=3` -> log "foregrip taken"; move the
       left test hand 10 cm up -> the gun and the aim ray pitch up by atan(10/30); the left grip doesn't press LB.
 
-### O. Holsters -- [S] logic, [H] feel
+### O. Holsters, and the hand that draws holds the gun -- [S] logic, [H] feel
+The player (2026-09-27): "Left hip for grenade. Should be able to grab weapons out of holster with either hand, hand
+that grabs is used as main hand for gun, other hand can grab foregrip."
+- [ ] Either hand can draw from any spot (already so in hands.cpp). **The drawing hand becomes the gun hand** (state in
+      Hands, replacing the fixed `leftHanded` input as the source of truth): gunPose/aimRay follow it, the other hand is
+      the foregrip/reload hand, and the pad's fire/grip sides follow it live (`pad.SetLeftHanded(gunHand == left)`,
+      called when it changes -- triggers and grips swap). Weapon switching with the Y button keeps the current gun hand.
+      Log "hands: gun hand -> left/right". Publish the gun hand (gunFlags bit 2) and use it for the host's aimSource
+      (2 left / 3 right) so the reticle is on the right hand; the game's aim uses aimRay (item M) whatever Aim.Mode
+      says, as long as Aim.Mode is 2 or 3.
 - [ ] [S]: test right hand at the right shoulder spot + `press=rgrip` -> 'SwitchPrimary' runs in the game and the
-      weapon key changes; the same for the other spots (log the weapon key before/after). The grip doesn't reload.
-- [ ] Ask in round 14 whether "right = grenade" meant left hip; spots adjustable in the ini.
+      weapon key changes; the same for the other spots, with left hip = grenade (log the weapon key before/after).
+      The grip doesn't reload/use. Then the LEFT test hand draws from the right hip -> gun hand left: the gun is drawn
+      at the left test hand, the left trigger fires (raw test `lt=1`), the right hand's grip at the foregrip takes it.
 
-### P. Stick swap and left-handed -- [S]
-- [ ] Menu main page: "Sticks < move left | move right >" and "Gun hand < right | left >", saved in the player's ini
-      ([Controls] SwapSticks, LeftHanded), applied via `pad.SetSwapSticks/SetLeftHanded` and Hands' leftHanded.
-      Left-handed also means the aim hand: the host's aimSource and the game's Aim.Mode must follow (publish the gun
-      hand; the game's aim uses gunPose/aimRay anyway once item M is done).
-- [ ] [S]: raw test with the physical right stick -> the pad's left stick moves; left-handed: left trigger fires,
-      the gun is drawn at the left test hand. The arms model stays right-handed (mirroring = later research).
-
+### P. Stick swap, and the starting gun hand -- [S]
+- [ ] Menu main page: "Sticks < move left | move right >" and "Gun hand < right | left >" (the hand at start and after a
+      level load, until a hand draws), saved in the player's ini ([Controls] SwapSticks, GunHand), applied via
+      `pad.SetSwapSticks` and Hands.
+- [ ] [S]: raw test with the physical right stick -> the pad's left stick moves (and the crouch flick moves to the
+      turning stick). The arms model stays right-handed in the left hand (mirroring = later research; say so in
+      round 14).
 ### Q. Reload gesture -- [S] logic, [H] feel
 - [ ] [S]: left test hand at the magazine point (8 cm below, 10 cm ahead of the gun hand) + press=lgrip -> 'Reload'.
 
