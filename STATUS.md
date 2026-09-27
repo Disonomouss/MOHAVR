@@ -112,8 +112,8 @@ address-space budget for D3D9On12.
   - the title-screen height from a tracked pose.
 
 ## Next
-1. **HEADSET-TESTS round 11** (deployed, `Aim.Mode=3`): aiming with the right controller plus the red-dot
-   reticle. **M7 [S] done** (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
+1. **M7 done** (headset round 11 passed; `Aim.Mode=3`, right hand, is the default): aiming with the right controller plus the
+   red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
 2. **M8, the gun in the hand:** the view model follows the aiming controller (`UpdateGunView` offsets or the

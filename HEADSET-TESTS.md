@@ -421,9 +421,13 @@ middle of your view, so go by the red dot. [S] proven in the simulator: the bull
 4. Hand aiming or head aiming (shots land where you look, no dot): which do you want to try next or keep? (hand / head / the old way)
 5. The gun in front of your face while you aim elsewhere: bearable until it moves to your hand, or hide it for now? (keep / hide)
 
-**Answers:** (the player's words)
+**Answers (2026-09-27, ~19:10):** 1. yes. 2. Yes. 3. Good. 4. Hand. 5. keep for now.
 
-**Log received:** (after `tools\deploy.ps1 undeploy`)
+**Log received:** yes (`logs/modlogs/20260927-191114-*`): the hook was in, the player's shots took the hand aim, and the
+XR frame held 90 Hz (11.1 ms average, 0–1 late frames in 900) with the per-frame trace.
+
+**Verdict:** hand aiming **PASSED**. `Aim.Mode=3` (right hand) becomes the shipped default, with the reticle; the gun
+stays visible until M8 puts it in the hand.
 
 **Deployed for this round:** the shipped defaults plus `Aim.Mode=3` (right hand; the reticle is on by default).
 

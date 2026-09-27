@@ -104,7 +104,7 @@ from the OpenXR actions. Map controller buttons to the game's own controls (from
 `DefaultInput.ini`), not to keys, and make the mapping remappable.
 **Accept [S]:** scripted controller actions move, crouch, fire, and navigate menus.
 
-### M7. Controller aiming — [S] then [H] — **[S] DONE 2026-09-27** (ENGINE-NOTES 5s), [H] round 11
+### M7. Controller aiming — [S] then [H] — **DONE 2026-09-27** (ENGINE-NOTES 5s; headset round 11)
 Find where the engine builds the shot ray and drive it from the controller pose. Turn the body
 towards the controller with a gentle servo.
 **Accept [S]:** a shot fired along a scripted controller ray hits a known target. **[H]:** aim

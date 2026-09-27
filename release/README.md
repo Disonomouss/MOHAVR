@@ -33,7 +33,7 @@ The monitor shows what the headset shows (a mirror over the game's window), whil
 
 ## Controls
 
-You play with the VR controllers. Aiming up and down follows your head. To use an Xbox controller or
+You play with the VR controllers and aim by pointing the right one (a red dot shows where shots land). To use an Xbox controller or
 mouse and keyboard instead, set `Input.Controllers=0` in `MOHAVR.ini`.
 
 | Controller | Game |
@@ -80,16 +80,16 @@ headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may
 | `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880×1620). Lower it (for example 1920×1080) if the game stutters. |
 | `Camera.CinemaScreen=2` | Also shows cutscenes on the flat screen (default `1`: menus only). |
 | `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
-| `Aim.Mode` | What you aim with: `0` the game's own (your body's direction, with up/down from your head), `1` your head (shots land where you look), `2` left controller, `3` right controller (shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot). |
+| `Aim.Mode` | What you aim with: `3` the right controller (default: shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot), `2` the left controller, `1` your head (shots land where you look), `0` the game's own (your body's direction, with up/down from your head). |
 | `Weapon.HideViewModel=1` | Hides the first-person gun. |
 | `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
 | `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |
 
 ## Known issues
 
-- **Aiming:** by default up/down follows your head, but left/right follows your body (the direction you turn
-  with the stick). `Aim.Mode` lets you aim with your head or a controller instead. With a controller the gun
-  still sits in front of your face rather than in your hand; that comes next.
+- **Aiming:** you aim with the right controller (the red dot), but the gun still sits in front of your face
+  rather than in your hand, and the HUD's crosshair marks the middle of your view, not your aim. The gun in
+  your hand comes next.
 - The first-person gun sits very close to your eyes and can look doubled. `Weapon.HideViewModel=1` hides
   it.
 
