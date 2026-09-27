@@ -186,8 +186,15 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
         }
         pose = hand[h];
     }
-    float pos[3], fwd[3], upm = 100.0f;
-    if (!view::PoseToWorld(pose, pos, fwd, upm)) return;
+    float pos[3], axes[3][3], upm = 100.0f;
+    if (!view::PoseFrameToWorld(pose, pos, axes, upm)) return;
+    const float (&fwd)[3] = axes[0];
+    // With the gun drawn in the hand (Weapon.ViewModel=2) the ray runs along its barrel, Aim.RayUp above the
+    // controller's aim pose (headset round 12: the shots were ~8 cm below the barrel).
+    if (g_cfg.aimMode >= 2 && g_cfg.viewModel == 2) {
+        const float lift = g_cfg.aimRayUp * upm / 100.0f;
+        for (int i = 0; i < 3; ++i) pos[i] += axes[2][i] * lift;
+    }
     const float reach = kTraceMeters * upm;
     const float end[3] = {pos[0] + fwd[0] * reach, pos[1] + fwd[1] * reach, pos[2] + fwd[2] * reach};
     float point[3];

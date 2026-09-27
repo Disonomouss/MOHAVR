@@ -378,6 +378,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     const bool handsOk = controllers && pad.CreateSpaces(session);
     mohavr::host::Reticle reticle;
     bool reticleOk = false;
+    float reticleRayUp = 0.0f;  // metres along the aim pose's up
     {
         const std::wstring ini = ExeDir() + L"\\MOHAVR.ini";
         wchar_t v[16] = L"";
@@ -385,6 +386,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         const float deg = static_cast<float>(_wtof(v));
         if (handsOk && GetPrivateProfileIntW(L"Aim", L"Reticle", 1, ini.c_str()) != 0)
             reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
+        // With the gun in the hand the game's aim ray runs along the barrel, [Aim] RayUp cm above the aim pose
+        // (aim.cpp); the reticle's ray must be the same one.
+        if (GetPrivateProfileIntW(L"Weapon", L"ViewModel", 2, ini.c_str()) == 2) {
+            GetPrivateProfileStringW(L"Aim", L"RayUp", L"8", v, 16, ini.c_str());
+            const float cm = static_cast<float>(_wtof(v));
+            reticleRayUp = (cm >= -30.0f && cm <= 30.0f) ? cm / 100.0f : 0.08f;
+        }
+        MLOG("host: reticle ray %.1f cm above the aim pose", reticleRayUp * 100.0f);
     }
     XrPosef handPose[2] = {};
     std::uint32_t handBits = 0;
@@ -848,9 +857,15 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (reticleOk && lastMeta.hasView && menuHeadOk && !(menuOk && menu.Visible())) {
                 const std::uint32_t src = g_hdr->aimSource;
                 const float d = g_hdr->aimDistance;
-                if ((src == 2 || src == 3) && (handBits & (1u << (src - 2))))
-                    if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, handPose[src - 2], menuHead, d))
+                if ((src == 2 || src == 3) && (handBits & (1u << (src - 2)))) {
+                    XrPosef ray = handPose[src - 2];
+                    const auto& q = ray.orientation;  // up = q * (0,1,0)
+                    ray.position.x += reticleRayUp * 2.0f * (q.x * q.y - q.w * q.z);
+                    ray.position.y += reticleRayUp * (1.0f - 2.0f * (q.x * q.x + q.z * q.z));
+                    ray.position.z += reticleRayUp * 2.0f * (q.y * q.z + q.w * q.x);
+                    if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, ray, menuHead, d))
                         layers[layerCount++] = rl;
+                }
             }
             // The menu panel on top of the game when open.
             if (menuOk) {

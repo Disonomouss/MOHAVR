@@ -451,11 +451,40 @@ one piece, so they may look detached from your body. [S]: the simulator shows th
 4. Does the barrel line up with the red dot? (yes/no, which way it's off)
 5. Anything odd with other weapons or aiming down the sights? (describe)
 
+**Answers (2026-09-27, ~19:40):** 1. Yes. 2. No. 3. feels ok. 4. "A bit low", with a screenshot of the pistol against a
+wall (`OneDrive/Pictures/VirtualDesktop.Android-20260927-193819.jpg`). 5. no.
+
+**Log received:** yes (`logs/modlogs/20260927-194043-*`). The pistol's origin sits at 37.6 / 11.3 / −12.5 in the camera
+frame (the rifle's 34.2 / 11.2 / −16.7), so the fixed grip holds each weapon slightly differently.
+
+**Reading the screenshot:** the red dot (the shots) is ~217 px below the line of the pistol's barrel on a wall about
+as far away as the gun (slide ≈ 21 cm = 540 px) -> the barrel runs ~8 cm above the controller's aim ray, parallel to
+it. **Fix:** the aim ray is raised to the barrel, `Aim.RayUp=8` (cm along the controller's up; with the gun in the
+hand only), in the game's aim and in the host's reticle alike.
+
+**Verdict:** gun in hand **PASSED** (not doubled, fits); the aim line follows in round 13.
+
+**Deployed for this round:** the shipped defaults plus `Weapon.ViewModel=2` (grip 34 / 11 / −17).
+
+---
+
+## Round 13: prepared 2026-09-27, the aim along the gun's barrel
+**Changed:** the aim (and the red dot) now runs 8 cm higher, along the gun's barrel instead of from the controller's
+tip. The gun in your hand is now the default. [S]: the simulator shows the aim ray starting 8 cm above the hand,
+in the game and for the red dot alike.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Shoot at a wall with the pistol, as in your screenshot, and with the rifle; look along the barrel at the red dot.
+
+**Questions:**
+1. Does the barrel line up with the red dot now, with the pistol? (yes / still low / now high)
+2. And with the rifle? (yes / low / high / left / right)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults plus `Weapon.ViewModel=2` (grip 34 / 11 / −17).
+**Deployed for this round:** the shipped defaults (now `Weapon.ViewModel=2`, `Aim.RayUp=8`), no overrides.
 
 ---
 

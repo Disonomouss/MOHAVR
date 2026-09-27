@@ -81,18 +81,17 @@ headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may
 | `Camera.CinemaScreen=2` | Also shows cutscenes on the flat screen (default `1`: menus only). |
 | `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
 | `Aim.Mode` | What you aim with: `3` the right controller (default: shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot), `2` the left controller, `1` your head (shots land where you look), `0` the game's own (your body's direction, with up/down from your head). |
-| `Weapon.ViewModel` | The first-person gun: `0` as the game draws it (looks doubled in the headset), `1` true 3D in front of you, `2` in your aiming hand (`Weapon.GripX/Y/Z` fit it to your hand). |
+| `Weapon.ViewModel` | The first-person gun: `0` as the game draws it (looks doubled in the headset), `1` true 3D in front of you, `2` in your aiming hand (default; `Weapon.GripX/Y/Z` fit it to your hand, `Aim.RayUp` lines the aim up with its barrel). |
 | `Weapon.HideViewModel=1` | Hides the first-person gun. |
 | `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
 | `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |
 
 ## Known issues
 
-- **Aiming:** you aim with the right controller (the red dot), but the gun still sits in front of your face
-  rather than in your hand, and the HUD's crosshair marks the middle of your view, not your aim. The gun in
-  your hand comes next.
-- The first-person gun sits very close to your eyes and can look doubled. `Weapon.HideViewModel=1` hides
-  it.
+- **Aiming:** you aim with the right controller (the red dot). The HUD's crosshair still marks the middle of
+  your view, not your aim.
+- The gun is drawn in your hand, but both arms move with it as one piece, so they can look detached from your
+  body.
 
 ## Uninstall
 
