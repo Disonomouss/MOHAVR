@@ -126,6 +126,8 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
         {kRThumb, "right_thumb_click", "Right stick click", XR_ACTION_TYPE_BOOLEAN_INPUT},
     };
     for (const auto& d : defs) ok = ok && make(src_[d.s], d.name, d.loc, d.type);
+    ok = ok && make(aim_[0], "left_aim", "Left hand aim", XR_ACTION_TYPE_POSE_INPUT) &&
+         make(aim_[1], "right_aim", "Right hand aim", XR_ACTION_TYPE_POSE_INPUT);
     if (!ok) return false;
 
     wchar_t tmp[MAX_PATH];
@@ -155,6 +157,10 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
 void Pad::AppendBindings(const std::string& profile, const std::function<XrPath(const char*)>& path,
                          std::vector<XrActionSuggestedBinding>& out) const {
     auto add = [&](XrAction a, const char* p) { out.push_back({a, path(p)}); };
+    if (profile == "/interaction_profiles/oculus/touch_controller" || profile == "/interaction_profiles/valve/index_controller") {
+        add(aim_[0], "/user/hand/left/input/aim/pose");
+        add(aim_[1], "/user/hand/right/input/aim/pose");
+    }
     if (profile == "/interaction_profiles/oculus/touch_controller") {
         add(stick_[0], "/user/hand/left/input/thumbstick");
         add(stick_[1], "/user/hand/right/input/thumbstick");
@@ -295,13 +301,26 @@ void Pad::ReadTests(double now) {
             t.dur = 0.5;
             float lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
             std::string buttons, press;
+            bool aimLine = false;
             char* ctx = nullptr;
             for (char* tok = strtok_s(line, " \t\r\n", &ctx); tok; tok = strtok_s(nullptr, " \t\r\n", &ctx)) {
                 char* eq = strchr(tok, '=');
                 if (!eq) continue;
                 *eq = 0;
                 const char* v = eq + 1;
-                if (!strcmp(tok, "lx")) lx = static_cast<float>(atof(v));
+                if (!strcmp(tok, "aim")) {
+                    // "aim=yaw,pitch" (degrees) or "aim=off": a test right-hand aim pose, until changed.
+                    aimLine = true;
+                    testAim_ = strcmp(v, "off") != 0;
+                    float y = 0.0f, p = 0.0f;
+                    if (testAim_ && sscanf_s(v, "%f,%f", &y, &p) >= 1) {
+                        testAimYaw_ = y;
+                        testAimPitch_ = p;
+                    }
+                    if (testAim_) MLOG("pad: test aim yaw %.1f pitch %.1f deg (right hand)", testAimYaw_, testAimPitch_);
+                    else MLOG("pad: test aim off");
+                }
+                else if (!strcmp(tok, "lx")) lx = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "ly")) ly = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "rx")) rx = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "ry")) ry = static_cast<float>(atof(v));
@@ -312,6 +331,7 @@ void Pad::ReadTests(double now) {
                 else if (!strcmp(tok, "buttons")) buttons = v;
                 else if (!strcmp(tok, "press")) press = v;
             }
+            if (aimLine) continue;  // an aim line sets the test pose only; it is not a pad state
             auto each = [](const std::string& list, auto fn) {
                 size_t p = 0;
                 while (p < list.size()) {
@@ -405,6 +425,51 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
     if (!published_) MLOG("pad: driving the game's pad 0");
     last_ = p;
     published_ = true;
+}
+
+bool Pad::CreateSpaces(XrSession session) {
+    for (int h = 0; h < 2; ++h) {
+        XrActionSpaceCreateInfo ci{XR_TYPE_ACTION_SPACE_CREATE_INFO};
+        ci.action = aim_[h];
+        ci.poseInActionSpace.orientation.w = 1.0f;
+        if (!aim_[h] || XR_FAILED(xrCreateActionSpace(session, &ci, &aimSpace_[h]))) {
+            MLOG("pad: aim pose space %d failed -- no hand aiming", h);
+            return false;
+        }
+    }
+    MLOG("pad: aim pose spaces ready");
+    return true;
+}
+
+std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const {
+    std::uint32_t valid = 0;
+    for (int h = 0; h < 2; ++h) {
+        out[h] = XrPosef{{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
+        if (!aimSpace_[h]) continue;
+        XrSpaceLocation loc{XR_TYPE_SPACE_LOCATION};
+        constexpr XrSpaceLocationFlags need = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT;
+        if (XR_SUCCEEDED(xrLocateSpace(aimSpace_[h], space, t, &loc)) && (loc.locationFlags & need) == need) {
+            out[h] = loc.pose;
+            valid |= 1u << h;
+        }
+    }
+    if (testAim_) {
+        // The head's heading (yaw only), then the test pose in that frame.
+        const auto& q = head.orientation;
+        const float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
+        const float heading = std::atan2(-fx, -fz);  // R_y(heading) * (0,0,-1) = (fx, 0, fz)
+        const float sh = std::sin(heading), ch = std::cos(heading);
+        // right = (cos, 0, -sin), forward = (-sin, 0, -cos)
+        out[1].position = {head.position.x + 0.2f * ch - 0.3f * sh, head.position.y - 0.3f,
+                           head.position.z - 0.2f * sh - 0.3f * ch};
+        const float yaw = heading - testAimYaw_ * 0.0174533f;  // positive test yaw = to the right
+        const float pitch = testAimPitch_ * 0.0174533f;        // positive = up
+        const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cx = std::cos(pitch * 0.5f),
+                    sx = std::sin(pitch * 0.5f);
+        out[1].orientation = {cy * sx, cx * sy, -sy * sx, cy * cx};  // R_y(yaw) * R_x(pitch)
+        valid |= 2u;
+    }
+    return valid;
 }
 
 }  // namespace mohavr::host

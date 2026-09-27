@@ -76,7 +76,7 @@ field of view per eye. Handle both near planes (culler and projection).
 **Accept [S]:** the camera follows scripted head poses. **[H]:** scale and FOV feel right, and
 near objects clip rather than vanish.
 
-### M4. Stereo — [S] then [H] — **[S] DONE 2026-09-25**, [H] pending
+### M4. Stereo — [S] then [H] — **DONE 2026-09-26** ([H]: headset rounds 3–8)
 *As built:* UE3's own split-screen path. An InlineHook on `UGameViewportClient::Draw` makes
 `GamePlayers` list the same ULocalPlayer twice during Draw, and a CalcSceneView entry MidHook gives
 call 0 the left half and call 1 the right half. The view and projection hooks use each eye's own pose
@@ -91,20 +91,20 @@ submitting.
 **Accept [S]:** the two eyes differ by the expected parallax, and nothing appears in only one
 eye. **[H]:** no flicker, and depth reads correctly.
 
-### M5. Layers: menus, cutscenes, HUD — [S] then [H]
+### M5. Layers: menus, cutscenes, HUD — [S] then [H] — **DONE 2026-09-26** (headset round 5)
 Show menus, cutscenes and "no live player" states on a world-locked cinema-screen quad. Use a
 one-frame device-call trace to find where the HUD is drawn, redirect it to its own texture, and
 show that on a quad (wrist or fixed). Per-eye overlays (reticle, vignette) get their own draw
 at the end of each pass.
 **Accept [S]:** capture-window shows the quads. **[H]:** nothing is stuck to the face.
 
-### M6. Controller input (virtual pad) — [S] then [H]
+### M6. Controller input (virtual pad) — [S] then [H] — **DONE 2026-09-26** (headset rounds 5–6)
 Hook DirectInput `GetDeviceState` (and XInput, if the game uses it) and synthesize controls
 from the OpenXR actions. Map controller buttons to the game's own controls (from
 `DefaultInput.ini`), not to keys, and make the mapping remappable.
 **Accept [S]:** scripted controller actions move, crouch, fire, and navigate menus.
 
-### M7. Controller aiming — [S] then [H]
+### M7. Controller aiming — [S] then [H] — **[S] DONE 2026-09-27** (ENGINE-NOTES 5s), [H] round 11
 Find where the engine builds the shot ray and drive it from the controller pose. Turn the body
 towards the controller with a gentle servo.
 **Accept [S]:** a shot fired along a scripted controller ray hits a known target. **[H]:** aim

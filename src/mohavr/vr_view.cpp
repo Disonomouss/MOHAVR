@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "addresses.hpp"
+#include "aim.hpp"
 #include "bridge.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
@@ -122,6 +123,20 @@ void ForceVrSettings() {
 // Translation origin (OpenXR LOCAL), taken from the first TRACKED head pose (see OnViewPoint).
 bool  g_haveOrigin = false;
 float g_ox = 0, g_oy = 0, g_oz = 0;
+
+// M7: how the player's last head-tracked view mapped LOCAL into the world (game thread; PoseToWorld).
+struct WorldMap {
+    bool         valid;
+    float        base[3];  // the game's own (untracked) view location -- where its shots start
+    float        yaw;      // the game's yaw (radians)
+    shared::Pose head;     // that view's head pose (the translation reference without an origin)
+};
+WorldMap g_world{};
+
+float UnitsPerMeter(const shared::Header* hdr) {
+    const float live = hdr ? hdr->unitsPerMeter : 0.0f;
+    return (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter;
+}
 
 // `recenterSeq` must be read BEFORE the views: the host publishes views in its new LOCAL space
 // first and bumps the sequence after, so a new sequence always comes with new-space views.
@@ -433,6 +448,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
     if (g_cinema) return;  // flat: the game's own camera, untouched; the frame is marked "no view"
 
     const float gameYaw = UnrToRad(rot[1]);
+    if (g_thisEye == 0 && g_viewIsPlayers) {
+        // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
+        g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head};
+    }
     // Stereo: this eye's own pose (orientation and position); mono: the head.
     const shared::Pose& p = g_thisStereo ? eye[g_thisEye] : head;
 
@@ -506,6 +525,8 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
     LeaveCriticalSection(&g_lock);
     g_thisViewActive = true;
+    if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi)
+        aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_world.base);
 
     if (++g_views == 1 || g_views % 4000 == 0) {
         MLOG("view #%ld (%s eye %d): pose q(%.3f %.3f %.3f %.3f) p(%.3f %.3f %.3f) -> rot P%d Y%d R%d (game yaw %d)", g_views,
@@ -780,6 +801,7 @@ bool Install(const Config& cfg) {
             }
         }
     }
+    aim::Install(cfg);  // M7: needs the view hook (PoseToWorld)
     return true;
 }
 
@@ -798,6 +820,28 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta) {
     LeaveCriticalSection(&g_lock);
     meta.hasView = ok ? 1u : 0u;
     return ok;
+}
+
+bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float& unitsPerMeter) {
+    if (!g_world.valid) return false;
+    const shared::Header* hdr = bridge::SharedHeader();
+    unitsPerMeter = UnitsPerMeter(hdr);
+    // The same translation reference as the eyes: the origin when position tracking has one, else the head.
+    const bool origin = g_cfg.headPosition && g_haveOrigin;
+    const float ox = origin ? g_ox : g_world.head.px, oy = origin ? g_oy : g_world.head.py,
+                oz = origin ? g_oz : g_world.head.pz;
+    const Vec3 d = YawRotate(XrToUe(p.px - ox, p.py - oy, p.pz - oz), g_world.yaw);
+    const float h = hdr ? hdr->heightOffset : 0.0f;
+    const float lift = (h > -1.0f && h < 1.0f) ? h * unitsPerMeter : 0.0f;
+    pos[0] = g_world.base[0] + d.x * unitsPerMeter;
+    pos[1] = g_world.base[1] + d.y * unitsPerMeter;
+    pos[2] = g_world.base[2] + d.z * unitsPerMeter + lift;
+    const Vec3 f = QuatRotate(p, 0.0f, 0.0f, -1.0f);
+    const Vec3 F = YawRotate(XrToUe(f.x, f.y, f.z), g_world.yaw);
+    fwd[0] = F.x;
+    fwd[1] = F.y;
+    fwd[2] = F.z;
+    return true;
 }
 
 }  // namespace mohavr::view

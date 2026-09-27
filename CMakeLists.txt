@@ -27,6 +27,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/patch.cpp
         src/mohavr/xr_session.cpp
         src/mohavr/vr_view.cpp
+        src/mohavr/aim.cpp
         src/mohavr/xinput_hook.cpp
         src/mohavr/game_exec.cpp
         src/mohavr/render_res.cpp
@@ -49,6 +50,7 @@ else()
         src/host/menu.cpp
         src/host/mirror.cpp
         src/host/pad.cpp
+        src/host/reticle.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).

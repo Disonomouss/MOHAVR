@@ -29,6 +29,7 @@
 #include "menu.hpp"
 #include "mirror.hpp"
 #include "pad.hpp"
+#include "reticle.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -373,6 +374,20 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
         MLOG("host: actions attached (menu%s; Touch, Index, simple controller)", controllers ? " + gameplay pad" : "");
     }
+    // M7: the aim poses (for the game's aim) and the reticle ([Aim] Reticle, ReticleSize in degrees).
+    const bool handsOk = controllers && pad.CreateSpaces(session);
+    mohavr::host::Reticle reticle;
+    bool reticleOk = false;
+    {
+        const std::wstring ini = ExeDir() + L"\\MOHAVR.ini";
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Aim", L"ReticleSize", L"0.8", v, 16, ini.c_str());
+        const float deg = static_cast<float>(_wtof(v));
+        if (handsOk && GetPrivateProfileIntW(L"Aim", L"Reticle", 1, ini.c_str()) != 0)
+            reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
+    }
+    XrPosef handPose[2] = {};
+    std::uint32_t handBits = 0;
     // Test channel: %TEMP%\MOHAVR\host_cmd.txt, one command per line (toggle/up/down/left/right/select/back),
     // consumed and deleted each frame -- the simulator can't press controller buttons.
     std::wstring cmdPath;
@@ -631,7 +646,20 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
                 const auto& hq = headLoc.pose.orientation;
                 headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
+                // M7: the aim poses, at the same time and in the same space as the head.
+                handBits = handsOk ? pad.LocateHands(local, fs.predictedDisplayTime, headLoc.pose, handPose) : 0u;
+                g_hdr->handValid = handBits;
+                for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
+                {
+                    static std::uint32_t seenBits = 0xFFFFFFFFu;
+                    static int logged = 0;
+                    if (handBits != seenBits && logged < 20) {
+                        ++logged;
+                        MLOG("host: aim poses %s%s", handBits & 1u ? "left " : "", handBits & 2u ? "right" : handBits ? "" : "none");
+                        seenBits = handBits;
+                    }
+                }
                 if (recenterBumpPending) {
                     recenterBumpPending = false;
                     // Anything published up to now (plus a frame the game may be rendering with views it
@@ -747,7 +775,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
         XrCompositionLayerProjectionView pviews[2] = {{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
                                                       {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
-        const XrCompositionLayerBaseHeader* layers[2];
+        const XrCompositionLayerBaseHeader* layers[3];
         uint32_t layerCount = 0;
         if (fs.shouldRender) {
             uint32_t idx = 0;
@@ -816,6 +844,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
             }
             layerCount = 1;
+            // M7: the reticle where the shot will land, along the aiming hand's ray (gameplay only).
+            if (reticleOk && lastMeta.hasView && menuHeadOk && !(menuOk && menu.Visible())) {
+                const std::uint32_t src = g_hdr->aimSource;
+                const float d = g_hdr->aimDistance;
+                if ((src == 2 || src == 3) && (handBits & (1u << (src - 2))))
+                    if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, handPose[src - 2], menuHead, d))
+                        layers[layerCount++] = rl;
+            }
             // The menu panel on top of the game when open.
             if (menuOk) {
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;

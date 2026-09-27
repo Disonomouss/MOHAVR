@@ -136,6 +136,33 @@ inline constexpr std::uintptr_t kHudMatrixStackOffset = 0x130;
 inline constexpr std::uintptr_t kDecalScreenBox = 0x10A2ABB0;
 inline constexpr std::uint8_t   kDecalScreenBoxBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x81, 0xEC, 0x44, 0x01, 0x00, 0x00};
 
+// --- M7 aim (ENGINE-NOTES 5s) ---
+// UPawn::execGetBaseAimRotation(FFrame&, RESULT_DECL): the script native behind Pawn.GetBaseAimRotation()
+// (native table entry "intAPawnexecGetBaseAimRotation" at 0x116158E0). thiscall (ECX = pawn), RET 8; it
+// finishes the params, calls the C++ virtual (vtable + 0x354) and copies its FRotator to *Result. The
+// player's shots take their base aim from it (PlayerController.GetAdjustedAimFor).
+inline constexpr std::uintptr_t kExecGetBaseAimRotation = 0x10D39090;
+inline constexpr std::uint8_t   kExecGetBaseAimRotationBytes[] = {0x8B, 0x44, 0x24, 0x04, 0x83, 0x40, 0x1C, 0x01, 0x83, 0xEC, 0x0C, 0x56, 0x8B, 0xF1};
+// UWorld::SingleLineCheck -- LTCG convention, read from AActor::execTrace (0x10CE85A0, the call at
+// 0x10CE8994): stack (this = GWorld, FCheckResult* Hit, AActor* Source, FVector* End, FVector* Start,
+// FVector* Extent), EAX = TraceFlags, ECX = light component (0); callee pops (RET 0x18); preserves
+// EBX/ESI/EDI/EBP. Returns nonzero when nothing was hit.
+inline constexpr std::uintptr_t kSingleLineCheck = 0x10B640A0;
+inline constexpr std::uint8_t   kSingleLineCheckBytes[] = {0x51, 0x8B, 0x54, 0x24, 0x10, 0x53, 0x8B, 0x1D, 0x50, 0xE5, 0x6A, 0x11};
+inline constexpr std::uintptr_t kGWorld = 0x116DCE78;       // UWorld* (execTrace: mov ecx,[0x116DCE78] before the call)
+// The flags execTrace builds for Trace(..., bTraceActors=true): 0x20BF | 0x4000 (SingleLineCheck adds 0x400).
+inline constexpr std::uint32_t  kTraceFlagsActors = 0x60BF;
+// FCheckResult (execTrace's initialisation): Next +0, Actor +4, Location +8, Normal +0x14, Time +0x20 (1.0 =
+// no hit), Item +0x24 (-1), then Material/Component/BoneName/...: 0x44 bytes in all.
+inline constexpr std::uintptr_t kCheckResultActor = 0x04, kCheckResultLocation = 0x08, kCheckResultTime = 0x20,
+                                kCheckResultItem = 0x24, kCheckResultSize = 0x44;
+inline constexpr std::uintptr_t kActorLocation   = 0xE8;    // FVector (execTrace reads Actor+0xE8 as the default start)
+// Pawn.Controller: APawn::execIsHumanControlled (0x10D38FF0) tests [pawn+0x1EC]. Its declared place (after
+// three floats) puts AActor's size at 0x1E0, and Controller.Pawn is Controller's first variable -> +0x1E0.
+// Used only when both point at each other (checked at run time).
+inline constexpr std::uintptr_t kPawnController  = 0x1EC;
+inline constexpr std::uintptr_t kControllerPawn  = 0x1E0;
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},
@@ -154,6 +181,8 @@ inline constexpr Signature kSignatures[] = {
     {"Draw HUD loop view read",            kHudViewRead, kHudViewReadBytes, sizeof(kHudViewReadBytes)},
     {"Draw HUD matrix push",               kHudMatrixPush, kHudMatrixPushBytes, sizeof(kHudMatrixPushBytes)},
     {"decal screen box",                   kDecalScreenBox, kDecalScreenBoxBytes, sizeof(kDecalScreenBoxBytes)},
+    {"execGetBaseAimRotation",             kExecGetBaseAimRotation, kExecGetBaseAimRotationBytes, sizeof(kExecGetBaseAimRotationBytes)},
+    {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},
 };
 
 }  // namespace mohavr::addr

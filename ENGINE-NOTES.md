@@ -512,6 +512,32 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   zeroes them for this call and replaces the return address with a stub that restores them and adds X/Y to
   the box. Only the render thread's own view is touched, for the length of one call.
 
+## 5s. Aiming with the head or a controller (M7, 2026-09-27, simulator)
+
+- **`UPawn::execGetBaseAimRotation`** `0x10D39090` (thiscall, `RET 8`): finishes the params (`[stack+0x1C]`,
+  `0x41` = EX_EndFunctionParms), calls the C++ virtual at vtable `+0x354` and copies its FRotator to `*Result`.
+  The player's shots take their base aim from it (`PlayerController.GetAdjustedAimFor` → `Pawn.GetBaseAimRotation()`),
+  then aim assist and spread. Measured: while firing it's called once per shot for the player's pawn.
+- **`Pawn.Controller` = `+0x1EC`** (`execIsHumanControlled` `0x10D38FF0` tests it). Declared after three floats,
+  so `sizeof(AActor)` = `0x1E0`, and **`Controller.Pawn` = `+0x1E0`** (Controller's first variable). Verified at
+  run time: the local controller's `+0x1E0` is a pawn whose `+0x1EC` is that controller. `Actor.Location` = `+0xE8`.
+- **`UWorld::SingleLineCheck`** `0x10B640A0`, LTCG convention (read at execTrace's call, `0x10CE8994`): stack
+  `(this = GWorld 0x116DCE78, FCheckResult* Hit, AActor* Source, FVector* End, FVector* Start, FVector* Extent)`,
+  `EAX` = trace flags (it ORs in `0x400`), `ECX` = light component (0); callee pops `0x18`; EBX/ESI/EDI/EBP kept.
+  Returns nonzero when nothing was hit. `Trace(..., bTraceActors=true)` uses flags `0x60BF`. FCheckResult: Actor
+  `+4`, Location `+8`, Normal `+0x14`, Time `+0x20` (init 1.0), Item `+0x24` (init −1), `0x44` bytes.
+- **The shot start stays the game's eye** (`GetWeaponStartTraceLocation` → `GetPlayerViewPoint`: the untracked
+  camera). So `Aim.Mode` doesn't move the start: each view frame the aiming pose's ray (head, or a controller's
+  `/input/aim/pose`, mapped into the world exactly like the eyes) is traced, and the player's
+  `GetBaseAimRotation` returns the direction from the game's eye to that hit. The shot then lands on the ray's
+  hit point whatever the offset between hand and eye (only something between the eye and the point, which the
+  hand can see past, differs).
+- **Verified [S]:** head mode, head straight ahead: aim unchanged (P0 Y16388 both ways); head 30° left and 10°
+  down: aim Y −5461 (−30.0°) and P −1820 (−10.0°) from the body. Right-hand mode with a test pose 25° left, 5°
+  up: the burst's bullet holes land within ~1.5° (spread and recoil) of the aim point projected into the left eye,
+  and the host's reticle shows in both eyes at that point.
+- The simulator's own aim poses are the identity at the LOCAL origin (the floor); tests use `pad_cmd.py --aim`.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

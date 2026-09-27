@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 6;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad
+inline constexpr std::uint32_t kVersion = 7;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -116,6 +116,14 @@ struct Header {
     // Game -> host: 1 while one of the game's UI menus is open (the cursor test, ENGINE-NOTES 5m). The
     // virtual pad then uses its menu layout (A selects, B backs out).
     volatile std::uint32_t gameUiMenu;
+
+    // --- v7: the controllers' aim poses, host -> game (M7), written inside the view seqlock (viewSeq) ---------
+    std::uint32_t          handValid;  // bit 0: left aim pose valid (orientation + position), bit 1: right
+    Pose                   hand[2];    // /input/aim/pose located in LOCAL, left/right
+    // Game -> host: where the shot will land, for the reticle -- metres along the aim pose's forward from
+    // its position (0 = nothing to show), and which pose: 0 none, 1 head, 2 left hand, 3 right hand.
+    volatile float         aimDistance;
+    volatile std::uint32_t aimSource;
 };
 #pragma pack(pop)
 
@@ -129,7 +137,9 @@ static_assert(offsetof(Header, defaultUnitsPerMeter) == 788, "shared::Header lay
 static_assert(offsetof(Header, padSeq) == 820, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, snapYawTotal) == 840, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, gameUiMenu) == 844, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 848, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, hand) == 852, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, aimSource) == 912, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 920, "shared::Header layout must match between x86 and x64");
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {
@@ -143,6 +153,22 @@ inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]
     eye[1] = h->eye[1];
     fov[0] = h->eyeFov[0];
     fov[1] = h->eyeFov[1];
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    return h->viewSeq == s1;
+}
+
+// Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits.
+inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid) {
+    const std::uint32_t s1 = h->viewSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    valid = h->handValid;
+    hand[0] = h->hand[0];
+    hand[1] = h->hand[1];
 #if defined(_MSC_VER)
     _ReadWriteBarrier();
 #endif

@@ -43,6 +43,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.decalFix       = get(L"Render", L"DecalFix", c.decalFix);
     if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
     c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
+    c.aimMode        = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Mode", c.aimMode, ini.c_str()));
+    if (c.aimMode < 0 || c.aimMode > 3) c.aimMode = 0;
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));

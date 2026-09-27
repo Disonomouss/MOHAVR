@@ -112,10 +112,12 @@ address-space budget for D3D9On12.
   - the title-screen height from a tracked pose.
 
 ## Next
-1. Rounds 6–10 passed: no double vision or glass bowl (window lock, no maximizing; ENGINE-NOTES §5q), bullet holes
-   in both eyes (§5r), A/B in menus. Nothing deployed.
-2. **M7 aiming, next steps:** yaw (where the head or hand points, not the body) and hand aim through
-   `execGetBaseAimRotation` (ENGINE-NOTES §5o). The gun: `UpdateGunView` offsets vs. hiding.
+1. **HEADSET-TESTS round 11** (deployed, `Aim.Mode=3`): aiming with the right controller plus the red-dot
+   reticle. **M7 [S] done** (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
+   `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
+   decals, A/B in menus).
+2. **M8, the gun in the hand:** the view model follows the aiming controller (`UpdateGunView` offsets or the
+   weapon mesh's transform), then the HUD crosshair (hide it in controller modes).
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 
 ## Risks

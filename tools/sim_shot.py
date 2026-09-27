@@ -1,7 +1,7 @@
 """Capture what the OpenXR Simulator composited for the headset (both eyes, all layers) -- the
 headset's view, unlike tools/harness.ps1 shot (the game's backbuffer).
 
-    python tools/sim_shot.py logs/shots/x.png [--eye both|left|right] [--timeout 5]
+    python tools/sim_shot.py logs/shots/x.png [--eye both|left|right] [--layer projection|quad|all] [--timeout 5]
 
 Uses the simulator's own request file (the same one its MCP server's screenshot tool writes).
 """
@@ -22,13 +22,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--eye", default="both")
+    ap.add_argument("--layer", default="projection", help="projection (the game's image), quad, or all (with the host's quads: menu, reticle)")
     ap.add_argument("--timeout", type=float, default=5.0)
     a = ap.parse_args()
     SIM.mkdir(parents=True, exist_ok=True)
     for p in OUTPUTS:
         p.unlink(missing_ok=True)
     t0 = time.time()
-    REQUEST.write_text(json.dumps({"timestamp": t0, "eye": a.eye, "include_ui": True, "requested_by": "sim_shot"}))
+    REQUEST.write_text(json.dumps({"timestamp": t0, "eye": a.eye, "include_ui": True, "layer": a.layer, "requested_by": "sim_shot"}))
     while time.time() - t0 < a.timeout:
         for p in OUTPUTS:
             if p.exists() and p.stat().st_size > 0:

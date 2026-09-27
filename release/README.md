@@ -80,14 +80,16 @@ headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may
 | `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880×1620). Lower it (for example 1920×1080) if the game stutters. |
 | `Camera.CinemaScreen=2` | Also shows cutscenes on the flat screen (default `1`: menus only). |
 | `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
+| `Aim.Mode` | What you aim with: `0` the game's own (your body's direction, with up/down from your head), `1` your head (shots land where you look), `2` left controller, `3` right controller (shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot). |
 | `Weapon.HideViewModel=1` | Hides the first-person gun. |
 | `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
 | `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |
 
 ## Known issues
 
-- **Aiming:** up/down follows your head, but left/right follows your body (the direction you turn with the
-  stick), not where you look or point. Controller aiming is the next big step.
+- **Aiming:** by default up/down follows your head, but left/right follows your body (the direction you turn
+  with the stick). `Aim.Mode` lets you aim with your head or a controller instead. With a controller the gun
+  still sits in front of your face rather than in your hand; that comes next.
 - The first-person gun sits very close to your eyes and can look doubled. `Weapon.HideViewModel=1` hides
   it.
 

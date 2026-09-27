@@ -7,6 +7,8 @@
     python tools/pad_cmd.py --raw --press b --dur 0.2      # CONTROLLER input: the B button (-> reload via [Controls])
     python tools/pad_cmd.py --raw --ry -1 --dur 0.2        # controller: flick the right stick down (-> crouch)
     python tools/pad_cmd.py --seq "ly=1 dur=1" "dur=0.5" "buttons=y dur=0.2"   # several states in order
+    python tools/pad_cmd.py --aim 10,-5                    # test RIGHT-HAND aim pose: 10 deg right, 5 down (Aim.Mode)
+    python tools/pad_cmd.py --aim off                      # back to the real controllers
 
 The host reads and deletes %TEMP%\\MOHAVR\\pad_cmd.txt and plays each line for its duration; while a test
 state plays it replaces the controllers entirely. Without --raw the values are an Xbox pad state (buttons: a b x
@@ -27,9 +29,12 @@ def main():
     ap.add_argument("--press", default="")
     ap.add_argument("--raw", action="store_true")
     ap.add_argument("--dur", type=float, default=0.5)
+    ap.add_argument("--aim", help="YAW,PITCH in degrees (a test right-hand aim pose, kept until changed) or off")
     ap.add_argument("--seq", nargs="+", help="raw lines, e.g. 'ly=1 dur=2' or 'raw=1 press=b dur=0.2'")
     a = ap.parse_args()
-    if a.seq:
+    if a.aim:
+        lines = [f"aim={a.aim}"]
+    elif a.seq:
         lines = a.seq
     else:
         parts = ["raw=1"] if a.raw else []

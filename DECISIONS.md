@@ -98,3 +98,12 @@ plumbing.
 ### D6. Ghidra runs headless by default — Decided 2026-09-25
 `tools/start-ghidra-headless.ps1` serves the analyzed project to the `ghidra` MCP server with no
 GUI, so analysis doesn't depend on someone opening Ghidra.
+
+### D11. Aim by bending the shot from the game's eye, not by moving its start — Decided 2026-09-27
+`Aim.Mode` (M7) traces the head's or controller's ray in the world each frame and makes the player's
+`GetBaseAimRotation` point from the game's (untracked) eye to that hit point (ENGINE-NOTES 5s).
+**Why:** the shot start comes from script (`GetWeaponStartTraceLocation` → `GetPlayerViewPoint`), which the camera
+uses too, so moving it would mean hooking the script VM or disturbing the camera. Bending from the eye needs one
+native hook and lands every hit exactly where the ray points, at any distance.
+**Costs:** one engine line trace per frame; a target the hand can see but the eye can't (around a corner) is hit
+from the eye's side. Projectiles (grenades) still leave from the gun.

@@ -403,6 +403,32 @@ asked to maximize.
 
 ---
 
+## Round 11: prepared 2026-09-27, aiming with the right controller (M7)
+**Changed:** your shots now go where your **right controller points**, not where your body faces. A small red
+dot shows where they will land, on whatever the controller points at. The gun model still sits in front of your
+face as before (putting it in your hand is the next step), and the game's own crosshair on the HUD still shows the
+middle of your view, so go by the red dot. [S] proven in the simulator: the bullet holes land on the aim point.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Point the right controller at things near and far, and watch the red dot.
+2. Shoot at walls and enemies, pointing well to the side of where you're looking too.
+3. Try aiming down the sights (left trigger) once.
+
+**Questions:**
+1. Does the red dot sit on what the controller points at, and follow it smoothly? (yes/no, describe)
+2. Do the shots (bullet holes, hits on enemies) land on the red dot? (yes/no)
+3. Dot size and colour: fine, too big, too small, hard to see? (describe)
+4. Hand aiming or head aiming (shots land where you look, no dot): which do you want to try next or keep? (hand / head / the old way)
+5. The gun in front of your face while you aim elsewhere: bearable until it moves to your hand, or hide it for now? (keep / hide)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults plus `Aim.Mode=3` (right hand; the reticle is on by default).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

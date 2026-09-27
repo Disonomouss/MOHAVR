@@ -43,6 +43,13 @@ public:
     // of turning smoothly.
     void Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr);
 
+    // M7: the controllers' aim poses (/input/aim/pose). CreateSpaces once the action sets are attached.
+    bool CreateSpaces(XrSession session);
+    // Both aim poses in `space` at `t`; the result's bit 0/1 = left/right valid. A test aim from
+    // pad_cmd.txt ("aim=yaw,pitch" in degrees; "aim=off") replaces the right hand with a pose 20 cm right,
+    // 30 cm below and 30 cm ahead of `head`, turned by yaw/pitch from the head's heading.
+    std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
+
 private:
     // Controller inputs. kMenu is the tap of the menu button (main.cpp owns it); kRFlickDown/Up are short
     // pulses when the right stick is flicked down/up (derived from its Y, which isn't a stick axis by default).
@@ -69,6 +76,10 @@ private:
     XrActionSet set_ = XR_NULL_HANDLE;
     XrAction    stick_[2]{};           // left, right thumbstick
     XrAction    src_[kSrcCount]{};     // real controller actions (none for kNone, kMenu and the flicks)
+    XrAction    aim_[2]{};             // left, right aim pose
+    XrSpace     aimSpace_[2]{};
+    bool        testAim_ = false;      // pad_cmd.txt "aim=yaw,pitch"
+    float       testAimYaw_ = 0.0f, testAimPitch_ = 0.0f;  // degrees
     Src         map_[tCount][kMaxSources]{};
     Src         mapMenu_[tCount][kMaxSources]{};  // while a game menu is open ([ControlsMenu]: A selects, B backs out)
     bool        menuLayout_ = false;

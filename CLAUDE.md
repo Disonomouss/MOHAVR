@@ -89,3 +89,7 @@ HEADSET-TESTS.md.
   `Set-Content` defaults to ANSI. Write files with the file tools or `[IO.File]`.
 - `Select-String` is case-insensitive by default. Use `-CaseSensitive` when grepping logs.
 - Keep game launches short and separate. An interrupted launch can hang the session.
+- Run `tools\deploy.ps1` with `&` in the PowerShell tool, not through `powershell -File`: `-File` joins a
+  `-Set` list into one string, so only the first override applies (the rest are silently lost).
+- `tools/sim_shot.py` gets only the projection layer from the host's D3D11 session. To see the host's quads
+  (menu, reticle), capture the simulator window: `tools/sim_window_shot.ps1 -Out x.png`.

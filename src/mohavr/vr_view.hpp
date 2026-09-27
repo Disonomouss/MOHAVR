@@ -25,4 +25,9 @@ bool Install(const Config& cfg);
 // frame being presented. Returns false (meta.hasView = 0) if head tracking wasn't applied.
 bool MetaForPresentedFrame(shared::SlotMeta& meta);
 
+// M7: a tracked pose (head or controller, OpenXR LOCAL) as a ray in the world, mapped exactly like the
+// eyes of the player's last head-tracked view: `pos` and unit `fwd` in Unreal units/axes. `unitsPerMeter`
+// = the scale in use. Game thread; false before the first such view.
+bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float& unitsPerMeter);
+
 }  // namespace mohavr::view
