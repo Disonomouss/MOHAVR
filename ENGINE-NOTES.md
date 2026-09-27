@@ -483,6 +483,14 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   2580×1460. The game's top-level window has class `LaunchUnrealUWindowsClient`; its client equals the
   backbuffer only once the game has finished sizing it (checked from Present).
 - The pause screen (Esc/Start) is a tabbed Objectives / Options / Save & Load panel; B or Start closes it.
+- **Maximizing can't be held at a bigger-than-desktop size:** with the lock's `WM_GETMINMAXINFO` raising the limits,
+  the maximize still asked for 2896×1659 but became 2576×1408 (Windows clamps maximized windows to the monitor).
+  The viewport then became 2560×1369 (headset round 9, "glass bowl"). Restoring from minimized into maximized
+  arrives while `WS_MINIMIZE` is still set. So `Render.LockWindow` removes `WS_MAXIMIZEBOX`, swallows
+  `SC_MAXIMIZE`, restores on `SIZE_MAXIMIZED`, and lets through only the move to the iconic size.
+- **Never change the window's style from the render thread:** the lock is found from Present (render thread), and
+  `SetWindowLong(GWL_STYLE)` / `SetWindowPos` send messages to the main thread, which can be waiting on the render
+  thread (deadlock seen). It posts a registered message and does it in its own window procedure instead.
 
 ## 5r. Decals are culled in any view that doesn't start at x = 0 (headset round 7, 2026-09-26)
 

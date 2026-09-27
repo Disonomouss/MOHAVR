@@ -353,6 +353,43 @@ rectangles), so the log can show what goes wrong when you come back from the des
 2. Did pause/unpause change it? (yes/no)
 3. What did you do on the desktop (click the game window, move it, other apps)? (describe)
 
+**Answers (2026-09-27, ~17:45):** the player double-pressed the menu button, moved the MOHA window,
+**minimized it, maximized it**, went back into play: the glass bowl appeared. Screenshots of both eyes before
+and after (`Downloads/GunVR-r154/VirtualDesktop.Android-20260927-1741..1743*.jpg`): after, each eye is magnified
+and the left eye shows a strip of the other view.
+
+**Log (`logs/modlogs/20260927-174851-*`), the diagnostics caught it:** `diag: eye 0 view rect x 0 y 0 1280 x 1369
+(was 0 0 1440 1620)`. The game's viewport had become the maximized window's client area (2560×1369 on the 2560×1440
+desktop) inside the unchanged 2880×1620 frame. The host kept splitting at 1440, so each eye got a smaller,
+stretched image plus part of the other. The FOVs and the headset runtime were unchanged.
+
+**Why the lock let it through:** restoring from minimized into a maximized window arrives while the window still
+has `WS_MINIMIZE` (let through since round 8). And a maximize can't be held at the render size anyway: asked for
+2896×1659, Windows made it 2576×1408 (traced). **Fix:** no maximizing. The maximize box is removed, `SC_MAXIMIZE`
+is swallowed, a window that is maximized anyway is restored at once, and only the move into the minimized size is
+let through. The style change is posted to the window's own thread: done from the render thread it deadlocked
+the game (seen once in the simulator, killed, user data restored). [S]: maximize command → refused; `ShowWindow`
+maximize → restored; minimize → maximize → restored; the client stays 2880×1620 and the eye rects never change.
+
+**Verdict:** glass bowl found; fix in round 10.
+
+**Deployed for this round:** the shipped defaults, no overrides.
+
+---
+
+## Round 10: prepared 2026-09-27, the glass bowl (maximizing the game window)
+**Changed:** the game window can't be maximized any more: no maximize button, and double-click or Win+Up does
+nothing. If something maximizes it anyway (like restoring from the taskbar), it snaps straight back.
+Maximizing was what shrank the picture and gave the glass bowl. Minimizing and moving the window still work.
+
+**How to try it:** Claude has deployed. Launch as usual.
+1. Do exactly what you did last time: double press the menu button, move the window, minimize it, try to maximize
+   it (button, double-click on the title bar, restore from the taskbar), go back into the game.
+
+**Questions:**
+1. Any glass bowl or double vision after coming back? (yes/no)
+2. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

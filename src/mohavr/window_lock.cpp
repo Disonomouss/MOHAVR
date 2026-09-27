@@ -13,14 +13,38 @@ int     g_w = 0, g_h = 0;  // the pinned outer size
 int     g_refused = 0;
 unsigned g_calls = 0;
 
+UINT g_applyStyleMsg = 0;  // registered when the lock is installed (not in DllMain)
+
 LRESULT CALLBACK Proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == g_applyStyleMsg && g_applyStyleMsg) {
+        SetWindowLongW(h, GWL_STYLE, GetWindowLongW(h, GWL_STYLE) & ~WS_MAXIMIZEBOX);
+        SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        MLOG("window: maximize button removed");
+        return 0;
+    }
+    // Maximizing can't be held at the render size -- Windows clamps a maximized window to the screen
+    // whatever size is asked for (measured: asked 2896x1659, got 2576x1408; headset round 9). So there is
+    // no maximizing: the maximize box is removed (Lock), SC_MAXIMIZE is swallowed, and a window that gets
+    // maximized anyway (restored from the taskbar into a maximized state) is restored straight back.
+    if (msg == WM_SYSCOMMAND && (wp & 0xFFF0) == SC_MAXIMIZE) {
+        if (g_refused++ < 10) MLOG("window: refused to maximize (it would shrink the game's view)");
+        return 0;
+    }
+    if (msg == WM_SIZE && wp == SIZE_MAXIMIZED) {
+        if (g_refused++ < 10) MLOG("window: maximized anyway -- restoring it to the render size");
+        PostMessageW(h, WM_SYSCOMMAND, SC_RESTORE, 0);
+    }
     if (msg == WM_WINDOWPOSCHANGING && lp) {
         auto* pos = reinterpret_cast<WINDOWPOS*>(lp);
-        // Minimizing (and restoring from it) is not a resize the game renders at: let Windows have it.
-        // Forcing the full size onto a minimized window left the game in an odd state after restoring
-        // (headset round 7: "like looking through a glass bowl").
+        // Minimizing is not a resize the game renders at: let Windows have it (forcing the full size onto a
+        // minimized window, round 7, was left alone since). Only the move INTO the minimized state (the iconic size, ~160x28) is let through: restoring from
+        // minimized also arrives while WS_MINIMIZE is set, and restoring into a maximized window resized the
+        // game to the desktop (headset round 9: each eye 1280x1369 in a 2880x1620 frame -> magnified, with a
+        // strip of the other eye).
         const bool minimized = (GetWindowLongW(h, GWL_STYLE) & WS_MINIMIZE) != 0;
-        if (!minimized && !(pos->flags & SWP_NOSIZE) && (pos->cx != g_w || pos->cy != g_h)) {
+        const bool toIconic = minimized && pos->cx <= GetSystemMetrics(SM_CXMINIMIZED) * 2 &&
+                              pos->cy <= GetSystemMetrics(SM_CYMINIMIZED) * 2;
+        if (!toIconic && !(pos->flags & SWP_NOSIZE) && (pos->cx != g_w || pos->cy != g_h)) {
             if (g_refused++ < 10) MLOG("window: refused a resize to %dx%d (kept %dx%d, the render size)", pos->cx, pos->cy, g_w, g_h);
             pos->cx = g_w;
             pos->cy = g_h;
@@ -70,6 +94,7 @@ void Watch(unsigned bbW, unsigned bbH) {
     GetWindowRect(h, &r);
     g_w = r.right - r.left;
     g_h = r.bottom - r.top;
+    g_applyStyleMsg = RegisterWindowMessageW(L"MOHAVR.WindowLock.ApplyStyle");
     g_orig = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(h, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Proc)));
     if (!g_orig) {
         MLOG("window: subclassing failed (%lu) -- the window size is not locked", GetLastError());
@@ -77,6 +102,10 @@ void Watch(unsigned bbW, unsigned bbH) {
         return;
     }
     g_hwnd = h;
+    // No maximize button (and so no title-bar double-click or Win+Up maximize either) -- applied on the window's
+    // own thread: Watch runs on the render thread, and a style change sends messages to the game's main thread,
+    // which may be waiting on the render thread (it deadlocked).
+    if (g_applyStyleMsg) PostMessageW(h, g_applyStyleMsg, 0, 0);
     MLOG("window: size locked at %dx%d (client %ldx%ld = the backbuffer); moving it is still fine", g_w, g_h, c.right,
          c.bottom);
 }
