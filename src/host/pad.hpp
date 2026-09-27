@@ -42,6 +42,9 @@ public:
     // `snapDeg` > 0: the right stick's X snaps by that many degrees per flick (hdr->snapYawTotal) instead
     // of turning smoothly.
     void Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr);
+    // Start of the XR frame, before anything reads the controllers: the test file and the test state due now (so a
+    // raw test's grips reach hands.cpp in the same frame the mapping sees them).
+    void BeginFrame(double now);
 
     // M7: the controllers' aim poses (/input/aim/pose). CreateSpaces once the action sets are attached.
     bool CreateSpaces(XrSession session);

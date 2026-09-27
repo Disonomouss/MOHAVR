@@ -397,7 +397,7 @@ void Pad::ReadTests(double now) {
     (void)now;
 }
 
-void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr) {
+void Pad::BeginFrame(double now) {
     now_ = now;
     ReadTests(now);
     if (testActive_ && now >= testUntil_) testActive_ = false;
@@ -414,7 +414,10 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
                  test_.state.thumbLX, test_.state.thumbLY, test_.state.thumbRX, test_.state.thumbRY,
                  test_.state.leftTrigger, test_.state.rightTrigger, test_.dur);
     }
+}
 
+void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, shared::Header* hdr) {
+    if (now != now_) BeginFrame(now);  // a caller that didn't call BeginFrame this frame
     shared::PadState p{};
     if (testActive_ && !test_.raw) {
         p = test_.state;

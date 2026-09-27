@@ -57,6 +57,14 @@ void Hands::Init(const std::wstring& ini) {
         for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
         z.command = s;
     }
+    auto iniFloat = [&](const wchar_t* sec, const wchar_t* key, float def) {
+        wchar_t b[32] = L"";
+        GetPrivateProfileStringW(sec, key, L"", b, 32, ini.c_str());
+        return b[0] ? static_cast<float>(_wtof(b)) : def;
+    };
+    defaultFit_ = {{iniFloat(L"Weapon", L"GripX", 34.0f), iniFloat(L"Weapon", L"GripY", 11.0f), iniFloat(L"Weapon", L"GripZ", -17.0f)},
+                   0.0f, iniFloat(L"Aim", L"RayUp", 8.0f), 0.0f, iniFloat(L"Hands", L"ForeFwd", 30.0f),
+                   iniFloat(L"Hands", L"ForeUp", 0.0f)};
     holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
     foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
@@ -66,7 +74,14 @@ void Hands::Init(const std::wstring& ini) {
 
 Hands::Output Hands::Update(const Input& in) {
     Output out;
-    const int g = in.leftHanded ? 0 : 1, o = 1 - g;
+    // The gun hand: the menu's starting hand (applied whenever that setting changes), then whichever hand draws.
+    if (static_cast<int>(in.startLeft) != lastStart_) {
+        lastStart_ = in.startLeft ? 1 : 0;
+        gunHand_ = in.startLeft ? 0 : 1;
+        twoHanded_ = false;
+        MLOG("hands: gun hand -> %s (the starting hand)", gunHand_ ? "right" : "left");
+    }
+    const int g = gunHand_, o = 1 - g;
     const bool gunOk = (in.valid & (1u << g)) != 0, offOk = (in.valid & (1u << o)) != 0;
 
     // The gun's pose before the foregrip: the gun hand's aim pose, pitched by the fit's angle (+ = muzzle up).
@@ -121,6 +136,13 @@ Hands::Output Hands::Update(const Input& in) {
             consumed_[h] = true;
             out.pulse[h] = true;
             MLOG("hands: %s hand at %ls -> '%s'", h ? "right" : "left", zones_[zone].key, out.command.c_str());
+            if (h != gunHand_) {
+                // The hand that draws holds the gun; the other one becomes the foregrip / reload hand. (Pressed
+                // this frame: the rest of this frame still works out the old gun hand's gun.)
+                gunHand_ = h;
+                twoHanded_ = false;
+                MLOG("hands: gun hand -> %s (drew)", h ? "right" : "left");
+            }
         } else if (h == o && gunOk) {
             if (foregrip_ && Len(Sub(hp, fore)) < 0.12f) {
                 twoHanded_ = true;
@@ -150,7 +172,8 @@ Hands::Output Hands::Update(const Input& in) {
         if (Len(want) > 0.12f) gun.orientation = Mul(FromTo(have, want), gun.orientation);
     }
     out.twoHanded = twoHanded_;
-    if (gunOk) {
+    out.gunHand = gunHand_;
+    if (gunOk && g == gunHand_) {
         out.gunValid = true;
         out.gun = gun;
         out.aimRay.orientation = gun.orientation;

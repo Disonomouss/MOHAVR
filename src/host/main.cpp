@@ -29,6 +29,7 @@
 #include "menu.hpp"
 #include "mirror.hpp"
 #include "pad.hpp"
+#include "hands.hpp"
 #include "reticle.hpp"
 
 using mohavr::shared::Header;
@@ -378,7 +379,6 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     const bool handsOk = controllers && pad.CreateSpaces(session);
     mohavr::host::Reticle reticle;
     bool reticleOk = false;
-    float reticleRayUp = 0.0f;  // metres along the aim pose's up
     {
         const std::wstring ini = ExeDir() + L"\\MOHAVR.ini";
         wchar_t v[16] = L"";
@@ -386,16 +386,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         const float deg = static_cast<float>(_wtof(v));
         if (handsOk && GetPrivateProfileIntW(L"Aim", L"Reticle", 1, ini.c_str()) != 0)
             reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
-        // With the gun in the hand the game's aim ray runs along the barrel (viewmodel.cpp); the menu holds the
-        // weapon's fit. Without the menu: [Aim] RayUp cm above the aim pose, as the game does without a fit.
-        if (GetPrivateProfileIntW(L"Weapon", L"ViewModel", 2, ini.c_str()) == 2) {
-            GetPrivateProfileStringW(L"Aim", L"RayUp", L"8", v, 16, ini.c_str());
-            const float cm = static_cast<float>(_wtof(v));
-            reticleRayUp = (cm >= -30.0f && cm <= 30.0f) ? cm / 100.0f : 0.08f;
-        }
     }
     XrPosef handPose[2] = {};
     std::uint32_t handBits = 0;
+    mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
+    mohavr::host::Hands::Output handsOut;
+    if (handsOk) hands.Init(ExeDir() + L"\\MOHAVR.ini");
     // Test channel: %TEMP%\MOHAVR\host_cmd.txt, one command per line (toggle/up/down/left/right/select/back),
     // consumed and deleted each frame -- the simulator can't press controller buttons.
     std::wstring cmdPath;
@@ -593,6 +589,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             MLOG("host: test command '%s'", c.c_str());
         }
 
+        if (controllers) pad.BeginFrame(static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
+
         // Head pose + eye views at the predicted display time -> the game (seqlock, M3).
         XrPosef menuHead{};
         menuHead.orientation.w = 1.0f;
@@ -658,7 +656,36 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 handBits = handsOk ? pad.LocateHands(local, fs.predictedDisplayTime, headLoc.pose, handPose) : 0u;
                 g_hdr->handValid = handBits;
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
+                // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
+                if (handsOk) {
+                    mohavr::host::Hands::Input hin{};
+                    hin.aim[0] = handPose[0];
+                    hin.aim[1] = handPose[1];
+                    hin.valid = handBits;
+                    hin.head = headLoc.pose;
+                    for (int h = 0; h < 2; ++h) hin.grip[h] = pad.GripValue(session, h);
+                    hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
+                    hin.startLeft = menuOk && menu.StartLeft();
+                    hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
+                    handsOut = hands.Update(hin);
+                    g_hdr->gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
+                    g_hdr->gunPose = toPose(handsOut.gun);
+                    g_hdr->aimRay = toPose(handsOut.aimRay);
+                }
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
+                if (handsOk) {
+                    if (!handsOut.command.empty()) {
+                        const size_t n = handsOut.command.size() < 63 ? handsOut.command.size() : 63;
+                        std::memcpy(g_hdr->cmd, handsOut.command.c_str(), n);
+                        g_hdr->cmd[n] = 0;
+                        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
+                    }
+                    for (int h = 0; h < 2; ++h)
+                        if (handsOut.pulse[h]) pad.Pulse(session, h);
+                    pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
+                    pad.SetLeftHanded(handsOut.gunHand == 0);
+                    if (menuOk) pad.SetSwapSticks(menu.SwapSticks());
+                }
                 {
                     static std::uint32_t seenBits = 0xFFFFFFFFu;
                     static int logged = 0;
@@ -857,32 +884,23 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (reticleOk && lastMeta.hasView && menuHeadOk) {
                 const std::uint32_t src = g_hdr->aimSource;
                 const float d = g_hdr->aimDistance;
-                if ((src == 2 || src == 3) && (handBits & (1u << (src - 2)))) {
-                    // The game's aim line (viewmodel.cpp GunRay): the controller pitched by the gun's angle, then
-                    // offset along the gun's up/right -- the weapon in hand's fit (the menu), or the ini's.
-                    XrPosef ray = handPose[src - 2];
-                    float angle = 0.0f, up = reticleRayUp, right = 0.0f;
-                    if (menuOk && menu.GunInHand()) {
-                        angle = menu.Fit().angle * 0.0174533f;
-                        up = menu.Fit().rayUp / 100.0f;
-                        right = menu.Fit().rayRight / 100.0f;
+                if (src == 2 || src == 3) {
+                    // With the gun in the hand: the host's aim line (hands.cpp: the gun hand, foregrip, the fit's
+                    // angle and offset) -- the one the game traces along. Otherwise the aiming controller itself.
+                    XrPosef ray{};
+                    bool ok = false;
+                    if (menuOk && menu.GunInHand() && handsOk && handsOut.gunValid) {
+                        ray = handsOut.aimRay;
+                        ok = true;
+                    } else if (handBits & (1u << (src - 2))) {
+                        ray = handPose[src - 2];
+                        ok = true;
                     }
-                    const XrQuaternionf a = ray.orientation;
-                    const float bx = std::sin(angle * 0.5f), bw = std::cos(angle * 0.5f);  // q * R_x(angle)
-                    const XrQuaternionf q{a.w * bx + a.x * bw, a.y * bw + a.z * bx, a.z * bw - a.y * bx, a.w * bw - a.x * bx};
-                    ray.orientation = q;
-                    const float ux = 2.0f * (q.x * q.y - q.w * q.z), uy = 1.0f - 2.0f * (q.x * q.x + q.z * q.z),
-                                uz = 2.0f * (q.y * q.z + q.w * q.x);  // q * (0,1,0)
-                    const float rx = 1.0f - 2.0f * (q.y * q.y + q.z * q.z), ry = 2.0f * (q.x * q.y + q.w * q.z),
-                                rz = 2.0f * (q.x * q.z - q.w * q.y);  // q * (1,0,0)
-                    ray.position.x += ux * up + rx * right;
-                    ray.position.y += uy * up + ry * right;
-                    ray.position.z += uz * up + rz * right;
-                    if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, ray, menuHead, d))
-                        layers[layerCount++] = rl;
+                    if (ok)
+                        if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, ray, menuHead, d))
+                            layers[layerCount++] = rl;
                 }
-            }
-            // The menu panel on top of the game when open.
+            }            // The menu panel on top of the game when open.
             if (menuOk) {
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
             }

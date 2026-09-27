@@ -297,45 +297,40 @@ items go into **round 14**. Deploy round 14 only at the end, as the morning conf
   Index), `SetSwapSticks`, `SetLeftHanded` (swap triggers and grips), test poses `hand=l|r,x,y,z,yaw,pitch`
   (metres, head-heading frame) besides `aim=yaw,pitch`.
 
-### M. Wire the hands module in -- [S]
-- [ ] main.cpp: `Hands::Init`; each frame after LocateHands (inside the view seqlock) run `Hands::Update` (grips from
-      `pad.GripValue`, the menu's fit, leftHanded, gestures = !menu.Visible() && !gameUiMenu); publish gunFlags /
-      gunPose / aimRay; `pad.SetConsumed`; `pad.Pulse`; a command -> `cmd` then bump `cmdSeq`. The reticle uses
-      `aimRay` directly (drop its own angle/offset math).
-- [ ] Game: viewmodel.cpp takes `ReadGun` (gunPose -> PoseFrameToWorld, then the fit's grip) instead of hand + angle;
-      GunRay = aimRay via PoseToWorld. vr_view Hook_Draw runs a new `cmd` once via `gexec::Run` (like RunTestCommands).
-- [ ] [S]: the aim/gun behave exactly as in round 13 with one hand (same logs as the round-13 simulator test).
+### M. Wire the hands module in -- [S] DONE
+- [x] main.cpp runs `Hands::Update` in the view seqlock (grips from `pad.GripValue`, the menu's fit, gestures off
+      while a menu is open) and publishes gunFlags/gunPose/aimRay, the command (cmdSeq), pulses and consumed grips;
+      the reticle uses aimRay. `Pad::BeginFrame` starts test states before the hands run (no leaked grip press).
+- [x] Game: viewmodel.cpp places the gun from `ReadGun` (+ the fit's grip); GunRay = aimRay; Hook_Draw runs the
+      host's command once via gexec (`RunHostCommand`).
+- [x] [S] (log 20260927-224113): right test hand level -> aim ray from -4595 (8 above the hand), as in round 13.
 
-### N. Foregrip (two hands) -- [S] logic, [H] feel
-- [ ] Menu Gun fit page: "Foregrip forward/back", "Foregrip up/down" (cm; defaults per ini `[Hands] ForeFwd=30,
-      ForeUp=0`; saved with the fit -- extend the `[GunFit]` value to 8 numbers, reading old 6-number entries).
-- [ ] [S]: test left hand placed at the foregrip point + `raw=1 press=lgrip dur=3` -> log "foregrip taken"; move the
-      left test hand 10 cm up -> the gun and the aim ray pitch up by atan(10/30); the left grip doesn't press LB.
+### N. Foregrip (two hands) -- [S] DONE, [H] feel
+- [x] Gun fit page: "Foregrip forward" (cm, default 30) and "Foregrip up / down"; `[GunFit]` values are 8 numbers now
+      (6-number entries still read). Defaults `[Hands] ForeFwd/ForeUp`.
+- [x] [S]: left test hand at the foregrip point + held lgrip -> "foregrip taken (0 cm from the point)"; the left hand
+      10 cm higher -> aim direction z 0.32 (expected sin(atan(10/30)) = 0.316); the gun pitched up with it
+      (m14-foregrip.png); release -> "foregrip released", one-handed again.
 
-### O. Holsters, and the hand that draws holds the gun -- [S] logic, [H] feel
-The player (2026-09-27): "Left hip for grenade. Should be able to grab weapons out of holster with either hand, hand
-that grabs is used as main hand for gun, other hand can grab foregrip."
-- [ ] Either hand can draw from any spot (already so in hands.cpp). **The drawing hand becomes the gun hand** (state in
-      Hands, replacing the fixed `leftHanded` input as the source of truth): gunPose/aimRay follow it, the other hand is
-      the foregrip/reload hand, and the pad's fire/grip sides follow it live (`pad.SetLeftHanded(gunHand == left)`,
-      called when it changes -- triggers and grips swap). Weapon switching with the Y button keeps the current gun hand.
-      Log "hands: gun hand -> left/right". Publish the gun hand (gunFlags bit 2) and use it for the host's aimSource
-      (2 left / 3 right) so the reticle is on the right hand; the game's aim uses aimRay (item M) whatever Aim.Mode
-      says, as long as Aim.Mode is 2 or 3.
-- [ ] [S]: test right hand at the right shoulder spot + `press=rgrip` -> 'SwitchPrimary' runs in the game and the
-      weapon key changes; the same for the other spots, with left hip = grenade (log the weapon key before/after).
-      The grip doesn't reload/use. Then the LEFT test hand draws from the right hip -> gun hand left: the gun is drawn
-      at the left test hand, the left trigger fires (raw test `lt=1`), the right hand's grip at the foregrip takes it.
+### O. Holsters, and the hand that draws holds the gun -- [S] DONE, [H] feel
+- [x] Either hand draws from any spot; the drawing hand becomes the gun hand (Hands' state; the menu's Gun hand is
+      the start); the pad's triggers and grips follow it; gunFlags bit 2 = left.
+- [x] [S]: right hand at the right hip -> SwitchPistol -> 'Attachment_Colt45'; LEFT hand at the left shoulder ->
+      SwitchSecondary -> 'Attachment_Stg44', "gun hand -> left (drew)", the gun drawn at the left test hand
+      (m14-lefthand.png) and the LEFT trigger fired (the aim hook's shots aimed from the left hand, ammo 30 -> 25);
+      left hand at the left hip -> SwitchGrenade -> 'Attachment_MKIIFragGrenade'; right hand at the right shoulder
+      -> SwitchPrimary -> 'Attachment_Bar', gun hand right. Every command "handled". (Primary = BAR, secondary = StG
+      in this save.)
 
-### P. Stick swap, and the starting gun hand -- [S]
-- [ ] Menu main page: "Sticks < move left | move right >" and "Gun hand < right | left >" (the hand at start and after a
-      level load, until a hand draws), saved in the player's ini ([Controls] SwapSticks, GunHand), applied via
-      `pad.SetSwapSticks` and Hands.
-- [ ] [S]: raw test with the physical right stick -> the pad's left stick moves (and the crouch flick moves to the
-      turning stick). The arms model stays right-handed in the left hand (mirroring = later research; say so in
-      round 14).
-### Q. Reload gesture -- [S] logic, [H] feel
-- [ ] [S]: left test hand at the magazine point (8 cm below, 10 cm ahead of the gun hand) + press=lgrip -> 'Reload'.
+### P. Stick swap, and the starting gun hand -- [S] DONE
+- [x] Menu: "Sticks < move left, turn right | move right, turn left >", "Gun hand < right | left >" (saved:
+      [Controls] SwapSticks, GunHand); shipped defaults in MOHAVR.ini [Controls].
+- [x] [S]: swapped, the physical right stick forward for 1.5 s -> the player moved 6.8 m forward (view_state);
+      Gun hand left/right -> "hands: gun hand -> left/right (the starting hand)". The arms model stays right-handed
+      in the left hand (it reaches across; mirroring = later research).
+
+### Q. Reload gesture -- [S] DONE, [H] feel
+- [x] [S]: left test hand at the magazine point + lgrip -> "hands: reload gesture" -> the game's 'Reload' handled.
 
 ### R. Throwable grenades -- research, time-boxed 2 h
 - [ ] Find where the grenade's toss velocity is made (EALAGrenade / projectile spawn; the throw is RB = X on Touch).

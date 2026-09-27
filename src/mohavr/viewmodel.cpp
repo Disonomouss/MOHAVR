@@ -197,54 +197,61 @@ shared::GunFit CurrentFit(const shared::Header* hdr) {
 }  // namespace
 
 void OnPlayerView() {
-    g_line.valid = false;
     if (!g_installed) return;
     shared::Header* hdr = bridge::SharedHeader();
     UpdateWeaponKey(hdr);
     float camLoc[3], pitch = 0.0f, yaw = 0.0f;
-    if (!view::GameCamera(camLoc, pitch, yaw)) return;
+    if (!view::GameCamera(camLoc, pitch, yaw)) {
+        g_line.valid = false;
+        return;
+    }
     const float cp = std::cos(pitch), sp = std::sin(pitch), cy = std::cos(yaw), sy = std::sin(yaw);
     const float cx[3] = {cp * cy, cp * sy, sp}, cyv[3] = {-sy, cy, 0.0f}, cz[3] = {-sp * cy, -sp * sy, cp};
     const M4 cam = Frame(cx, cyv, cz, camLoc);
     const M4 camInv = RigidInverse(cam);
 
     M4 d{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}}, dInv = d;  // ViewModel=1: where the game put it
+    if (g_cfg.viewModel != 2) g_line.valid = false;
     if (g_cfg.viewModel == 2) {
-        shared::Pose hand[2];
-        std::uint32_t valid = 0;
-        const int h = g_cfg.aimMode == 2 ? 0 : 1;  // the aiming hand (right unless Aim.Mode=2)
-        if (!hdr || !shared::ReadHands(hdr, hand, valid)) return;  // mid-write: keep the last one
-        if (!(valid & (1u << h))) {
+        // The host works the gun out from both hands (hands.cpp: the gun hand, the foregrip, the fit's angle and aim
+        // line); here it is only mapped into the world like the eyes, and the fit's grip point put on it.
+        shared::Pose gun, ray;
+        std::uint32_t flags = 0xFFFFFFFFu;
+        if (!hdr) return;
+        if (!shared::ReadGun(hdr, gun, ray, flags)) {
+            if (flags == 0xFFFFFFFFu) return;  // mid-write: keep last frame's
+            g_line.valid = false;
             AcquireSRWLockExclusive(&g_lock);
-            g_state.valid = false;
+            g_state.valid = false;  // no gun hand this frame: the game's own drawing
             ReleaseSRWLockExclusive(&g_lock);
             return;
         }
         float pos[3], axes[3][3], upm = 100.0f;
-        if (!view::PoseFrameToWorld(hand[h], pos, axes, upm)) return;
+        if (!view::PoseFrameToWorld(gun, pos, axes, upm)) return;
         const shared::GunFit fit = CurrentFit(hdr);
-        // The gun's frame: the controller's, pitched by the fit's angle about its right axis (+ = muzzle up).
-        const float a = fit.angle * 0.0174533f, ca = std::cos(a), sa = std::sin(a);
-        float gf[3], gr[3], gu[3];
-        for (int i = 0; i < 3; ++i) {
-            gf[i] = axes[0][i] * ca + axes[2][i] * sa;
-            gr[i] = axes[1][i];
-            gu[i] = axes[2][i] * ca - axes[0][i] * sa;
-        }
+        const float (&gf)[3] = axes[0], (&gr)[3] = axes[1], (&gu)[3] = axes[2];
         // The camera-frame grip point lands on the controller: the gun frame's origin is moved back by it.
         float t[3];
         for (int i = 0; i < 3; ++i) t[i] = pos[i] - (fit.grip[0] * gf[i] + fit.grip[1] * gr[i] + fit.grip[2] * gu[i]);
         const M4 gunFrame = Frame(gf, gr, gu, t);
         d = Mul(camInv, gunFrame);
         dInv = Mul(RigidInverse(gunFrame), cam);
-        // The aim line along the barrel: from the controller, offset by the fit's ray (cm), along the gun.
-        const float up = fit.rayUp * upm / 100.0f, right = fit.rayRight * upm / 100.0f;
-        for (int i = 0; i < 3; ++i) {
-            g_line.pos[i] = pos[i] + gu[i] * up + gr[i] * right;
-            g_line.dir[i] = gf[i];
+        // The aim line: the host's, mapped the same way.
+        float rpos[3], rdir[3], rupm = 100.0f;
+        g_line.valid = false;
+        if (view::PoseToWorld(ray, rpos, rdir, rupm)) {
+            for (int i = 0; i < 3; ++i) {
+                g_line.pos[i] = rpos[i];
+                g_line.dir[i] = rdir[i];
+            }
+            g_line.upm = rupm;
+            g_line.valid = true;
         }
-        g_line.upm = upm;
-        g_line.valid = true;
+        static std::uint32_t seenFlags = 0;
+        if ((flags & 6u) != (seenFlags & 6u)) {
+            MLOG("viewmodel: gun in the %s hand%s", (flags & 4u) ? "left" : "right", (flags & 2u) ? ", two-handed" : "");
+            seenFlags = flags;
+        }
     }
     AcquireSRWLockExclusive(&g_lock);
     g_state.valid = true;
@@ -254,7 +261,6 @@ void OnPlayerView() {
     g_state.camInv = camInv;
     ReleaseSRWLockExclusive(&g_lock);
 }
-
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter) {
     if (!g_line.valid) return false;
     for (int i = 0; i < 3; ++i) {

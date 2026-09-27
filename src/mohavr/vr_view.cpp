@@ -264,12 +264,30 @@ void RunTestCommands(const std::uintptr_t* players) {
     DeleteFileW(path.c_str());
 }
 
+// M8: a console command from the host (holsters, the reload gesture), once per cmdSeq, on the game thread.
+void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
+    static std::uint32_t seen = 0;
+    if (!hdr || !players || players[1] < 1 || !players[0]) return;
+    const std::uint32_t seq = hdr->cmdSeq;
+    if (seq == seen) return;
+    seen = seq;
+    wchar_t cmd[64];
+    int n = 0;
+    for (; n < 63 && hdr->cmd[n]; ++n) cmd[n] = static_cast<wchar_t>(static_cast<unsigned char>(hdr->cmd[n]));
+    cmd[n] = 0;
+    if (!n) return;
+    const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
+    const bool ok = gexec::Run(player, cmd);
+    MLOG("hands: game command '%ls' -> %s", cmd, ok ? "handled" : "not handled");
+}
+
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
     RunTestCommands(arr);
+    RunHostCommand(arr, hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);

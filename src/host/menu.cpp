@@ -17,10 +17,11 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kGunFit, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
-// The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight.
-enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fReset, fBack, fCount };
+// The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
+// foreFwd foreUp (older entries have the first six).
+enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fForeUp, fReset, fBack, fCount };
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
 
 std::wstring UserIniPath() {
@@ -128,9 +129,19 @@ void Menu::ApplySavedSettings() {
     };
     fitDefault_ = {{shippedFloat(L"Weapon", L"GripX", 34.0f), shippedFloat(L"Weapon", L"GripY", 11.0f),
                     shippedFloat(L"Weapon", L"GripZ", -17.0f)},
-                   0.0f, shippedFloat(L"Aim", L"RayUp", 8.0f), 0.0f};
+                   0.0f, shippedFloat(L"Aim", L"RayUp", 8.0f), 0.0f, shippedFloat(L"Hands", L"ForeFwd", 30.0f),
+                   shippedFloat(L"Hands", L"ForeUp", 0.0f)};
     fit_ = fitDefault_;
     gunInHand_ = GetPrivateProfileIntW(L"Weapon", L"ViewModel", 2, shipped.c_str()) == 2;
+
+    // Controls (the player's): the sticks and the starting gun hand; the shipped [Controls] ones are the defaults.
+    const int defSwap = static_cast<int>(GetPrivateProfileIntW(L"Controls", L"SwapSticks", 0, shipped.c_str()));
+    swapSticks_ = GetPrivateProfileIntW(L"Controls", L"SwapSticks", defSwap, iniPath_.c_str()) != 0;
+    GetPrivateProfileStringW(L"Controls", L"GunHand", L"", buf, 32, shipped.c_str());
+    const bool defLeft = !_wcsicmp(buf, L"left");
+    GetPrivateProfileStringW(L"Controls", L"GunHand", defLeft ? L"left" : L"right", buf, 32, iniPath_.c_str());
+    startLeft_ = !_wcsicmp(buf, L"left");
+    MLOG("menu: sticks %s, gun hand %s (at start)", swapSticks_ ? "swapped (right moves)" : "normal", startLeft_ ? "left" : "right");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
@@ -148,8 +159,11 @@ void Menu::SyncWeapon() {
         const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
         wchar_t b[128] = L"";
         GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", b, 128, iniPath_.c_str());
-        shared::GunFit f{};
-        if (b[0] && swscanf_s(b, L"%f %f %f %f %f %f", &f.grip[0], &f.grip[1], &f.grip[2], &f.angle, &f.rayUp, &f.rayRight) == 6) {
+        shared::GunFit f = fitDefault_;
+        const int n = b[0] ? swscanf_s(b, L"%f %f %f %f %f %f %f %f", &f.grip[0], &f.grip[1], &f.grip[2], &f.angle, &f.rayUp,
+                                       &f.rayRight, &f.foreFwd, &f.foreUp)
+                           : 0;
+        if (n == 6 || n == 8) {  // 6: saved before the foregrip existed (it keeps the default)
             fit_ = f;
             saved = true;
         }
@@ -177,7 +191,8 @@ void Menu::SaveFit() {
     if (weaponKey_.empty() || iniPath_.empty()) return;
     const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
     wchar_t b[128];
-    swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
+    swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp,
+               fit_.rayRight, fit_.foreFwd, fit_.foreUp);
     WritePrivateProfileStringW(L"GunFit", wkey.c_str(), b, iniPath_.c_str());
 }
 
@@ -192,13 +207,16 @@ void Menu::AdjustFit(int item, float dir) {
         case fAngle: fit_.angle = std::fmax(-45.0f, std::fmin(45.0f, fit_.angle + dir * kAngleStep)); break;
         case fRayUp: fit_.rayUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayUp + dir * kRayStep)); break;
         case fRayRight: fit_.rayRight = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayRight + dir * kRayStep)); break;
+        case fForeFwd: fit_.foreFwd = std::fmax(0.0f, std::fmin(80.0f, fit_.foreFwd + dir * kFitStep)); break;
+        case fForeUp: fit_.foreUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.foreUp + dir * kFitStep)); break;
         default: return;
     }
     for (float& g : fit_.grip) g = std::fmax(-200.0f, std::fmin(200.0f, g));
     PublishFit();
     SaveFit();
-    MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f", weaponKey_.c_str(), fit_.grip[0],
-         fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
+    MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f, foregrip %.0f / %.0f cm",
+         weaponKey_.c_str(), fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight, fit_.foreFwd,
+         fit_.foreUp);
 }
 
 void Menu::SetHeightOffset(float v, bool save) {
@@ -232,6 +250,8 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Camera", L"HeightOffset", buf, iniPath_.c_str());
     swprintf_s(buf, L"%d", snapDeg_);
     WritePrivateProfileStringW(L"Comfort", L"SnapTurn", buf, iniPath_.c_str());
+    WritePrivateProfileStringW(L"Controls", L"SwapSticks", swapSticks_ ? L"1" : L"0", iniPath_.c_str());
+    WritePrivateProfileStringW(L"Controls", L"GunHand", startLeft_ ? L"left" : L"right", iniPath_.c_str());
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
@@ -298,6 +318,14 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             snapDeg_ = kSnapSteps[i];
             Save();
             MLOG("menu: turning -> %s %d", snapDeg_ ? "snap" : "smooth", snapDeg_);
+        } else if (selected_ == kSticks) {
+            swapSticks_ = !swapSticks_;
+            Save();
+            MLOG("menu: sticks -> %s", swapSticks_ ? "swapped (right moves, left turns)" : "normal (left moves, right turns)");
+        } else if (selected_ == kGunHand) {
+            startLeft_ = !startLeft_;
+            Save();
+            MLOG("menu: gun hand -> %s", startLeft_ ? "left" : "right");
         }
     }
     if (in.select) {
@@ -351,6 +379,10 @@ void Menu::Render() {
     if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
     else snprintf(label, sizeof(label), "Turning          <  smooth  >");
     ImGui::Selectable(label, selected_ == kTurn);
+    snprintf(label, sizeof(label), "Sticks           <  %s  >", swapSticks_ ? "move right, turn left" : "move left, turn right");
+    ImGui::Selectable(label, selected_ == kSticks);
+    snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
+    ImGui::Selectable(label, selected_ == kGunHand);
     snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
     ImGui::Selectable(label, selected_ == kGunFit);
     ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
@@ -407,6 +439,10 @@ void Menu::RenderFitPage() {
     ImGui::Selectable(label, selected_ == fRayUp);
     snprintf(label, sizeof(label), "Aim line right / left <  %+.1f cm  >", fit_.rayRight);
     ImGui::Selectable(label, selected_ == fRayRight);
+    snprintf(label, sizeof(label), "Foregrip forward      <  %.0f cm  >", fit_.foreFwd);
+    ImGui::Selectable(label, selected_ == fForeFwd);
+    snprintf(label, sizeof(label), "Foregrip up / down    <  %+.0f cm  >", fit_.foreUp);
+    ImGui::Selectable(label, selected_ == fForeUp);
     ImGui::Selectable("Reset this gun", selected_ == fReset);
     if (!on) ImGui::EndDisabled();
     ImGui::Selectable("Back", selected_ == fBack);

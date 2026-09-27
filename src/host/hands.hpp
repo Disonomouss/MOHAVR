@@ -34,10 +34,11 @@ public:
         XrPosef        head;        // VIEW in LOCAL
         float          grip[2];     // squeeze 0..1
         shared::GunFit fit;         // the weapon in hand's
-        bool           leftHanded;
+        bool           startLeft;   // the gun hand until a hand draws (the menu's Gun hand); a change applies at once
         bool           gestures;    // false while a menu is open (the MOHAVR menu or the game's)
     };
     struct Output {
+        int         gunHand = 1;    // 0 left, 1 right: the hand that drew last (the pad's fire side follows it)
         bool        gunValid = false, twoHanded = false;
         XrPosef     gun{}, aimRay{};
         std::string command;        // to run in the game this frame ("" none)
@@ -45,6 +46,8 @@ public:
         bool        pulse[2]{};     // haptic pulse this frame
     };
     Output Update(const Input& in);
+    // The fit without a menu: the shipped defaults ([Aim] RayUp, [Hands] ForeFwd/ForeUp).
+    const shared::GunFit& DefaultFit() const { return defaultFit_; }
 
 private:
     struct Zone {
@@ -61,6 +64,9 @@ private:
     bool  twoHanded_ = false;
     int   inZone_[2] = {-1, -1};
     bool  nearFore_ = false;
+    int   gunHand_ = 1;
+    int   lastStart_ = -1;       // the start setting last applied
+    shared::GunFit defaultFit_{};
 };
 
 }  // namespace mohavr::host
