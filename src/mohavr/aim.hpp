@@ -22,4 +22,7 @@ bool Install(const Config& cfg);
 // `shotStart` = the game's untracked view location (where its shots start).
 void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]);
 
+// The local player's pawn (checked both ways, addresses.hpp), or 0. Game thread.
+std::uintptr_t LocalPlayerPawn();
+
 }  // namespace mohavr::aim

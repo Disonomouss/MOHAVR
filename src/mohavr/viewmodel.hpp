@@ -17,7 +17,13 @@ namespace mohavr::viewmodel {
 // Hooks the proxy's per-view transform (Weapon.ViewModel > 0). Called by view::Install.
 bool Install(const Config& cfg);
 
-// Per frame, from the player's own head-tracked view (game thread), after the aim.
+// Per frame, from the player's own head-tracked view (game thread), BEFORE the aim (aim uses GunRay).
+// Also names the weapon in the player's hands for the host's Gun fit page (hdr->weaponKey) and applies the
+// host's fit for it.
 void OnPlayerView();
+
+// ViewModel=2: this frame's aim line along the gun in the hand (world: start, unit direction; the scale in use).
+// False when the gun isn't in the hand.
+bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter);
 
 }  // namespace mohavr::viewmodel

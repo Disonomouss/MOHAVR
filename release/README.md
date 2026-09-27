@@ -66,6 +66,8 @@ left stick to move and change values, and the trigger or A to select. B closes i
 - **World scale**: how big the world feels (higher = smaller).
 - **Height**: raise or lower yourself for seated or standing play.
 - **Turning**: smooth, snap 30° or snap 45°.
+- **Gun fit**: fits the gun you're holding to your hand. Move it forward/back, left/right and up/down, tilt it, and
+  shift the aim line (the red dot) until it runs along the barrel. Each gun keeps its own fit; B goes back.
 - **Recentre**: face forward from where you are now.
 
 Your choices are saved in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and kept across updates.

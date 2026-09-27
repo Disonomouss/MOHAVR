@@ -116,7 +116,8 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 13** (deployed): the aim ray raised 8 cm to the gun's barrel (`Aim.RayUp`; round 12: the shots
+2. **HEADSET-TESTS round 13** (deployed): the **Gun fit** menu page (per-weapon position, angle and aim line; ENGINE-NOTES §5u,
+   shared block v8) and the aim ray raised 8 cm to the gun's barrel (`Aim.RayUp`; round 12: the shots
    were a bit low). **Round 12 passed:** the arms and gun drawn at the aiming controller in true 3D (`Weapon.ViewModel=2`,
    now the default; ENGINE-NOTES §5t): not doubled, the fit feels OK. Next: per-weapon barrel line (the muzzle
    socket instead of one RayUp), the HUD crosshair in controller modes, the arms detached from the body (IK).

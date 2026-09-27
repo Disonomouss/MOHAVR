@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "../mohavr/log.hpp"
 
@@ -16,8 +17,11 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kGunFit, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
+// The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight.
+enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fReset, fBack, fCount };
+constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
 
 std::wstring UserIniPath() {
     wchar_t base[MAX_PATH] = L"";
@@ -115,6 +119,86 @@ void Menu::ApplySavedSettings() {
     for (int s : kSnapSteps)
         if (s == (saved >= 0 ? saved : defSnap)) snapDeg_ = s;
     MLOG("menu: turning %s%d (%s)", snapDeg_ ? "snap " : "smooth ", snapDeg_, saved >= 0 ? "player's saved setting" : "default");
+
+    // Gun fit defaults: the shipped [Weapon] GripX/Y/Z and [Aim] RayUp (the game uses the same without a fit).
+    auto shippedFloat = [&](const wchar_t* sec, const wchar_t* key, float def) {
+        wchar_t b[32] = L"";
+        GetPrivateProfileStringW(sec, key, L"", b, 32, shipped.c_str());
+        return b[0] ? static_cast<float>(_wtof(b)) : def;
+    };
+    fitDefault_ = {{shippedFloat(L"Weapon", L"GripX", 34.0f), shippedFloat(L"Weapon", L"GripY", 11.0f),
+                    shippedFloat(L"Weapon", L"GripZ", -17.0f)},
+                   0.0f, shippedFloat(L"Aim", L"RayUp", 8.0f), 0.0f};
+    fit_ = fitDefault_;
+    gunInHand_ = GetPrivateProfileIntW(L"Weapon", L"ViewModel", 2, shipped.c_str()) == 2;
+    MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
+         fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
+}
+
+void Menu::SyncWeapon() {
+    if (!hdr_ || hdr_->weaponSeq == seenWeaponSeq_) return;
+    seenWeaponSeq_ = hdr_->weaponSeq;
+    char key[48];
+    std::memcpy(key, hdr_->weaponKey, sizeof(key));
+    key[47] = 0;
+    weaponKey_ = key;
+    fit_ = fitDefault_;
+    bool saved = false;
+    if (!weaponKey_.empty()) {
+        const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+        wchar_t b[128] = L"";
+        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", b, 128, iniPath_.c_str());
+        shared::GunFit f{};
+        if (b[0] && swscanf_s(b, L"%f %f %f %f %f %f", &f.grip[0], &f.grip[1], &f.grip[2], &f.angle, &f.rayUp, &f.rayRight) == 6) {
+            fit_ = f;
+            saved = true;
+        }
+    }
+    MLOG("menu: weapon '%s' -- fit %s: grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f", weaponKey_.c_str(),
+         saved ? "saved" : "default", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
+    PublishFit();
+}
+
+void Menu::PublishFit() {
+    if (!hdr_) return;
+    InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->fitSeq));  // odd: writing
+    const size_t n = weaponKey_.size() < 47 ? weaponKey_.size() : 47;
+    std::memcpy(hdr_->fitKey, weaponKey_.c_str(), n);
+    hdr_->fitKey[n] = 0;
+    for (int i = 0; i < 3; ++i) hdr_->fitGrip[i] = fit_.grip[i];
+    hdr_->fitAngle = fit_.angle;
+    hdr_->fitRayUp = fit_.rayUp;
+    hdr_->fitRayRight = fit_.rayRight;
+    hdr_->fitValid = weaponKey_.empty() ? 0u : 1u;
+    InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->fitSeq));  // even: done
+}
+
+void Menu::SaveFit() {
+    if (weaponKey_.empty() || iniPath_.empty()) return;
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    wchar_t b[128];
+    swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
+    WritePrivateProfileStringW(L"GunFit", wkey.c_str(), b, iniPath_.c_str());
+}
+
+// Stick right = the gun forward / right / up, muzzle up, the aim line up / right. (The grip is the gun's point put
+// on the controller, so moving the gun forward moves that point back.)
+void Menu::AdjustFit(int item, float dir) {
+    if (weaponKey_.empty()) return;
+    switch (item) {
+        case fForward: fit_.grip[0] -= dir * kFitStep; break;
+        case fRight: fit_.grip[1] -= dir * kFitStep; break;
+        case fUp: fit_.grip[2] -= dir * kFitStep; break;
+        case fAngle: fit_.angle = std::fmax(-45.0f, std::fmin(45.0f, fit_.angle + dir * kAngleStep)); break;
+        case fRayUp: fit_.rayUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayUp + dir * kRayStep)); break;
+        case fRayRight: fit_.rayRight = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayRight + dir * kRayStep)); break;
+        default: return;
+    }
+    for (float& g : fit_.grip) g = std::fmax(-200.0f, std::fmin(200.0f, g));
+    PublishFit();
+    SaveFit();
+    MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f", weaponKey_.c_str(), fit_.grip[0],
+         fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
 }
 
 void Menu::SetHeightOffset(float v, bool save) {
@@ -151,6 +235,14 @@ void Menu::Save() {
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
+    SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
+    if (visible_ && page_ == 1 && (in.back || (in.select && selected_ == fBack))) {
+        page_ = 0;  // back from the Gun fit page to the main page
+        selected_ = kGunFit;
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
     if (in.toggle || (visible_ && in.back)) {
         visible_ = !visible_;
         if (visible_) {
@@ -163,6 +255,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             panelPose_.orientation = {0.0f, std::sin(yaw * 0.5f), 0.0f, std::cos(yaw * 0.5f)};
             panelPose_.position = {head.position.x + fx * 1.0f, head.position.y - 0.15f, head.position.z + fz * 1.0f};
             selected_ = 0;
+            page_ = 0;
             rendered_ = false;
             MLOG("menu: opened");
         } else {
@@ -171,6 +264,22 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         }
     }
     if (!visible_) return;
+
+    if (page_ == 1) {
+        if (in.up) selected_ = (selected_ + fCount - 1) % fCount;
+        if (in.down) selected_ = (selected_ + 1) % fCount;
+        if (in.left || in.right) AdjustFit(selected_, in.right ? 1.0f : -1.0f);
+        if (in.select && selected_ == fReset && !weaponKey_.empty()) {
+            fit_ = fitDefault_;
+            PublishFit();
+            const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+            WritePrivateProfileStringW(L"GunFit", wkey.c_str(), nullptr, iniPath_.c_str());
+            MLOG("menu: %s fit reset to the defaults", weaponKey_.c_str());
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
 
     if (in.up) selected_ = (selected_ + kItemCount - 1) % kItemCount;
     if (in.down) selected_ = (selected_ + 1) % kItemCount;
@@ -192,7 +301,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         }
     }
     if (in.select) {
-        if (selected_ == kRecenter) {
+        if (selected_ == kGunFit) {
+            page_ = 1;
+            selected_ = 0;
+            MLOG("menu: gun fit page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+        } else if (selected_ == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
         } else if (selected_ == kResetScale) {
@@ -217,6 +330,9 @@ void Menu::Render() {
     ImGui::Begin("MOHAVR", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
     // 1.92: the size is set per push (the style's FontSizeBase alone left it at the 13 px default).
     ImGui::PushFont(nullptr, 40.0f);
+    if (page_ == 1) {
+        RenderFitPage();
+    } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     ImGui::Separator();
 
@@ -235,6 +351,8 @@ void Menu::Render() {
     if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
     else snprintf(label, sizeof(label), "Turning          <  smooth  >");
     ImGui::Selectable(label, selected_ == kTurn);
+    snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+    ImGui::Selectable(label, selected_ == kGunFit);
     ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
     snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
     ImGui::Selectable(label, selected_ == kResetScale);
@@ -243,6 +361,7 @@ void Menu::Render() {
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Left stick: choose / adjust    Trigger: select    Menu: close");
     ImGui::PopFont();
+    }
     ImGui::PopFont();
     ImGui::End();
     ImGui::Render();
@@ -264,6 +383,39 @@ void Menu::Render() {
     XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
     xrReleaseSwapchainImage(swapchain_, &ri);
     rendered_ = true;
+}
+
+// Values shown relative to the defaults for the gun's position (0 = as shipped), absolute for the rest.
+void Menu::RenderFitPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Gun fit");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  %s", weaponKey_.empty() ? "(no gun in hand)" : weaponKey_.c_str());
+    ImGui::Separator();
+    const bool on = !weaponKey_.empty();
+    if (!on) ImGui::BeginDisabled();
+    char label[128];
+    auto moved = [&](int i) { return std::round(fitDefault_.grip[i] - fit_.grip[i]) + 0.0f; };  // +0.0f: no "-0"
+    snprintf(label, sizeof(label), "Gun forward / back    <  %+.0f  >", moved(0));
+    ImGui::Selectable(label, selected_ == fForward);
+    snprintf(label, sizeof(label), "Gun right / left      <  %+.0f  >", moved(1));
+    ImGui::Selectable(label, selected_ == fRight);
+    snprintf(label, sizeof(label), "Gun up / down         <  %+.0f  >", moved(2));
+    ImGui::Selectable(label, selected_ == fUp);
+    snprintf(label, sizeof(label), "Gun angle             <  %+.0f\xC2\xB0  >", fit_.angle);
+    ImGui::Selectable(label, selected_ == fAngle);
+    snprintf(label, sizeof(label), "Aim line up / down    <  %+.1f cm  >", fit_.rayUp);
+    ImGui::Selectable(label, selected_ == fRayUp);
+    snprintf(label, sizeof(label), "Aim line right / left <  %+.1f cm  >", fit_.rayRight);
+    ImGui::Selectable(label, selected_ == fRayRight);
+    ImGui::Selectable("Reset this gun", selected_ == fReset);
+    if (!on) ImGui::EndDisabled();
+    ImGui::Selectable("Back", selected_ == fBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled(gunInHand_ ? "Stick right = forward / right / up / muzzle up. Saved for this gun."
+                                   : "The gun isn't drawn in your hand (Weapon.ViewModel=2 in MOHAVR.ini): no effect.");
+    ImGui::TextDisabled("Line the barrel up with the red dot using the aim line.   B: back");
+    ImGui::PopFont();
 }
 
 const XrCompositionLayerBaseHeader* Menu::Layer(XrSpace local) {

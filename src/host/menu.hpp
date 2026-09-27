@@ -3,8 +3,9 @@
 // address space, and it works in menus, cutscenes and gameplay alike.
 //
 // Items: World Scale (live, saved), Height (seated/standing offset, live, saved), Turning (smooth /
-// snap 30 / snap 45, saved; needs Input.Controllers), Recentre (the host re-creates LOCAL at the
-// head's heading), Reset World Scale, Close.
+// snap 30 / snap 45, saved; needs Input.Controllers), Gun fit (a page: the gun in hand's position, angle and aim
+// line, live and saved per weapon -- the game names the weapon, hdr->weaponKey), Recentre (the host re-creates
+// LOCAL at the head's heading), Reset World Scale, Close.
 // Settings are the PLAYER's (lessons 1): %LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini, separate from the
 // shipped defaults, outside the game folder, never touched by deploy/undeploy.
 #pragma once
@@ -49,12 +50,21 @@ public:
     void Close();
     // Turning (Comfort): 0 = smooth, else the snap step in degrees. Used by the virtual pad.
     int SnapTurnDegrees() const { return snapDeg_; }
+    // The gun fit in use (the weapon in hand's saved fit, or the defaults): the reticle follows the same aim line.
+    const shared::GunFit& Fit() const { return fit_; }
+    bool GunInHand() const { return gunInHand_; }
 
 private:
     void Render();
+    void RenderFitPage();
     void SetUnitsPerMeter(float v, bool save);
     void SetHeightOffset(float v, bool save);
     void Save();
+    // Gun fit (M8): follows hdr->weaponKey, loads that weapon's fit from the player's ini, publishes it.
+    void SyncWeapon();
+    void PublishFit();
+    void SaveFit();
+    void AdjustFit(int item, float dir);
 
     ID3D11Device*           dev_ = nullptr;
     ID3D11DeviceContext*    ctx_ = nullptr;
@@ -63,7 +73,7 @@ private:
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
-    int                     width_ = 1024, height_ = 480;
+    int                     width_ = 1024, height_ = 640;
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
     bool                    visible_ = false;
@@ -74,6 +84,11 @@ private:
     int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
+    int                     page_ = 0;                // 0 main, 1 gun fit
+    std::uint32_t           seenWeaponSeq_ = 0xFFFFFFFFu;
+    std::string             weaponKey_;               // the weapon in hand ("" none)
+    shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)
+    bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
 };
 
 }  // namespace mohavr::host

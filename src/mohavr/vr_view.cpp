@@ -528,8 +528,8 @@ void OnViewPoint(SafetyHookContext& ctx) {
     LeaveCriticalSection(&g_lock);
     g_thisViewActive = true;
     if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi) {
+        viewmodel::OnPlayerView();  // first: the aim follows the gun's barrel
         aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_world.base);
-        viewmodel::OnPlayerView();
     }
 
     if (++g_views == 1 || g_views % 4000 == 0) {

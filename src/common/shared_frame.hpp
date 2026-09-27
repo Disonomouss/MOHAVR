@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 7;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses
+inline constexpr std::uint32_t kVersion = 8;           // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -124,6 +124,20 @@ struct Header {
     // its position (0 = nothing to show), and which pose: 0 none, 1 head, 2 left hand, 3 right hand.
     volatile float         aimDistance;
     volatile std::uint32_t aimSource;
+
+    // --- v8: the gun fit (M8, the host menu's Gun fit page) ----------------------------------------------------
+    // Game -> host: the weapon in the player's hands, by class name ("" = none); weaponSeq is bumped on a change.
+    char                   weaponKey[48];
+    volatile std::uint32_t weaponSeq;
+    // Host -> game (seqlock fitSeq): the fit for fitKey. Grip: the point of the gun, in the game camera's frame, that
+    // is put on the controller (Unreal units: forward, right, up). Angle: the gun's pitch against the controller
+    // (degrees, + = muzzle up). Ray: the aim line's offset from the controller along the gun's up / right (cm).
+    volatile std::uint32_t fitSeq;
+    std::uint32_t          fitValid;
+    char                   fitKey[48];
+    float                  fitGrip[3];
+    float                  fitAngle;
+    float                  fitRayUp, fitRayRight;
 };
 #pragma pack(pop)
 
@@ -139,7 +153,37 @@ static_assert(offsetof(Header, snapYawTotal) == 840, "shared::Header layout must
 static_assert(offsetof(Header, gameUiMenu) == 844, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, hand) == 852, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, aimSource) == 912, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 920, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, weaponKey) == 916, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, fitKey) == 976, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, fitRayRight) == 1044, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1048, "shared::Header layout must match between x86 and x64");
+
+// The gun fit (v8) as one value.
+struct GunFit {
+    float grip[3];
+    float angle;
+    float rayUp, rayRight;
+};
+
+// Seqlock read of the host's fit; false if mid-write or none. `key` gets fitKey (NUL-terminated).
+inline bool ReadFit(const Header* h, GunFit& fit, char (&key)[48]) {
+    const std::uint32_t s1 = h->fitSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    const bool valid = h->fitValid != 0;
+    for (int i = 0; i < 48; ++i) key[i] = h->fitKey[i];
+    key[47] = 0;
+    for (int i = 0; i < 3; ++i) fit.grip[i] = h->fitGrip[i];
+    fit.angle = h->fitAngle;
+    fit.rayUp = h->fitRayUp;
+    fit.rayRight = h->fitRayRight;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    return valid && h->fitSeq == s1;
+}
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {

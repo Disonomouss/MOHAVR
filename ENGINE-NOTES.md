@@ -560,6 +560,24 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
 - **Verified [S]:** with the test hand at 15° right/10° down and 20° left/10° up, the arms and gun are drawn at the
   hand, pointing its way, in both eyes.
 
+## 5u. Object names, and which gun is in hand (2026-09-27, simulator)
+
+- **Names:** `FName::ToString` `0x109E2E80` (LTCG: ECX = `&FName {Index, Number}`, EAX = out FString): the names
+  array's data pointer is at `[0x116F4A54]`, and each entry's wide string sits at entry `+0x10`. A Number > 0
+  means `Name_(Number-1)`.
+- **UObject:** Index `+0x04` (−1 = uninitialised, `GetName` `0x1090BBD0`), Outer `+0x28` (`GetPathName`
+  `0x109EBAD0`), Name `+0x2C`, **Class `+0x34`**. Class is verified by the names it gives (below).
+- **The gun in hand:** the first-person part (FOV != 0) whose Outer isn't the pawn. The arms' Outer is the pawn;
+  the gun's is its weapon attachment actor, e.g. `MOHASkeletalMeshComponent_104` of `Attachment_Stg44_14`. The
+  key is that actor's class: seen `Attachment_Stg44`, `Attachment_Colt45`, `Attachment_Bar`, and during the jump
+  `MOHAParachuteActor`. Y cycles the three weapons.
+- **Gun fit** (menu, shared block v8): the host keeps a fit per key (`[GunFit]` in the player's ini: grip x y z,
+  angle, aim line up, right) and publishes it for the key the game reports. The game uses it when the keys match,
+  else the ini's `Weapon.GripX/Y/Z` and `Aim.RayUp`. The gun frame is the controller's, pitched by the angle; the
+  aim line starts at the controller, offset along the gun's up and right. The host's reticle builds the same line.
+  Verified [S]: the menu's aim line +2 cm → the game's ray +2 units; angle +10° → ray direction z 0.17; the saved fit
+  reloads when the gun comes back into hand.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

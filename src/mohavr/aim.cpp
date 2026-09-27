@@ -12,6 +12,7 @@
 #include "config.hpp"
 #include "log.hpp"
 #include "patch.hpp"
+#include "viewmodel.hpp"
 #include "vr_view.hpp"
 
 namespace mohavr::aim {
@@ -132,6 +133,8 @@ void __fastcall Hook_GetBaseAimRotation(std::uintptr_t self, void* /*edx*/, void
 
 }  // namespace
 
+std::uintptr_t LocalPlayerPawn() { return LocalPawn(LocalController()); }
+
 bool Install(const Config& cfg) {
     g_cfg = cfg;
     if (cfg.aimMode == 0) {
@@ -186,15 +189,11 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
         }
         pose = hand[h];
     }
-    float pos[3], axes[3][3], upm = 100.0f;
-    if (!view::PoseFrameToWorld(pose, pos, axes, upm)) return;
-    const float (&fwd)[3] = axes[0];
-    // With the gun drawn in the hand (Weapon.ViewModel=2) the ray runs along its barrel, Aim.RayUp above the
-    // controller's aim pose (headset round 12: the shots were ~8 cm below the barrel).
-    if (g_cfg.aimMode >= 2 && g_cfg.viewModel == 2) {
-        const float lift = g_cfg.aimRayUp * upm / 100.0f;
-        for (int i = 0; i < 3; ++i) pos[i] += axes[2][i] * lift;
-    }
+    float pos[3], fwd[3], upm = 100.0f;
+    // With the gun drawn in the aiming hand (Weapon.ViewModel=2) the ray runs along its barrel -- the gun's own
+    // frame and aim-line offset, per weapon (the menu's Gun fit; headset round 12: the shots were ~8 cm low).
+    const bool barrel = g_cfg.aimMode >= 2 && viewmodel::GunRay(pos, fwd, upm);
+    if (!barrel && !view::PoseToWorld(pose, pos, fwd, upm)) return;
     const float reach = kTraceMeters * upm;
     const float end[3] = {pos[0] + fwd[0] * reach, pos[1] + fwd[1] * reach, pos[2] + fwd[2] * reach};
     float point[3];

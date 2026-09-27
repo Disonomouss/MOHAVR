@@ -174,6 +174,14 @@ inline constexpr std::uint8_t   kViewModelTransformBytes[] = {0x55, 0x8B, 0xEC, 
 inline constexpr std::uintptr_t kProxyComponent = 0xF0, kProxyLocalToWorld = 0x20, kProxyWorldToLocal = 0x60;
 inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshComponent.FOV (float)
 
+// --- Object names (ENGINE-NOTES 5u) ---
+// FName::ToString 0x109E2E80 (ECX = &FName {Index, Number}): FName::Names data = [0x116F4A54], entry string (wide)
+// at entry + 0x10. UObject: Index +0x04 (-1 = uninitialised; GetName 0x1090BBD0), Outer +0x28 (GetPathName
+// 0x109EBAD0), Name +0x2C (both). Class +0x34 (the UE3 order after Name; verified at run time by class names).
+inline constexpr std::uintptr_t kGNamesData   = 0x116F4A54;
+inline constexpr std::uintptr_t kNameEntryString = 0x10;
+inline constexpr std::uintptr_t kObjectOuter  = 0x28, kObjectName = 0x2C, kObjectClass = 0x34;
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},

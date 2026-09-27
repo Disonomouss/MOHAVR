@@ -60,7 +60,8 @@ HEADSET-TESTS.md.
 ## In-headset menu (host)
 - `src/host/menu.cpp`: Dear ImGui into its own quad layer. Left Touch menu button toggles; the left
   stick navigates and adjusts; the trigger or A selects. The first item is World Scale, live to the
-  game via shared block v4 (`unitsPerMeter`).
+  game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
+  (`[GunFit]` in the player's ini, keyed by the weapon's class name, e.g. `Attachment_Stg44`).
 - **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`. `tools/userdata.ps1`
   backs it up and restores it with the MOHA user folder (a test that creates it has it removed).
 - Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`

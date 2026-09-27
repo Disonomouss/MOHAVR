@@ -468,17 +468,25 @@ hand only), in the game's aim and in the host's reticle alike.
 
 ---
 
-## Round 13: prepared 2026-09-27, the aim along the gun's barrel
+## Round 13: prepared 2026-09-27, the aim along the gun's barrel, and the Gun fit page
 **Changed:** the aim (and the red dot) now runs 8 cm higher, along the gun's barrel instead of from the controller's
-tip. The gun in your hand is now the default. [S]: the simulator shows the aim ray starting 8 cm above the hand,
-in the game and for the red dot alike.
+tip. The gun in your hand is now the default. **New, at your request:** a **Gun fit** page in the MOHAVR menu (hold
+the menu button → Gun fit). It shows the gun you're holding, and the left stick adjusts, live: gun forward/back,
+right/left, up/down, gun angle, aim line up/down and right/left. Each gun keeps its own fit (saved in your settings);
+"Reset this gun" goes back to the defaults. The red dot stays visible while the menu is open, so you can line it up
+with the barrel. [S]: in the simulator the game named the StG 44, Colt 45 and BAR, the menu's changes reached the
+aim straight away, and the saved fit came back when the gun did.
 
 **How to try it:** Claude has deployed. Launch as usual, get into play.
-1. Shoot at a wall with the pistol, as in your screenshot, and with the rifle; look along the barrel at the red dot.
+1. With the pistol, look along the barrel at the red dot on a wall. If they don't line up, open Gun fit and move the
+   aim line (and the gun, if its place in your hand feels off) until they do.
+2. Do the same with the rifle (Y switches weapons; switch with the menu closed).
 
 **Questions:**
-1. Does the barrel line up with the red dot now, with the pistol? (yes / still low / now high)
-2. And with the rifle? (yes / low / high / left / right)
+1. Did the barrel line up with the red dot before you adjusted, with the pistol? (yes / low / high)
+2. And the rifle? (yes / low / high / left / right)
+3. Was the Gun fit page easy to use; is anything missing (a step too big or small, another adjustment)? (describe)
+4. After fitting, do the shots land where the barrel points? (yes/no)
 
 **Answers:** (the player's words)
 
