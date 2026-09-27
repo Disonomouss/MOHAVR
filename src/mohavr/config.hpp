@@ -21,6 +21,9 @@ struct Config {
     bool aimHeadPitch   = true;   // [Aim] HeadPitch -- the player's pitch (gun, shots) follows the head
     int  aimMode        = 3;      // [Aim] Mode -- 0 the game's (body yaw), 1 head, 2 left hand, 3 right hand (M7)
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
+    int  viewModel      = 0;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
+    float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)
+                                                     // put at the controller (fwd/right/up)
     bool hideBody       = false;  // [Weapon] HideBody -- hide the first-person body/sleeves (RenderBody exec)
     int  cinemaScreen   = 1;      // [Camera]  CinemaScreen -- flat on the host's screen: 1 UI menus, 2 + cinematic cameras (M5)
     bool debugViewState = false;  // [Debug]   ViewState -- write the game camera to %TEMP%\MOHAVR\view_state.txt (tests)

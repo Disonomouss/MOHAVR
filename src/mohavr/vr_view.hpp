@@ -29,5 +29,9 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta);
 // eyes of the player's last head-tracked view: `pos` and unit `fwd` in Unreal units/axes. `unitsPerMeter`
 // = the scale in use. Game thread; false before the first such view.
 bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float& unitsPerMeter);
+// The same with the pose's full frame: axes[0] forward, [1] right, [2] up (Unreal axes, unit length).
+bool PoseFrameToWorld(const shared::Pose& p, float (&pos)[3], float (&axes)[3][3], float& unitsPerMeter);
+// M8: the game's own camera of that view (before the head): location and pitch/yaw in radians.
+bool GameCamera(float (&loc)[3], float& pitch, float& yaw);
 
 }  // namespace mohavr::view

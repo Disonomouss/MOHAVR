@@ -538,6 +538,28 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   and the host's reticle shows in both eyes at that point.
 - The simulator's own aim poses are the identity at the LOCAL origin (the floor); tests use `pad_cmd.py --aim`.
 
+## 5t. The first-person arms and gun (M8, 2026-09-27, simulator)
+
+- **The camera comes from the arms:** `MOHAPlayerPawn.GetCameraPos()` = `GetBoneLocation('Camera')` of `FPArms`
+  (a `MOHASkeletalMeshComponent`; the gun mesh hangs off its socket). So moving the arms in the game would move
+  the camera. M8 moves only their *drawing*.
+- **`UMOHASkeletalMeshComponent.FOV`** at component `+0x3D0` (65 for the player's arms and gun, 0 otherwise).
+- **The proxy's per-view transform** `0x10EEA470` (vtable slot at `0x11595E00`): thiscall (proxy; `FSceneView*`,
+  `FMatrix* OutLocalToWorld`, `FMatrix* OutWorldToLocal`), `RET 0xC`. Proxy `+0xF0` = the component, `+0x20`
+  LocalToWorld, `+0x60` WorldToLocal. With FOV != 0 it returns `LocalToWorld · View(+0x40) · Persp(FOV, SizeX +0x24,
+  SizeY +0x28, near +0x1BC) · inverse(ViewProjection)` and its inverse: a flat-screen projection baked in *per
+  view*. In stereo each eye gets a symmetric frustum with its own centre, so **the gun is seen double**.
+- **Where the parts sit** (ViewModel log, camera frame, Unreal units): the gun's origin 34.2 forward, 11.2 right,
+  16.7 down; the arms' root 64.9 straight below the camera.
+- **Fix** (`Weapon.ViewModel`, src/mohavr/viewmodel.cpp): an inline hook on that function. For parts with FOV != 0
+  in the player's head-tracked view: `LocalToWorld · D` and `D⁻¹ · WorldToLocal`. ViewModel=1: D = identity (true
+  3D, where the game put them). ViewModel=2: D = inverse(game camera) · hand frame, the hand frame being the aiming
+  controller's pose moved back by `Weapon.GripX/Y/Z` (the camera-frame point that lands on the controller). The game
+  camera = the view's untracked location with the game's pitch/yaw (roll 0). Per eye, render thread; D is computed on
+  the game thread each player view.
+- **Verified [S]:** with the test hand at 15° right/10° down and 20° left/10° up, the arms and gun are drawn at the
+  hand, pointing its way, in both eyes.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

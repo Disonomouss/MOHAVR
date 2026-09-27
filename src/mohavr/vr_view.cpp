@@ -10,6 +10,7 @@
 #include "addresses.hpp"
 #include "aim.hpp"
 #include "bridge.hpp"
+#include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
 #include "log.hpp"
@@ -130,6 +131,7 @@ struct WorldMap {
     float        base[3];  // the game's own (untracked) view location -- where its shots start
     float        yaw;      // the game's yaw (radians)
     shared::Pose head;     // that view's head pose (the translation reference without an origin)
+    float        pitch;    // the game's own view pitch (radians) -- the first-person gun is placed with it
 };
 WorldMap g_world{};
 
@@ -450,7 +452,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     const float gameYaw = UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
-        g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head};
+        g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};
     }
     // Stereo: this eye's own pose (orientation and position); mono: the head.
     const shared::Pose& p = g_thisStereo ? eye[g_thisEye] : head;
@@ -525,8 +527,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
     LeaveCriticalSection(&g_lock);
     g_thisViewActive = true;
-    if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi)
+    if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi) {
         aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_world.base);
+        viewmodel::OnPlayerView();
+    }
 
     if (++g_views == 1 || g_views % 4000 == 0) {
         MLOG("view #%ld (%s eye %d): pose q(%.3f %.3f %.3f %.3f) p(%.3f %.3f %.3f) -> rot P%d Y%d R%d (game yaw %d)", g_views,
@@ -801,7 +805,8 @@ bool Install(const Config& cfg) {
             }
         }
     }
-    aim::Install(cfg);  // M7: needs the view hook (PoseToWorld)
+    aim::Install(cfg);        // M7: needs the view hook (PoseToWorld)
+    viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
     return true;
 }
 
@@ -823,6 +828,21 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta) {
 }
 
 bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float& unitsPerMeter) {
+    float axes[3][3];
+    if (!PoseFrameToWorld(p, pos, axes, unitsPerMeter)) return false;
+    for (int i = 0; i < 3; ++i) fwd[i] = axes[0][i];
+    return true;
+}
+
+bool GameCamera(float (&loc)[3], float& pitch, float& yaw) {
+    if (!g_world.valid) return false;
+    for (int i = 0; i < 3; ++i) loc[i] = g_world.base[i];
+    pitch = g_world.pitch;
+    yaw = g_world.yaw;
+    return true;
+}
+
+bool PoseFrameToWorld(const shared::Pose& p, float (&pos)[3], float (&axes)[3][3], float& unitsPerMeter) {
     if (!g_world.valid) return false;
     const shared::Header* hdr = bridge::SharedHeader();
     unitsPerMeter = UnitsPerMeter(hdr);
@@ -836,11 +856,14 @@ bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float&
     pos[0] = g_world.base[0] + d.x * unitsPerMeter;
     pos[1] = g_world.base[1] + d.y * unitsPerMeter;
     pos[2] = g_world.base[2] + d.z * unitsPerMeter + lift;
-    const Vec3 f = QuatRotate(p, 0.0f, 0.0f, -1.0f);
-    const Vec3 F = YawRotate(XrToUe(f.x, f.y, f.z), g_world.yaw);
-    fwd[0] = F.x;
-    fwd[1] = F.y;
-    fwd[2] = F.z;
+    const Vec3 f = QuatRotate(p, 0.0f, 0.0f, -1.0f), r = QuatRotate(p, 1.0f, 0.0f, 0.0f), u = QuatRotate(p, 0.0f, 1.0f, 0.0f);
+    const Vec3 A[3] = {YawRotate(XrToUe(f.x, f.y, f.z), g_world.yaw), YawRotate(XrToUe(r.x, r.y, r.z), g_world.yaw),
+                       YawRotate(XrToUe(u.x, u.y, u.z), g_world.yaw)};
+    for (int i = 0; i < 3; ++i) {
+        axes[i][0] = A[i].x;
+        axes[i][1] = A[i].y;
+        axes[i][2] = A[i].z;
+    }
     return true;
 }
 

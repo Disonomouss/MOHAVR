@@ -163,6 +163,17 @@ inline constexpr std::uintptr_t kActorLocation   = 0xE8;    // FVector (execTrac
 inline constexpr std::uintptr_t kPawnController  = 0x1EC;
 inline constexpr std::uintptr_t kControllerPawn  = 0x1E0;
 
+// --- M8 the first-person gun (ENGINE-NOTES 5t) ---
+// The MOHA skeletal-mesh scene proxy's per-view transform (vtable entry at 0x11595E00; the only caller of
+// FPerspectiveMatrix besides CalcSceneView): thiscall (ECX = proxy; stack: const FSceneView*, FMatrix* OutLocalToWorld,
+// FMatrix* OutWorldToLocal), RET 0xC. When the component's FOV (proxy+0xF0 -> +0x3D0) is nonzero -- the
+// first-person arms and gun -- it bakes a flat-screen projection of that FOV into the matrices (per view, so per eye:
+// the doubled gun in stereo); otherwise it copies the proxy's LocalToWorld (+0x20) and WorldToLocal (+0x60).
+inline constexpr std::uintptr_t kViewModelTransform = 0x10EEA470;
+inline constexpr std::uint8_t   kViewModelTransformBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x81, 0xEC, 0x04, 0x01, 0x00, 0x00, 0x53, 0x8B, 0xD9};
+inline constexpr std::uintptr_t kProxyComponent = 0xF0, kProxyLocalToWorld = 0x20, kProxyWorldToLocal = 0x60;
+inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshComponent.FOV (float)
+
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
     {"WinMain",                 kWinMain,               kWinMainBytes,              sizeof(kWinMainBytes)},
@@ -183,6 +194,7 @@ inline constexpr Signature kSignatures[] = {
     {"decal screen box",                   kDecalScreenBox, kDecalScreenBoxBytes, sizeof(kDecalScreenBoxBytes)},
     {"execGetBaseAimRotation",             kExecGetBaseAimRotation, kExecGetBaseAimRotationBytes, sizeof(kExecGetBaseAimRotationBytes)},
     {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},
+    {"view-model proxy transform",         kViewModelTransform, kViewModelTransformBytes, sizeof(kViewModelTransformBytes)},
 };
 
 }  // namespace mohavr::addr

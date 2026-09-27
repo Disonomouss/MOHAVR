@@ -433,6 +433,32 @@ stays visible until M8 puts it in the hand.
 
 ---
 
+## Round 12: prepared 2026-09-27, the gun in your hand (M8, first step)
+**Changed:** the gun (with both arms holding it) is now drawn at your **right controller**, pointing where it
+points, instead of in front of your face. It's also drawn in true 3D, so it shouldn't look doubled any more.
+Only the drawing moved; the game itself still thinks the gun is in front of the camera. The arms come along as
+one piece, so they may look detached from your body. [S]: the simulator shows the gun at the test hand, in both eyes.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Hold the controller as if it were the gun's grip; move it around, look at the gun from the side.
+2. Shoot at a few things; check that the barrel points at the red dot.
+3. Switch weapons (Y) once, and aim down the sights (left trigger) once.
+
+**Questions:**
+1. Is the gun in your hand and does it follow the controller smoothly? (yes/no)
+2. Is it still doubled? (yes/no)
+3. Where does it sit relative to your real hand: too far forward/back, left/right, up/down, tilted? (describe)
+4. Does the barrel line up with the red dot? (yes/no, which way it's off)
+5. Anything odd with other weapons or aiming down the sights? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults plus `Weapon.ViewModel=2` (grip 34 / 11 / −17).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

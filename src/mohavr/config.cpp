@@ -47,6 +47,11 @@ Config LoadConfig(const std::wstring& dir) {
     if (c.aimMode < 0 || c.aimMode > 3) c.aimMode = 0;
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
+    c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
+    if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
+    c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);
+    c.gripY          = getf(L"Weapon", L"GripY", c.gripY, -200.0f, 200.0f);
+    c.gripZ          = getf(L"Weapon", L"GripZ", c.gripZ, -200.0f, 200.0f);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));
     if (c.cinemaScreen < 0 || c.cinemaScreen > 2) c.cinemaScreen = 0;
 

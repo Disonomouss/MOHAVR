@@ -116,8 +116,9 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **M8, the gun in the hand:** the view model follows the aiming controller (`UpdateGunView` offsets or the
-   weapon mesh's transform), then the HUD crosshair (hide it in controller modes).
+2. **HEADSET-TESTS round 12** (deployed, `Weapon.ViewModel=2`): **M8 first step [S] done**: the arms and gun are drawn at the
+   aiming controller in true 3D (the proxy's per-view transform, ENGINE-NOTES §5t). Next: fit per the player (grip,
+   angle), the HUD crosshair in controller modes, the arms detached from the body (IK later).
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 
 ## Risks
