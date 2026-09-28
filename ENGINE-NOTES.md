@@ -704,6 +704,13 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   (shared v12 `freeHand[4]`, the menu's Free hand page) turns it about the wrist in the controller's frame (Z turn,
   Y tilt, X roll) and moves it forward.
 
+- **Round 19 log (headset):** 0 torn reads -- the lock was not it. With the BAR, every 5-s line for ~50 s of
+  walking was a hit at exactly 0.2 m: the first trace hit within 20 cm and the re-trace from 20 cm hit at its own
+  start. **Round 20:** the ray steps on 20 cm at a time (up to 5 steps, 1 m) while each trace hits within 20 cm of
+  its start, and logs the hit actor (FCheckResult.Actor +4; first 12 distinct). Simulator: during the landing the
+  ray starts inside `Var_Flk_Roof_Pr_StaticMeshActor_62` (StaticMeshActor) and steps out. What the headset's
+  walking case starts inside is still to be read from the next log.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

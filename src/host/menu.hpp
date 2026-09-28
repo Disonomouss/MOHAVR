@@ -100,6 +100,7 @@ private:
     std::wstring            iniPath_;
     int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
+    float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
     HolsterSpot             spots_[kHolsters]{}, spotDefaults_[kHolsters]{};  // metres
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;

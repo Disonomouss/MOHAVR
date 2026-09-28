@@ -116,7 +116,9 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 19** (deployed): shots kept on the red dot (the shared view lock held only for the copies,
+2. **HEADSET-TESTS round 20** (deployed): the aim ray steps out of whatever it starts inside (round 19's log: runs of
+   0.2 m hits while walking with the BAR; the lock had 0 torn reads), `ShoulderWidth` 30, `FreeHand` default tilt 180
+   (the player's fix). Round 19: shots kept on the red dot (the shared view lock held only for the copies,
    readers retry and keep the last frame; the aim trace ignores volumes and re-traces past a start inside geometry),
    the free hand's grip taken from a long gun held still, and a Free hand menu page (tilt / turn / roll / forward,
    saved as the player's `[Hands] FreeHand`). Round 18: arm jitter gone, foregrip/reload rules passed; the grenade's

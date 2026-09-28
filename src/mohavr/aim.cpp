@@ -65,7 +65,8 @@ __declspec(naked) int __stdcall CallSingleLineCheck(void* /*world*/, void* /*hit
 }
 
 // The trace; false (and `hit` = end) when nothing is in the way.
-bool Trace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3]) {
+bool Trace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3],
+           std::uintptr_t* actor = nullptr) {
     void* world = *reinterpret_cast<void**>(addr::kGWorld);
     std::memcpy(hit, end, sizeof(hit));
     if (!world) return false;
@@ -77,6 +78,7 @@ bool Trace(std::uintptr_t source, const float (&start)[3], const float (&end)[3]
                                           addr::kTraceFlagsActors, addr::kSingleLineCheck);
     if (clear) return false;
     std::memcpy(hit, result + addr::kCheckResultLocation, sizeof(hit));
+    if (actor) *actor = *reinterpret_cast<const std::uintptr_t*>(result + addr::kCheckResultActor);
     return true;
 }
 
@@ -110,7 +112,7 @@ void Publish(float distance, std::uint32_t source) {
 }
 
 // Frames since the last ray log, and those whose hand read met the host mid-write (kept the last aim).
-unsigned g_frames = 0, g_torn = 0;
+unsigned g_frames = 0, g_torn = 0, g_near = 0;
 
 // The last base aim this hook gave the player (for AddSpread).
 int   g_lastAim[3] = {0, 0, 0};
@@ -249,14 +251,27 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     const float reach = kTraceMeters * upm;
     const float end[3] = {pos[0] + fwd[0] * reach, pos[1] + fwd[1] * reach, pos[2] + fwd[2] * reach};
     float point[3];
-    bool hit = Trace(pawn, pos, end, point);
-    // A hit right at the start means the ray began inside something (headset round 18: 6 of 37 rays at 0.0 m while
-    // moving along walls -- the aim then pointed from the eye at the hand). Trace again from just past it.
-    const float skip = 20.0f * upm / 100.0f;
-    const float dx0 = point[0] - pos[0], dy0 = point[1] - pos[1], dz0 = point[2] - pos[2];
-    if (hit && dx0 * dx0 + dy0 * dy0 + dz0 * dz0 < skip * skip) {
-        const float from[3] = {pos[0] + fwd[0] * skip, pos[1] + fwd[1] * skip, pos[2] + fwd[2] * skip};
-        hit = Trace(pawn, from, end, point);
+    std::uintptr_t actor = 0;
+    bool hit = Trace(pawn, pos, end, point, &actor);
+    // A hit right at the start means the ray began inside something (headset rounds 18-19: runs of 0.0 / 0.2 m hits
+    // while walking -- the aim then pointed from the eye at the hand, and shots went "somewhere else"). Step along
+    // the ray past it, 20 cm at a time, up to 1 m.
+    const float step = 20.0f * upm / 100.0f;
+    float from[3] = {pos[0], pos[1], pos[2]};
+    for (int i = 1; hit && i <= 5; ++i) {
+        const float fx = point[0] - from[0], fy = point[1] - from[1], fz = point[2] - from[2];
+        if (fx * fx + fy * fy + fz * fz >= step * step) break;
+        ++g_near;
+        static int loggedNear = 0;
+        static std::uintptr_t seenNear = 0;
+        if (actor != seenNear && loggedNear < 12) {
+            ++loggedNear;
+            seenNear = actor;
+            MLOG("aim: the ray starts inside %s (%s)%s -- traced again from %d cm on", actor ? names::Name(actor).c_str() : "?",
+                 actor ? names::ClassName(actor).c_str() : "?", actor == pawn ? " = the player" : "", i * 20);
+        }
+        for (int k = 0; k < 3; ++k) from[k] = pos[k] + fwd[k] * step * static_cast<float>(i);
+        hit = Trace(pawn, from, end, point, &actor);
     }
     g_frame.valid = true;
     g_frame.tick = GetTickCount();
@@ -267,10 +282,10 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     static DWORD nextLog = 0;
     if (static_cast<LONG>(g_frame.tick - nextLog) >= 0) {
         nextLog = g_frame.tick + 5000;
-        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn)",
+        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn, %u started inside)",
              pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2], hit ? "hit" : "nothing", point[0], point[1], point[2],
-             std::sqrt(dx * dx + dy * dy + dz * dz) / upm, barrel ? "barrel" : "controller", g_torn, g_frames);
-        g_torn = g_frames = 0;
+             std::sqrt(dx * dx + dy * dy + dz * dz) / upm, barrel ? "barrel" : "controller", g_torn, g_frames, g_near);
+        g_torn = g_frames = g_near = 0;
     }
 }
 

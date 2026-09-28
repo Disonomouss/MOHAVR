@@ -182,6 +182,7 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kHolsters]) {
     wchar_t fh[64] = L"", fhDef[64] = L"";
     GetPrivateProfileStringW(L"Hands", L"FreeHand", L"0 0 0 0", fhDef, 64, shipped.c_str());
     GetPrivateProfileStringW(L"Hands", L"FreeHand", fhDef, fh, 64, iniPath_.c_str());
+    swscanf_s(fhDef, L"%f %f %f %f", &freeHandDef_[0], &freeHandDef_[1], &freeHandDef_[2], &freeHandDef_[3]);
     swscanf_s(fh, L"%f %f %f %f", &freeHand_[0], &freeHand_[1], &freeHand_[2], &freeHand_[3]);
     PublishFreeHand(false);
     MLOG("menu: free hand pitch %.0f yaw %.0f roll %.0f, forward %.0f cm", freeHand_[0], freeHand_[1], freeHand_[2], freeHand_[3]);
@@ -375,7 +376,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                  freeHand_[3]);
         }
         if (in.select && selected_ == eqReset) {
-            for (float& v : freeHand_) v = 0.0f;
+            for (int i = 0; i < 4; ++i) freeHand_[i] = freeHandDef_[i];  // the shipped defaults
             PublishFreeHand(false);
             WritePrivateProfileStringW(L"Hands", L"FreeHand", nullptr, iniPath_.c_str());
             MLOG("menu: free hand reset");

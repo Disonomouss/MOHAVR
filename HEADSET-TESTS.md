@@ -754,6 +754,39 @@ hit at 0.0 m (the ray starting inside something).
 3. Pistol: wrist and forearm twist OK? (yes / describe)
 4. Anything else odd? (describe)
 
+**Answers:** "Bring shoulders in a bit" · 1 "no, issue persists" · 2 "I turned the off hand around 180 degrees" (saved
+`FreeHand=180 0 0 0`: tilt 180) · 3 two screenshots of the off-hand arm, pistol and grenade
+(`VirtualDesktop.Android-20260928-184535.jpg`, `-184618.jpg`: the upper arm big in the lower left, the forearm long).
+
+**Log received:** yes, `logs/modlogs/20260928-185105-MOHAVR.log` and `-MOHAVR-host.log`. 0 torn reads in every
+5-second line (the lock was not the cause). With the BAR, ~50 s of walking gave "hit at 0.2 m" in every line: the
+ray started inside something and the re-trace from 20 cm started inside it too -- the aim then pointed from the eye
+at the hand.
+
+**Verdict:** shots FAILED again (cause found in the log, round 20); free hand fixed by the player's tilt 180.
+
+---
+
+## Round 20: prepared 2026-09-28, the aim ray steps out of what it starts in; shoulders in
+**Changed:**
+- **Shots:** when the aim ray starts inside something, it now steps along 20 cm at a time (up to 1 m) until it's
+  out, instead of aiming at a point by your hand. The log names what it started inside, so if it still happens the
+  next fix is exact.
+- **Shoulders** 6 cm narrower (`ShoulderWidth` 36 -> 30).
+- **Free hand:** your tilt 180 is now the default too (your saved setting is unchanged); Reset goes back to it.
+- [S]: in the simulator a ray starting inside the roof mesh during the landing steps out and hits beyond it; the
+  shoulder and free-hand defaults load.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Walk around with the BAR and the rifle, shooting at things near and far, and along walls and past teammates.
+2. Look at your arms with each weapon.
+
+**Questions:**
+1. Do shots land on the red dot now? (yes / when not)
+2. Shoulders: better? Still too wide, or too narrow now? (describe)
+3. In your screenshots, what's wrong with the off-hand arm: too big, too long, the elbow, the sleeve? (describe)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
