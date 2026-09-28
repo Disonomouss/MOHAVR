@@ -616,11 +616,51 @@ around.) [S]: in the simulator the shoulders land where they should and the arms
 5. Grenades now strong enough? (yes / too weak / too strong)
 6. Anything else odd? (describe)
 
+**Answers (2026-09-28):** 1. "Yes" 2. "Seem ok" 3. "When twisting arm, shoulder and bicep twist all the way around
+when hand is only twisted 90 degress or so." 4. "Didn't notice, needs further testing." 5. "All good".
+The player also asked: take the off hand off the gun unless it holds the foregrip, and have it follow its controller
+when not in use (not on the foregrip; pistol / grenade).
+
+**Log received:** yes (`logs/modlogs/20260928-172408-*`).
+
+**Cause of 3:** the upper arm was turned from its gun-moved pose, which carries the hand's whole roll. **Fix:** the upper
+arm and the forearm bone are turned from the body's pose (no twist); only the forearm roll bones take the hand's twist.
+
+**Verdict:** arm IK **PASSED** (connected, shoulders OK; now on by default); the twist and the free hand in round 17.
+
+
+**Deployed for this round:** the shipped defaults plus `Weapon.ArmIK=1`.
+
+---
+
+## Round 17: prepared 2026-09-28, the twist fix and the free off hand
+**Changed:**
+- **Twist:** turning your wrist no longer spins the bicep and shoulder -- only the forearm turns with the hand.
+- **The off hand is free:** unless you're holding the foregrip, the model's other hand leaves the gun and follows your
+  other controller (with a pistol or a grenade too). Take the foregrip and it goes back on the gun.
+- A hand just out of reach now stretches the arm a little (up to 30%) before the shoulder follows -- a far reach had
+  torn the sleeve into a flat "sail".
+- Arm IK is on by default now.
+- [S]: in the simulator the free hand follows the other controller with its arm reaching to it, goes back on the gun
+  on the foregrip, the far foregrip pose shows one sleeve with no sail, and a rolled wrist turns the forearm only.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. With the rifle: turn your gun wrist both ways; hold and let go of the foregrip; wave the free hand around.
+2. With the pistol and a grenade: the free hand.
+
+**Questions:**
+1. Wrist twist: does the upper arm stay put now? (yes/no)
+2. The free hand: does it follow your controller, and does it look right (its angle, where it sits)? (describe)
+3. Does it snap back onto the foregrip cleanly when you grab it? (yes/no)
+4. Any stretching, sails or odd shapes? (describe)
+5. Arm lag or wobble on fast moves? (yes/no)
+6. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults plus `Weapon.ArmIK=1`.
+**Deployed for this round:** the shipped defaults (now `Weapon.ArmIK=1`, `FreeOffHand=1`), no overrides.
 
 ---
 

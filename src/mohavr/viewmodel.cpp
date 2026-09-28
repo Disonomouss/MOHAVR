@@ -88,6 +88,9 @@ struct State {
     DWORD tick;
     M4    d, dInv;  // LocalToWorld' = LocalToWorld * d; WorldToLocal' = dInv * WorldToLocal
     M4    camInv;   // the game camera's inverse (calibration log)
+    // Arm IK: the gun's frame and the other (off) controller's frame in the world (rows: forward, right, up, origin).
+    M4    gunFrame, offFrame;
+    bool  offValid, twoHanded;
 } g_state{};
 
 void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void* view, M4* outL2W, M4* outW2L) {
@@ -283,6 +286,8 @@ void OnPlayerView() {
     const M4 camInv = RigidInverse(cam);
 
     M4 d{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}}, dInv = d;  // ViewModel=1: where the game put it
+    M4 gunFrameNow = d, offFrameNow = d;
+    bool offValidNow = false, twoHandedNow = false;
     if (g_cfg.viewModel != 2) g_line.valid = false;
     if (g_cfg.viewModel == 2) {
         // The host works the gun out from both hands (hands.cpp: the gun hand, the foregrip, the fit's angle and aim
@@ -324,8 +329,23 @@ void OnPlayerView() {
             MLOG("viewmodel: gun in the %s hand%s", (flags & 4u) ? "left" : "right", (flags & 2u) ? ", two-handed" : "");
             seenFlags = flags;
         }
+        // For the arm IK: the gun's frame, and the other controller's (the free hand follows it off the foregrip).
+        gunFrameNow = gunFrame;
+        twoHandedNow = (flags & 2u) != 0;
+        shared::Pose hand[2];
+        std::uint32_t hv = 0;
+        const int o = (flags & 4u) ? 1 : 0;  // the gun in the left hand -> the right one is free
+        float opos[3], oaxes[3][3], oupm = 100.0f;
+        if (shared::ReadHands(hdr, hand, hv) && (hv & (1u << o)) && view::PoseFrameToWorld(hand[o], opos, oaxes, oupm)) {
+            offFrameNow = Frame(oaxes[0], oaxes[1], oaxes[2], opos);
+            offValidNow = true;
+        }
     }
     AcquireSRWLockExclusive(&g_lock);
+    g_state.gunFrame = gunFrameNow;
+    g_state.offFrame = offFrameNow;
+    g_state.offValid = offValidNow;
+    g_state.twoHanded = twoHandedNow;
     g_state.valid = true;
     g_state.tick = GetTickCount();
     g_state.d = d;
@@ -333,6 +353,20 @@ void OnPlayerView() {
     g_state.camInv = camInv;
     ReleaseSRWLockExclusive(&g_lock);
 }
+bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHanded) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    if (!s.valid || GetTickCount() - s.tick > 250) return false;
+    std::memcpy(gun, s.gunFrame.m, sizeof(gun));
+    std::memcpy(off, s.offFrame.m, sizeof(off));
+    offValid = s.offValid;
+    twoHanded = s.twoHanded;
+    return true;
+}
+
 bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     if (!g_installed || g_cfg.viewModel != 2) return false;
     State s;

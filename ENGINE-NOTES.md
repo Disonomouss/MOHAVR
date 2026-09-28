@@ -651,6 +651,13 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   down. [S]: the right shoulder drawn 18 units right / 22 below the eye; the left arm reaches from the left shoulder to
   the foregrip as one sleeve (m16-ik2-*.png). Known: the shoulders use the gun's move from the previous frame (a
   frame of lag on fast moves).
+- **Round 16/17 refinements:** the upper arm and the forearm bone are turned from the body's pose (moved with the
+  shoulder), so they carry no wrist roll (round 16: a 90-degree wrist turn spun the bicep and shoulder); only the
+  forearm roll bones take the hand's twist. Just out of reach the arm stretches up to 30% along its segments
+  (x' = (x - p)(I + (k-1)a^T a) + p) before the shoulder follows (a far reach had torn the sleeve). **Free off hand**
+  (`Weapon.FreeOffHand`): off the foregrip the rig's left (support) hand and fingers move by
+  Th = inverse(gun frame at that hand) * the other controller's frame, so a hand on the foregrip at the gun's angle
+  gets exactly its on-gun pose; the arm IK then reaches to it.
 
 ## 6. Content and UnrealScript
 

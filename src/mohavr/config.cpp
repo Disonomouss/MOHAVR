@@ -51,6 +51,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
     c.armIK          = get(L"Weapon", L"ArmIK", c.armIK);
+    c.freeOffHand    = get(L"Weapon", L"FreeOffHand", c.freeOffHand);
     c.shoulderWidth  = getf(L"Weapon", L"ShoulderWidth", c.shoulderWidth, 10.0f, 80.0f);
     c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);
     c.shoulderBack   = getf(L"Weapon", L"ShoulderBack", c.shoulderBack, -30.0f, 30.0f);

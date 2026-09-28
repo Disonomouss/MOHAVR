@@ -50,7 +50,7 @@ public:
     bool CreateSpaces(XrSession session);
     // Both aim poses in `space` at `t`; the result's bit 0/1 = left/right valid. Test poses from pad_cmd.txt
     // replace a hand: "aim=yaw,pitch" (degrees) = the right hand 20 cm right, 30 cm below and 30 cm ahead of `head`,
-    // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch" = that hand at x right, y up, z ahead
+    // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch[,roll]" = that hand at x right, y up, z ahead
     // (metres, heading frame); "aim=off" = both real again.
     std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
 
@@ -100,7 +100,7 @@ private:
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
     XrAction    haptic_[2]{};          // left, right vibration
-    struct TestPose { bool on; float x, y, z, yaw, pitch; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
+    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
     bool        testThrow_ = false;

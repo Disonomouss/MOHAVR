@@ -106,7 +106,7 @@ headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may
 | `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
 | `Aim.Mode` | What you aim with: `3` the right controller (default: shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot), `2` the left controller, `1` your head (shots land where you look), `0` the game's own (your body's direction, with up/down from your head). |
 | `Weapon.ViewModel` | The first-person gun: `0` as the game draws it (looks doubled in the headset), `1` true 3D in front of you, `2` in your aiming hand (default; `Weapon.GripX/Y/Z` fit it to your hand, `Aim.RayUp` lines the aim up with its barrel). |
-| `Weapon.ArmIK=1` | The arms reach from your shoulders to the gun (being tested); `ShoulderWidth`, `ShoulderDrop`, `ShoulderBack` place the shoulders (cm). |
+| `Weapon.ArmIK` | `1` (default): the arms reach from your shoulders to the gun, and your other hand follows its controller unless it holds the foregrip (`FreeOffHand=0` keeps it on the gun); `ShoulderWidth`, `ShoulderDrop`, `ShoulderBack` place the shoulders (cm). |
 | `Weapon.HideViewModel=1` | Hides the first-person gun. |
 | `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
 | `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |

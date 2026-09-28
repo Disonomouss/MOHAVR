@@ -330,7 +330,7 @@ void Pad::ReadTests(double now) {
                     aimLine = true;
                     float y = 0.0f, p = 0.0f;
                     if (strcmp(v, "off") != 0 && sscanf_s(v, "%f,%f", &y, &p) >= 1) {
-                        testPose_[1] = {true, 0.2f, -0.3f, 0.3f, y, p};
+                        testPose_[1] = {true, 0.2f, -0.3f, 0.3f, y, p, 0.0f};
                         MLOG("pad: test aim yaw %.1f pitch %.1f deg (right hand)", y, p);
                     } else {
                         testPose_[0].on = testPose_[1].on = false;
@@ -347,8 +347,8 @@ void Pad::ReadTests(double now) {
                     // "hand=l|r,x,y,z,yaw,pitch": that hand at x right, y up, z ahead of the head (m), turned yaw/pitch.
                     aimLine = true;
                     char which = 0;
-                    TestPose tp{true, 0, 0, 0, 0, 0};
-                    if (sscanf_s(v, "%c,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch) >= 4) {
+                    TestPose tp{true, 0, 0, 0, 0, 0, 0};
+                    if (sscanf_s(v, "%c,%f,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll) >= 4) {
                         const int h = (which == 'l' || which == 'L') ? 0 : 1;
                         testPose_[h] = tp;
                         MLOG("pad: test %s hand at %.2f %.2f %.2f m, yaw %.1f pitch %.1f", h ? "right" : "left", tp.x, tp.y,
@@ -506,7 +506,9 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
         const float pitch = tp.pitch * 0.0174533f;        // positive = up
         const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cx = std::cos(pitch * 0.5f),
                     sx = std::sin(pitch * 0.5f);
-        out[h].orientation = {cy * sx, cx * sy, -sy * sx, cy * cx};  // R_y(yaw) * R_x(pitch)
+        const XrQuaternionf yp{cy * sx, cx * sy, -sy * sx, cy * cx};  // R_y(yaw) * R_x(pitch)
+        const float rz = -tp.roll * 0.0174533f * 0.5f, sz = std::sin(rz), cz = std::cos(rz);  // + roll = clockwise
+        out[h].orientation = {yp.x * cz + yp.y * sz, yp.y * cz - yp.x * sz, yp.z * cz + yp.w * sz, yp.w * cz - yp.z * sz};
         valid |= 1u << h;
     }
     return valid;

@@ -93,13 +93,28 @@ M4 SegmentMove(V3 pivotOld, V3 from, V3 pivotNew, V3 to) {
     return r;
 }
 
+// A stretch by `k` along direction `axis` through `pivot` (row vectors): x' = (x - p) S + p, S = I + (k-1) a^T a.
+M4 Stretch(V3 pivot, V3 axis, float k) {
+    const V3 a = Unit(axis);
+    const float av[3] = {a.x, a.y, a.z};
+    M4 r{};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) r.m[i][j] = (i == j ? 1.0f : 0.0f) + (k - 1.0f) * av[i] * av[j];
+    const float p[3] = {pivot.x, pivot.y, pivot.z};
+    for (int j = 0; j < 3; ++j) r.m[3][j] = p[j] - (p[0] * r.m[0][j] + p[1] * r.m[1][j] + p[2] * r.m[2][j]);
+    r.m[3][3] = 1.0f;
+    return r;
+}
+
 Config g_cfg;
 SafetyHookInline g_hook;
 
 // Bone indices of the arms mesh, found by name (once per mesh).
 struct Side {
     int hand = -1, fore = -1, arm = -1, clav = -1;
-    std::vector<int> foreGroup, armGroup;  // bones moved with the forearm / the upper arm
+    std::vector<int> rolls;      // the forearm roll bones (they take the hand's twist)
+    std::vector<int> armGroup;   // the upper arm and its roll bone
+    std::vector<int> handGroup;  // the hand and its fingers
 };
 struct Rig {
     std::uintptr_t mesh = 0;
@@ -130,11 +145,11 @@ bool Resolve(std::uintptr_t mesh, int bones) {
         sd.arm = find(p + "Arm");
         sd.clav = find(p + "Shoulder");
         if (sd.hand < 0 || sd.fore < 0 || sd.arm < 0 || sd.clav < 0) return false;
-        sd.foreGroup.push_back(sd.fore);
         sd.armGroup.push_back(sd.arm);
         for (int i = 0; i < num; ++i) {
-            if (n[i].rfind(p + "ForeArmRoll", 0) == 0) sd.foreGroup.push_back(i);
+            if (n[i].rfind(p + "ForeArmRoll", 0) == 0) sd.rolls.push_back(i);
             if (n[i] == p + "ArmRoll") sd.armGroup.push_back(i);
+            if (n[i].rfind(p + "Hand", 0) == 0) sd.handGroup.push_back(i);  // the hand and its fingers
         }
         g_rig.body.push_back(sd.clav);
     }
@@ -146,10 +161,11 @@ bool Resolve(std::uintptr_t mesh, int bones) {
         if (!handSide) g_rig.body.push_back(i);
     }
     g_rig.ok = true;
-    MLOG("armik: rig of %s -- %d bones; right hand %d forearm %d arm %d clavicle %d (+%zu/+%zu roll), left %d %d %d %d, %zu body",
-         names::Name(mesh).c_str(), num, g_rig.side[0].hand, g_rig.side[0].fore, g_rig.side[0].arm, g_rig.side[0].clav,
-         g_rig.side[0].foreGroup.size() - 1, g_rig.side[0].armGroup.size() - 1, g_rig.side[1].hand, g_rig.side[1].fore,
-         g_rig.side[1].arm, g_rig.side[1].clav, g_rig.body.size());
+    MLOG("armik: rig of %s -- %d bones; right hand %d (+%zu fingers) forearm %d (+%zu roll) arm %d (+%zu roll) clavicle %d, "
+         "left %d %d %d %d, %zu body",
+         names::Name(mesh).c_str(), num, g_rig.side[0].hand, g_rig.side[0].handGroup.size() - 1, g_rig.side[0].fore,
+         g_rig.side[0].rolls.size(), g_rig.side[0].arm, g_rig.side[0].armGroup.size() - 1, g_rig.side[0].clav,
+         g_rig.side[1].hand, g_rig.side[1].fore, g_rig.side[1].arm, g_rig.side[1].clav, g_rig.body.size());
     return true;
 }
 
@@ -208,14 +224,44 @@ bool Apply(std::uintptr_t comp) {
     const M4 kBody = Mul(Mul(l2w, translate(shift)), Ainv);
     for (int i : g_rig.body) bones[i] = Mul(g_saved[i], kBody);
 
+    // The free hand: off the foregrip (or with a pistol or grenade) the rig's support hand (the model's left) leaves the
+    // gun and follows the other controller, holding its grip orientation: Th = inverse(gun frame at the hand) * that
+    // controller's frame (a hand on the foregrip at the gun's angle gets exactly its on-gun pose).
+    float gunF[16], offF[16];
+    bool offValid = false, twoHanded = false;
+    const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
+    const bool freeHand = g_cfg.freeOffHand && framesOk && offValid && !twoHanded;
+    M4 th{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
+    if (freeHand) {
+        M4 g, f;
+        std::memcpy(g.m, gunF, sizeof(g.m));
+        std::memcpy(f.m, offF, sizeof(f.m));
+        const V3 wristOnGun = Origin(Mul(g_saved[g_rig.side[1].hand], A));
+        g.m[3][0] = wristOnGun.x;
+        g.m[3][1] = wristOnGun.y;
+        g.m[3][2] = wristOnGun.z;
+        th = Mul(AffineInverse(g), f);
+    }
+    static int seenFree = -1;
+    if (seenFree != static_cast<int>(freeHand)) {
+        seenFree = freeHand;
+        MLOG("armik: support hand %s", freeHand ? "free (follows the other controller)" : "on the gun");
+    }
+
     for (int si = 0; si < 2; ++si) {
         const Side& s = g_rig.side[si];
-        const V3 wrist = Origin(Mul(g_saved[s.hand], A));      // with the gun
-        const V3 elbowOld = Origin(Mul(g_saved[s.fore], A));
-        const V3 shoulderOld = Origin(Mul(g_saved[s.arm], A));
+        const bool moveHand = si == 1 && freeHand;
+        const M4 ah = moveHand ? Mul(A, th) : A;               // how this side's hand is drawn
+        const V3 wrist = Origin(Mul(g_saved[s.hand], ah));
+        const V3 elbowOld = Origin(Mul(g_saved[s.fore], ah));
+        const V3 shoulderOld = Origin(Mul(g_saved[s.arm], ah));
         V3 shoulder = anchor[si];
         const float lu = Len(Sub(elbowOld, shoulderOld)), lf = Len(Sub(wrist, elbowOld));
         if (lu < 1e-3f || lf < 1e-3f) continue;
+        if (moveHand) {
+            const M4 kHand = Mul(ah, Ainv);
+            for (int i : s.handGroup) bones[i] = Mul(g_saved[i], kHand);
+        }
         static DWORD nextLog[2] = {0, 0};
         if (static_cast<LONG>(GetTickCount() - nextLog[si]) >= 0) {
             nextLog[si] = GetTickCount() + 5000;
@@ -223,18 +269,21 @@ bool Apply(std::uintptr_t comp) {
                  si ? "left" : "right", lu, lf, Len(Sub(wrist, shoulder)), shoulder.x, shoulder.y, shoulder.z, wrist.x, wrist.y,
                  wrist.z);
         }
-        // Two-bone solve: shoulder -> elbow (lu) -> wrist (lf), bending the way the game's pose bends. Out of reach, the
-        // shoulder follows the hand (the arm never stretches).
-        const float reach = (lu + lf) * 0.999f;
+        // Two-bone solve: shoulder -> elbow (lu) -> wrist (lf), bending the way the game's pose bends. Just out of reach
+        // the arm stretches (up to 30%: pulling the shoulder far off the torso tore the sleeve into a "sail"); beyond
+        // that the shoulder follows the hand.
         const V3 u = Unit(Sub(wrist, shoulder));
+        const float stretch = std::fmin(std::fmax(Len(Sub(wrist, shoulder)) / ((lu + lf) * 0.999f), 1.0f), 1.3f);
+        const float lus = lu * stretch, lfs = lf * stretch;
+        const float reach = (lus + lfs) * 0.999f;
         if (Len(Sub(wrist, shoulder)) > reach) shoulder = Sub(wrist, Scale(u, reach));
         float dist = Len(Sub(wrist, shoulder));
-        dist = std::fmin(std::fmax(dist, std::fabs(lu - lf) + 1e-3f), reach);
+        dist = std::fmin(std::fmax(dist, std::fabs(lus - lfs) + 1e-3f), reach);
         // The clavicle goes with its shoulder joint.
         const M4 kClav = Mul(Mul(l2w, translate(Sub(shoulder, bodyShoulder[si]))), Ainv);
         bones[s.clav] = Mul(g_saved[s.clav], kClav);
-        const float along = (lu * lu - lf * lf + dist * dist) / (2.0f * dist);
-        const float out = std::sqrt(std::fmax(lu * lu - along * along, 0.0f));
+        const float along = (lus * lus - lfs * lfs + dist * dist) / (2.0f * dist);
+        const float out = std::sqrt(std::fmax(lus * lus - along * along, 0.0f));
         const V3 bodyElbow = Origin(Mul(g_saved[s.fore], l2w)), bodyWrist = Origin(Mul(g_saved[s.hand], l2w));
         const V3 u0 = Unit(Sub(bodyWrist, bodyShoulder[si]));
         const V3 e0 = Sub(bodyElbow, bodyShoulder[si]);
@@ -243,12 +292,21 @@ bool Apply(std::uintptr_t comp) {
         bend = Unit(Sub(bend, Scale(u, Dot(bend, u))));
         if (Len(bend) < 0.5f) bend = Unit(Sub(V3{0, 0, -1}, Scale(u, -u.z)));
         const V3 elbow = Add(shoulder, Add(Scale(u, along), Scale(bend, out)));
-        // Rigid moves of the two segments (drawn space), then back into the arms' component space.
-        const M4 tArm = SegmentMove(shoulderOld, Sub(elbowOld, shoulderOld), shoulder, Sub(elbow, shoulder));
-        const M4 tFore = SegmentMove(wrist, Sub(elbowOld, wrist), wrist, Sub(elbow, wrist));
-        const M4 kArm = Mul(Mul(A, tArm), Ainv), kFore = Mul(Mul(A, tFore), Ainv);
+        // The upper arm: from the BODY's pose (moved with its shoulder), turned onto shoulder -> elbow -- so it carries
+        // none of the hand's twist (headset round 16: a 90-degree wrist turn spun the bicep and shoulder around).
+        const M4 bsh = Mul(l2w, translate(Sub(shoulder, bodyShoulder[si])));
+        const V3 elbowBody = Origin(Mul(g_saved[s.fore], bsh));
+        const M4 tArm = SegmentMove(shoulder, Sub(elbowBody, shoulder), shoulder, Sub(elbow, shoulder));
+        const M4 kArm = Mul(Mul(Mul(bsh, tArm), Stretch(shoulder, Sub(elbow, shoulder), stretch)), Ainv);
         for (int i : s.armGroup) bones[i] = Mul(g_saved[i], kArm);
-        for (int i : s.foreGroup) bones[i] = Mul(g_saved[i], kFore);
+        // The forearm bone: likewise from the body's pose, turned onto elbow -> wrist (no twist either).
+        const V3 wristBody = Origin(Mul(g_saved[s.hand], bsh));
+        const M4 tFore = SegmentMove(elbowBody, Sub(wristBody, elbowBody), elbow, Sub(wrist, elbow));
+        bones[s.fore] = Mul(g_saved[s.fore], Mul(Mul(Mul(bsh, tFore), Stretch(elbow, Sub(wrist, elbow), stretch)), Ainv));
+        // The forearm roll bones: from the hand's pose, turned onto wrist -> elbow -- they take the hand's twist.
+        const M4 tRoll = SegmentMove(wrist, Sub(elbowOld, wrist), wrist, Sub(elbow, wrist));
+        const M4 kRoll = Mul(Mul(Mul(ah, tRoll), Stretch(wrist, Sub(elbow, wrist), stretch)), Ainv);
+        for (int i : s.rolls) bones[i] = Mul(g_saved[i], kRoll);
     }
     static int logged = 0;
     if (logged < 2) {
