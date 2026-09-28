@@ -155,8 +155,10 @@ inline constexpr std::uintptr_t kGWorld = 0x116DCE78;       // UWorld* (execTrac
 // AddSpread (vtable +0x170); *Result = the spread aim.
 inline constexpr std::uintptr_t kExecAddSpread = 0x10E4E310;
 inline constexpr std::uint8_t   kExecAddSpreadBytes[] = {0x83, 0xEC, 0x18, 0x56, 0x8B, 0x74, 0x24, 0x20, 0x8B, 0x46, 0x1C};
-// The flags execTrace builds for Trace(..., bTraceActors=true): 0x20BF | 0x4000 (SingleLineCheck adds 0x400).
-inline constexpr std::uint32_t  kTraceFlagsActors = 0x60BF;
+// The flags execTrace builds for Trace(..., bTraceActors=true): 0x20BF | 0x4000 (SingleLineCheck adds 0x400). The aim
+// trace leaves out TRACE_Volumes (0x08): blocking volumes (player clip, invisible walls) stop players, not bullets --
+// hitting them put the aim point short of what the ray points at (headset round 18).
+inline constexpr std::uint32_t  kTraceFlagsActors = 0x60BF & ~0x08u;
 // FCheckResult (execTrace's initialisation): Next +0, Actor +4, Location +8, Normal +0x14, Time +0x20 (1.0 =
 // no hit), Item +0x24 (-1), then Material/Component/BoneName/...: 0x44 bytes in all.
 inline constexpr std::uintptr_t kCheckResultActor = 0x04, kCheckResultLocation = 0x08, kCheckResultTime = 0x20,

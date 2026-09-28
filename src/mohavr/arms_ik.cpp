@@ -12,6 +12,7 @@
 
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "bridge.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -242,10 +243,38 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         M4 gunCtrl, offCtrl;
         std::memcpy(gunCtrl.m, gunF, sizeof(gunCtrl.m));
         std::memcpy(offCtrl.m, offF, sizeof(offCtrl.m));
-        const M4 rel = Mul(Mul(saved[g_rig.side[0].hand], A), AffineInverse(gunCtrl));  // the gun hand in its controller
+        // The gun hand in its controller's frame -- taken from a long gun held still and kept (round 18: mirroring the
+        // grenade grip put the free hand wrong; round 19: a frame of the long gun's put-away animation, or the
+        // parachute's, had been kept -- the hand bent back with the grenade).
+        static M4 longGunRel;
+        static bool haveLongGunRel = false;
+        static V3 lastOrigin{};
+        static int steady = 0;
+        const shared::Header* hdr = bridge::SharedHeader();
+        M4 rel = Mul(Mul(saved[g_rig.side[0].hand], A), AffineInverse(gunCtrl));
+        const bool longGun = hdr && hdr->weaponKind == 0 && std::strncmp(hdr->weaponKey, "Attachment_", 11) == 0;
+        const V3 o = Origin(rel);
+        steady = longGun && Len(Sub(o, lastOrigin)) < 0.2f * upm / 100.0f ? steady + 1 : 0;
+        lastOrigin = o;
+        if (steady >= 30) {
+            if (!haveLongGunRel) MLOG("armik: free hand grip taken from %.47s (held still 30 frames)", hdr->weaponKey);
+            longGunRel = rel;
+            haveLongGunRel = true;
+        }
+        if (haveLongGunRel) rel = longGunRel;
         M4 mirror = kIdentity;
         mirror.m[1][1] = -1.0f;  // left <-> right in the controller's frame
-        const M4 target = Mul(Mul(Mul(mirror, rel), mirror), offCtrl);
+        M4 relM = Mul(Mul(mirror, rel), mirror);
+        // The player's adjustment (the menu's Free hand): yaw, pitch, roll about the wrist, then forward -- in the
+        // controller's frame (X forward, Y right, Z up). Round 18: the mirrored grip looked bent back.
+        if (hdr) {
+            const float k = 0.0174533f;
+            const V3 w = Origin(relM);
+            const M4 turn = Mul(Mul(AxisAngle(w, V3{0, 0, 1}, hdr->freeHand[1] * k), AxisAngle(w, V3{0, 1, 0}, hdr->freeHand[0] * k)),
+                                AxisAngle(w, V3{1, 0, 0}, hdr->freeHand[2] * k));
+            relM = Mul(Mul(relM, turn), Translate(V3{hdr->freeHand[3] * upm / 100.0f, 0.0f, 0.0f}));
+        }
+        const M4 target = Mul(relM, offCtrl);
         supportDrawn = Mul(AffineInverse(saved[g_rig.side[1].hand]), target);
         static int logged = 0;
         if (logged < 2) {

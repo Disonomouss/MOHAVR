@@ -69,6 +69,8 @@ private:
     void RenderFitPage();
     void RenderHolsterPage();
     void SaveHolster(int i);
+    void RenderFreeHandPage();
+    void PublishFreeHand(bool save);
     void SetUnitsPerMeter(float v, bool save);
     void SetHeightOffset(float v, bool save);
     void Save();
@@ -85,7 +87,7 @@ private:
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
-    int                     width_ = 1024, height_ = 760;
+    int                     width_ = 1024, height_ = 820;
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
     bool                    visible_ = false;
@@ -96,7 +98,8 @@ private:
     int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
-    int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters
+    int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand
+    float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     HolsterSpot             spots_[kHolsters]{}, spotDefaults_[kHolsters]{};  // metres
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;

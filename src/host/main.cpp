@@ -632,19 +632,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 auto toFov = [](const XrFovf& f) {
                     return mohavr::shared::Fov{std::tan(f.angleLeft), std::tan(f.angleRight), std::tan(f.angleUp), std::tan(f.angleDown)};
                 };
-                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
-                g_hdr->viewDisplayTime = fs.predictedDisplayTime;
-                g_hdr->head = toPose(headLoc.pose);
-                for (int e = 0; e < 2; ++e) {
-                    g_hdr->eye[e] = toPose(views[e].pose);
-                    g_hdr->eyeFov[e] = toFov(views[e].fov);
-                }
+                // Everything is worked out first (OpenXR calls, the hands update); the seqlock only covers the copies, so the
+                // game's readers rarely meet it mid-write (round 18: a torn read dropped the shot to the game's own aim).
+                std::uint32_t gunFlags = 0;
                 // Position TRACKED, not just VALID: before the headset reports real tracking, runtimes
                 // hand out a placeholder pose (Virtual Desktop: identity at y = -1.187), which the game
                 // must not take as its origin (headset round 2: the camera ended up ~1.2 m too high).
                 const bool posTracked = (headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) &&
                                         (headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT);
-                g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
                 {
                     // Diagnostics (headset round 8): the runtime's own eye FOVs, whenever they change.
                     static XrFovf seenFov[2] = {};
@@ -665,8 +660,6 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
                 // M7: the aim poses, at the same time and in the same space as the head.
                 handBits = handsOk ? pad.LocateHands(local, fs.predictedDisplayTime, headLoc.pose, handPose) : 0u;
-                g_hdr->handValid = handBits;
-                for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -686,7 +679,20 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                     hin.testThrow = pad.TakeTestThrow(hin.testThrowVel);
                     handsOut = hands.Update(hin);
-                    g_hdr->gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
+                    gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
+                }
+                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
+                g_hdr->viewDisplayTime = fs.predictedDisplayTime;
+                g_hdr->head = toPose(headLoc.pose);
+                for (int e = 0; e < 2; ++e) {
+                    g_hdr->eye[e] = toPose(views[e].pose);
+                    g_hdr->eyeFov[e] = toFov(views[e].fov);
+                }
+                g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
+                g_hdr->handValid = handBits;
+                for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
+                if (handsOk) {
+                    g_hdr->gunFlags = gunFlags;
                     g_hdr->gunPose = toPose(handsOut.gun);
                     g_hdr->aimRay = toPose(handsOut.aimRay);
                 }

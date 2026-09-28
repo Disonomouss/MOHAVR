@@ -683,6 +683,27 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   `MOHAPistol` = a pistol, else a long gun (MOHAColt45 -> pistol, MOHAStg44 -> long gun). The host allows the
   foregrip for long guns only and the reload gesture for all but grenades.
 
+## 5z. Stray shots: the shared view lock, and the aim trace (2026-09-28, headset round 18 -> 19)
+
+- **Cause of shots going "somewhere else", near or far, at random:** the host incremented `viewSeq` (odd) before its
+  OpenXR hand calls and the whole `Hands::Update`, so the lock stayed odd for a noticeable part of each 11 ms frame.
+  The game's `ReadHands` gave up on an odd or changed sequence, and `aim::OnPlayerView` had already cleared
+  `g_frame.valid`: that frame's shot used the game's own aim (the body's heading). Also `ReadGun` set `flags` before
+  checking the sequence, so a torn read looked like "no gun": the viewmodel dropped the gun ray and the aim fell back
+  to the raw controller pose.
+- **Fix:** the host works everything out first and holds the lock only for the plain copies; the readers
+  (`ReadViews`, `ReadHands`, `ReadGun`) retry up to 64 times with `_mm_pause`; a read that still fails keeps the last
+  frame (aim and gun). The 5-second `aim: ray` log line now says `barrel`/`controller` and how many frames were torn.
+  Simulator: 0 torn in ~850 frames per 5 s.
+- **The aim trace** uses `0x60BF & ~0x08` (TRACE_Actors without TRACE_Volumes: blocking/physics volumes had stopped the
+  ray), and a hit within 20 cm of the start (the ray began inside geometry: round 18, 6 of 37 logged rays at 0.0 m) is
+  traced again from 20 cm along the ray.
+- **The free hand's grip** (5x) is taken only from a real long gun (`weaponKey` `Attachment_*`, kind 0) whose hand has
+  held still (< 0.2 cm a frame) for 30 frames -- during a weapon switch the long gun's put-away animation had been
+  kept, and the grenade's free hand came out bent back. The player's `[Hands] FreeHand = tilt turn roll forward`
+  (shared v12 `freeHand[4]`, the menu's Free hand page) turns it about the wrist in the controller's frame (Z turn,
+  Y tilt, X roll) and moves it forward.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

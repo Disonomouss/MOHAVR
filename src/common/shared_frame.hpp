@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 11;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind
+inline constexpr std::uint32_t kVersion = 12;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -160,6 +160,10 @@ struct Header {
     // The foregrip is for long guns only, the reload gesture not for grenades.
     volatile std::uint32_t weaponKind;
     std::uint32_t          pad11;
+
+    // --- v12: host -> game (the menu's Free hand): how the free support hand sits on its controller, on top of the
+    // mirrored gun-hand grip -- pitch, yaw, roll (degrees, about the wrist) and forward (cm).
+    volatile float         freeHand[4];
 };
 #pragma pack(pop)
 
@@ -182,7 +186,8 @@ static_assert(offsetof(Header, gunPose) == 1052, "shared::Header layout must mat
 static_assert(offsetof(Header, cmd) == 1112, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, throwVel) == 1180, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, weaponKind) == 1192, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1200, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, freeHand) == 1200, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1216, "shared::Header layout must match between x86 and x64");
 
 // The gun fit (v8) as one value. foreFwd/foreUp (cm, the gun's frame from the gun hand's controller: where the other
 // hand holds the foregrip) are the host's only -- they shape gunPose.
@@ -193,20 +198,33 @@ struct GunFit {
     float foreFwd, foreUp;
 };
 
-// Seqlock read of the host's gun (v9); false if mid-write or no gun pose this frame.
+// Seqlock readers spin a little when they meet the host mid-write: the host holds the lock only for the copies
+// (round 19), so a retry nearly always gets the frame, where giving up had dropped the shot to the game's own aim.
+inline constexpr int kSeqTries = 64;
+
+// Seqlock read of the host's gun (v9); false if no gun pose this frame, or (flags = 0xFFFFFFFF) still mid-write.
 inline bool ReadGun(const Header* h, Pose& gun, Pose& aim, std::uint32_t& flags) {
-    const std::uint32_t s1 = h->viewSeq;
-    if (s1 & 1u) return false;
+    for (int t = 0; t < kSeqTries; ++t) {
+        const std::uint32_t s1 = h->viewSeq;
+        if (s1 & 1u) {
+            _mm_pause();
+            continue;
+        }
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    flags = h->gunFlags;
-    gun = h->gunPose;
-    aim = h->aimRay;
+        const std::uint32_t f = h->gunFlags;
+        gun = h->gunPose;
+        aim = h->aimRay;
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    return (flags & 1u) && h->viewSeq == s1;
+        if (h->viewSeq != s1) continue;
+        flags = f;
+        return (f & 1u) != 0;
+    }
+    flags = 0xFFFFFFFFu;
+    return false;
 }
 
 // Seqlock read of the host's fit; false if mid-write or none. `key` gets fitKey (NUL-terminated).
@@ -231,36 +249,49 @@ inline bool ReadFit(const Header* h, GunFit& fit, char (&key)[48]) {
 
 // Seqlock read of the views; false if the host is mid-write (just try again next frame).
 inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]) {
-    const std::uint32_t s1 = h->viewSeq;
-    if ((s1 & 1u) || !h->viewValid) return false;
+    for (int t = 0; t < kSeqTries; ++t) {
+        const std::uint32_t s1 = h->viewSeq;
+        if (s1 & 1u) {
+            _mm_pause();
+            continue;
+        }
+        if (!h->viewValid) return false;
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    head = h->head;
-    eye[0] = h->eye[0];
-    eye[1] = h->eye[1];
-    fov[0] = h->eyeFov[0];
-    fov[1] = h->eyeFov[1];
+        head = h->head;
+        eye[0] = h->eye[0];
+        eye[1] = h->eye[1];
+        fov[0] = h->eyeFov[0];
+        fov[1] = h->eyeFov[1];
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    return h->viewSeq == s1;
+        if (h->viewSeq == s1) return true;
+    }
+    return false;
 }
 
 // Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits.
 inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid) {
-    const std::uint32_t s1 = h->viewSeq;
-    if (s1 & 1u) return false;
+    for (int t = 0; t < kSeqTries; ++t) {
+        const std::uint32_t s1 = h->viewSeq;
+        if (s1 & 1u) {
+            _mm_pause();
+            continue;
+        }
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    valid = h->handValid;
-    hand[0] = h->hand[0];
-    hand[1] = h->hand[1];
+        valid = h->handValid;
+        hand[0] = h->hand[0];
+        hand[1] = h->hand[1];
 #if defined(_MSC_VER)
-    _ReadWriteBarrier();
+        _ReadWriteBarrier();
 #endif
-    return h->viewSeq == s1;
+        if (h->viewSeq == s1) return true;
+    }
+    return false;
 }
 
 // The virtual pad as XInput lays it out (XINPUT_GAMEPAD, 12 bytes).

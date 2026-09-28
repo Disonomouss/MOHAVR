@@ -109,6 +109,9 @@ void Publish(float distance, std::uint32_t source) {
     }
 }
 
+// Frames since the last ray log, and those whose hand read met the host mid-write (kept the last aim).
+unsigned g_frames = 0, g_torn = 0;
+
 // The last base aim this hook gave the player (for AddSpread).
 int   g_lastAim[3] = {0, 0, 0};
 DWORD g_lastAimTick = 0;
@@ -209,10 +212,10 @@ bool Install(const Config& cfg) {
 
 void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     if (!g_installed) return;
-    g_frame.valid = false;
     const shared::Header* hdr = bridge::SharedHeader();
     const std::uintptr_t pawn = LocalPawn(ctrl);
     if (!hdr || !pawn) {
+        g_frame.valid = false;
         Publish(0.0f, 0);
         return;
     }
@@ -225,14 +228,19 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     } else {
         shared::Pose hand[2];
         std::uint32_t valid = 0;
-        if (!shared::ReadHands(hdr, hand, valid)) return;
+        if (!shared::ReadHands(hdr, hand, valid)) {  // still mid-write: keep last frame's aim
+            ++g_torn;
+            return;
+        }
         const int h = g_cfg.aimMode - 2;
         if (!(valid & (1u << h))) {
+            g_frame.valid = false;
             Publish(0.0f, 0);
             return;
         }
         pose = hand[h];
     }
+    ++g_frames;
     float pos[3], fwd[3], upm = 100.0f;
     // With the gun drawn in the aiming hand (Weapon.ViewModel=2) the ray runs along its barrel -- the gun's own
     // frame and aim-line offset, per weapon (the menu's Gun fit; headset round 12: the shots were ~8 cm low).
@@ -241,7 +249,15 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     const float reach = kTraceMeters * upm;
     const float end[3] = {pos[0] + fwd[0] * reach, pos[1] + fwd[1] * reach, pos[2] + fwd[2] * reach};
     float point[3];
-    const bool hit = Trace(pawn, pos, end, point);
+    bool hit = Trace(pawn, pos, end, point);
+    // A hit right at the start means the ray began inside something (headset round 18: 6 of 37 rays at 0.0 m while
+    // moving along walls -- the aim then pointed from the eye at the hand). Trace again from just past it.
+    const float skip = 20.0f * upm / 100.0f;
+    const float dx0 = point[0] - pos[0], dy0 = point[1] - pos[1], dz0 = point[2] - pos[2];
+    if (hit && dx0 * dx0 + dy0 * dy0 + dz0 * dz0 < skip * skip) {
+        const float from[3] = {pos[0] + fwd[0] * skip, pos[1] + fwd[1] * skip, pos[2] + fwd[2] * skip};
+        hit = Trace(pawn, from, end, point);
+    }
     g_frame.valid = true;
     g_frame.tick = GetTickCount();
     std::memcpy(g_frame.start, shotStart, sizeof(g_frame.start));
@@ -251,9 +267,10 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     static DWORD nextLog = 0;
     if (static_cast<LONG>(g_frame.tick - nextLog) >= 0) {
         nextLog = g_frame.tick + 5000;
-        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m)", pos[0], pos[1], pos[2],
-             fwd[0], fwd[1], fwd[2], hit ? "hit" : "nothing", point[0], point[1], point[2],
-             std::sqrt(dx * dx + dy * dy + dz * dz) / upm);
+        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn)",
+             pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2], hit ? "hit" : "nothing", point[0], point[1], point[2],
+             std::sqrt(dx * dx + dy * dy + dz * dz) / upm, barrel ? "barrel" : "controller", g_torn, g_frames);
+        g_torn = g_frames = 0;
     }
 }
 

@@ -17,7 +17,7 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kHolsterPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -26,6 +26,9 @@ constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (
 // The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
 // x y z r); the rings' visibility ([Hands] Rings = never / near / always).
 enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+// The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
+// saved in the player's ini [Hands] FreeHand = p y r f.
+enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
 const char* kHolsterLabels[kHolsters] = {"right shoulder", "left shoulder", "right hip", "left hip"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
@@ -175,6 +178,23 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kHolsters]) {
     for (int m = 0; m < 3; ++m)
         if (!_wcsicmp(v, kRingModes[m])) ringsMode_ = m;
     MLOG("menu: rings %ls", kRingModes[ringsMode_]);
+    // The free hand: the player's, else the shipped [Hands] FreeHand.
+    wchar_t fh[64] = L"", fhDef[64] = L"";
+    GetPrivateProfileStringW(L"Hands", L"FreeHand", L"0 0 0 0", fhDef, 64, shipped.c_str());
+    GetPrivateProfileStringW(L"Hands", L"FreeHand", fhDef, fh, 64, iniPath_.c_str());
+    swscanf_s(fh, L"%f %f %f %f", &freeHand_[0], &freeHand_[1], &freeHand_[2], &freeHand_[3]);
+    PublishFreeHand(false);
+    MLOG("menu: free hand pitch %.0f yaw %.0f roll %.0f, forward %.0f cm", freeHand_[0], freeHand_[1], freeHand_[2], freeHand_[3]);
+}
+
+void Menu::PublishFreeHand(bool save) {
+    if (hdr_)
+        for (int i = 0; i < 4; ++i) hdr_->freeHand[i] = freeHand_[i];
+    if (save && !iniPath_.empty()) {
+        wchar_t b[64];
+        swprintf_s(b, L"%.0f %.0f %.0f %.0f", freeHand_[0], freeHand_[1], freeHand_[2], freeHand_[3]);
+        WritePrivateProfileStringW(L"Hands", L"FreeHand", b, iniPath_.c_str());
+    }
 }
 
 void Menu::SaveHolster(int i) {
@@ -297,9 +317,10 @@ void Menu::Save() {
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
     SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
     const bool backFromPage = visible_ && ((page_ == 1 && (in.back || (in.select && selected_ == fBack))) ||
-                                           (page_ == 2 && (in.back || (in.select && selected_ == hBack))));
+                                           (page_ == 2 && (in.back || (in.select && selected_ == hBack))) ||
+                                           (page_ == 3 && (in.back || (in.select && selected_ == eqBack))));
     if (backFromPage) {
-        selected_ = page_ == 1 ? kGunFit : kHolsterPage;  // back to the main page, on the item that opened it
+        selected_ = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : kFreeHandPage;  // back on the item that opened it
         page_ = 0;
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -337,6 +358,27 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
             WritePrivateProfileStringW(L"GunFit", wkey.c_str(), nullptr, iniPath_.c_str());
             MLOG("menu: %s fit reset to the defaults", weaponKey_.c_str());
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
+    if (page_ == 3) {
+        if (in.up) selected_ = (selected_ + eqCount - 1) % eqCount;
+        if (in.down) selected_ = (selected_ + 1) % eqCount;
+        if ((in.left || in.right) && selected_ <= eqForward) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            float& v = freeHand_[selected_];
+            v = selected_ == eqForward ? std::fmax(-30.0f, std::fmin(30.0f, v + dir)) : std::fmax(-180.0f, std::fmin(180.0f, v + dir * 5.0f));
+            PublishFreeHand(true);
+            MLOG("menu: free hand -> pitch %.0f yaw %.0f roll %.0f, forward %.0f cm", freeHand_[0], freeHand_[1], freeHand_[2],
+                 freeHand_[3]);
+        }
+        if (in.select && selected_ == eqReset) {
+            for (float& v : freeHand_) v = 0.0f;
+            PublishFreeHand(false);
+            WritePrivateProfileStringW(L"Hands", L"FreeHand", nullptr, iniPath_.c_str());
+            MLOG("menu: free hand reset");
         }
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -416,6 +458,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 2;
             selected_ = 0;
             MLOG("menu: holsters page");
+        } else if (selected_ == kFreeHandPage) {
+            page_ = 3;
+            selected_ = 0;
+            MLOG("menu: free hand page");
         } else if (selected_ == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
@@ -445,6 +491,8 @@ void Menu::Render() {
         RenderFitPage();
     } else if (page_ == 2) {
         RenderHolsterPage();
+    } else if (page_ == 3) {
+        RenderFreeHandPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     ImGui::Separator();
@@ -472,6 +520,7 @@ void Menu::Render() {
     ImGui::Selectable(label, selected_ == kGunFit);
     snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);
     ImGui::Selectable(label, selected_ == kHolsterPage);
+    ImGui::Selectable("Free hand  (how your other hand sits)", selected_ == kFreeHandPage);
     ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
     snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
     ImGui::Selectable(label, selected_ == kResetScale);
@@ -567,6 +616,30 @@ void Menu::RenderHolsterPage() {
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
     ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
+    ImGui::PopFont();
+}
+
+// The free support hand (off the foregrip) on its controller: turned about the wrist, moved forward/back.
+void Menu::RenderFreeHandPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Free hand");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  your other hand, off the gun");
+    ImGui::Separator();
+    char label[128];
+    snprintf(label, sizeof(label), "Tilt (up / down)      <  %+.0f\xC2\xB0  >", freeHand_[0]);
+    ImGui::Selectable(label, selected_ == eqPitch);
+    snprintf(label, sizeof(label), "Turn (left / right)   <  %+.0f\xC2\xB0  >", freeHand_[1]);
+    ImGui::Selectable(label, selected_ == eqYaw);
+    snprintf(label, sizeof(label), "Roll                  <  %+.0f\xC2\xB0  >", freeHand_[2]);
+    ImGui::Selectable(label, selected_ == eqRoll);
+    snprintf(label, sizeof(label), "Forward / back        <  %+.0f cm  >", freeHand_[3]);
+    ImGui::Selectable(label, selected_ == eqForward);
+    ImGui::Selectable("Reset", selected_ == eqReset);
+    ImGui::Selectable("Back", selected_ == eqBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Hold your other hand in view and adjust until it sits like your real hand. Saved for you.");
+    ImGui::TextDisabled("B: back");
     ImGui::PopFont();
 }
 

@@ -709,6 +709,51 @@ grenades and reload from grenades."
 5. Foregrip and reload rules OK? (yes/no)
 6. Anything else odd? (describe)
 
+**Answers:** 1 "Gone" · 2 "The hand points back at the player as if it had been bent back. It is in the right position
+for guns but not the grenade." · 3 (not answered) · 4 "No, issue remains. Sometimes close shots don't work either. I
+cannot tell what triggers this." · 5 "Yes" · 6 (not answered).
+
+**Log received:** yes, `logs/modlogs/20260928-182307-MOHAVR.log` and `-MOHAVR-host.log`. 6 of 37 logged aim rays
+hit at 0.0 m (the ray starting inside something).
+
+**Verdict:** arm jitter PASSED; foregrip/reload rules PASSED; free hand with grenades and shot landing FAILED (round 19).
+
+**Found (round 19):**
+- **Shots:** the host held the shared view lock for its whole hands update (OpenXR calls included). A game read that
+  met it gave up, and for that frame the shot went back to the game's own aim (straight ahead of the body), and a torn
+  gun read counted as "no gun", so the aim fell back to the raw controller. Random, near or far: what the player saw.
+  Also the aim trace hit volumes and could start inside geometry (the 0.0 m hits).
+- **Free hand:** the long-gun grip it copies was re-taken on every frame of "a long gun" -- including the long gun's
+  put-away animation during the switch, so the grenade kept a frame with the hand bent away.
+
+---
+
+## Round 19: prepared 2026-09-28, shots that stay on the red dot, the free hand's own menu
+**Changed:**
+- **Shots:** the host now holds the lock only for the copies, and the game retries a read instead of giving up; a
+  read that still fails keeps the last frame's aim. The aim trace ignores volumes, and a ray starting inside
+  something is traced again from 20 cm on.
+- **Free hand:** its grip is taken from a long gun held still (not the switch animation), then kept for pistols and
+  grenades.
+- **New menu page, Free hand:** tilt, turn, roll (5 degrees a step) and forward/back (1 cm) for your free hand, saved
+  as yours. Reset puts it back.
+- [S]: in the simulator the grenade's free hand sits where the rifle's does; the Free hand page turns it live and
+  saves `FreeHand` in your settings; 0 torn reads in ~850 frames per 5 s (the log now counts them, so your headset
+  log will show how often it happened).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Shoot at things far and near with the rifle and the pistol, moving around and along walls; check the hits against
+   the red dot.
+2. Switch to a grenade with your other hand in view. If it still sits wrong, open the menu -> Free hand and tilt / turn
+   / roll it until it matches your real hand.
+3. Pistol: twist the controller; look at the wrist and forearm.
+
+**Questions:**
+1. Do shots land on the red dot now, far and near? (yes / when not)
+2. The free hand with the grenade and the pistol: right? If you used the Free hand page, what values? (yes / describe)
+3. Pistol: wrist and forearm twist OK? (yes / describe)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

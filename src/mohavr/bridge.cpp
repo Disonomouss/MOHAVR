@@ -251,6 +251,7 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int 
     g_hdr->cmd[0] = 0;
     g_hdr->throwSeq = 0;
     g_hdr->weaponKind = 0;
+    for (int i = 0; i < 4; ++i) g_hdr->freeHand[i] = 0.0f;
 
     const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);
