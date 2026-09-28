@@ -107,6 +107,24 @@ M4 SegmentMove(V3 pivotOld, V3 from, V3 pivotNew, V3 to) {
     return FromColumnRotation(rc, pivotOld, pivotNew);
 }
 // A turn by `angle` about the line through `pivot` along `axis`.
+// A segment turned onto a new direction AND a new hinge axis (the elbow's bend axis): the frame (dir, hinge,
+// dir x hinge) old -> new, about `pivotOld`, which lands on `pivotNew`. The upper arm and the forearm share the hinge,
+// so they meet at the elbow without a twist (round 20: each turned by its own shortest rotation, they didn't).
+bool HingeMove(V3 pivotOld, V3 dirOld, V3 hingeOld, V3 pivotNew, V3 dirNew, V3 hingeNew, M4& out) {
+    const V3 d0 = Unit(dirOld), d1 = Unit(dirNew);
+    const V3 h0 = Unit(Sub(hingeOld, Scale(d0, Dot(hingeOld, d0)))), h1 = Unit(Sub(hingeNew, Scale(d1, Dot(hingeNew, d1))));
+    if (Len(d0) < 0.5f || Len(d1) < 0.5f || Len(h0) < 0.5f || Len(h1) < 0.5f) return false;
+    const V3 c0 = Cross(d0, h0), c1 = Cross(d1, h1);
+    const V3 f0[3] = {d0, h0, c0}, f1[3] = {d1, h1, c1};
+    float rc[3][3] = {};  // column-vector rotation: sum over k of f1[k] f0[k]^T
+    for (int k = 0; k < 3; ++k) {
+        const float a[3] = {f1[k].x, f1[k].y, f1[k].z}, b[3] = {f0[k].x, f0[k].y, f0[k].z};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j) rc[i][j] += a[i] * b[j];
+    }
+    out = FromColumnRotation(rc, pivotOld, pivotNew);
+    return true;
+}
 M4 AxisAngle(V3 pivot, V3 axis, float angle) {
     const V3 a = Unit(axis);
     const float c = std::cos(angle), s = std::sin(angle), t = 1.0f - c;
@@ -328,11 +346,30 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         // segments -- no wrist twist (round 16: a 90-degree turn spun the bicep and shoulder around).
         const M4 bsh = Mul(l2w, Translate(Sub(shoulder, bodyShoulder[si])));
         const V3 elbowBody = Origin(Mul(saved[s.fore], bsh)), wristBody = Origin(Mul(saved[s.hand], bsh));
-        const M4 tArm = SegmentMove(shoulder, Sub(elbowBody, shoulder), shoulder, Sub(elbow, shoulder));
+        // Weapon.ElbowHinge (round 20: each segment's own shortest turn left the elbow twisted):
+        //   2 (default) the forearm is carried by the upper arm's turn, as its child, then bent onto its new direction
+        //     from there -- the shoulder as before, the elbow without a fold;
+        //   1 both turned about the elbow's hinge (shoulder -> elbow -> wrist) -- clean elbow, but the shoulder pinched;
+        //   0 each turned on its own.
+        const M4 tSwing = SegmentMove(shoulder, Sub(elbowBody, shoulder), shoulder, Sub(elbow, shoulder));
+        M4 tArm = tSwing, tFore = SegmentMove(elbowBody, Sub(wristBody, elbowBody), elbow, Sub(wrist, elbow));
+        if (g_cfg.elbowHinge == 2) {
+            const V3 f = Sub(wristBody, elbowBody);
+            const V3 f1 = Add(Add(Scale(Row(tSwing, 0), f.x), Scale(Row(tSwing, 1), f.y)), Scale(Row(tSwing, 2), f.z));
+            tFore = Mul(tSwing, SegmentMove(Origin(Mul(Translate(elbowBody), tSwing)), f1, elbow, Sub(wrist, elbow)));
+        } else if (g_cfg.elbowHinge == 1) {
+            const V3 hingeBody = Cross(Sub(elbowBody, shoulder), Sub(wristBody, elbowBody));
+            const V3 hingeNew = Cross(Sub(elbow, shoulder), Sub(wrist, elbow));
+            M4 ha, hf;
+            if (HingeMove(shoulder, Sub(elbowBody, shoulder), hingeBody, shoulder, Sub(elbow, shoulder), hingeNew, ha) &&
+                HingeMove(elbowBody, Sub(wristBody, elbowBody), hingeBody, elbow, Sub(wrist, elbow), hingeNew, hf)) {
+                tArm = ha;
+                tFore = hf;
+            }
+        }
         const M4 kArm = Mul(Mul(Mul(bsh, tArm), Stretch(shoulder, Sub(elbow, shoulder), stretch)), invL2W);
         for (int i : s.armGroup) bones[i] = Mul(saved[i], kArm);
-        const M4 foreTF = Mul(Mul(bsh, SegmentMove(elbowBody, Sub(wristBody, elbowBody), elbow, Sub(wrist, elbow))),
-                              Stretch(elbow, Sub(wrist, elbow), stretch));
+        const M4 foreTF = Mul(Mul(bsh, tFore), Stretch(elbow, Sub(wrist, elbow), stretch));
         bones[s.fore] = Mul(saved[s.fore], Mul(foreTF, invL2W));
         // The forearm roll bones: the twist-free forearm turned about its axis by 60% of the wrist's twist (round 17:
         // all of it twisted the arm too much with the pistol).
@@ -452,8 +489,8 @@ bool Install(const Config& cfg) {
         return false;
     }
     g_mid = std::move(*mid);
-    MLOG("armik: hooked UpdateTransform 0x%08X and the MeshObject update 0x%08X", static_cast<unsigned>(addr::kMohaSkelUpdateTransform),
-         static_cast<unsigned>(addr::kSkelMeshObjectUpdateCall));
+    MLOG("armik: hooked UpdateTransform 0x%08X and the MeshObject update 0x%08X (ElbowHinge=%d)",
+         static_cast<unsigned>(addr::kMohaSkelUpdateTransform), static_cast<unsigned>(addr::kSkelMeshObjectUpdateCall), cfg.elbowHinge);
     return true;
 }
 

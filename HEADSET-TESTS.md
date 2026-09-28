@@ -774,8 +774,12 @@ at the hand.
   next fix is exact.
 - **Shoulders** 6 cm narrower (`ShoulderWidth` 36 -> 30).
 - **Free hand:** your tilt 180 is now the default too (your saved setting is unchanged); Reset goes back to it.
+- **Elbow** (the player, before playing this round: "In the pistol screenshot the elbow is twisted"): the forearm is
+  now carried by the upper arm and bends from there (`Weapon.ElbowHinge=2`), instead of each turning on its own.
 - [S]: in the simulator a ray starting inside the roof mesh during the landing steps out and hits beyond it; the
-  shoulder and free-hand defaults load.
+  shoulder and free-hand defaults load. Elbow, looking down at the free arm with the pistol in three poses: the old way
+  folds and creases at the elbow; both on a shared hinge (1) was clean at the elbow but pinched the shoulder; carried
+  (2) is smooth at both (`logs/shots/r20-elbow-*.png`).
 
 **How to try it:** Claude has deployed. Launch as usual, get into play.
 1. Walk around with the BAR and the rifle, shooting at things near and far, and along walls and past teammates.
@@ -784,7 +788,7 @@ at the hand.
 **Questions:**
 1. Do shots land on the red dot now? (yes / when not)
 2. Shoulders: better? Still too wide, or too narrow now? (describe)
-3. In your screenshots, what's wrong with the off-hand arm: too big, too long, the elbow, the sleeve? (describe)
+3. The elbow: still twisted? Both arms, with each weapon. (yes / describe)
 4. Anything else odd? (describe)
 
 **Answers:** (the player's words)

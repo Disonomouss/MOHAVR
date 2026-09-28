@@ -27,6 +27,7 @@ struct Config {
     float throwScale    = 2.2f;   // [Hands] ThrowScale -- times the hand's speed
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
+    int   elbowHinge = 2;  // [Weapon] ElbowHinge -- 0 each arm segment on its own, 1 on the elbow's hinge, 2 the forearm carried by the upper arm
     float shoulderWidth = 30.0f, shoulderDrop = 22.0f, shoulderBack = 6.0f;  // [Weapon] Shoulder* -- cm, from the head
     int  viewModel      = 2;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
     float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)

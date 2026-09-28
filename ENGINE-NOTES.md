@@ -710,6 +710,14 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   its start, and logs the hit actor (FCheckResult.Actor +4; first 12 distinct). Simulator: during the landing the
   ray starts inside `Var_Flk_Roof_Pr_StaticMeshActor_62` (StaticMeshActor) and steps out. What the headset's
   walking case starts inside is still to be read from the next log.
+- **The elbow (round 20):** the upper arm and the forearm had each been turned by its own shortest rotation from the
+  body pose, so their rolls about their own axes disagreed and the elbow looked twisted. Tried in the simulator
+  (the free arm, pistol, head pitched down 45 degrees): a shared hinge frame (dir, shoulder->elbow x elbow->wrist) for
+  both -- clean elbow, but the upper arm's roll pinched the shoulder cap into a spike; half the roll on the ArmRoll
+  bone -- still pinched. **Kept (`Weapon.ElbowHinge=2`):** the upper arm by its shortest turn (as before, no shoulder
+  pinch), the forearm carried by that same turn (as its child) and then turned by the shortest rotation from there
+  onto its new direction -- smooth at the shoulder and the elbow. VM_Arms: upper arm + 1 ArmRoll, forearm + 5
+  ForeArmRoll per side.
 
 ## 6. Content and UnrealScript
 
