@@ -116,11 +116,9 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 15** (deployed): rings around the gesture spots (holsters, foregrip, magazine; lit when a
-   hand is inside; a dot on the off hand) with never/near/always, and a Holsters menu page to move and size each
-   holster (saved). **Round 14 passed** for holsters, the drawing hand, foregrip and the reload gesture (now on by
-   default); throwing and the stick swap still to test. The player will tune per-gun fits in play and say when,
-   and those become the defaults.
+2. **Rounds 14-15 passed:** holsters (rings, adjustable in the menu), the drawing hand, foregrip, reload gesture,
+   stick swap, throwing (ThrowScale 2.2) -- all on by default. The player will tune per-gun fits in play and say
+   when; those become the defaults. Nothing deployed.
    **Next milestone: arm IK** (the arms follow the hands instead of hanging off the gun), then a mirrored arms model
    for the left hand, the HUD crosshair in controller modes, a full manual reload.
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.

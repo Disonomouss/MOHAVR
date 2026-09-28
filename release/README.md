@@ -58,7 +58,8 @@ B and the right grip both press the game's reload/use button; the game decides w
 In the game's menus the face buttons work as labelled: A selects, B goes back.
 The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
-**Hand features** (on; throwing is still being tested: `Hands.Throw=1` in `MOHAVR.ini` turns it on):
+**Hand features** (all on; `[Hands]` and `[Holsters]` in `MOHAVR.ini` turn each off, `Hands.ThrowScale` sets
+how hard grenades fly):
 
 | Do this | Game |
 |---|---|

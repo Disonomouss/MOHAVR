@@ -579,9 +579,17 @@ throwing and the stick swap still to test; per-gun fits later from the player's 
 5. Sticks swapped: works as expected? (yes/no)
 6. Anything else odd? (describe)
 
-**Answers:** (the player's words)
+**Answers (2026-09-28):** 1. "Holsters working great" 2. "Rings are fine" 3. "Yes" (fewer accidental reloads)
+4. "A little too weak" 5. "Yes" (sticks swapped)
 
-**Log received:** (after `tools\deploy.ps1 undeploy`)
+**Log received:** yes (`logs/modlogs/20260928-162210-*`): 11 hand throws at 3-9.5 m/s (x1.5 -> ~1100-1400 units/s,
+where the game's own full throw is ~1900). One release caught a pooled grenade lying still 250 units away (velocity 0)
+instead of the new one, so that throw went the game's way. **Fixes:** `ThrowScale` 2.2 (a typical 8.5 m/s throw =
+the game's full strength); a thrown grenade must be within 60 units of the eye and already moving (measured: 4-14
+units). [S]: two test throws caught (the pooled grenade relaunched the second time), 1760 units/s forward.
+
+**Verdict:** rings, holster adjustment, fewer accidents, stick swap **PASSED**; throwing PASSED with the strength
+raised (now on by default, `Hands.ThrowScale=2.2`).
 
 **Deployed for this round:** the shipped defaults (now holsters, foregrip and the reload gesture on) plus
 `Hands.Throw=1`.

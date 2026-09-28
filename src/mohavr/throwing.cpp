@@ -81,10 +81,13 @@ void OnPlayerView() {
     if (lo < 0 || vo < 0 || !names::ReadVector(proj + lo, loc) || !names::ReadVector(proj + vo, vel) ||
         !view::GameCamera(cam, pitch, yaw))
         return;
-    // A new grenade: another projectile, or the pooled one relaunched (a velocity we didn't write), near the player.
+    // A new grenade: another projectile, or the pooled one relaunched (a velocity we didn't write) -- spawned at the
+    // eye (the arms' Camera bone: measured 4-7 units away) and already launched by the game. A pooled grenade lying
+    // still a couple of metres away (headset round 15: velocity 0 at 250 units) is not it.
+    const float zero[3] = {0.0f, 0.0f, 0.0f};
     const bool fresh = proj != g_lastProj || Dist(vel, g_lastWritten) > 1.0f;
     g_lastProj = proj;
-    if (!fresh || Dist(loc, cam) > 300.0f) return;
+    if (!fresh || Dist(loc, cam) > 60.0f || Dist(vel, zero) < 200.0f) return;
     float pawnVel[3] = {0.0f, 0.0f, 0.0f};
     const int pvo = names::PropertyOffset(pawn, "Velocity");
     if (pvo >= 0) names::ReadVector(pawn + pvo, pawnVel);

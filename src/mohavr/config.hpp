@@ -22,8 +22,8 @@ struct Config {
     int  aimMode        = 3;      // [Aim] Mode -- 0 the game's (body yaw), 1 head, 2 left hand, 3 right hand (M7)
     float aimRayUp      = 8.0f;   // [Aim] RayUp -- cm the hand's aim ray is raised to the gun's barrel (ViewModel=2 only)
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
-    bool throwByHand    = false;  // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)
-    float throwScale    = 1.5f;   // [Hands] ThrowScale -- times the hand's speed
+    bool throwByHand    = true;   // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)
+    float throwScale    = 2.2f;   // [Hands] ThrowScale -- times the hand's speed
     int  viewModel      = 2;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
     float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)
                                                      // put at the controller (fwd/right/up)

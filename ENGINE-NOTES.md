@@ -595,7 +595,9 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   ~0.1 s when its trigger lets go of a grenade (shared block v10). When the grenade weapon's SpawnedExplosive is a
   new projectile (another actor, or the pooled one with a velocity we didn't write) within 300 units of the eye, its
   Velocity becomes the hand's velocity mapped into the world × `Hands.ThrowScale`, plus the pawn's velocity.
-  Releases under 1 m/s keep the game's own throw.
+  Releases under 1 m/s keep the game's own throw. Only a grenade within 60 units of the eye and already moving counts (spawned at the
+  arms' Camera bone, measured 4-14 units away): headset round 15 caught a pooled grenade lying still 250 units away.
+  `ThrowScale` 2.2 (round 15: at 1.5 the player's 7-9 m/s throws gave ~1200 units/s, the game's own ~1900).
 - **Verified [S]:** a test release of (0, 3, −8) m/s → the grenade's velocity (−1, 1979, 279) became (0, 1200, 450)
   units/s, 12 units from the eye, and it lay ~6.4 m ahead a second later.
 
