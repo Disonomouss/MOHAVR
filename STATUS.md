@@ -116,10 +116,10 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 17** (deployed): the twist fix (the upper arm turns from the body's pose) and the free off hand
-   (off the foregrip it follows the other controller), arm stretch before the shoulder follows. **Round 16 passed:**
-   arm IK (now on by default). Rounds 14-15 passed: holsters, the drawing hand, foregrip, reload gesture, stick swap,
-   throwing. The player will tune per-gun fits in play and say when; those become the defaults.
+2. **HEADSET-TESTS round 18** (deployed): the move baked into the arms and the gun in the same frame (no jitter), the
+   free hand as the mirror of the gun hand's grip, forearm twist 60%, no weapon spread (`Aim.Spread=0`), gun angle
+   +-180, foregrip for long guns only, no reload gesture with grenades. Round 17: the twist fix passed. Arm IK and the
+   earlier hand features are on by default. The player will tune per-gun fits in play and say when.
    **Backlog (the player's):** pick up grenades lying on the ground (the game pools them) and throw them back; the
    left hand free (off the gun) following its controller; a mirrored arms model for the left hand; the HUD crosshair
    in controller modes; a full manual reload.

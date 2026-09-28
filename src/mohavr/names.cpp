@@ -90,6 +90,14 @@ int PropertyOffset(std::uintptr_t object, const char* name) {
 
 std::uintptr_t ReadPointer(std::uintptr_t at) { return ReadPtr(at); }
 
+bool IsA(std::uintptr_t object, const char* className) {
+    int depth = 0;
+    for (std::uintptr_t c = object ? ReadPtr(object + addr::kObjectClass) : 0; c && depth < 64;
+         c = ReadPtr(c + addr::kFieldSuper), ++depth)
+        if (Name(c) == className) return true;
+    return false;
+}
+
 bool ReadVector(std::uintptr_t at, float (&v)[3]) {
     __try {
         for (int i = 0; i < 3; ++i) v[i] = reinterpret_cast<const float*>(at)[i];

@@ -4,6 +4,7 @@
 
 #include <safetyhook.hpp>
 
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -24,6 +25,8 @@ namespace {
 // Unreal FMatrix: row vectors (p' = p * M), rows = X/Y/Z axes then the origin.
 struct M4 { float m[4][4]; };
 struct V3 { float x, y, z; };
+
+const M4 kIdentity{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
 
 M4 Mul(const M4& a, const M4& b) {
     M4 r{};
@@ -54,6 +57,7 @@ M4 AffineInverse(const M4& a) {
     return r;
 }
 V3 Origin(const M4& a) { return {a.m[3][0], a.m[3][1], a.m[3][2]}; }
+V3 Row(const M4& a, int i) { return {a.m[i][0], a.m[i][1], a.m[i][2]}; }
 V3 Sub(V3 a, V3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
 V3 Add(V3 a, V3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
 V3 Scale(V3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
@@ -62,24 +66,15 @@ V3 Cross(V3 a, V3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x
 float Len(V3 a) { return std::sqrt(Dot(a, a)); }
 V3 Unit(V3 a) { const float l = Len(a); return l > 1e-6f ? Scale(a, 1.0f / l) : V3{0, 0, 0}; }
 
-// The rigid move (row-vector matrix) that turns direction `from` onto `to` about `pivotOld` and puts that pivot at
-// `pivotNew`: x' = (x - pivotOld) R + pivotNew.
-M4 SegmentMove(V3 pivotOld, V3 from, V3 pivotNew, V3 to) {
-    const V3 a = Unit(from), b = Unit(to);
-    const V3 v = Cross(a, b);
-    const float c = Dot(a, b);
-    // Column-vector Rodrigues for a -> b, then transposed for row vectors.
-    float rc[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
-    if (c > -0.9999f) {
-        const float k = 1.0f / (1.0f + c);
-        const float vx[3][3] = {{0, -v.z, v.y}, {v.z, 0, -v.x}, {-v.y, v.x, 0}};
-        for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j) {
-                float vv = 0.0f;
-                for (int t = 0; t < 3; ++t) vv += vx[i][t] * vx[t][j];
-                rc[i][j] += vx[i][j] + vv * k;
-            }
-    }
+M4 Translate(V3 t) {
+    M4 r = kIdentity;
+    r.m[3][0] = t.x;
+    r.m[3][1] = t.y;
+    r.m[3][2] = t.z;
+    return r;
+}
+// A row-vector matrix from a column-vector 3x3 rotation `rc`, about `pivotOld`, putting that pivot at `pivotNew`.
+M4 FromColumnRotation(const float (&rc)[3][3], V3 pivotOld, V3 pivotNew) {
     M4 r{};
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j) r.m[i][j] = rc[j][i];
@@ -92,8 +87,34 @@ M4 SegmentMove(V3 pivotOld, V3 from, V3 pivotNew, V3 to) {
     r.m[3][3] = 1.0f;
     return r;
 }
-
-// A stretch by `k` along direction `axis` through `pivot` (row vectors): x' = (x - p) S + p, S = I + (k-1) a^T a.
+// The rigid move that turns direction `from` onto `to` about `pivotOld` and puts that pivot at `pivotNew`.
+M4 SegmentMove(V3 pivotOld, V3 from, V3 pivotNew, V3 to) {
+    const V3 a = Unit(from), b = Unit(to);
+    const V3 v = Cross(a, b);
+    const float c = Dot(a, b);
+    float rc[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    if (c > -0.9999f) {
+        const float k = 1.0f / (1.0f + c);
+        const float vx[3][3] = {{0, -v.z, v.y}, {v.z, 0, -v.x}, {-v.y, v.x, 0}};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j) {
+                float vv = 0.0f;
+                for (int t = 0; t < 3; ++t) vv += vx[i][t] * vx[t][j];
+                rc[i][j] += vx[i][j] + vv * k;
+            }
+    }
+    return FromColumnRotation(rc, pivotOld, pivotNew);
+}
+// A turn by `angle` about the line through `pivot` along `axis`.
+M4 AxisAngle(V3 pivot, V3 axis, float angle) {
+    const V3 a = Unit(axis);
+    const float c = std::cos(angle), s = std::sin(angle), t = 1.0f - c;
+    const float rc[3][3] = {{c + t * a.x * a.x, t * a.x * a.y - s * a.z, t * a.x * a.z + s * a.y},
+                            {t * a.x * a.y + s * a.z, c + t * a.y * a.y, t * a.y * a.z - s * a.x},
+                            {t * a.x * a.z - s * a.y, t * a.y * a.z + s * a.x, c + t * a.z * a.z}};
+    return FromColumnRotation(rc, pivot, pivot);
+}
+// A stretch by `k` along direction `axis` through `pivot`: x' = (x - p) S + p, S = I + (k-1) a^T a.
 M4 Stretch(V3 pivot, V3 axis, float k) {
     const V3 a = Unit(axis);
     const float av[3] = {a.x, a.y, a.z};
@@ -106,21 +127,22 @@ M4 Stretch(V3 pivot, V3 axis, float k) {
     return r;
 }
 
-Config g_cfg;
-SafetyHookInline g_hook;
+Config           g_cfg;
+SafetyHookInline g_hook;  // UMOHASkeletalMeshComponent::UpdateTransform: puts the game's pose back afterwards
+SafetyHookMid    g_mid;   // just before MeshObject->Update: bakes the move (and the IK)
 
 // Bone indices of the arms mesh, found by name (once per mesh).
 struct Side {
     int hand = -1, fore = -1, arm = -1, clav = -1;
-    std::vector<int> rolls;      // the forearm roll bones (they take the hand's twist)
+    std::vector<int> rolls;      // the forearm roll bones (they take part of the wrist's twist)
     std::vector<int> armGroup;   // the upper arm and its roll bone
     std::vector<int> handGroup;  // the hand and its fingers
 };
 struct Rig {
     std::uintptr_t mesh = 0;
     bool ok = false;
-    Side side[2];            // right, left
-    std::vector<int> body;   // bones put back at the body (root .. legs, the clavicles)
+    Side side[2];            // right (the gun hand's), left (the support hand)
+    std::vector<int> body;   // root .. legs (moved with the shoulders)
 } g_rig;
 
 bool Resolve(std::uintptr_t mesh, int bones) {
@@ -151,7 +173,6 @@ bool Resolve(std::uintptr_t mesh, int bones) {
             if (n[i] == p + "ArmRoll") sd.armGroup.push_back(i);
             if (n[i].rfind(p + "Hand", 0) == 0) sd.handGroup.push_back(i);  // the hand and its fingers
         }
-        g_rig.body.push_back(sd.clav);
     }
     // The body: everything that isn't a hand, a finger, an arm bone or a weapon prop.
     for (int i = 0; i < num; ++i) {
@@ -169,44 +190,35 @@ bool Resolve(std::uintptr_t mesh, int bones) {
     return true;
 }
 
-// The arms' pose before we touched it (restored after the render copy).
-std::vector<M4> g_saved;
+// The parts' own poses (restored after the render copy), per component (the arms, the gun).
+struct Saved {
+    std::uintptr_t comp = 0;
+    std::vector<M4> bones;
+};
+Saved g_saved[4];
 
-bool Apply(std::uintptr_t comp) {
-    if (!g_cfg.armIK) return false;
-    const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
-    if (fov == 0.0f) return false;
-    const std::uintptr_t pawn = aim::LocalPlayerPawn();
-    if (!pawn || names::Outer(comp) != pawn) return false;  // only the player's arms (the gun's Outer is the weapon)
-    float d[16], dInv[16];
-    if (!viewmodel::CurrentMove(d, dInv)) return false;
-    const int sbo = names::PropertyOffset(comp, "SpaceBases"), l2wo = names::PropertyOffset(comp, "LocalToWorld"),
-              smo = names::PropertyOffset(comp, "SkeletalMesh");
-    if (sbo < 0 || l2wo < 0 || smo < 0) return false;
-    auto* bones = reinterpret_cast<M4*>(names::ReadPointer(comp + sbo));
-    const int num = static_cast<int>(names::ReadPointer(comp + sbo + 4));
-    const std::uintptr_t mesh = names::ReadPointer(comp + smo);
-    if (!bones || num <= 0 || !mesh) return false;
-    if (mesh != g_rig.mesh && !Resolve(mesh, num)) {
-        static int logged = 0;
-        if (logged++ < 3) MLOG("armik: %s has no arm bones this rig expects -- no IK", names::Name(mesh).c_str());
-        return false;
+// Render thread: which parts carry the move this frame.
+std::atomic<std::uintptr_t> g_bakedComp[4];
+std::atomic<DWORD> g_bakedTick[4];
+
+void MarkBaked(std::uintptr_t comp) {
+    const DWORD now = GetTickCount();
+    int slot = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (g_bakedComp[i].load(std::memory_order_relaxed) == comp) { slot = i; break; }
+        if (now - g_bakedTick[i].load(std::memory_order_relaxed) > now - g_bakedTick[slot].load(std::memory_order_relaxed)) slot = i;
     }
-    if (!g_rig.ok) return false;
+    g_bakedComp[slot].store(comp, std::memory_order_relaxed);
+    g_bakedTick[slot].store(now, std::memory_order_relaxed);
+}
 
-    M4 l2w, D, Dinv;
-    std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
-    std::memcpy(D.m, d, sizeof(D.m));
-    std::memcpy(Dinv.m, dInv, sizeof(Dinv.m));
-    const M4 A = Mul(l2w, D);             // drawn: bone * A
-    const M4 Ainv = AffineInverse(A);
-    g_saved.assign(bones, bones + num);
-
-    // The shoulders: the game's rig has them at eye height ~25 units behind the eye and off-centre (fine flat, wrong
-    // in VR), so they're anchored to the tracked head instead: Weapon.ShoulderWidth apart, ShoulderDrop below the
-    // eyes, ShoulderBack behind, turned with the body. The torso moves with them (translated by their mean shift).
+// The arms: body, shoulders and the two-bone solves on top of the baked move (bones already = saved * A * L2W^-1).
+void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4& A, const M4& invL2W) {
+    // The shoulders: anchored to the tracked head (Weapon.ShoulderWidth apart, ShoulderDrop below the eyes,
+    // ShoulderBack behind, turned with the body) -- the game's rig has them at eye height behind the eye. The torso moves
+    // with them (by their mean shift).
     V3 bodyShoulder[2], anchor[2];
-    for (int s = 0; s < 2; ++s) bodyShoulder[s] = anchor[s] = Origin(Mul(g_saved[g_rig.side[s].arm], l2w));
+    for (int s = 0; s < 2; ++s) bodyShoulder[s] = anchor[s] = Origin(Mul(saved[g_rig.side[s].arm], l2w));
     float head[3], yaw = 0.0f, upm = 100.0f;
     if (view::HeadInWorld(head, yaw, upm)) {
         const float k = upm / 100.0f;  // cm -> units
@@ -216,62 +228,55 @@ bool Apply(std::uintptr_t comp) {
         anchor[1] = Sub(base, Scale(right, 0.5f * g_cfg.shoulderWidth * k));
     }
     const V3 shift = Scale(Add(Sub(anchor[0], bodyShoulder[0]), Sub(anchor[1], bodyShoulder[1])), 0.5f);
-    auto translate = [](V3 t) {
-        M4 r{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {t.x, t.y, t.z, 1}}};
-        return r;
-    };
-    // Body: drawn where the game has it, moved with the shoulders: K = L2W * T(shift) * A^-1 (clavicles below).
-    const M4 kBody = Mul(Mul(l2w, translate(shift)), Ainv);
-    for (int i : g_rig.body) bones[i] = Mul(g_saved[i], kBody);
+    const M4 kBody = Mul(Mul(l2w, Translate(shift)), invL2W);
+    for (int i : g_rig.body) bones[i] = Mul(saved[i], kBody);
 
-    // The free hand: off the foregrip (or with a pistol or grenade) the rig's support hand (the model's left) leaves the
-    // gun and follows the other controller, holding its grip orientation: Th = inverse(gun frame at the hand) * that
-    // controller's frame (a hand on the foregrip at the gun's angle gets exactly its on-gun pose).
+    // The support hand off the foregrip: the mirror image of the gun hand's grip on its controller, put on the other
+    // controller (round 17: following the game's animated left hand it sat wrong and, with the pistol, twisted).
     float gunF[16], offF[16];
     bool offValid = false, twoHanded = false;
     const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
     const bool freeHand = g_cfg.freeOffHand && framesOk && offValid && !twoHanded;
-    M4 th{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
+    M4 supportDrawn{};  // saved support-side bone -> world
     if (freeHand) {
-        M4 g, f;
-        std::memcpy(g.m, gunF, sizeof(g.m));
-        std::memcpy(f.m, offF, sizeof(f.m));
-        const V3 wristOnGun = Origin(Mul(g_saved[g_rig.side[1].hand], A));
-        g.m[3][0] = wristOnGun.x;
-        g.m[3][1] = wristOnGun.y;
-        g.m[3][2] = wristOnGun.z;
-        th = Mul(AffineInverse(g), f);
+        M4 gunCtrl, offCtrl;
+        std::memcpy(gunCtrl.m, gunF, sizeof(gunCtrl.m));
+        std::memcpy(offCtrl.m, offF, sizeof(offCtrl.m));
+        const M4 rel = Mul(Mul(saved[g_rig.side[0].hand], A), AffineInverse(gunCtrl));  // the gun hand in its controller
+        M4 mirror = kIdentity;
+        mirror.m[1][1] = -1.0f;  // left <-> right in the controller's frame
+        const M4 target = Mul(Mul(Mul(mirror, rel), mirror), offCtrl);
+        supportDrawn = Mul(AffineInverse(saved[g_rig.side[1].hand]), target);
+        static int logged = 0;
+        if (logged < 2) {
+            ++logged;
+            const V3 t = Origin(target), c = Origin(offCtrl), r = Origin(rel);
+            MLOG("armik: free hand at %.1f %.1f %.1f (its controller %.1f %.1f %.1f; the gun hand sits at %.1f %.1f %.1f in its "
+                 "controller's frame)", t.x, t.y, t.z, c.x, c.y, c.z, r.x, r.y, r.z);
+        }
     }
     static int seenFree = -1;
     if (seenFree != static_cast<int>(freeHand)) {
         seenFree = freeHand;
-        MLOG("armik: support hand %s", freeHand ? "free (follows the other controller)" : "on the gun");
+        MLOG("armik: support hand %s", freeHand ? "free (the mirror of the gun hand's grip, on the other controller)" : "on the gun");
     }
 
     for (int si = 0; si < 2; ++si) {
         const Side& s = g_rig.side[si];
         const bool moveHand = si == 1 && freeHand;
-        const M4 ah = moveHand ? Mul(A, th) : A;               // how this side's hand is drawn
-        const V3 wrist = Origin(Mul(g_saved[s.hand], ah));
-        const V3 elbowOld = Origin(Mul(g_saved[s.fore], ah));
-        const V3 shoulderOld = Origin(Mul(g_saved[s.arm], ah));
+        const M4 ah = moveHand ? supportDrawn : A;  // how this side's hand chain is drawn
+        if (moveHand) {
+            const M4 kHand = Mul(ah, invL2W);
+            for (int i : s.handGroup) bones[i] = Mul(saved[i], kHand);
+        }
+        const V3 wrist = Origin(Mul(saved[s.hand], ah));
+        const V3 elbowOld = Origin(Mul(saved[s.fore], ah));
+        const V3 shoulderOld = Origin(Mul(saved[s.arm], ah));
         V3 shoulder = anchor[si];
         const float lu = Len(Sub(elbowOld, shoulderOld)), lf = Len(Sub(wrist, elbowOld));
         if (lu < 1e-3f || lf < 1e-3f) continue;
-        if (moveHand) {
-            const M4 kHand = Mul(ah, Ainv);
-            for (int i : s.handGroup) bones[i] = Mul(g_saved[i], kHand);
-        }
-        static DWORD nextLog[2] = {0, 0};
-        if (static_cast<LONG>(GetTickCount() - nextLog[si]) >= 0) {
-            nextLog[si] = GetTickCount() + 5000;
-            MLOG("armik: %s arm: upper %.1f fore %.1f, shoulder->wrist %.1f units (shoulder %.1f %.1f %.1f, wrist %.1f %.1f %.1f)",
-                 si ? "left" : "right", lu, lf, Len(Sub(wrist, shoulder)), shoulder.x, shoulder.y, shoulder.z, wrist.x, wrist.y,
-                 wrist.z);
-        }
-        // Two-bone solve: shoulder -> elbow (lu) -> wrist (lf), bending the way the game's pose bends. Just out of reach
-        // the arm stretches (up to 30%: pulling the shoulder far off the torso tore the sleeve into a "sail"); beyond
-        // that the shoulder follows the hand.
+        // Two-bone solve: shoulder -> elbow -> wrist, bending the way the game's pose bends (a little down). Just out of
+        // reach the arm stretches (up to 30%); beyond that the shoulder follows the hand.
         const V3 u = Unit(Sub(wrist, shoulder));
         const float stretch = std::fmin(std::fmax(Len(Sub(wrist, shoulder)) / ((lu + lf) * 0.999f), 1.0f), 1.3f);
         const float lus = lu * stretch, lfs = lf * stretch;
@@ -279,58 +284,117 @@ bool Apply(std::uintptr_t comp) {
         if (Len(Sub(wrist, shoulder)) > reach) shoulder = Sub(wrist, Scale(u, reach));
         float dist = Len(Sub(wrist, shoulder));
         dist = std::fmin(std::fmax(dist, std::fabs(lus - lfs) + 1e-3f), reach);
-        // The clavicle goes with its shoulder joint.
-        const M4 kClav = Mul(Mul(l2w, translate(Sub(shoulder, bodyShoulder[si]))), Ainv);
-        bones[s.clav] = Mul(g_saved[s.clav], kClav);
+        bones[s.clav] = Mul(saved[s.clav], Mul(Mul(l2w, Translate(Sub(shoulder, bodyShoulder[si]))), invL2W));
         const float along = (lus * lus - lfs * lfs + dist * dist) / (2.0f * dist);
         const float out = std::sqrt(std::fmax(lus * lus - along * along, 0.0f));
-        const V3 bodyElbow = Origin(Mul(g_saved[s.fore], l2w)), bodyWrist = Origin(Mul(g_saved[s.hand], l2w));
+        const V3 bodyElbow = Origin(Mul(saved[s.fore], l2w)), bodyWrist = Origin(Mul(saved[s.hand], l2w));
         const V3 u0 = Unit(Sub(bodyWrist, bodyShoulder[si]));
         const V3 e0 = Sub(bodyElbow, bodyShoulder[si]);
-        V3 bend = Sub(e0, Scale(u0, Dot(e0, u0)));  // the game's bend
-        bend = Add(Unit(bend), V3{0.0f, 0.0f, -0.5f});                                          // and a little down
+        V3 bend = Sub(e0, Scale(u0, Dot(e0, u0)));
+        bend = Add(Unit(bend), V3{0.0f, 0.0f, -0.5f});
         bend = Unit(Sub(bend, Scale(u, Dot(bend, u))));
         if (Len(bend) < 0.5f) bend = Unit(Sub(V3{0, 0, -1}, Scale(u, -u.z)));
         const V3 elbow = Add(shoulder, Add(Scale(u, along), Scale(bend, out)));
-        // The upper arm: from the BODY's pose (moved with its shoulder), turned onto shoulder -> elbow -- so it carries
-        // none of the hand's twist (headset round 16: a 90-degree wrist turn spun the bicep and shoulder around).
-        const M4 bsh = Mul(l2w, translate(Sub(shoulder, bodyShoulder[si])));
-        const V3 elbowBody = Origin(Mul(g_saved[s.fore], bsh));
+        // The upper arm and the forearm bone: from the BODY's pose (moved with the shoulder), turned onto their new
+        // segments -- no wrist twist (round 16: a 90-degree turn spun the bicep and shoulder around).
+        const M4 bsh = Mul(l2w, Translate(Sub(shoulder, bodyShoulder[si])));
+        const V3 elbowBody = Origin(Mul(saved[s.fore], bsh)), wristBody = Origin(Mul(saved[s.hand], bsh));
         const M4 tArm = SegmentMove(shoulder, Sub(elbowBody, shoulder), shoulder, Sub(elbow, shoulder));
-        const M4 kArm = Mul(Mul(Mul(bsh, tArm), Stretch(shoulder, Sub(elbow, shoulder), stretch)), Ainv);
-        for (int i : s.armGroup) bones[i] = Mul(g_saved[i], kArm);
-        // The forearm bone: likewise from the body's pose, turned onto elbow -> wrist (no twist either).
-        const V3 wristBody = Origin(Mul(g_saved[s.hand], bsh));
-        const M4 tFore = SegmentMove(elbowBody, Sub(wristBody, elbowBody), elbow, Sub(wrist, elbow));
-        bones[s.fore] = Mul(g_saved[s.fore], Mul(Mul(Mul(bsh, tFore), Stretch(elbow, Sub(wrist, elbow), stretch)), Ainv));
-        // The forearm roll bones: from the hand's pose, turned onto wrist -> elbow -- they take the hand's twist.
-        const M4 tRoll = SegmentMove(wrist, Sub(elbowOld, wrist), wrist, Sub(elbow, wrist));
-        const M4 kRoll = Mul(Mul(Mul(ah, tRoll), Stretch(wrist, Sub(elbow, wrist), stretch)), Ainv);
-        for (int i : s.rolls) bones[i] = Mul(g_saved[i], kRoll);
+        const M4 kArm = Mul(Mul(Mul(bsh, tArm), Stretch(shoulder, Sub(elbow, shoulder), stretch)), invL2W);
+        for (int i : s.armGroup) bones[i] = Mul(saved[i], kArm);
+        const M4 foreTF = Mul(Mul(bsh, SegmentMove(elbowBody, Sub(wristBody, elbowBody), elbow, Sub(wrist, elbow))),
+                              Stretch(elbow, Sub(wrist, elbow), stretch));
+        bones[s.fore] = Mul(saved[s.fore], Mul(foreTF, invL2W));
+        // The forearm roll bones: the twist-free forearm turned about its axis by 60% of the wrist's twist (round 17:
+        // all of it twisted the arm too much with the pistol).
+        const V3 axis = Unit(Sub(wrist, elbow));
+        V3 p1 = Row(Mul(saved[s.hand], foreTF), 1), p2 = Row(Mul(saved[s.hand], ah), 1);
+        p1 = Unit(Sub(p1, Scale(axis, Dot(p1, axis))));
+        p2 = Unit(Sub(p2, Scale(axis, Dot(p2, axis))));
+        const float twist = std::atan2(Dot(Cross(p1, p2), axis), Dot(p1, p2));
+        const M4 kRoll = Mul(Mul(foreTF, AxisAngle(wrist, axis, 0.6f * twist)), invL2W);
+        for (int i : s.rolls) bones[i] = Mul(saved[i], kRoll);
     }
+}
+
+// Just before MeshObject->Update (EBX = the component; its LocalToWorld is final): bake the move into a first-person
+// part of the player's (and, for the arms, the IK).
+void OnMeshUpdate(SafetyHookContext& ctx) {
+    const std::uintptr_t comp = ctx.ebx;
+    if (!comp) return;
+    // This is the base class's UpdateTransform (every skinned mesh): only MOHASkeletalMeshComponents have the FOV.
+    static std::uintptr_t mohaClass = 0;
+    const std::uintptr_t cls = names::ReadPointer(comp + addr::kObjectClass);
+    if (!cls) return;
+    if (cls != mohaClass) {
+        if (mohaClass || names::Name(cls) != "MOHASkeletalMeshComponent") return;
+        mohaClass = cls;
+    }
+    const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
+    if (fov == 0.0f) return;  // not a first-person part
+    float d[16], dInv[16];
+    if (!viewmodel::CurrentMove(d, dInv)) return;
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!pawn) return;
+    const bool arms = names::Outer(comp) == pawn;  // the arms' Outer is the pawn, the gun's its weapon
+    const int sbo = names::PropertyOffset(comp, "SpaceBases"), l2wo = names::PropertyOffset(comp, "LocalToWorld"),
+              smo = names::PropertyOffset(comp, "SkeletalMesh");
+    if (sbo < 0 || l2wo < 0 || smo < 0) return;
+    auto* bones = reinterpret_cast<M4*>(names::ReadPointer(comp + sbo));
+    const int num = static_cast<int>(names::ReadPointer(comp + sbo + 4));
+    if (!bones || num <= 0 || num > 512) return;
+    if (arms) {
+        const std::uintptr_t mesh = names::ReadPointer(comp + smo);
+        if (mesh != g_rig.mesh && !Resolve(mesh, num)) {
+            static int logged = 0;
+            if (logged++ < 3) MLOG("armik: %s has no arm bones this rig expects -- the arms move with the gun", names::Name(mesh).c_str());
+        }
+    }
+    Saved* sv = nullptr;
+    for (Saved& s : g_saved)
+        if (s.comp == comp || (!sv && s.comp == 0)) sv = &s;
+    if (!sv) sv = &g_saved[0];
+    sv->comp = comp;
+    sv->bones.assign(bones, bones + num);
+
+    M4 l2w, D;
+    std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
+    std::memcpy(D.m, d, sizeof(D.m));
+    const M4 invL2W = AffineInverse(l2w);
+    const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
+    const M4 kMove = Mul(A, invL2W);
+    for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
+    if (arms && g_rig.ok && static_cast<int>(sv->bones.size()) == num) SolveArms(bones, sv->bones, l2w, A, invL2W);
+    MarkBaked(comp);
     static int logged = 0;
     if (logged < 2) {
         ++logged;
-        const V3 sw = Origin(Mul(bones[g_rig.side[0].arm], A)), sb = Origin(Mul(g_saved[g_rig.side[0].arm], l2w));
-        MLOG("armik: applied -- right shoulder joint drawn at %.1f %.1f %.1f (body %.1f %.1f %.1f)", sw.x, sw.y, sw.z, sb.x,
-             sb.y, sb.z);
+        MLOG("armik: baked the move into %s (%s, %d bones)", names::Name(comp).c_str(), arms ? "the arms" : "the gun", num);
     }
-    return true;
 }
 
 void __fastcall Hook_UpdateTransform(std::uintptr_t comp) {  // ECX = the component, no stack arguments
-    const bool changed = Apply(comp);
     g_hook.thiscall<void>(comp);
-    if (changed) {
-        // The game's own pose back (its Camera bone, sockets and later reads); the renderer has its copy.
+    // The game's own pose back (its Camera bone, sockets and later reads); the renderer has its copy.
+    for (Saved& s : g_saved) {
+        if (s.comp != comp) continue;
         const int sbo = names::PropertyOffset(comp, "SpaceBases");
         auto* bones = reinterpret_cast<M4*>(names::ReadPointer(comp + sbo));
         const int num = static_cast<int>(names::ReadPointer(comp + sbo + 4));
-        if (bones && num == static_cast<int>(g_saved.size())) std::memcpy(bones, g_saved.data(), g_saved.size() * sizeof(M4));
+        if (bones && num == static_cast<int>(s.bones.size())) std::memcpy(bones, s.bones.data(), s.bones.size() * sizeof(M4));
+        s.comp = 0;
     }
 }
 
 }  // namespace
+
+bool IsBaked(std::uintptr_t comp) {
+    const DWORD now = GetTickCount();
+    for (int i = 0; i < 4; ++i)
+        if (g_bakedComp[i].load(std::memory_order_relaxed) == comp && now - g_bakedTick[i].load(std::memory_order_relaxed) < 250)
+            return true;
+    return false;
+}
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
@@ -339,7 +403,9 @@ bool Install(const Config& cfg) {
         return false;
     }
     if (!patch::BytesMatch(addr::kMohaSkelUpdateTransform, addr::kMohaSkelUpdateTransformBytes,
-                           sizeof(addr::kMohaSkelUpdateTransformBytes))) {
+                           sizeof(addr::kMohaSkelUpdateTransformBytes)) ||
+        !patch::BytesMatch(addr::kSkelMeshObjectUpdateCall, addr::kSkelMeshObjectUpdateCallBytes,
+                           sizeof(addr::kSkelMeshObjectUpdateCallBytes))) {
         MLOG("armik: UpdateTransform bytes differ -- standing down");
         return false;
     }
@@ -350,8 +416,15 @@ bool Install(const Config& cfg) {
         return false;
     }
     g_hook = std::move(*res);
-    MLOG("armik: UMOHASkeletalMeshComponent::UpdateTransform hooked at 0x%08X",
-         static_cast<unsigned>(addr::kMohaSkelUpdateTransform));
+    auto mid = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kSkelMeshObjectUpdateCall), OnMeshUpdate);
+    if (!mid) {
+        MLOG("armik: mid hook failed (error %d) -- standing down", static_cast<int>(mid.error().type));
+        g_hook = {};
+        return false;
+    }
+    g_mid = std::move(*mid);
+    MLOG("armik: hooked UpdateTransform 0x%08X and the MeshObject update 0x%08X", static_cast<unsigned>(addr::kMohaSkelUpdateTransform),
+         static_cast<unsigned>(addr::kSkelMeshObjectUpdateCall));
     return true;
 }
 

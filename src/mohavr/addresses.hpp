@@ -150,6 +150,11 @@ inline constexpr std::uint8_t   kExecGetBaseAimRotationBytes[] = {0x8B, 0x44, 0x
 inline constexpr std::uintptr_t kSingleLineCheck = 0x10B640A0;
 inline constexpr std::uint8_t   kSingleLineCheckBytes[] = {0x51, 0x8B, 0x54, 0x24, 0x10, 0x53, 0x8B, 0x1D, 0x50, 0xE5, 0x6A, 0x11};
 inline constexpr std::uintptr_t kGWorld = 0x116DCE78;       // UWorld* (execTrace: mov ecx,[0x116DCE78] before the call)
+// UWeaponAccuracyComponent::execAddSpread (native table entry at 0x11612DE8 -> "intUWeaponAccuracyComponentexecAddSpread"):
+// thiscall (ECX = the component), RET 8; reads BaseAim from the script stack and calls the component's virtual
+// AddSpread (vtable +0x170); *Result = the spread aim.
+inline constexpr std::uintptr_t kExecAddSpread = 0x10E4E310;
+inline constexpr std::uint8_t   kExecAddSpreadBytes[] = {0x83, 0xEC, 0x18, 0x56, 0x8B, 0x74, 0x24, 0x20, 0x8B, 0x46, 0x1C};
 // The flags execTrace builds for Trace(..., bTraceActors=true): 0x20BF | 0x4000 (SingleLineCheck adds 0x400).
 inline constexpr std::uint32_t  kTraceFlagsActors = 0x60BF;
 // FCheckResult (execTrace's initialisation): Next +0, Actor +4, Location +8, Normal +0x14, Time +0x20 (1.0 =
@@ -180,6 +185,11 @@ inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshC
 // MeshObject(+0x21C)->Update(LOD, this, ActiveMorphs) -- the copy of SpaceBases for the renderer.
 inline constexpr std::uintptr_t kMohaSkelUpdateTransform = 0x10EEB550;
 inline constexpr std::uint8_t   kMohaSkelUpdateTransformBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x83, 0xEC, 0x44, 0x53, 0x8B, 0xD9};
+// Inside USkeletalMeshComponent::UpdateTransform, just before MeshObject->Update(...) -- LocalToWorld and the
+// attachments (the gun on the arms' prop bone) are final here: `mov eax,[ecx]; mov eax,[eax+0x10]; lea edx,[ebx+0x290]`,
+// EBX = the component. The arms' IK and the gun's move are baked into SpaceBases at this point (MidHook).
+inline constexpr std::uintptr_t kSkelMeshObjectUpdateCall = 0x10CFAFAD;
+inline constexpr std::uint8_t   kSkelMeshObjectUpdateCallBytes[] = {0x8B, 0x01, 0x8B, 0x40, 0x10, 0x8D, 0x93, 0x90, 0x02, 0x00, 0x00};
 // USkeletalMesh RefSkeleton (TArray<FMeshBone>) and FMeshBone's size (probe: 70 VM_Arms bones, names at 0, 68, ...;
 // ParentIndex at +56).
 inline constexpr std::uintptr_t kSkelMeshRefSkeleton = 0x7C;
@@ -220,6 +230,8 @@ inline constexpr Signature kSignatures[] = {
     {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},
     {"view-model proxy transform",         kViewModelTransform, kViewModelTransformBytes, sizeof(kViewModelTransformBytes)},
     {"MOHA skel UpdateTransform",          kMohaSkelUpdateTransform, kMohaSkelUpdateTransformBytes, sizeof(kMohaSkelUpdateTransformBytes)},
+    {"skel MeshObject->Update call",       kSkelMeshObjectUpdateCall, kSkelMeshObjectUpdateCallBytes, sizeof(kSkelMeshObjectUpdateCallBytes)},
+    {"execAddSpread",                      kExecAddSpread, kExecAddSpreadBytes, sizeof(kExecAddSpreadBytes)},
 };
 
 }  // namespace mohavr::addr

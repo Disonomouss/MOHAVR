@@ -658,6 +658,30 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   (`Weapon.FreeOffHand`): off the foregrip the rig's left (support) hand and fingers move by
   Th = inverse(gun frame at that hand) * the other controller's frame, so a hand on the foregrip at the gun's angle
   gets exactly its on-gun pose; the arm IK then reaches to it.
+- **Round 18: baked, not drawn, move.** The arms were solved with the previous frame's D but drawn with the current D
+  (the free arm "jittered" with the gun). Now a MidHook just before `MeshObject->Update` (`0x10CFAFAD`, inside
+  USkeletalMeshComponent::UpdateTransform; EBX = the component; LocalToWorld and the attachments are final there)
+  bakes D into every first-person part's SpaceBases (bone' = bone * L2W * D * L2W^-1) -- the arms (plus the IK) and the
+  gun, with the same D in the same tick -- and the proxy hook draws baked parts as they are. Only
+  MOHASkeletalMeshComponents are touched (class checked: the MidHook sits in the base class's function). The inline
+  hook on the MOHA override restores the game's pose after the copy. **The free hand** is now the mirror of the gun
+  hand's grip: rel = gunHand * inverse(gun controller frame), target = S rel S * other controller (S = diag(1,-1,1):
+  left-right in the controller frame) -- the rig's left hand bones are mirrored like that (verified: a mirrored grip,
+  14 units behind its controller like the gun hand). **Forearm roll bones:** the twist-free forearm turned about its
+  axis by 60% of the wrist's twist (the Y axes of the hand under the twist-free forearm and as drawn, projected).
+
+## 5y. The player's shots: spread, and what the weapon is (2026-09-28)
+
+- **Aim assist is not involved:** MOHAPlayerPawn.GetAdjustedAimFor returns GetBaseAimRotation() (our hook) directly.
+  EALAWeapon.InstantFire traces from GetWeaponStartTraceLocation (the eye) along GetAdjustedAim = AddSpread(base aim).
+- **Spread:** EALASmallArms.AddSpread -> GetAccuracy() (native) -> WeaponAccuracyComponent.AddSpread (native, pimpl;
+  penalties for stance, running, turning (yaw/pitch velocity), hip fire vs ironsights). **`execAddSpread` 0x10E4E310**
+  (native table entry at 0x11612DE8; thiscall, RET 8; virtual +0x170). Hooked (`Aim.Spread`, default 0): for the
+  player's weapon (component.mWeapon.Instigator == the player's pawn, by reflection) the result is pulled back to our
+  base aim by the factor. Measured: the game's spread had moved a shot ~1 degree (P64921 Y16792 vs P65093 Y16881).
+- **Weapon kind** (shared block v11 `weaponKind`): the pawn's Weapon's class chain -- `EALAGrenade` = a grenade,
+  `MOHAPistol` = a pistol, else a long gun (MOHAColt45 -> pistol, MOHAStg44 -> long gun). The host allows the
+  foregrip for long guns only and the reload gesture for all but grenades.
 
 ## 6. Content and UnrealScript
 

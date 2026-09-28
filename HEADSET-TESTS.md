@@ -656,11 +656,64 @@ arm and the forearm bone are turned from the body's pose (no twist); only the fo
 5. Arm lag or wobble on fast moves? (yes/no)
 6. Anything else odd? (describe)
 
+**Answers (2026-09-28):** 1. "Yes" (the upper arm stays put). 2. "It follows the hand, position is off, could use menu
+to adjust or just make it relative to other hands position. With long gun equipped, arm jutters when gun is moved, like
+it's trying to move with it but being pulled back. With pistol equipped, wrist twists constantly and arm twists
+excessivley with controller twist." 3. "Yes" 4. "Just what I mentioned already" 5. "Seems ok".
+Also: "let the grenade position be rotated further than 45 degrees"; "guns lose the ability to aim where I fire them at
+distance. If the crosshair isn't there, they fire from and to somewhere else"; "Remove foregrip hold from pistols and
+grenades and reload from grenades."
+
+**Causes and fixes (round 18):**
+- The jitter: the arms' pose was solved with the gun's move from the previous frame but drawn with the current one --
+  the free arm moved with the gun for a frame and snapped back. Now the move is baked into the arms' AND the gun's bone
+  matrices at the same point of the same frame (just before the pose goes to the renderer), and the renderer draws them
+  as they are.
+- The free hand's place and the pistol's constant wrist twist: it followed the game's animated support hand. Now it is
+  the mirror image of the gun hand's grip, on the other controller.
+- The arm twisting too much: the forearm roll bones took all the wrist's roll; now 60% of it.
+- Shots off at distance: MOHA's weapon spread (hip fire is wide and grows while turning -- the head always moves in VR).
+  `Aim.Spread` (default 0) scales it for the player's shots.
+- Gun angle up to +-180 degrees; the foregrip for long guns only; no reload gesture with grenades (the game now tells the
+  host what the weapon is: a long gun, a pistol or a grenade, by its class).
+
+**Verdict:** the twist fix PASSED; the free hand, the jitter, spread and the weapon rules in round 18.
+
+
+**Deployed for this round:** the shipped defaults (now `Weapon.ArmIK=1`, `FreeOffHand=1`), no overrides.
+
+---
+
+## Round 18: prepared 2026-09-28, steadier arms, the free hand mirrored, no spread
+**Changed:**
+- **No more arm jitter:** the arms and the gun are now moved together, in the same frame.
+- **The free hand** is the mirror image of your gun hand's grip, on your other controller (not the game's animated hand).
+- **The forearm** turns with 60% of your wrist's roll (it was 100%: too much, especially with the pistol).
+- **Shots go to the red dot, even far away:** the game's spread is off (`Aim.Spread=0`; 1 brings it back).
+- **Gun angle** in Gun fit goes to +-180 degrees (grenades).
+- **Foregrip:** long guns only. **Reload gesture:** not with grenades.
+- [S]: in the simulator the gun is drawn in the hand with the arms baked in the same frame; the free left hand shows a
+  mirrored grip behind its controller and rolls with it; shots land exactly on the aim (the spread had moved one ~1 degree).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Rifle: move the gun fast with the free hand away and on the foregrip; watch both arms.
+2. Pistol: twist the controller; look at the wrist and forearm. Try to take a foregrip (it shouldn't).
+3. Shoot at something far away with each gun; check the hits against the red dot.
+4. Grenade: rotate it in Gun fit past 45 degrees if you want; the reload gesture shouldn't fire.
+
+**Questions:**
+1. Any arm jitter left? (yes/no)
+2. The free hand: in the right place now? (yes / describe)
+3. Pistol: wrist and forearm twist OK now? (yes / describe)
+4. Far shots land on the red dot? (yes/no)
+5. Foregrip and reload rules OK? (yes/no)
+6. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults (now `Weapon.ArmIK=1`, `FreeOffHand=1`), no overrides.
+**Deployed for this round:** the shipped defaults, no overrides.
 
 ---
 

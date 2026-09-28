@@ -11,6 +11,7 @@
 
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "arms_ik.hpp"
 #include "bridge.hpp"
 #include "config.hpp"
 #include "log.hpp"
@@ -101,12 +102,19 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
     AcquireSRWLockShared(&g_lock);
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
+    const M4& l2w = *reinterpret_cast<const M4*>(proxy + addr::kProxyLocalToWorld);
+    const M4& w2l = *reinterpret_cast<const M4*>(proxy + addr::kProxyWorldToLocal);
+    if (fov != 0.0f && armsik::IsBaked(comp)) {
+        // The move (and the arms' IK) is already in this part's bone matrices, from the same frame for the arms and
+        // the gun: drawn where it is, without the flat-screen FOV trick.
+        *outL2W = l2w;
+        *outW2L = w2l;
+        return;
+    }
     if (fov == 0.0f || !s.valid || GetTickCount() - s.tick > 250) {
         g_hook.thiscall<void>(proxy, view, outL2W, outW2L);  // not the first-person model, or not the player's view
         return;
     }
-    const M4& l2w = *reinterpret_cast<const M4*>(proxy + addr::kProxyLocalToWorld);
-    const M4& w2l = *reinterpret_cast<const M4*>(proxy + addr::kProxyWorldToLocal);
     *outL2W = Mul(l2w, s.d);
     *outW2L = Mul(s.dInv, w2l);
 
@@ -249,11 +257,22 @@ void UpdateWeaponKey(shared::Header* hdr) {
         }
     }
     const std::string key = gun ? names::ClassName(names::Outer(gun)) : std::string();
-    if (key == current) return;
-    MLOG("viewmodel: weapon in hand: '%s' (part %s of %s)", key.c_str(), gun ? names::Name(gun).c_str() : "-",
-         gun ? names::Name(names::Outer(gun)).c_str() : "-");
+    // What it is, by the weapon's class chain: a grenade (EALAGrenade), a pistol (MOHAPistol), else a long gun.
+    static std::uint32_t currentKind = 0;
+    std::uint32_t kind = 0;
+    const int wo = pawn ? names::PropertyOffset(pawn, "Weapon") : -1;
+    const std::uintptr_t weapon = wo >= 0 ? names::ReadPointer(pawn + wo) : 0;
+    if (weapon && names::IsA(weapon, "EALAGrenade")) kind = 2;
+    else if (weapon && names::IsA(weapon, "MOHAPistol")) kind = 1;
+    if (key == current && kind == currentKind) return;
+    static const char* kKinds[] = {"long gun", "pistol", "grenade"};
+    MLOG("viewmodel: weapon in hand: '%s' -- %s (part %s of %s; weapon %s)", key.c_str(), kKinds[kind],
+         gun ? names::Name(gun).c_str() : "-", gun ? names::Name(names::Outer(gun)).c_str() : "-",
+         weapon ? names::ClassName(weapon).c_str() : "-");
     current = key;
+    currentKind = kind;
     if (!hdr) return;
+    hdr->weaponKind = kind;
     const size_t n = key.size() < sizeof(hdr->weaponKey) - 1 ? key.size() : sizeof(hdr->weaponKey) - 1;
     std::memcpy(hdr->weaponKey, key.c_str(), n);
     hdr->weaponKey[n] = 0;
@@ -330,7 +349,7 @@ void OnPlayerView() {
             seenFlags = flags;
         }
         // For the arm IK: the gun's frame, and the other controller's (the free hand follows it off the foregrip).
-        gunFrameNow = gunFrame;
+        gunFrameNow = Frame(gf, gr, gu, pos);  // the gun hand's controller frame (its origin at the controller)
         twoHandedNow = (flags & 2u) != 0;
         shared::Pose hand[2];
         std::uint32_t hv = 0;

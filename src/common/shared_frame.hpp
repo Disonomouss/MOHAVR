@@ -27,7 +27,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 10;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing
+inline constexpr std::uint32_t kVersion = 11;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -155,6 +155,11 @@ struct Header {
     // throwSeq is bumped after throwVel is written. The game gives it to the grenade that the throw spawns.
     volatile std::uint32_t throwSeq;
     float                  throwVel[3];
+
+    // --- v11: game -> host: what the weapon in hand is (0 a long gun, 1 a pistol, 2 a grenade); bumps weaponSeq.
+    // The foregrip is for long guns only, the reload gesture not for grenades.
+    volatile std::uint32_t weaponKind;
+    std::uint32_t          pad11;
 };
 #pragma pack(pop)
 
@@ -176,7 +181,8 @@ static_assert(offsetof(Header, fitRayRight) == 1044, "shared::Header layout must
 static_assert(offsetof(Header, gunPose) == 1052, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, cmd) == 1112, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, throwVel) == 1180, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1192, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, weaponKind) == 1192, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1200, "shared::Header layout must match between x86 and x64");
 
 // The gun fit (v8) as one value. foreFwd/foreUp (cm, the gun's frame from the gun hand's controller: where the other
 // hand holds the foregrip) are the host's only -- they shape gunPose.

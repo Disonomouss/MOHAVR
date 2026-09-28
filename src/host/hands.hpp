@@ -45,6 +45,7 @@ public:
         // Throwing: the triggers, whether the weapon in hand is a grenade, the time (s), and a test velocity.
         float          trigger[2];
         bool           grenade;
+        std::uint32_t  weaponKind;  // 0 long gun, 1 pistol, 2 grenade (hdr->weaponKind)
         double         now;
         bool           testThrow;
         float          testThrowVel[3];

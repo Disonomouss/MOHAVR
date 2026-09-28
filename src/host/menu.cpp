@@ -243,7 +243,7 @@ void Menu::AdjustFit(int item, float dir) {
         case fForward: fit_.grip[0] -= dir * kFitStep; break;
         case fRight: fit_.grip[1] -= dir * kFitStep; break;
         case fUp: fit_.grip[2] -= dir * kFitStep; break;
-        case fAngle: fit_.angle = std::fmax(-45.0f, std::fmin(45.0f, fit_.angle + dir * kAngleStep)); break;
+        case fAngle: fit_.angle = std::fmax(-180.0f, std::fmin(180.0f, fit_.angle + dir * kAngleStep)); break;  // round 17: grenades want more than 45
         case fRayUp: fit_.rayUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayUp + dir * kRayStep)); break;
         case fRayRight: fit_.rayRight = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayRight + dir * kRayStep)); break;
         case fForeFwd: fit_.foreFwd = std::fmax(0.0f, std::fmin(80.0f, fit_.foreFwd + dir * kFitStep)); break;

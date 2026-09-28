@@ -47,6 +47,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.aimMode        = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Mode", c.aimMode, ini.c_str()));
     if (c.aimMode < 0 || c.aimMode > 3) c.aimMode = 0;
     c.aimRayUp       = getf(L"Aim", L"RayUp", c.aimRayUp, -30.0f, 30.0f);
+    c.aimSpread      = getf(L"Aim", L"Spread", c.aimSpread, 0.0f, 1.0f);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);

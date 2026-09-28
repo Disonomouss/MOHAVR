@@ -20,6 +20,7 @@ struct Config {
     bool decalFix       = true;   // [Render] DecalFix -- decals (bullet holes) in the right eye too (ENGINE-NOTES 5r)
     bool aimHeadPitch   = true;   // [Aim] HeadPitch -- the player's pitch (gun, shots) follows the head
     int  aimMode        = 3;      // [Aim] Mode -- 0 the game's (body yaw), 1 head, 2 left hand, 3 right hand (M7)
+    float aimSpread     = 0.0f;   // [Aim] Spread -- the game's shot spread, scaled (0 none, 1 the game's; Mode 1-3)
     float aimRayUp      = 8.0f;   // [Aim] RayUp -- cm the hand's aim ray is raised to the gun's barrel (ViewModel=2 only)
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
     bool throwByHand    = true;   // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)

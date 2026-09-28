@@ -681,7 +681,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         for (int i = 0; i < mohavr::host::kHolsters; ++i) hands.SetSpot(i, menu.Spot(i));
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
                     for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);
-                    hin.grenade = menuOk && menu.WeaponKey().find("Grenade") != std::string::npos;
+                    hin.weaponKind = g_hdr->weaponKind;
+                    hin.grenade = hin.weaponKind == 2 || (menuOk && menu.WeaponKey().find("Grenade") != std::string::npos);
                     hin.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                     hin.testThrow = pad.TakeTestThrow(hin.testThrowVel);
                     handsOut = hands.Update(hin);

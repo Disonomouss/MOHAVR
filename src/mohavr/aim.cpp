@@ -11,6 +11,7 @@
 #include "bridge.hpp"
 #include "config.hpp"
 #include "log.hpp"
+#include "names.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
 #include "vr_view.hpp"
@@ -108,6 +109,34 @@ void Publish(float distance, std::uint32_t source) {
     }
 }
 
+// The last base aim this hook gave the player (for AddSpread).
+int   g_lastAim[3] = {0, 0, 0};
+DWORD g_lastAimTick = 0;
+SafetyHookInline g_spreadHook;
+
+// WeaponAccuracyComponent.AddSpread(BaseAim) (native, 0x10E4E310): the player's shots get Aim.Spread of the game's
+// spread around our aim (0 = none: in VR the hand is the spread; the game's hip-fire and "turning" penalties -- the
+// head moves all the time -- scattered shots far from the red dot at distance, headset round 17).
+void __fastcall Hook_AddSpread(std::uintptr_t self, void* /*edx*/, void* stack, int* result) {
+    g_spreadHook.thiscall<void>(self, stack, result);
+    if (!result || GetTickCount() - g_lastAimTick > 100) return;
+    const int wo = names::PropertyOffset(self, "mWeapon");
+    const std::uintptr_t weapon = wo >= 0 ? names::ReadPointer(self + wo) : 0;
+    const int io = weapon ? names::PropertyOffset(weapon, "Instigator") : -1;
+    if (io < 0 || names::ReadPointer(weapon + io) != LocalPawn(LocalController())) return;
+    const int spread[3] = {result[0], result[1], result[2]};
+    for (int i = 0; i < 2; ++i) {
+        const int delta = static_cast<std::int16_t>(static_cast<std::uint16_t>((spread[i] - g_lastAim[i]) & 0xFFFF));
+        result[i] = (g_lastAim[i] + static_cast<int>(std::lround(delta * g_cfg.aimSpread))) & 0xFFFF;
+    }
+    static int logged = 0;
+    if (logged < 6) {
+        ++logged;
+        MLOG("aim: spread P%d Y%d -> P%d Y%d (x%.2f of the game's)", spread[0] & 0xFFFF, spread[1] & 0xFFFF, result[0], result[1],
+             g_cfg.aimSpread);
+    }
+}
+
 // Pawn.GetBaseAimRotation() -- the player's pawn aims at this frame's aim point from where its shot starts.
 void __fastcall Hook_GetBaseAimRotation(std::uintptr_t self, void* /*edx*/, void* stack, int* result) {
     g_hook.thiscall<void>(self, stack, result);
@@ -122,6 +151,8 @@ void __fastcall Hook_GetBaseAimRotation(std::uintptr_t self, void* /*edx*/, void
     result[0] = static_cast<int>(std::lround(std::atan2(vz, std::sqrt(vx * vx + vy * vy)) * toUnr)) & 0xFFFF;
     result[1] = static_cast<int>(std::lround(std::atan2(vy, vx) * toUnr)) & 0xFFFF;
     result[2] = 0;
+    for (int i = 0; i < 3; ++i) g_lastAim[i] = result[i];
+    g_lastAimTick = GetTickCount();
     static int logged = 0;
     if (logged < 12) {
         ++logged;
@@ -157,6 +188,19 @@ bool Install(const Config& cfg) {
     }
     g_hook = std::move(*res);
     g_installed = true;
+    if (cfg.aimSpread < 0.999f) {
+        if (patch::BytesMatch(addr::kExecAddSpread, addr::kExecAddSpreadBytes, sizeof(addr::kExecAddSpreadBytes))) {
+            auto sp = safetyhook::InlineHook::create(reinterpret_cast<void*>(addr::kExecAddSpread),
+                                                     reinterpret_cast<void*>(&Hook_AddSpread));
+            if (sp) {
+                g_spreadHook = std::move(*sp);
+                MLOG("aim: Aim.Spread=%.2f -- the player's spread scaled (AddSpread hooked at 0x%08X)", cfg.aimSpread,
+                     static_cast<unsigned>(addr::kExecAddSpread));
+            }
+        } else {
+            MLOG("aim: AddSpread bytes differ -- the game's spread stays");
+        }
+    }
     static const char* kNames[] = {"game", "head", "left hand", "right hand"};
     MLOG("aim: Aim.Mode=%d (%s) -- execGetBaseAimRotation hooked at 0x%08X", cfg.aimMode, kNames[cfg.aimMode],
          static_cast<unsigned>(addr::kExecGetBaseAimRotation));

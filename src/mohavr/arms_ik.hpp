@@ -1,12 +1,15 @@
-// Arm IK (M8, [Weapon] ArmIK) -- game side.
+// Arm IK and the gun's move (M8, [Weapon] ArmIK) -- game side.
 //
-// The first-person arms rig is hand-driven (ENGINE-NOTES 5x): the forearm, upper arm and clavicle hang off each hand,
-// so drawing the arms with the gun in the controller (viewmodel.cpp: LocalToWorld * D) drags whole arms and the body
-// along. Just before the arms' pose is copied for the renderer (UMOHASkeletalMeshComponent::UpdateTransform) this
-// rewrites their SpaceBases so that, drawn with D, the hands stay on the gun while the body and the clavicles stay
-// where the game has them, and each arm is a two-bone solve from its shoulder joint to its wrist (the elbow bending
-// the way the game's pose bends it). The game's own pose is put back right after the copy.
+// The first-person parts (the arms and the gun) are moved into the aiming hand by baking the move D into their bone
+// matrices just before their pose is copied for the renderer (inside USkeletalMeshComponent::UpdateTransform, with
+// LocalToWorld final): the arms and the gun then use the same D in the same frame (no jitter against each other), and
+// the renderer draws them where they are (viewmodel.cpp skips them). The arms rig is hand-driven (ENGINE-NOTES 5x):
+// here the hands stay on the gun, the body and clavicles go back under the player's head-anchored shoulders, and each
+// arm is a two-bone solve (the upper arm and forearm without the wrist's twist; the forearm roll bones take part of
+// it). Off the foregrip the support hand follows the other controller, as the mirror of the gun hand's grip. The
+// game's own pose is put back right after the copy.
 #pragma once
+#include <cstdint>
 
 namespace mohavr {
 struct Config;
@@ -15,5 +18,8 @@ struct Config;
 namespace mohavr::armsik {
 
 bool Install(const Config& cfg);
+
+// Render thread: whether this first-person part's bone matrices already carry the move (drawn as is).
+bool IsBaked(std::uintptr_t component);
 
 }  // namespace mohavr::armsik

@@ -11,6 +11,8 @@ std::string Name(std::uintptr_t object);
 std::string ClassName(std::uintptr_t object);
 // The FName stored at `at` (8 bytes: index, number), or "".
 std::string NameAt(std::uintptr_t at);
+// Whether `object`'s class is `className` or derives from it (the class chain by UStruct.SuperField).
+bool IsA(std::uintptr_t object, const char* className);
 // UObject.Outer, or 0.
 std::uintptr_t Outer(std::uintptr_t object);
 
