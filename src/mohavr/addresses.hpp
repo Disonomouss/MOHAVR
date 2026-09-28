@@ -174,6 +174,17 @@ inline constexpr std::uint8_t   kViewModelTransformBytes[] = {0x55, 0x8B, 0xEC, 
 inline constexpr std::uintptr_t kProxyComponent = 0xF0, kProxyLocalToWorld = 0x20, kProxyWorldToLocal = 0x60;
 inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshComponent.FOV (float)
 
+// --- M8 arm IK (ENGINE-NOTES 5x) ---
+// UMOHASkeletalMeshComponent::UpdateTransform (fastcall, ECX = component; slot in the arms' vtable 0x11587D38):
+// bLockTranslation, then USkeletalMeshComponent::UpdateTransform 0x10CFAC10, which ends with
+// MeshObject(+0x21C)->Update(LOD, this, ActiveMorphs) -- the copy of SpaceBases for the renderer.
+inline constexpr std::uintptr_t kMohaSkelUpdateTransform = 0x10EEB550;
+inline constexpr std::uint8_t   kMohaSkelUpdateTransformBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x83, 0xEC, 0x44, 0x53, 0x8B, 0xD9};
+// USkeletalMesh RefSkeleton (TArray<FMeshBone>) and FMeshBone's size (probe: 70 VM_Arms bones, names at 0, 68, ...;
+// ParentIndex at +56).
+inline constexpr std::uintptr_t kSkelMeshRefSkeleton = 0x7C;
+inline constexpr std::uintptr_t kMeshBoneStride = 68;
+
 // --- Object names (ENGINE-NOTES 5u) ---
 // FName::ToString 0x109E2E80 (ECX = &FName {Index, Number}): FName::Names data = [0x116F4A54], entry string (wide)
 // at entry + 0x10. UObject: Index +0x04 (-1 = uninitialised; GetName 0x1090BBD0), Outer +0x28 (GetPathName
@@ -208,6 +219,7 @@ inline constexpr Signature kSignatures[] = {
     {"execGetBaseAimRotation",             kExecGetBaseAimRotation, kExecGetBaseAimRotationBytes, sizeof(kExecGetBaseAimRotationBytes)},
     {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},
     {"view-model proxy transform",         kViewModelTransform, kViewModelTransformBytes, sizeof(kViewModelTransformBytes)},
+    {"MOHA skel UpdateTransform",          kMohaSkelUpdateTransform, kMohaSkelUpdateTransformBytes, sizeof(kMohaSkelUpdateTransformBytes)},
 };
 
 }  // namespace mohavr::addr

@@ -151,6 +151,68 @@ bool Install(const Config& cfg) {
 
 namespace {
 
+// Research (Debug.Reflect, arm IK): the arms component's bone arrays and its mesh's skeleton layout, logged once.
+void ProbeArms(std::uintptr_t comp) {
+    const int sbo = names::PropertyOffset(comp, "SpaceBases"), lao = names::PropertyOffset(comp, "LocalAtoms"),
+              smo = names::PropertyOffset(comp, "SkeletalMesh");
+    const std::uintptr_t sbData = sbo >= 0 ? names::ReadPointer(comp + sbo) : 0;
+    const int bones = sbo >= 0 ? static_cast<int>(names::ReadPointer(comp + sbo + 4)) : 0;
+    const std::uintptr_t mesh = smo >= 0 ? names::ReadPointer(comp + smo) : 0;
+    MLOG("arms: %s SpaceBases +0x%X (%d bones, data %08X) LocalAtoms +0x%X, mesh +0x%X = %s", names::Name(comp).c_str(), sbo,
+         bones, static_cast<unsigned>(sbData), lao, smo, names::Name(mesh).c_str());
+    const std::uintptr_t vt = names::ReadPointer(comp);
+    std::string slots;
+    for (int i = 0; i < 96; ++i) {
+        char b[16];
+        sprintf_s(b, " %X", static_cast<unsigned>(names::ReadPointer(vt + 4 * static_cast<std::uintptr_t>(i))));
+        slots += b;
+        if (i % 16 == 15) {
+            MLOG("arms: vtable %08X [%d..%d]%s", static_cast<unsigned>(vt), i - 15, i, slots.c_str());
+            slots.clear();
+        }
+    }
+    if (!mesh || bones <= 0 || bones > 512) return;
+    // Arrays in the mesh with exactly `bones` elements whose elements start with bone names.
+    for (std::uintptr_t off = 0x3C; off < 0x400; off += 4) {
+        const std::uintptr_t data = names::ReadPointer(mesh + off);
+        const int num = static_cast<int>(names::ReadPointer(mesh + off + 4));
+        if (num != bones || !data) continue;
+        for (int stride = 8; stride <= 256; stride += 4) {
+            // Every element must start with a plausible, distinct bone name.
+            bool all = true;
+            std::string prev;
+            for (int i = 0; i < num && all; ++i) {
+                const std::string n = names::NameAt(data + static_cast<std::uintptr_t>(i) * stride);
+                all = !n.empty() && n.rfind("None", 0) != 0 && n.find("Property") == std::string::npos && n != prev;
+                prev = n;
+            }
+            if (!all) continue;
+            const std::string n0 = names::NameAt(data), n1 = names::NameAt(data + stride),
+                              n2 = names::NameAt(data + 2 * static_cast<std::uintptr_t>(stride));
+            MLOG("arms: mesh +0x%X: %d elements, stride %d, names %s %s %s ...", static_cast<unsigned>(off), num, stride,
+                 n0.c_str(), n1.c_str(), n2.c_str());
+            // The parent index: an int field that is < i for every bone i > 0.
+            for (int k = 8; k < stride; k += 4) {
+                bool ok = true;
+                for (int i = 1; i < num && ok; ++i) {
+                    const int v = static_cast<int>(names::ReadPointer(data + static_cast<std::uintptr_t>(i) * stride + k));
+                    ok = v >= 0 && v < i;
+                }
+                if (ok) MLOG("arms:   parent index candidate at element +%d", k);
+            }
+            for (int i = 0; i < num; ++i) {
+                const std::uintptr_t e = data + static_cast<std::uintptr_t>(i) * stride;
+                MLOG("arms:   bone %2d %-28s words %X %X %X %X %X %X", i, names::NameAt(e).c_str(),
+                     static_cast<unsigned>(names::ReadPointer(e + stride - 24)), static_cast<unsigned>(names::ReadPointer(e + stride - 20)),
+                     static_cast<unsigned>(names::ReadPointer(e + stride - 16)), static_cast<unsigned>(names::ReadPointer(e + stride - 12)),
+                     static_cast<unsigned>(names::ReadPointer(e + stride - 8)), static_cast<unsigned>(names::ReadPointer(e + stride - 4)));
+            }
+            return;
+        }
+    }
+    MLOG("arms: no bone-name array of %d found in the mesh", bones);
+}
+
 // The weapon in the player's hands: the first-person part drawn lately whose Outer isn't the pawn (the arms'
 // is). Its Outer is the weapon actor; the key is that actor's class name. Published to the host when it changes.
 void UpdateWeaponKey(shared::Header* hdr) {
@@ -172,6 +234,11 @@ void UpdateWeaponKey(shared::Header* hdr) {
         const DWORD tick = p.tick.load(std::memory_order_relaxed);
         if (!comp || now - tick > 500) continue;
         const std::uintptr_t outer = names::Outer(comp);
+        static bool armsProbed = false;
+        if (g_cfg.debugReflect && outer && outer == pawn && !armsProbed) {
+            armsProbed = true;
+            ProbeArms(comp);
+        }
         if (!outer || outer == pawn) continue;
         if (!gun || static_cast<LONG>(tick - newest) > 0) {
             gun = comp;
@@ -266,6 +333,18 @@ void OnPlayerView() {
     g_state.camInv = camInv;
     ReleaseSRWLockExclusive(&g_lock);
 }
+bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    if (!s.valid || GetTickCount() - s.tick > 250) return false;
+    std::memcpy(d, s.d.m, sizeof(d));
+    std::memcpy(dInv, s.dInv.m, sizeof(dInv));
+    return true;
+}
+
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter) {
     if (!g_line.valid) return false;
     for (int i = 0; i < 3; ++i) {

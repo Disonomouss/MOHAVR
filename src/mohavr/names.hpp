@@ -9,6 +9,8 @@ namespace mohavr::names {
 std::string Name(std::uintptr_t object);
 // The name of the object's class, or "".
 std::string ClassName(std::uintptr_t object);
+// The FName stored at `at` (8 bytes: index, number), or "".
+std::string NameAt(std::uintptr_t at);
 // UObject.Outer, or 0.
 std::uintptr_t Outer(std::uintptr_t object);
 

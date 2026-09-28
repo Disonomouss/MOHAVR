@@ -618,6 +618,40 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   (8 cm below, 10 cm ahead of the gun hand) → `Reload`. A grip used by a gesture is kept from the pad until
   released; a 30 ms pulse marks entering a spot or the foregrip.
 
+## 5x. The first-person arms skeleton, and where its pose reaches the renderer (arm IK research, 2026-09-28)
+
+- **VM_Arms** (the FPArms mesh): 70 bones. USkeletalMesh RefSkeleton at mesh `+0x7C` (TArray), FMeshBone stride
+  `68`: Name `+0`, ParentIndex `+56`, NumChildren `+60`. MatchRefBone `0x10D05140` uses a name map at `+0x8C`.
+  Component: SkeletalMesh `+0x1F4`, MeshObject `+0x21C`, SpaceBases `+0x224` (TArray<FMatrix>, component space),
+  LocalAtoms `+0x230` (reflection), ActiveMorphs `+0x290`, PredictedLODLevel `+0x2B8`; PrimitiveComponent
+  LocalToWorld is script-declared (reflection).
+- **The rig is inverted** (a hand-driven FPS rig): Root(0) → Anchor(1) → HipsOffset(2) → Hips(3) → Spine(4) →
+  Spine1(5) → Spine2(6) → Neck(7) / Tripod(8) → Camera(9); legs 10-17 under Hips. **RightHand(18)** is a child of
+  HipsOffset; its fingers 19-33; **RightForeArm(34)** is the hand's child (at the elbow), **RightArm(35)** the
+  forearm's (at the shoulder joint), RightArmRoll(36) and **RightShoulder(37)** (clavicle) the arm's; forearm roll
+  bones 38-42 hang off the hand. The left side mirrors it: LeftHand 43, fingers 44-58, LeftForeArm 59, LeftArm 60,
+  LeftArmRoll 61, LeftShoulder 62, roll bones 63-67. RightProp(68) / LeftProp(69) (weapon attach) under HipsOffset.
+  So moving the hands drags the whole arm with them: the "detached arms" with the gun in the hand.
+- **The render copy:** `USkeletalMeshComponent::UpdateTransform` `0x10CFAC10` ends with
+  `MeshObject->Update(PredictedLODLevel, this, ActiveMorphs)` (vtable `+0x10`), which copies SpaceBases for the
+  renderer. MOHA's override `UMOHASkeletalMeshComponent::UpdateTransform` `0x10EEB550` (vtable slot of the arms'
+  vtable `0x11587D38`) applies bLockTranslation, then calls it. MOHA's Tick is `0x10EEA7C0`. Detach `0x10CFB180`
+  deletes the MeshObject.
+- **IK plan:** hook `0x10EEB550`; for the local arms, before the original: with rendered = SpaceBases · L2W · D,
+  give each bone group K = (L2W·D)·T·(L2W·D)⁻¹ -- hands/fingers/props untouched (with the gun), body bones and the
+  clavicles T = D⁻¹ (at the body), the upper arm / forearm (+ roll bones) the rigid moves that take each old segment
+  onto a two-bone solve (shoulder joint at the body, wrist at the gun, the elbow bending toward the game's own);
+  restore SpaceBases after the original so game code (the Camera bone) sees the game's pose.
+- **Built** (`Weapon.ArmIK`, src/mohavr/arms_ik.cpp; bones found by name from the RefSkeleton). Measured: each arm is
+  28.5 (upper) + 27.8 (fore) units; the game's rig puts the shoulder joints at eye height ~25 units behind the eye and
+  off-centre (right on the centre line, left 38 units left) -- fine flat, out of reach in VR (the first try stretched
+  the sleeves into "sails"). So the shoulders are anchored to the tracked head (`Weapon.ShoulderWidth` 36 /
+  `ShoulderDrop` 22 / `ShoulderBack` 6 cm, turned with the body), the torso and each clavicle move with them, and a
+  hand out of reach pulls its shoulder along (the arm never stretches). The elbow bends like the game's pose, a little
+  down. [S]: the right shoulder drawn 18 units right / 22 below the eye; the left arm reaches from the left shoulder to
+  the foregrip as one sleeve (m16-ik2-*.png). Known: the shoulders use the gun's move from the previous frame (a
+  frame of lag on fast moves).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

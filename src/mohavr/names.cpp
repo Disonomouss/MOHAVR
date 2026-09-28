@@ -47,6 +47,12 @@ std::string Name(std::uintptr_t object) {
     return buf;
 }
 
+std::string NameAt(std::uintptr_t at) {
+    char buf[128];
+    if (!at || !ReadFName(at, buf, sizeof(buf))) return {};
+    return buf;
+}
+
 std::string ClassName(std::uintptr_t object) {
     return object ? Name(ReadPtr(object + addr::kObjectClass)) : std::string();
 }

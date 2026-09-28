@@ -596,6 +596,34 @@ raised (now on by default, `Hands.ThrowScale=2.2`).
 
 ---
 
+## Round 16: prepared 2026-09-28, arm IK
+**Changed:** the arms now reach from your shoulders to the gun instead of moving with it as one piece. Your hands stay
+on the gun; the shoulders sit where yours are (18 cm to each side, 22 cm below your eyes, turned with your body), each
+elbow bends naturally, and if you reach further than the arm is long the shoulder follows. The body/legs under you stay
+under you. (Also in this build: grenades throw at 2.2x, and a thrown grenade can no longer be mixed up with one lying
+around.) [S]: in the simulator the shoulders land where they should and the arms connect without stretching.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Hold the rifle one-handed and two-handed (foregrip); move it around, high, low, across your body; look at your arms.
+2. The pistol, reaching out and close to your chest.
+3. Throw a grenade once or twice (stronger now).
+
+**Questions:**
+1. Do the arms look connected to you and follow naturally? (describe)
+2. Shoulders in the right place (too wide / narrow / high / low / forward / back)? (describe)
+3. Elbows bending the right way? Any strange stretching or twisting? (describe)
+4. Any lag or wobble of the arms when you move fast? (yes/no)
+5. Grenades now strong enough? (yes / too weak / too strong)
+6. Anything else odd? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults plus `Weapon.ArmIK=1`.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -26,4 +26,8 @@ void OnPlayerView();
 // False when the gun isn't in the hand.
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter);
 
+// Arm IK: the move the first-person parts are drawn with (world, row-major FMatrix: LocalToWorld' = LocalToWorld *
+// d) and its inverse; false when they're drawn where the game put them (or the game's own way).
+bool CurrentMove(float (&d)[16], float (&dInv)[16]);
+
 }  // namespace mohavr::viewmodel

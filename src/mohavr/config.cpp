@@ -50,6 +50,10 @@ Config LoadConfig(const std::wstring& dir) {
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
+    c.armIK          = get(L"Weapon", L"ArmIK", c.armIK);
+    c.shoulderWidth  = getf(L"Weapon", L"ShoulderWidth", c.shoulderWidth, 10.0f, 80.0f);
+    c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);
+    c.shoulderBack   = getf(L"Weapon", L"ShoulderBack", c.shoulderBack, -30.0f, 30.0f);
     c.throwScale     = getf(L"Hands", L"ThrowScale", c.throwScale, 0.2f, 5.0f);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;

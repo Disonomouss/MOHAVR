@@ -9,6 +9,7 @@
 
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "arms_ik.hpp"
 #include "bridge.hpp"
 #include "throwing.hpp"
 #include "viewmodel.hpp"
@@ -828,6 +829,7 @@ bool Install(const Config& cfg) {
     aim::Install(cfg);        // M7: needs the view hook (PoseToWorld)
     viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
     throwing::Configure(cfg);
+    armsik::Install(cfg);     // M8: the arms reach from the body to the gun
     MLOG("throw: Hands.Throw=%d (x%.2f)", cfg.throwByHand, cfg.throwScale);
     return true;
 }
@@ -853,6 +855,14 @@ bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float&
     float axes[3][3];
     if (!PoseFrameToWorld(p, pos, axes, unitsPerMeter)) return false;
     for (int i = 0; i < 3; ++i) fwd[i] = axes[0][i];
+    return true;
+}
+
+bool HeadInWorld(float (&pos)[3], float& yaw, float& unitsPerMeter) {
+    if (!g_world.valid) return false;
+    float fwd[3];
+    if (!PoseToWorld(g_world.head, pos, fwd, unitsPerMeter)) return false;
+    yaw = g_world.yaw;
     return true;
 }
 
