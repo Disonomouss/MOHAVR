@@ -23,6 +23,12 @@
 
 namespace mohavr::host {
 
+// A holster spot: metres from the head in its heading frame (right, up, forward), and its radius.
+struct HolsterSpot {
+    float x, y, z, r;
+};
+constexpr int kHolsters = 4;  // right shoulder, left shoulder, right hip, left hip
+
 class Hands {
 public:
     // Reads [Holsters] / [Hands] from the shipped ini.
@@ -43,7 +49,20 @@ public:
         bool           testThrow;
         float          testThrowVel[3];
     };
+    // Where the gesture spots are this frame (LOCAL), for the rings (markers.cpp).
+    enum SpotKind { kHolster, kForegrip, kMagazine };
+    struct Spot {
+        SpotKind   kind;
+        XrVector3f pos;
+        float      radius;
+        bool       inside;   // a hand is in it (a squeeze would act)
+        bool       close;    // a hand is within twice its radius
+    };
     struct Output {
+        Spot        spots[kHolsters + 2]{};
+        int         spotCount = 0;
+        bool        offValid = false;
+        XrVector3f  offHand{};      // the off hand's aim pose position (its marker)
         int         gunHand = 1;    // 0 left, 1 right: the hand that drew last (the pad's fire side follows it)
         bool        gunValid = false, twoHanded = false;
         XrPosef     gun{}, aimRay{};
@@ -56,15 +75,18 @@ public:
     Output Update(const Input& in);
     // The fit without a menu: the shipped defaults ([Aim] RayUp, [Hands] ForeFwd/ForeUp).
     const shared::GunFit& DefaultFit() const { return defaultFit_; }
+    // The holster spots: the shipped ones ([Holsters] RightShoulderSpot=x y z r, cm), and the player's (the menu).
+    const HolsterSpot& DefaultSpot(int i) const { return defaultSpots_[i]; }
+    void SetSpot(int i, const HolsterSpot& s) { spots_[i] = s; }
+    static const wchar_t* SpotName(int i);
 
 private:
     struct Zone {
         const wchar_t* key;
-        float          x, y, z;  // metres from the head: right, up, forward (heading frame)
         std::string    command;
     };
-    Zone  zones_[4];
-    float zoneRadius_ = 0.16f;
+    Zone        zones_[kHolsters];
+    HolsterSpot spots_[kHolsters]{}, defaultSpots_[kHolsters]{};
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;
     float gripWas_[2]{};
     bool  held_[2]{};          // grip pressed (hysteresis)

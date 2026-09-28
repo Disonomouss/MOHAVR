@@ -55,6 +55,7 @@ else()
         src/host/pad.cpp
         src/host/reticle.cpp
         src/host/hands.cpp
+        src/host/markers.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).

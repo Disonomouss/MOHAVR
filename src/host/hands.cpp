@@ -41,21 +41,36 @@ XrQuaternionf FromTo(V3 a, V3 b) {
 
 }  // namespace
 
+const wchar_t* Hands::SpotName(int i) {
+    static const wchar_t* kNames[kHolsters] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip"};
+    return i >= 0 && i < kHolsters ? kNames[i] : L"";
+}
+
 void Hands::Init(const std::wstring& ini) {
     // Body spots in metres from the head (right, up, forward) in the head's heading frame. The command is the
     // game's own (MOHAPlayerController exec functions).
-    zones_[0] = {L"RightShoulder", 0.20f, -0.22f, -0.08f, "SwitchPrimary"};
-    zones_[1] = {L"LeftShoulder", -0.20f, -0.22f, -0.08f, "SwitchSecondary"};
-    zones_[2] = {L"RightHip", 0.22f, -0.65f, 0.0f, "SwitchPistol"};
-    zones_[3] = {L"LeftHip", -0.22f, -0.65f, 0.0f, "SwitchGrenade"};
-    for (auto& z : zones_) {
+    zones_[0] = {L"RightShoulder", "SwitchPrimary"};
+    zones_[1] = {L"LeftShoulder", "SwitchSecondary"};
+    zones_[2] = {L"RightHip", "SwitchPistol"};
+    zones_[3] = {L"LeftHip", "SwitchGrenade"};
+    // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r.
+    const HolsterSpot builtIn[kHolsters] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}};
+    for (int i = 0; i < kHolsters; ++i) {
+        Zone& z = zones_[i];
         wchar_t v[64] = L"";
         GetPrivateProfileStringW(L"Holsters", z.key, L"", v, 64, ini.c_str());
-        if (!v[0]) continue;
-        if (!_wcsicmp(v, L"none")) { z.command.clear(); continue; }
-        std::string s;
-        for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
-        z.command = s;
+        if (v[0] && !_wcsicmp(v, L"none")) z.command.clear();
+        else if (v[0]) {
+            std::string s;
+            for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
+            z.command = s;
+        }
+        HolsterSpot cm = builtIn[i];
+        const std::wstring key = std::wstring(z.key) + L"Spot";
+        GetPrivateProfileStringW(L"Holsters", key.c_str(), L"", v, 64, ini.c_str());
+        if (v[0]) swscanf_s(v, L"%f %f %f %f", &cm.x, &cm.y, &cm.z, &cm.r);
+        defaultSpots_[i] = {cm.x / 100.0f, cm.y / 100.0f, cm.z / 100.0f, cm.r / 100.0f};
+        spots_[i] = defaultSpots_[i];
     }
     auto iniFloat = [&](const wchar_t* sec, const wchar_t* key, float def) {
         wchar_t b[32] = L"";
@@ -65,9 +80,9 @@ void Hands::Init(const std::wstring& ini) {
     defaultFit_ = {{iniFloat(L"Weapon", L"GripX", 34.0f), iniFloat(L"Weapon", L"GripY", 11.0f), iniFloat(L"Weapon", L"GripZ", -17.0f)},
                    0.0f, iniFloat(L"Aim", L"RayUp", 8.0f), 0.0f, iniFloat(L"Hands", L"ForeFwd", 30.0f),
                    iniFloat(L"Hands", L"ForeUp", 0.0f)};
-    holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 0, ini.c_str()) != 0;
-    foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 0, ini.c_str()) != 0;
-    reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 0, ini.c_str()) != 0;
+    holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
+    foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
+    reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
     MLOG("hands: holsters %d (%s / %s / %s / %s), foregrip %d, reload gesture %d", holsters_, zones_[0].command.c_str(),
          zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(), foregrip_, reloadGesture_);
 }
@@ -102,6 +117,30 @@ Hands::Output Hands::Update(const Input& in) {
     const float heading = std::atan2(-fx, -fz);
     const V3 right{std::cos(heading), 0.0f, -std::sin(heading)}, fwd{-std::sin(heading), 0.0f, -std::cos(heading)};
     const V3 head = P(in.head.position);
+    V3 centre[kHolsters];
+    for (int z = 0; z < kHolsters; ++z)
+        centre[z] = Add(head, Add(Add(Scale(right, spots_[z].x), V3{0.0f, spots_[z].y, 0.0f}), Scale(fwd, spots_[z].z)));
+
+    // The spots, for the rings: each holster, and the off hand's foregrip / magazine spots on the gun.
+    auto addSpot = [&](SpotKind kind, V3 c, float r, bool onlyOffHand) {
+        Spot& s = out.spots[out.spotCount++];
+        s.kind = kind;
+        s.pos = {c.x, c.y, c.z};
+        s.radius = r;
+        for (int h = 0; h < 2; ++h) {
+            if (!(in.valid & (1u << h)) || (onlyOffHand && h != o)) continue;
+            const float d = Len(Sub(P(in.aim[h].position), c));
+            if (d < r) s.inside = true;
+            if (d < 2.0f * r) s.close = true;
+        }
+    };
+    if (holsters_)
+        for (int z = 0; z < kHolsters; ++z)
+            if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
+    if (gunOk && foregrip_ && in.fit.foreFwd >= 15.0f) addSpot(kForegrip, fore, 0.12f, true);
+    if (gunOk && reloadGesture_) addSpot(kMagazine, mag, 0.10f, true);
+    out.offValid = offOk;
+    out.offHand = in.aim[o].position;
 
     for (int h = 0; h < 2; ++h) {
         const bool ok = (in.valid & (1u << h)) != 0;
@@ -109,10 +148,9 @@ Hands::Output Hands::Update(const Input& in) {
         // Which holster spot the hand is in (a pulse when it enters one).
         int zone = -1;
         if (ok && holsters_) {
-            for (int z = 0; z < 4; ++z) {
+            for (int z = 0; z < kHolsters; ++z) {
                 if (zones_[z].command.empty()) continue;
-                const V3 c = Add(head, Add(Add(Scale(right, zones_[z].x), V3{0.0f, zones_[z].y, 0.0f}), Scale(fwd, zones_[z].z)));
-                if (Len(Sub(hp, c)) < zoneRadius_) zone = z;
+                if (Len(Sub(hp, centre[z])) < spots_[z].r) zone = z;
             }
         }
         if (zone >= 0 && zone != inZone_[h] && in.gestures) out.pulse[h] = true;

@@ -58,8 +58,7 @@ B and the right grip both press the game's reload/use button; the game decides w
 In the game's menus the face buttons work as labelled: A selects, B goes back.
 The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
-**Hand features** (being tested; turn them on in `MOHAVR.ini`: `Holsters.Enabled`, `Hands.Foregrip`,
-`Hands.ReloadGesture`, `Hands.Throw`):
+**Hand features** (on; throwing is still being tested: `Hands.Throw=1` in `MOHAVR.ini` turns it on):
 
 | Do this | Game |
 |---|---|
@@ -72,7 +71,8 @@ The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 | Swing and let go of the trigger with a grenade | Throw it (a slow release throws the game's way) |
 
 Either hand can draw, and the hand that draws holds the gun: its trigger fires. A short buzz tells you your hand
-is at a holster or the foregrip.
+is at a holster or the foregrip, and rings show where the spots are (green = a squeeze there acts); a white dot marks
+your other hand.
 
 ## The in-headset menu
 
@@ -87,6 +87,8 @@ left stick to move and change values, and the trigger or A to select. B closes i
 - **Gun fit**: fits the gun you're holding to your hand. Move it forward/back, left/right and up/down, tilt it,
   shift the aim line (the red dot) until it runs along the barrel, and place the foregrip. Each gun keeps its own
   fit; B goes back.
+- **Holsters**: move each holster (right/left, up/down, forward/back from your head) and size it; choose when
+  the rings show (never, near, always).
 - **Recentre**: face forward from where you are now.
 
 Your choices are saved in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and kept across updates.

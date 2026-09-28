@@ -116,15 +116,13 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 14** (deployed 2026-09-27 night): the player's hand features, all [S]-proven
-   (UNATTENDED-REPORT §7, ENGINE-NOTES §5v/§5w): holsters (either hand; the hand that draws holds the gun), foregrip
-   (two-handed, adjustable per gun), reload gesture, throwing grenades by hand (runtime reflection: script
-   properties by name), stick swap and starting gun hand in the menu. They ship off (`Holsters.Enabled`,
-   `Hands.Foregrip/ReloadGesture/Throw`) and round 14 turns them on. Round 13 (Gun fit page, aim along the barrel)
-   wasn't played; its questions are in round 14. **Round 12 passed:** the gun drawn at the aiming controller in
-   true 3D (`Weapon.ViewModel=2`, the default).
-   Next: the verdicts; then the HUD crosshair in controller modes, a mirrored arms model for the left hand, the
-   arms detached from the body (IK), a full manual reload (magazine out/in).
+2. **HEADSET-TESTS round 15** (deployed): rings around the gesture spots (holsters, foregrip, magazine; lit when a
+   hand is inside; a dot on the off hand) with never/near/always, and a Holsters menu page to move and size each
+   holster (saved). **Round 14 passed** for holsters, the drawing hand, foregrip and the reload gesture (now on by
+   default); throwing and the stick swap still to test. The player will tune per-gun fits in play and say when,
+   and those become the defaults.
+   **Next milestone: arm IK** (the arms follow the hands instead of hanging off the gun), then a mirrored arms model
+   for the left hand, the HUD crosshair in controller modes, a full manual reload.
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 
 ## Risks

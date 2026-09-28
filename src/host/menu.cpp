@@ -17,12 +17,17 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kHolsterPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
 enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fForeUp, fReset, fBack, fCount };
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
+// The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
+// x y z r); the rings' visibility ([Hands] Rings = never / near / always).
+enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+const char* kHolsterLabels[kHolsters] = {"right shoulder", "left shoulder", "right hip", "left hip"};
+const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
 std::wstring UserIniPath() {
     wchar_t base[MAX_PATH] = L"";
@@ -146,6 +151,40 @@ void Menu::ApplySavedSettings() {
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
 
+void Menu::LoadHolsters(const HolsterSpot (&defaults)[kHolsters]) {
+    for (int i = 0; i < kHolsters; ++i) {
+        spotDefaults_[i] = spots_[i] = defaults[i];
+        const std::wstring key = std::wstring(Hands::SpotName(i)) + L"Spot";
+        wchar_t b[64] = L"";
+        GetPrivateProfileStringW(L"Holsters", key.c_str(), L"", b, 64, iniPath_.c_str());
+        HolsterSpot cm{};
+        if (b[0] && swscanf_s(b, L"%f %f %f %f", &cm.x, &cm.y, &cm.z, &cm.r) == 4)
+            spots_[i] = {cm.x / 100.0f, cm.y / 100.0f, cm.z / 100.0f, cm.r / 100.0f};
+        MLOG("menu: holster %ls at %.0f %.0f %.0f cm, %.0f cm across (%s)", Hands::SpotName(i), spots_[i].x * 100.0f,
+             spots_[i].y * 100.0f, spots_[i].z * 100.0f, spots_[i].r * 200.0f, b[0] ? "player's" : "default");
+    }
+    // Rings: the player's, else the shipped default.
+    wchar_t exe[MAX_PATH] = L"";
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring shipped(exe);
+    shipped = shipped.substr(0, shipped.find_last_of(L'\\')) + L"\\MOHAVR.ini";
+    wchar_t def[16] = L"", v[16] = L"";
+    GetPrivateProfileStringW(L"Hands", L"Rings", L"near", def, 16, shipped.c_str());
+    GetPrivateProfileStringW(L"Hands", L"Rings", def, v, 16, iniPath_.c_str());
+    ringsMode_ = 1;
+    for (int m = 0; m < 3; ++m)
+        if (!_wcsicmp(v, kRingModes[m])) ringsMode_ = m;
+    MLOG("menu: rings %ls", kRingModes[ringsMode_]);
+}
+
+void Menu::SaveHolster(int i) {
+    if (iniPath_.empty()) return;
+    const std::wstring key = std::wstring(Hands::SpotName(i)) + L"Spot";
+    wchar_t b[64];
+    swprintf_s(b, L"%.0f %.0f %.0f %.0f", spots_[i].x * 100.0f, spots_[i].y * 100.0f, spots_[i].z * 100.0f, spots_[i].r * 100.0f);
+    WritePrivateProfileStringW(L"Holsters", key.c_str(), b, iniPath_.c_str());
+}
+
 void Menu::SyncWeapon() {
     if (!hdr_ || hdr_->weaponSeq == seenWeaponSeq_) return;
     seenWeaponSeq_ = hdr_->weaponSeq;
@@ -252,13 +291,16 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Comfort", L"SnapTurn", buf, iniPath_.c_str());
     WritePrivateProfileStringW(L"Controls", L"SwapSticks", swapSticks_ ? L"1" : L"0", iniPath_.c_str());
     WritePrivateProfileStringW(L"Controls", L"GunHand", startLeft_ ? L"left" : L"right", iniPath_.c_str());
+    WritePrivateProfileStringW(L"Hands", L"Rings", kRingModes[ringsMode_], iniPath_.c_str());
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
     SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
-    if (visible_ && page_ == 1 && (in.back || (in.select && selected_ == fBack))) {
-        page_ = 0;  // back from the Gun fit page to the main page
-        selected_ = kGunFit;
+    const bool backFromPage = visible_ && ((page_ == 1 && (in.back || (in.select && selected_ == fBack))) ||
+                                           (page_ == 2 && (in.back || (in.select && selected_ == hBack))));
+    if (backFromPage) {
+        selected_ = page_ == 1 ? kGunFit : kHolsterPage;  // back to the main page, on the item that opened it
+        page_ = 0;
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
         return;
@@ -300,6 +342,43 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         Render();
         return;
     }
+    if (page_ == 2) {
+        if (in.up) selected_ = (selected_ + hCount - 1) % hCount;
+        if (in.down) selected_ = (selected_ + 1) % hCount;
+        if (in.left || in.right) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            HolsterSpot& s = spots_[holsterSel_];
+            bool moved = true;
+            switch (selected_) {
+                case hWhich: holsterSel_ = (holsterSel_ + (in.right ? 1 : kHolsters - 1)) % kHolsters; moved = false; break;
+                case hRight: s.x = std::fmax(-0.8f, std::fmin(0.8f, s.x + dir * 0.01f)); break;
+                case hUp: s.y = std::fmax(-1.2f, std::fmin(0.4f, s.y + dir * 0.01f)); break;
+                case hForward: s.z = std::fmax(-0.6f, std::fmin(0.6f, s.z + dir * 0.01f)); break;
+                case hSize: s.r = std::fmax(0.05f, std::fmin(0.40f, s.r + dir * 0.005f)); break;
+                case hRings:
+                    ringsMode_ = (ringsMode_ + (in.right ? 1 : 2)) % 3;
+                    Save();
+                    moved = false;
+                    MLOG("menu: rings -> %ls", kRingModes[ringsMode_]);
+                    break;
+                default: moved = false; break;
+            }
+            if (moved) {
+                SaveHolster(holsterSel_);
+                MLOG("menu: holster %ls -> %.0f %.0f %.0f cm, %.0f cm across", Hands::SpotName(holsterSel_), s.x * 100.0f,
+                     s.y * 100.0f, s.z * 100.0f, s.r * 200.0f);
+            }
+        }
+        if (in.select && selected_ == hReset) {
+            spots_[holsterSel_] = spotDefaults_[holsterSel_];
+            const std::wstring key = std::wstring(Hands::SpotName(holsterSel_)) + L"Spot";
+            WritePrivateProfileStringW(L"Holsters", key.c_str(), nullptr, iniPath_.c_str());
+            MLOG("menu: holster %ls reset", Hands::SpotName(holsterSel_));
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
 
     if (in.up) selected_ = (selected_ + kItemCount - 1) % kItemCount;
     if (in.down) selected_ = (selected_ + 1) % kItemCount;
@@ -333,6 +412,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 1;
             selected_ = 0;
             MLOG("menu: gun fit page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+        } else if (selected_ == kHolsterPage) {
+            page_ = 2;
+            selected_ = 0;
+            MLOG("menu: holsters page");
         } else if (selected_ == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
@@ -360,6 +443,8 @@ void Menu::Render() {
     ImGui::PushFont(nullptr, 40.0f);
     if (page_ == 1) {
         RenderFitPage();
+    } else if (page_ == 2) {
+        RenderHolsterPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     ImGui::Separator();
@@ -385,6 +470,8 @@ void Menu::Render() {
     ImGui::Selectable(label, selected_ == kGunHand);
     snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
     ImGui::Selectable(label, selected_ == kGunFit);
+    snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);
+    ImGui::Selectable(label, selected_ == kHolsterPage);
     ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
     snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
     ImGui::Selectable(label, selected_ == kResetScale);
@@ -451,6 +538,35 @@ void Menu::RenderFitPage() {
     ImGui::TextDisabled(gunInHand_ ? "Stick right = forward / right / up / muzzle up. Saved for this gun."
                                    : "The gun isn't drawn in your hand (Weapon.ViewModel=2 in MOHAVR.ini): no effect.");
     ImGui::TextDisabled("Line the barrel up with the red dot using the aim line.   B: back");
+    ImGui::PopFont();
+}
+
+// Positions from the head (in its heading), in cm; the rings of all holsters show while this page is open.
+void Menu::RenderHolsterPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Holsters");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  from your head, in cm");
+    ImGui::Separator();
+    const HolsterSpot& s = spots_[holsterSel_];
+    char label[128];
+    snprintf(label, sizeof(label), "Holster               <  %s  >", kHolsterLabels[holsterSel_]);
+    ImGui::Selectable(label, selected_ == hWhich);
+    snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", s.x * 100.0f);
+    ImGui::Selectable(label, selected_ == hRight);
+    snprintf(label, sizeof(label), "Up / down             <  %+.0f  >", s.y * 100.0f);
+    ImGui::Selectable(label, selected_ == hUp);
+    snprintf(label, sizeof(label), "Forward / back        <  %+.0f  >", s.z * 100.0f);
+    ImGui::Selectable(label, selected_ == hForward);
+    snprintf(label, sizeof(label), "Size                  <  %.0f across  >", s.r * 200.0f);
+    ImGui::Selectable(label, selected_ == hSize);
+    snprintf(label, sizeof(label), "Rings                 <  %ls  >", kRingModes[ringsMode_]);
+    ImGui::Selectable(label, selected_ == hRings);
+    ImGui::Selectable("Reset this holster", selected_ == hReset);
+    ImGui::Selectable("Back", selected_ == hBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
+    ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
     ImGui::PopFont();
 }
 

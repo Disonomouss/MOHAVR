@@ -30,6 +30,7 @@
 #include "mirror.hpp"
 #include "pad.hpp"
 #include "hands.hpp"
+#include "markers.hpp"
 #include "reticle.hpp"
 
 using mohavr::shared::Header;
@@ -391,7 +392,17 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     std::uint32_t handBits = 0;
     mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
     mohavr::host::Hands::Output handsOut;
-    if (handsOk) hands.Init(ExeDir() + L"\\MOHAVR.ini");
+    mohavr::host::Markers markers;  // the gesture spots' rings
+    bool markersOk = false;
+    if (handsOk) {
+        hands.Init(ExeDir() + L"\\MOHAVR.ini");
+        if (menuOk) {
+            mohavr::host::HolsterSpot defaults[mohavr::host::kHolsters];
+            for (int i = 0; i < mohavr::host::kHolsters; ++i) defaults[i] = hands.DefaultSpot(i);
+            menu.LoadHolsters(defaults);
+        }
+        markersOk = markers.Init(dev, ctx, session, fmt);
+    }
     // Test channel: %TEMP%\MOHAVR\host_cmd.txt, one command per line (toggle/up/down/left/right/select/back),
     // consumed and deleted each frame -- the simulator can't press controller buttons.
     std::wstring cmdPath;
@@ -666,6 +677,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     for (int h = 0; h < 2; ++h) hin.grip[h] = pad.GripValue(session, h);
                     hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
                     hin.startLeft = menuOk && menu.StartLeft();
+                    if (menuOk)
+                        for (int i = 0; i < mohavr::host::kHolsters; ++i) hands.SetSpot(i, menu.Spot(i));
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
                     for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);
                     hin.grenade = menuOk && menu.WeaponKey().find("Grenade") != std::string::npos;
@@ -818,7 +831,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
         XrCompositionLayerProjectionView pviews[2] = {{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
                                                       {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
-        const XrCompositionLayerBaseHeader* layers[3];
+        const XrCompositionLayerBaseHeader* layers[16];
         uint32_t layerCount = 0;
         if (fs.shouldRender) {
             uint32_t idx = 0;
@@ -908,7 +921,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, ray, menuHead, d))
                             layers[layerCount++] = rl;
                 }
-            }            // The menu panel on top of the game when open.
+            }            // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
+            if (markersOk && lastMeta.hasView && menuHeadOk && handsOk)
+                layerCount += static_cast<uint32_t>(markers.Layers(
+                    local, menuHead, handsOut, static_cast<mohavr::host::Markers::Mode>(menuOk ? menu.RingsMode() : 1),
+                    menuOk && menu.HolsterPageOpen(), layers + layerCount, 15 - static_cast<int>(layerCount)));
+            // The menu panel on top of the game when open.
             if (menuOk) {
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
             }

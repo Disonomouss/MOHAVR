@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "../common/shared_frame.hpp"
+#include "hands.hpp"
 
 namespace mohavr::host {
 
@@ -56,11 +57,18 @@ public:
     // Controls (the player's, saved): right stick moves / left turns; the gun hand at start (a draw changes it).
     bool SwapSticks() const { return swapSticks_; }
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
+    // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
+    void LoadHolsters(const HolsterSpot (&defaults)[kHolsters]);
+    const HolsterSpot& Spot(int i) const { return spots_[i]; }
+    int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
+    bool HolsterPageOpen() const { return visible_ && page_ == 2; }
     bool StartLeft() const { return startLeft_; }
 
 private:
     void Render();
     void RenderFitPage();
+    void RenderHolsterPage();
+    void SaveHolster(int i);
     void SetUnitsPerMeter(float v, bool save);
     void SetHeightOffset(float v, bool save);
     void Save();
@@ -88,7 +96,10 @@ private:
     int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
-    int                     page_ = 0;                // 0 main, 1 gun fit
+    int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters
+    HolsterSpot             spots_[kHolsters]{}, spotDefaults_[kHolsters]{};  // metres
+    int                     holsterSel_ = 0;
+    int                     ringsMode_ = 1;
     std::uint32_t           seenWeaponSeq_ = 0xFFFFFFFFu;
     std::string             weaponKey_;               // the weapon in hand ("" none)
     shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)

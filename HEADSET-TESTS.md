@@ -552,6 +552,42 @@ throwing and the stick swap still to test; per-gun fits later from the player's 
 
 ---
 
+## Round 15: prepared 2026-09-28, holster rings and adjustable holsters
+**Changed:**
+- **Rings** around the gesture spots: each holster, and the other hand's foregrip and magazine spots on the gun (so
+  you can see where your off hand's gestures are). A ring lights green while your hand is inside it -- a squeeze
+  there acts. A small white dot marks your off hand (the game shows nothing there).
+- **Menu -> Holsters** (new page): pick a holster (right shoulder, left shoulder, right hip, left hip) and move it
+  right/left, up/down, forward/back (cm from your head) and change its size. Every ring shows while the page is open.
+  "Rings: never / near / always" -- near (the default) shows a ring when a hand comes within twice its size.
+  Your holster places and the ring setting are saved.
+- Holsters, foregrip and the reload gesture are now on by default (round 14 passed). Throwing is on for this round.
+- [S]: in the simulator the foregrip ring showed amber with the off hand close and green with it inside, the dot on
+  the off hand; the Holsters page showed all four rings, and moving a holster moved its ring.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Open the menu -> Holsters. Put each holster where you want it (look down to see the hips' rings), and size them.
+2. Play with Rings on near; try always and never too.
+3. Reload with the off hand now that you can see the magazine spot.
+4. Still to test from round 14: throw grenades (left hip, swing, let go of the trigger), and Sticks swapped.
+
+**Questions:**
+1. Can you put each holster where you want it and size it? Anything missing on the page? (describe)
+2. Rings: which setting do you like; are they too big, too bright, in the way? (describe)
+3. Reload gesture: fewer accidents now that the magazine spot shows? (yes/no)
+4. Grenades: do they go where and as far as you throw them? Too weak / too strong? (describe)
+5. Sticks swapped: works as expected? (yes/no)
+6. Anything else odd? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults (now holsters, foregrip and the reload gesture on) plus
+`Hands.Throw=1`.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
