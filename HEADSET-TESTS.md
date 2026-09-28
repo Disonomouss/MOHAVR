@@ -528,9 +528,24 @@ aim straight away, and the saved fit came back when the gun did.
 8. (Round 13) Was the Gun fit page easy to use; anything missing? After fitting, do shots land where the barrel points?
 9. Anything else odd? (describe)
 
-**Answers:** (the player's words)
+**Answers (2026-09-28):**
+1. "Holsters are not quite where I want them, can you add a ring around where they are, make a menu toggle to have the
+   ring be visible (always, when hand is near and never visible) and make the holster size and position be adjustable."
+2. "works well, arm IK is part of next milestone right?"
+3. "feels good, will fine tune after arm IK"
+4. "It feels good, happens accidentally sometimes, but only because you can't tell where your offhand is."
+5. "Needs further testing"  6. "Untested"
+7. "Don't remember, I will adjust weapons in game later and when I tell you it's done we will use those values as
+   defaults."  8. "All good"
 
-**Log received:** (after `tools\deploy.ps1 undeploy`)
+**Log received:** yes (`logs/modlogs/20260928-155246-*`): every holster fired (RightShoulder, LeftShoulder, RightHip,
+LeftHip, with both hands; the gun hand followed), foregrip taken 8-11 cm from the point (the 12 cm catch is doing the
+work: the default point sits a little off), two reload gestures. No grenade release reached the throw code (not tested).
+The XR frame fell to 10 Hz from 05:15 with the session still FOCUSED: the headset was off the head (Virtual Desktop idles).
+
+**Verdict:** holsters, the drawing hand, foregrip, reload gesture **PASSED** as mechanics; holster placement needs
+visible, adjustable spots (round 15); the reload gesture needs to show where the off hand's gesture spots are;
+throwing and the stick swap still to test; per-gun fits later from the player's own values.
 
 **Deployed for this round:** the shipped defaults plus `Holsters.Enabled=1`, `Hands.Foregrip=1`,
 `Hands.ReloadGesture=1`, `Hands.Throw=1`.
