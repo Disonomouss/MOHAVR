@@ -38,6 +38,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudWidth       = getf(L"HUD", L"Width", c.hudWidth, 0.1f, 10.0f);
     c.hudDown        = getf(L"HUD", L"Down", c.hudDown, -2.0f, 2.0f);
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
+    c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
@@ -53,6 +54,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
     c.armIK          = get(L"Weapon", L"ArmIK", c.armIK);
     c.freeOffHand    = get(L"Weapon", L"FreeOffHand", c.freeOffHand);
+    c.freeArmPose    = get(L"Weapon", L"FreeArmPose", c.freeArmPose);
     c.elbowHinge     = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ElbowHinge", c.elbowHinge, ini.c_str()));
     c.shoulderWidth  = getf(L"Weapon", L"ShoulderWidth", c.shoulderWidth, 10.0f, 80.0f);
     c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);

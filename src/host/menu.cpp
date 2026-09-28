@@ -17,7 +17,7 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kRedDot, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -149,7 +149,10 @@ void Menu::ApplySavedSettings() {
     const bool defLeft = !_wcsicmp(buf, L"left");
     GetPrivateProfileStringW(L"Controls", L"GunHand", defLeft ? L"left" : L"right", buf, 32, iniPath_.c_str());
     startLeft_ = !_wcsicmp(buf, L"left");
-    MLOG("menu: sticks %s, gun hand %s (at start)", swapSticks_ ? "swapped (right moves)" : "normal", startLeft_ ? "left" : "right");
+    const int defDot = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Reticle", 1, shipped.c_str()));
+    redDot_ = GetPrivateProfileIntW(L"Aim", L"Reticle", defDot, iniPath_.c_str()) != 0;
+    MLOG("menu: sticks %s, gun hand %s (at start), red dot %s", swapSticks_ ? "swapped (right moves)" : "normal",
+         startLeft_ ? "left" : "right", redDot_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
@@ -312,6 +315,7 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Comfort", L"SnapTurn", buf, iniPath_.c_str());
     WritePrivateProfileStringW(L"Controls", L"SwapSticks", swapSticks_ ? L"1" : L"0", iniPath_.c_str());
     WritePrivateProfileStringW(L"Controls", L"GunHand", startLeft_ ? L"left" : L"right", iniPath_.c_str());
+    WritePrivateProfileStringW(L"Aim", L"Reticle", redDot_ ? L"1" : L"0", iniPath_.c_str());
     WritePrivateProfileStringW(L"Hands", L"Rings", kRingModes[ringsMode_], iniPath_.c_str());
 }
 
@@ -448,6 +452,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             startLeft_ = !startLeft_;
             Save();
             MLOG("menu: gun hand -> %s", startLeft_ ? "left" : "right");
+        } else if (selected_ == kRedDot) {
+            redDot_ = !redDot_;
+            Save();
+            MLOG("menu: red dot -> %s", redDot_ ? "on" : "off");
         }
     }
     if (in.select) {
@@ -517,6 +525,8 @@ void Menu::Render() {
     ImGui::Selectable(label, selected_ == kSticks);
     snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
     ImGui::Selectable(label, selected_ == kGunHand);
+    snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");
+    ImGui::Selectable(label, selected_ == kRedDot);
     snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
     ImGui::Selectable(label, selected_ == kGunFit);
     snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);

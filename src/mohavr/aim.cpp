@@ -104,6 +104,31 @@ std::uintptr_t LocalController() {
     return player ? *reinterpret_cast<const std::uintptr_t*>(player + addr::kLocalPlayerActor) : 0;
 }
 
+// HUD.Crosshair=0: the game's crosshair (MOHAHUD.hud_cursor, a MOHAHUDCursor) is drawn only while its
+// CursorRenderingEnabled is set (read by the native Render alone) -- cleared here, and again whenever the game sets it.
+void HideGameCrosshair(std::uintptr_t ctrl) {
+    const int ho = names::PropertyOffset(ctrl, "myHUD");
+    const std::uintptr_t hud = ho >= 0 ? names::ReadPointer(ctrl + ho) : 0;
+    const int co = hud ? names::PropertyOffset(hud, "hud_cursor") : -1;
+    const std::uintptr_t cursor = co >= 0 ? names::ReadPointer(hud + co) : 0;
+    if (!cursor) return;
+    // Both its own switch and the HUD element's (MOHAHUDObj.bRender, what EnableElement sets): the game sets
+    // CursorRenderingEnabled again every frame.
+    for (const char* flag : {"bRender", "CursorRenderingEnabled"}) {
+        int off = -1;
+        std::uint32_t mask = 0;
+        if (!names::BoolProperty(cursor, flag, off, mask)) continue;
+        auto* word = reinterpret_cast<volatile std::uint32_t*>(cursor + static_cast<std::uintptr_t>(off));
+        if (!(*word & mask)) continue;
+        *word = *word & ~mask;
+        static int logged = 0;
+        if (logged < 4) {
+            ++logged;
+            MLOG("aim: the game's crosshair hidden (%s.%s off; HUD.Crosshair=0)", names::Name(cursor).c_str(), flag);
+        }
+    }
+}
+
 void Publish(float distance, std::uint32_t source) {
     if (shared::Header* hdr = bridge::SharedHeader()) {
         hdr->aimDistance = distance;
@@ -112,7 +137,7 @@ void Publish(float distance, std::uint32_t source) {
 }
 
 // Frames since the last ray log, and those whose hand read met the host mid-write (kept the last aim).
-unsigned g_frames = 0, g_torn = 0, g_near = 0;
+unsigned g_frames = 0, g_torn = 0, g_near = 0, g_triggers = 0;
 
 // The last base aim this hook gave the player (for AddSpread).
 int   g_lastAim[3] = {0, 0, 0};
@@ -216,6 +241,7 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     if (!g_installed) return;
     const shared::Header* hdr = bridge::SharedHeader();
     const std::uintptr_t pawn = LocalPawn(ctrl);
+    if (ctrl && !g_cfg.hudCrosshair) HideGameCrosshair(ctrl);
     if (!hdr || !pawn) {
         g_frame.valid = false;
         Publish(0.0f, 0);
@@ -253,14 +279,40 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     float point[3];
     std::uintptr_t actor = 0;
     bool hit = Trace(pawn, pos, end, point, &actor);
-    // A hit right at the start means the ray began inside something (headset rounds 18-19: runs of 0.0 / 0.2 m hits
-    // while walking -- the aim then pointed from the eye at the hand, and shots went "somewhere else"). Step along
-    // the ray past it, 20 cm at a time, up to 1 m.
     const float step = 20.0f * upm / 100.0f;
     float from[3] = {pos[0], pos[1], pos[2]};
-    for (int i = 1; hit && i <= 5; ++i) {
+    int stepsOn = 0;
+    for (int guard = 0; hit && guard < 12; ++guard) {
+        // Triggers: the game's own shots pass through them (Weapon.PassThroughDamage: CalcWeaponFire clears the
+        // trigger's bProjTarget and traces again) -- so does the aim (round 20: standing in Trigger_1 the ray hit it
+        // at every step and the aim went to a point 1 m ahead).
+        if (actor && (names::IsA(actor, "Trigger") || names::IsA(actor, "TriggerVolume"))) {
+            int off = -1;
+            std::uint32_t mask = 0;
+            if (names::BoolProperty(actor, "bProjTarget", off, mask)) {
+                ++g_triggers;
+                auto* word = reinterpret_cast<volatile std::uint32_t*>(actor + static_cast<std::uintptr_t>(off));
+                const std::uint32_t was = *word;
+                *word = was & ~mask;
+                const std::uintptr_t trigger = actor;
+                hit = Trace(pawn, from, end, point, &actor);
+                *word = was;
+                static int loggedTrig = 0;
+                if (loggedTrig < 6) {
+                    ++loggedTrig;
+                    MLOG("aim: passed through %s (%s), as the game's shots do%s%s", names::Name(trigger).c_str(),
+                         names::ClassName(trigger).c_str(), (was & mask) ? "" : " (its bProjTarget was already off)",
+                         hit && actor == trigger ? " -- NOT: it was hit again" : "");
+                }
+                if (!(hit && actor == trigger)) continue;  // else: step past it like anything else
+            }
+        }
+        // A hit right at the start means the ray began inside something (headset rounds 18-19: runs of 0.0 / 0.2 m
+        // hits while walking -- the aim then pointed from the eye at the hand). Step along the ray past it, 20 cm at
+        // a time, up to 1 m.
         const float fx = point[0] - from[0], fy = point[1] - from[1], fz = point[2] - from[2];
-        if (fx * fx + fy * fy + fz * fz >= step * step) break;
+        if (fx * fx + fy * fy + fz * fz >= step * step || stepsOn >= 5) break;
+        ++stepsOn;
         ++g_near;
         static int loggedNear = 0;
         static std::uintptr_t seenNear = 0;
@@ -268,9 +320,9 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
             ++loggedNear;
             seenNear = actor;
             MLOG("aim: the ray starts inside %s (%s)%s -- traced again from %d cm on", actor ? names::Name(actor).c_str() : "?",
-                 actor ? names::ClassName(actor).c_str() : "?", actor == pawn ? " = the player" : "", i * 20);
+                 actor ? names::ClassName(actor).c_str() : "?", actor == pawn ? " = the player" : "", stepsOn * 20);
         }
-        for (int k = 0; k < 3; ++k) from[k] = pos[k] + fwd[k] * step * static_cast<float>(i);
+        for (int k = 0; k < 3; ++k) from[k] = pos[k] + fwd[k] * step * static_cast<float>(stepsOn);
         hit = Trace(pawn, from, end, point, &actor);
     }
     g_frame.valid = true;
@@ -282,10 +334,10 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     static DWORD nextLog = 0;
     if (static_cast<LONG>(g_frame.tick - nextLog) >= 0) {
         nextLog = g_frame.tick + 5000;
-        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn, %u started inside)",
+        MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn, %u started inside, %u through triggers)",
              pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2], hit ? "hit" : "nothing", point[0], point[1], point[2],
-             std::sqrt(dx * dx + dy * dy + dz * dz) / upm, barrel ? "barrel" : "controller", g_torn, g_frames, g_near);
-        g_torn = g_frames = g_near = 0;
+             std::sqrt(dx * dx + dy * dy + dz * dz) / upm, barrel ? "barrel" : "controller", g_torn, g_frames, g_near, g_triggers);
+        g_torn = g_frames = g_near = g_triggers = 0;
     }
 }
 

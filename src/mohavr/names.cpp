@@ -88,6 +88,56 @@ int PropertyOffset(std::uintptr_t object, const char* name) {
     return off;
 }
 
+bool BoolProperty(std::uintptr_t object, const char* name, int& offset, std::uint32_t& mask) {
+    struct Entry { std::uintptr_t cls; std::string name; int offset; std::uint32_t mask; };
+    static std::vector<Entry> cache;
+    static int maskAt = -1;  // UBoolProperty::BitMask's offset in the property object (found once)
+    const std::uintptr_t cls = ReadPtr(object + addr::kObjectClass);
+    if (!cls) return false;
+    for (const Entry& e : cache)
+        if (e.cls == cls && e.name == name) {
+            offset = e.offset;
+            mask = e.mask;
+            return e.offset >= 0;
+        }
+    Entry entry{cls, name, -1, 0};
+    const std::uintptr_t f = FindFieldProbe(cls, name);
+    if (f && ClassName(f) == "BoolProperty") {
+        const int off = static_cast<int>(ReadPtr(f + addr::kPropertyOffset));
+        if (maskAt < 0) {
+            // The BitMask: the word where this property and another bool in the same word each hold a different
+            // single bit (the struct that declares it lists them next to each other).
+            std::uintptr_t owner = cls;
+            for (int depth = 0; owner && maskAt < 0 && depth < 64; owner = ReadPtr(owner + addr::kFieldSuper), ++depth) {
+                int count = 0;
+                for (std::uintptr_t g = ReadPtr(owner + addr::kStructChildren); g && maskAt < 0 && count < 20000;
+                     g = ReadPtr(g + addr::kFieldNext), ++count) {
+                    if (g == f || static_cast<int>(ReadPtr(g + addr::kPropertyOffset)) != off || ClassName(g) != "BoolProperty") continue;
+                    for (int k = static_cast<int>(addr::kPropertyOffset) + 4; k < 0xC0; k += 4) {
+                        const std::uint32_t a = static_cast<std::uint32_t>(ReadPtr(f + k)), b = static_cast<std::uint32_t>(ReadPtr(g + k));
+                        if (a && b && a != b && !(a & (a - 1)) && !(b & (b - 1))) {
+                            maskAt = k;
+                            MLOG("reflect: BoolProperty.BitMask at +0x%X (%s 0x%X, %s 0x%X)", k, name, a, Name(g).c_str(), b);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        const std::uint32_t m = maskAt > 0 ? static_cast<std::uint32_t>(ReadPtr(f + maskAt)) : 0;
+        if (off >= 0 && off < 0x10000 && m && !(m & (m - 1))) {
+            entry.offset = off;
+            entry.mask = m;
+        }
+    }
+    cache.push_back(entry);
+    MLOG("reflect: %s.%s (bool) at %s0x%X mask 0x%X", Name(cls).c_str(), name, entry.offset < 0 ? "(none) " : "",
+         entry.offset < 0 ? 0 : entry.offset, entry.mask);
+    offset = entry.offset;
+    mask = entry.mask;
+    return entry.offset >= 0;
+}
+
 std::uintptr_t ReadPointer(std::uintptr_t at) { return ReadPtr(at); }
 
 bool IsA(std::uintptr_t object, const char* className) {

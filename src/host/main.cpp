@@ -376,7 +376,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
         MLOG("host: actions attached (menu%s; Touch, Index, simple controller)", controllers ? " + gameplay pad" : "");
     }
-    // M7: the aim poses (for the game's aim) and the reticle ([Aim] Reticle, ReticleSize in degrees).
+    // M7: the aim poses (for the game's aim) and the reticle (ReticleSize in degrees; shown per the menu's Red dot,
+    // whose default is the shipped [Aim] Reticle).
     const bool handsOk = controllers && pad.CreateSpaces(session);
     mohavr::host::Reticle reticle;
     bool reticleOk = false;
@@ -385,7 +386,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"Aim", L"ReticleSize", L"0.8", v, 16, ini.c_str());
         const float deg = static_cast<float>(_wtof(v));
-        if (handsOk && GetPrivateProfileIntW(L"Aim", L"Reticle", 1, ini.c_str()) != 0)
+        if (handsOk)
             reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
     }
     XrPosef handPose[2] = {};
@@ -909,7 +910,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             layerCount = 1;
             // M7: the reticle where the shot will land, along the aiming hand's ray (gameplay only).
             // Shown with the menu open too, so the Gun fit page can line the barrel up with it.
-            if (reticleOk && lastMeta.hasView && menuHeadOk) {
+            if (reticleOk && lastMeta.hasView && menuHeadOk && (!menuOk || menu.RedDot())) {
                 const std::uint32_t src = g_hdr->aimSource;
                 const float d = g_hdr->aimDistance;
                 if (src == 2 || src == 3) {

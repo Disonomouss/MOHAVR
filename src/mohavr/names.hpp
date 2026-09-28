@@ -19,6 +19,8 @@ std::uintptr_t Outer(std::uintptr_t object);
 // The byte offset of `object`'s script property `name` (searched through its class and supers; cached per class),
 // or -1 if its class has no such property. Game thread.
 int PropertyOffset(std::uintptr_t object, const char* name);
+// A script bool (a bit in a word): its word's offset in `object` and its bit (cached per class); false if none.
+bool BoolProperty(std::uintptr_t object, const char* name, int& offset, std::uint32_t& mask);
 // Reads a pointer / 3 floats at `object + offset`; false if unreadable.
 std::uintptr_t ReadPointer(std::uintptr_t at);
 bool ReadVector(std::uintptr_t at, float (&v)[3]);

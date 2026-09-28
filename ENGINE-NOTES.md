@@ -719,6 +719,24 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   onto its new direction -- smooth at the shoulder and the elbow. VM_Arms: upper arm + 1 ArmRoll, forearm + 5
   ForeArmRoll per side.
 
+## 5aa. Triggers, the HUD crosshair, bool properties (2026-09-28, round 20 -> 21)
+
+- **What the aim ray started inside (round 20 log):** `Trigger` actors. The game's own shots pass through them:
+  `Weapon.CalcWeaponFire` asks `PassThroughDamage(HitActor)` (= `IsA('Trigger') || IsA('TriggerVolume')`), clears the
+  trigger's `bProjTarget`, traces again from the hit, and sets it back. The aim does the same (Trigger.bProjTarget:
+  +0x78 mask 0x40000), then steps past anything else it starts inside.
+- **UBoolProperty.BitMask at +0x80** (found at run time from two bools sharing a word: CursorRenderingEnabled 0x2 /
+  bSprintedLastTick 0x1; bRender 0x2 / bFadeOut 0x1). `names::BoolProperty` returns a bool's word offset and bit.
+- **The crosshair:** `MOHAHUD.hud_cursor` (MOHAHUDCursor; `PlayerController.myHUD` by reflection). Its
+  `CursorRenderingEnabled` (+0x108 mask 0x2) is read only by the native Render and the game sets it again every frame;
+  `MOHAHUDObj.bRender` (+0x64 mask 0x2, what EnableElement sets; single player never calls it for the cursor). Both are
+  cleared each view (`HUD.Crosshair=0`). Verified in the game's backbuffer (HUD.Mode=0): the bars are gone.
+- **The free arm with a pistol or grenade** starts from the arms' pose captured with the free hand's long-gun grip
+  (`Weapon.FreeArmPose=1`): the pistol's own left arm is far from the hand, and its nearly straight pose gave the
+  elbow's bend direction from noise. The bend now counts the game's bend only as far as its arm is bent (full at 25%
+  of the upper arm's length off the shoulder-wrist line), otherwise down and a little out; the forearm roll bones'
+  twist is unwrapped frame to frame and held within 150 degrees.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

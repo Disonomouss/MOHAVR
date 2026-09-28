@@ -56,6 +56,7 @@ public:
     bool GunInHand() const { return gunInHand_; }
     // Controls (the player's, saved): right stick moves / left turns; the gun hand at start (a draw changes it).
     bool SwapSticks() const { return swapSticks_; }
+    bool RedDot() const { return redDot_; }  // the reticle shown (the player's; default the shipped [Aim] Reticle)
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
     // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
     void LoadHolsters(const HolsterSpot (&defaults)[kHolsters]);
@@ -87,7 +88,7 @@ private:
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
-    int                     width_ = 1024, height_ = 820;
+    int                     width_ = 1024, height_ = 860;
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
     bool                    visible_ = false;
@@ -108,7 +109,7 @@ private:
     std::string             weaponKey_;               // the weapon in hand ("" none)
     shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
-    bool                    swapSticks_ = false, startLeft_ = false;
+    bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true;
 };
 
 }  // namespace mohavr::host

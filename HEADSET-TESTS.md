@@ -791,6 +791,41 @@ at the hand.
 3. The elbow: still twisted? Both arms, with each weapon. (yes / describe)
 4. Anything else odd? (describe)
 
+**Answers:** 1 "Yes, make red dot toggle for menu. Also, can we remove the in game crosshair?" · 2 "Better" · 3 "Yes,
+with pistol, arm is constantly twisting and jittering."
+
+**Log received:** yes, `logs/modlogs/20260928-201303-MOHAVR.log`. The ray started inside **Trigger** actors
+(`Trigger_1`, `Var_Flk_Global_Aff_Trigger_8`): standing in one, every 20 cm step hit it again and the aim point
+ended 1 m out (3610 "started inside" in one 5-s line); otherwise StaticMeshActors of the level (stepped out of).
+
+**Verdict:** shots PASSED (the player); shoulders better; pistol arm FAILED (round 21).
+
+---
+
+## Round 21: prepared 2026-09-28, red dot switch, no game crosshair, a steady free arm with the pistol
+**Changed:**
+- **Menu: Red dot** on/off (saved as yours).
+- **The game's own crosshair is hidden** (`HUD.Crosshair=0`; 1 brings it back).
+- **Shots:** the aim passes through the game's trigger zones, exactly as the game's own bullets do (your log showed
+  standing inside one sent the aim to a point 1 m ahead).
+- **Free arm with the pistol / grenade:** it now starts from the rifle's arm pose instead of the pistol's own
+  (`Weapon.FreeArmPose=1`); the elbow no longer takes its bend from a nearly straight pose (noise flipped it), and
+  the forearm's twist no longer flips side to side near 180 degrees.
+- [S]: red dot off/on from the menu; the crosshair's bars gone from the game's image (`logs/shots/r21-xh-zoom.png`);
+  the aim passes through `Trigger_1` in the landing area; the free arm with the pistol moves 3.7x less between
+  frames (0.82 vs 3.00 mean pixel change, hands held still) and sits straighter (`logs/shots/r21-arm-ab.png`).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Menu -> Red dot: off and on again.
+2. Pistol: hold it and move/twist both controllers; watch both arms. Then the grenade.
+3. Shoot as usual.
+
+**Questions:**
+1. Red dot toggle works, and the game's crosshair is gone? (yes/no)
+2. Pistol: any twisting or jitter left, in which arm? (yes/no, describe)
+3. Shots still on the red dot? (yes/no)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

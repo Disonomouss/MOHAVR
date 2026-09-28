@@ -116,7 +116,10 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 20** (deployed): the aim ray steps out of whatever it starts inside (round 19's log: runs of
+2. **HEADSET-TESTS round 21** (deployed): menu Red dot switch, the game's crosshair hidden (`HUD.Crosshair`), the aim
+   passes through triggers like the game's bullets, the free arm with a pistol/grenade from the rifle's arm pose
+   (`Weapon.FreeArmPose`), steadier elbow bend and forearm twist. Round 20: shots passed, shoulders better, the elbow
+   hinge (`Weapon.ElbowHinge=2`). Round 20 as deployed: the aim ray steps out of whatever it starts inside (round 19's log: runs of
    0.2 m hits while walking with the BAR; the lock had 0 torn reads), `ShoulderWidth` 30, `FreeHand` default tilt 180
    (the player's fix). Round 19: shots kept on the red dot (the shared view lock held only for the copies,
    readers retry and keep the last frame; the aim trace ignores volumes and re-traces past a start inside geometry),
