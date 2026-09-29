@@ -40,6 +40,23 @@ M4 Frame(const float (&x)[3], const float (&y)[3], const float (&z)[3], const fl
     return M4{{{x[0], x[1], x[2], 0.0f}, {y[0], y[1], y[2], 0.0f}, {z[0], z[1], z[2], 0.0f}, {t[0], t[1], t[2], 1.0f}}};
 }
 
+// The reflection across the plane through p with unit normal n (row vectors: x' = x - 2((x - p).n) n); its own inverse.
+M4 Reflection(const float (&p)[3], const float (&n)[3]) {
+    M4 r{};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) r.m[i][j] = (i == j ? 1.0f : 0.0f) - 2.0f * n[i] * n[j];
+    const float pn = p[0] * n[0] + p[1] * n[1] + p[2] * n[2];
+    for (int j = 0; j < 3; ++j) r.m[3][j] = 2.0f * pn * n[j];
+    r.m[3][3] = 1.0f;
+    return r;
+}
+// A frame seen in the mirror, kept right-handed: its own Y axis flipped, then the world reflected.
+M4 MirrorFrame(const M4& f, const M4& r) {
+    M4 flipped = f;
+    for (int j = 0; j < 4; ++j) flipped.m[1][j] = -flipped.m[1][j];
+    return Mul(flipped, r);
+}
+
 M4 RigidInverse(const M4& a) {
     M4 r{};
     for (int i = 0; i < 3; ++i)
@@ -92,7 +109,34 @@ struct State {
     // Arm IK: the gun's frame and the other (off) controller's frame in the world (rows: forward, right, up, origin).
     M4    gunFrame, offFrame;
     bool  offValid, twoHanded;
+    // Weapon.LeftHandMirror: with the gun in the left hand everything above is in a mirror world (reflected across the
+    // body's centre plane: the left controller acts as a right hand), and the parts are drawn through `mirror`.
+    bool  mirrored;
+    M4    mirror;
+    // The player's pawn and its frame (location and yaw; the arms' LocalToWorld moves with it) at this view: the next
+    // tick's bake carries the move and the hand frames along with the body's move since (Weapon.CatchUp).
+    std::uintptr_t pawn;
+    M4    pawnFrame;
 } g_state{};
+
+M4 PawnFrame(std::uintptr_t pawn) {
+    const float* loc = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    const float yaw = static_cast<float>(*reinterpret_cast<const int*>(pawn + addr::kActorRotation + 4)) * (3.14159265f / 32768.0f);
+    const float c = std::cos(yaw), s = std::sin(yaw);
+    const float x[3] = {c, s, 0.0f}, y[3] = {-s, c, 0.0f}, z[3] = {0.0f, 0.0f, 1.0f}, t[3] = {loc[0], loc[1], loc[2]};
+    return Frame(x, y, z, t);
+}
+
+bool g_cullOk = false;  // the determinant's readers hold the pinned bytes (Install)
+
+// A mirrored part draws inside-out unless its proxy's LocalToWorldDeterminant is negative (addresses.hpp): set its sign
+// (never flip it -- this runs for both eyes and every pass), for first-person parts only.
+void SetDeterminantSign(std::uint8_t* proxy, bool negative) {
+    if (!g_cullOk) return;
+    float& det = *reinterpret_cast<float*>(proxy + addr::kProxyLocalToWorldDeterminant);
+    const float mag = std::fabs(det) > 1e-6f ? std::fabs(det) : 1.0f;
+    det = negative ? -mag : mag;
+}
 
 void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void* view, M4* outL2W, M4* outW2L) {
     const auto comp = *reinterpret_cast<const std::uintptr_t*>(proxy + addr::kProxyComponent);
@@ -102,21 +146,28 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
     AcquireSRWLockShared(&g_lock);
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
+    const bool mirrorNow = fov != 0.0f && s.mirrored && s.valid && GetTickCount() - s.tick <= 250;
+    if (fov != 0.0f) SetDeterminantSign(proxy, mirrorNow);
     const M4& l2w = *reinterpret_cast<const M4*>(proxy + addr::kProxyLocalToWorld);
     const M4& w2l = *reinterpret_cast<const M4*>(proxy + addr::kProxyWorldToLocal);
     if (fov != 0.0f && armsik::IsBaked(comp)) {
         // The move (and the arms' IK) is already in this part's bone matrices, from the same frame for the arms and
-        // the gun: drawn where it is, without the flat-screen FOV trick.
-        *outL2W = l2w;
-        *outW2L = w2l;
+        // the gun: drawn where it is, without the flat-screen FOV trick -- through the mirror in left-hand mode.
+        if (mirrorNow) {
+            *outL2W = Mul(l2w, s.mirror);
+            *outW2L = Mul(s.mirror, w2l);
+        } else {
+            *outL2W = l2w;
+            *outW2L = w2l;
+        }
         return;
     }
     if (fov == 0.0f || !s.valid || GetTickCount() - s.tick > 250) {
         g_hook.thiscall<void>(proxy, view, outL2W, outW2L);  // not the first-person model, or not the player's view
         return;
     }
-    *outL2W = Mul(l2w, s.d);
-    *outW2L = Mul(s.dInv, w2l);
+    *outL2W = mirrorNow ? Mul(Mul(l2w, s.d), s.mirror) : Mul(l2w, s.d);
+    *outW2L = mirrorNow ? Mul(Mul(s.mirror, s.dInv), w2l) : Mul(s.dInv, w2l);
 
     // Calibration: where the first-person parts sit in the game camera's frame (Weapon.GripX/Y/Z).
     static DWORD nextLog = 0;
@@ -135,23 +186,31 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
 }
 
 SafetyHookMid g_activityHook;
-unsigned      g_sprintSwaps = 0;
+unsigned      g_sprintSwaps = 0, g_walkSwaps = 0;
 
 // Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
 // lock on top of it jittered and missed sprints): the first-person arms' activity node ticks with EAX = the pawn's
 // CurrentActivity (addresses.hpp). For the local player's own arms, sprint (2) becomes idle (0) or walk (1), so they
 // never blend into the <weapon>_sprint loop; the gun (on the arms' RightGun socket) and the game camera (FPArms' Cam
 // socket) follow. The pawn still sprints -- speed, zoom, blur and sound come from its Stand_Sprint state, not this node.
+// Weapon.WalkArms (round 25: "slight jitter in general movement ... a slight rubber banding feeling"): walking (1) and
+// crouch-walking (3) become idle too. The walk and run loops sway the Cam socket -- the game camera, which the VR view is
+// built on -- up to 3 cm side to side, 1.6 cm up and down and 2 cm fore and aft (ENGINE-NOTES 5ah), and the gun 3-9 cm in
+// the hand. Crouch-idle is activity 0 as well; footsteps run on a timer, not on the animation.
 void OnActivityTick(SafetyHookContext& ctx) {
-    if (ctx.eax != 2) return;  // PLAYER_ACTIVITY_STAND_SPRINT
+    const bool sprint = ctx.eax == 2 && g_cfg.sprintArms != 0;               // PLAYER_ACTIVITY_STAND_SPRINT
+    const bool walk = (ctx.eax == 1 || ctx.eax == 3) && g_cfg.walkArms;  // PLAYER_ACTIVITY_STAND_WALK, _CROUCH_WALK
+    if (!sprint && !walk) return;
     const std::uintptr_t pawn = ctx.edi;
     if (!pawn || pawn != aim::LocalPlayerPawn()) return;
     const int ao = names::PropertyOffset(pawn, "FPArms");
     if (ao < 0 || names::ReadPointer(pawn + ao) != ctx.ebx) return;  // the first-person arms' tree only
-    const std::uintptr_t to = g_cfg.sprintArms == 1 ? 1u : 0u;
-    if (*reinterpret_cast<const int*>(ctx.esi + addr::kActivityNodeActiveChild) != static_cast<int>(to) && g_sprintSwaps < 20) {
-        ++g_sprintSwaps;  // a sprint starting (the node is about to blend)
-        MLOG("viewmodel: sprinting -- the arms play %s instead of the sprint animation (Weapon.SprintArms)", to ? "walk" : "idle");
+    const std::uintptr_t to = sprint && g_cfg.sprintArms == 1 ? 1u : 0u;
+    unsigned& swaps = sprint ? g_sprintSwaps : g_walkSwaps;
+    if (*reinterpret_cast<const int*>(ctx.esi + addr::kActivityNodeActiveChild) != static_cast<int>(to) && swaps < 20) {
+        ++swaps;  // a sprint or walk starting (the node is about to blend)
+        MLOG("viewmodel: %s -- the arms play %s instead of the %s animation (Weapon.%s)", sprint ? "sprinting" : "walking",
+             to ? "walk" : "idle", sprint ? "sprint" : "walk", sprint ? "SprintArms" : "WalkArms");
     }
     ctx.eax = to;
 }
@@ -160,23 +219,24 @@ void OnActivityTick(SafetyHookContext& ctx) {
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
-    // Weapon.SprintArms is its own switch: it works whatever Weapon.ViewModel is (the game camera's sprint shake comes from
-    // the arms too).
-    if (cfg.sprintArms != 0) {
+    // Weapon.SprintArms and WalkArms are their own switches: they work whatever Weapon.ViewModel is (the game camera's
+    // sprint shake and walk sway come from the arms too).
+    if (cfg.sprintArms != 0 || cfg.walkArms) {
         // Standing rule 4: the load of CurrentActivity and the compare the MidHook replaces.
         if (patch::BytesMatch(addr::kActivityTickLoad, addr::kActivityTickLoadBytes, sizeof(addr::kActivityTickLoadBytes)) &&
             patch::BytesMatch(addr::kActivityTickCmp, addr::kActivityTickCmpBytes, sizeof(addr::kActivityTickCmpBytes))) {
             auto mid = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kActivityTickCmp), OnActivityTick);
             if (mid) {
                 g_activityHook = std::move(*mid);
-                MLOG("viewmodel: Weapon.SprintArms=%s -- the arms' activity tick hooked at 0x%08X", cfg.sprintArms == 1 ? "walk" : "idle",
+                MLOG("viewmodel: Weapon.SprintArms=%s WalkArms=%s -- the arms' activity tick hooked at 0x%08X",
+                     cfg.sprintArms == 0 ? "game" : cfg.sprintArms == 1 ? "walk" : "idle", cfg.walkArms ? "idle" : "game",
                      static_cast<unsigned>(addr::kActivityTickCmp));
             } else {
-                MLOG("viewmodel: activity tick hook failed (error %d) -- the game's sprint animation stays",
+                MLOG("viewmodel: activity tick hook failed (error %d) -- the game's sprint and walk animations stay",
                      static_cast<int>(mid.error().type));
             }
         } else {
-            MLOG("viewmodel: activity tick bytes differ -- the game's sprint animation stays");
+            MLOG("viewmodel: activity tick bytes differ -- the game's sprint and walk animations stay");
         }
     }
     if (cfg.viewModel == 0) {
@@ -195,6 +255,15 @@ bool Install(const Config& cfg) {
     }
     g_hook = std::move(*res);
     g_installed = true;
+    if (g_cfg.leftHandMirror) {
+        // Standing rule 4: the three reads of the proxy's determinant the mirror's culling depends on.
+        g_cullOk = patch::BytesMatch(addr::kProxyDetReaderDraw, addr::kProxyDetReaderBytes, sizeof(addr::kProxyDetReaderBytes)) &&
+                   patch::BytesMatch(addr::kProxyDetReaderDecalA, addr::kProxyDetReaderBytes, sizeof(addr::kProxyDetReaderBytes)) &&
+                   patch::BytesMatch(addr::kProxyDetReaderDecalB, addr::kProxyDetReaderBytes, sizeof(addr::kProxyDetReaderBytes));
+        if (!g_cullOk) g_cfg.leftHandMirror = false;
+        MLOG("viewmodel: Weapon.LeftHandMirror=1 -- %s", g_cullOk ? "with the gun in the left hand, the arms and gun are drawn mirrored"
+                                                                   : "the culling reads differ: no mirroring");
+    }
     MLOG("viewmodel: Weapon.ViewModel=%d (%s) -- proxy transform hooked at 0x%08X; grip %.1f %.1f %.1f", cfg.viewModel,
          cfg.viewModel == 1 ? "true 3D" : "in the aiming hand", static_cast<unsigned>(addr::kViewModelTransform), cfg.gripX,
          cfg.gripY, cfg.gripZ);
@@ -346,8 +415,8 @@ void OnPlayerView() {
     const M4 camInv = RigidInverse(cam);
 
     M4 d{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}}, dInv = d;  // ViewModel=1: where the game put it
-    M4 gunFrameNow = d, offFrameNow = d;
-    bool offValidNow = false, twoHandedNow = false;
+    M4 gunFrameNow = d, offFrameNow = d, mirror = d;
+    bool offValidNow = false, twoHandedNow = false, mirroredNow = false;
     if (g_cfg.viewModel != 2) g_line.valid = false;
     if (g_cfg.viewModel == 2) {
         // The host works the gun out from both hands (hands.cpp: the gun hand, the foregrip, the fit's angle and aim
@@ -370,7 +439,18 @@ void OnPlayerView() {
         // The camera-frame grip point lands on the controller: the gun frame's origin is moved back by it.
         float t[3];
         for (int i = 0; i < 3; ++i) t[i] = pos[i] - (fit.grip[0] * gf[i] + fit.grip[1] * gr[i] + fit.grip[2] * gu[i]);
-        const M4 gunFrame = Frame(gf, gr, gu, t);
+        M4 gunFrame = Frame(gf, gr, gu, t);
+        // Weapon.LeftHandMirror (round 25: in left-hand mode the right arm reached across the chest to the gun): with the
+        // gun in the left hand, work in a mirror world -- reflected across the body's centre plane (through the head,
+        // across the body's right axis) -- where the left controller is a right hand and the game's right-handed
+        // animations and the arm IK apply as they are; the parts are drawn back through the mirror (the proxy hook).
+        float head[3], hyaw = 0.0f, hupm = 100.0f;
+        if (g_cfg.leftHandMirror && (flags & 4u) && view::HeadInWorld(head, hyaw, hupm)) {
+            const float n[3] = {-sy, cy, 0.0f};  // the body's right axis (the game camera's yaw)
+            mirror = Reflection(head, n);
+            gunFrame = MirrorFrame(gunFrame, mirror);
+            mirroredNow = true;
+        }
         d = Mul(camInv, gunFrame);
         dInv = Mul(RigidInverse(gunFrame), cam);
         // The aim line: the host's, mapped the same way.
@@ -391,6 +471,7 @@ void OnPlayerView() {
         }
         // For the arm IK: the gun's frame, and the other controller's (the free hand follows it off the foregrip).
         gunFrameNow = Frame(gf, gr, gu, pos);  // the gun hand's controller frame (its origin at the controller)
+        if (mirroredNow) gunFrameNow = MirrorFrame(gunFrameNow, mirror);
         twoHandedNow = (flags & 2u) != 0;
         shared::Pose hand[2];
         std::uint32_t hv = 0;
@@ -398,14 +479,21 @@ void OnPlayerView() {
         float opos[3], oaxes[3][3], oupm = 100.0f;
         if (shared::ReadHands(hdr, hand, hv) && (hv & (1u << o)) && view::PoseFrameToWorld(hand[o], opos, oaxes, oupm)) {
             offFrameNow = Frame(oaxes[0], oaxes[1], oaxes[2], opos);
+            if (mirroredNow) offFrameNow = MirrorFrame(offFrameNow, mirror);
             offValidNow = true;
         }
     }
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const M4 pawnFrame = pawn ? PawnFrame(pawn) : d;
     AcquireSRWLockExclusive(&g_lock);
     g_state.gunFrame = gunFrameNow;
     g_state.offFrame = offFrameNow;
     g_state.offValid = offValidNow;
     g_state.twoHanded = twoHandedNow;
+    g_state.mirrored = mirroredNow;
+    g_state.mirror = mirror;
+    g_state.pawn = pawn;
+    g_state.pawnFrame = pawnFrame;
     g_state.valid = true;
     g_state.tick = GetTickCount();
     g_state.d = d;
@@ -413,6 +501,14 @@ void OnPlayerView() {
     g_state.camInv = camInv;
     ReleaseSRWLockExclusive(&g_lock);
 }
+bool Mirrored() {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    AcquireSRWLockShared(&g_lock);
+    const bool m = g_state.valid && g_state.mirrored;
+    ReleaseSRWLockShared(&g_lock);
+    return m;
+}
+
 bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHanded) {
     if (!g_installed || g_cfg.viewModel != 2) return false;
     State s;
@@ -436,6 +532,23 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     if (!s.valid || GetTickCount() - s.tick > 250) return false;
     std::memcpy(d, s.d.m, sizeof(d));
     std::memcpy(dInv, s.dInv.m, sizeof(dInv));
+    return true;
+}
+
+bool BodyMoveSinceView(float (&w)[16]) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!s.valid || !s.pawn || pawn != s.pawn || GetTickCount() - s.tick > 250) return false;
+    const M4 now = PawnFrame(pawn);
+    // More than a frame's walk isn't one (a teleport, a respawn at the same pawn): no catch-up.
+    const float dx = now.m[3][0] - s.pawnFrame.m[3][0], dy = now.m[3][1] - s.pawnFrame.m[3][1], dz = now.m[3][2] - s.pawnFrame.m[3][2];
+    if (dx * dx + dy * dy + dz * dz > 100.0f * 100.0f) return false;
+    const M4 m = Mul(RigidInverse(s.pawnFrame), now);
+    std::memcpy(w, m.m, sizeof(w));
     return true;
 }
 

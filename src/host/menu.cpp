@@ -17,7 +17,7 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kRedDot, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kRedDot, kPacing, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -151,8 +151,13 @@ void Menu::ApplySavedSettings() {
     startLeft_ = !_wcsicmp(buf, L"left");
     const int defDot = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Reticle", 1, shipped.c_str()));
     redDot_ = GetPrivateProfileIntW(L"Aim", L"Reticle", defDot, iniPath_.c_str()) != 0;
-    MLOG("menu: sticks %s, gun hand %s (at start), red dot %s", swapSticks_ ? "swapped (right moves)" : "normal",
-         startLeft_ ? "left" : "right", redDot_ ? "on" : "off");
+    // Frame pacing (round 25): the shipped [Bridge] Pace is the default; the player's own only once they toggle it (so
+    // a later shipped default isn't pinned). Live: the game reads hdr->pace every Draw.
+    const int defPace = static_cast<int>(GetPrivateProfileIntW(L"Bridge", L"Pace", 0, shipped.c_str()));
+    pacing_ = GetPrivateProfileIntW(L"Bridge", L"Pace", defPace, iniPath_.c_str()) != 0;
+    if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
+    MLOG("menu: sticks %s, gun hand %s (at start), red dot %s, frame pacing %s", swapSticks_ ? "swapped (right moves)" : "normal",
+         startLeft_ ? "left" : "right", redDot_ ? "on" : "off", pacing_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
@@ -456,6 +461,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             redDot_ = !redDot_;
             Save();
             MLOG("menu: red dot -> %s", redDot_ ? "on" : "off");
+        } else if (selected_ == kPacing) {
+            pacing_ = !pacing_;
+            if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Bridge", L"Pace", pacing_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: frame pacing -> %s", pacing_ ? "on (one game frame per headset frame)" : "off (the game runs uncapped)");
         }
     }
     if (in.select) {
@@ -527,6 +537,11 @@ void Menu::Render() {
     ImGui::Selectable(label, selected_ == kGunHand);
     snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");
     ImGui::Selectable(label, selected_ == kRedDot);
+    snprintf(label, sizeof(label), "Frame pacing     <  %s  >", pacing_ ? "on" : "off");
+    ImGui::Selectable(label, selected_ == kPacing);
+    ImGui::PushFont(nullptr, 28.0f);
+    ImGui::TextDisabled("   on = one game frame per headset frame");
+    ImGui::PopFont();
     snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
     ImGui::Selectable(label, selected_ == kGunFit);
     snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);

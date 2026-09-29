@@ -31,4 +31,16 @@ void OnPresent(IDirect3DDevice9* device);
 void OnBeforeReset();
 void OnAfterReset(unsigned width, unsigned height);
 
+// Frame pacing (hdr->pace, the host menu's Frame pacing; vr_view.cpp, game thread): the host's frame event --
+// auto-reset, set once per headset frame, just after the host wrote that frame's poses and took the last game frame.
+// 1 when it came within `timeoutMs`, 0 on a timeout, -1 with no host running (no wait).
+int WaitHostFrame(unsigned timeoutMs);
+bool HostRunning();
+// The Draw hook that paces is installed: while hdr->pace is on, a frame is published even when the host hasn't taken
+// the last one yet (it takes the newest).
+void SetPacingAvailable(bool on);
+// OnPresent calls so far (render thread; counted after the frame's publish), and a wait until they reach `target`.
+std::uint32_t PresentsSeen();
+bool WaitPresents(std::uint32_t target, unsigned timeoutMs);
+
 }  // namespace mohavr::bridge

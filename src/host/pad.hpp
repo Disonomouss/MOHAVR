@@ -53,6 +53,10 @@ public:
     // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch[,roll]" = that hand at x right, y up, z ahead
     // (metres, heading frame); "aim=off" = both real again.
     std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
+    // Hands.HoldLost: a hand that lost tracking keeps its last pose relative to the head's position and heading (not its
+    // pitch: a held gun doesn't swing when you look up or down) until it's tracked again. Returns the held bits (OR them
+    // into the valid bits). "lost=l|r|both|none" in pad_cmd.txt makes a hand lose tracking, for tests.
+    std::uint32_t HoldLost(const XrPosef& head, XrPosef (&pose)[2], std::uint32_t valid);
 
     // M8 (hands.cpp): a hand's squeeze 0..1 (a raw test state's while one plays); grips a gesture used are kept
     // from the mapping until released; a short haptic pulse.
@@ -102,6 +106,10 @@ private:
     XrAction    haptic_[2]{};          // left, right vibration
     struct TestPose { bool on; float x, y, z, yaw, pitch, roll; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
+    bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking
+    bool        holdLost_ = true;      // [Hands] HoldLost
+    XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading
+    bool        haveRel_[2]{}, heldNow_[2]{};
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
     bool        testThrow_ = false;
     float       testThrowVel_[3]{};

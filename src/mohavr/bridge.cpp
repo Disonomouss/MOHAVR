@@ -5,6 +5,8 @@
 #include <d3d9on12.h>
 #include <d3d12.h>
 
+#include <atomic>
+#include <cmath>
 #include <string>
 
 #include "../common/shared_frame.hpp"
@@ -39,6 +41,53 @@ bool                        g_paused     = false;  // backbuffer size changed by
 // Reset runs on the main thread, Present on the render thread (ENGINE-NOTES 5e): g_rt is shared.
 CRITICAL_SECTION            g_rtLock;
 bool                        g_rtLockInit = false;
+
+// Frame pacing (hdr->pace): the host's frame event (Local\MOHAVR_Frame_<pid>, created here, set by the host), and the
+// Presents seen.
+HANDLE                      g_frameEvent   = nullptr;
+HANDLE                      g_presentEvent = nullptr;  // auto-reset, set after each OnPresent
+std::atomic<std::uint32_t>  g_presentsSeen{0};
+bool                        g_pacingHooked = false;    // the Draw hook that paces is in (SetPacingAvailable)
+
+double QpcMs(LONGLONG q) {
+    static LARGE_INTEGER f{};
+    if (!f.QuadPart) QueryPerformanceFrequency(&f);
+    return 1000.0 * static_cast<double>(q) / static_cast<double>(f.QuadPart);
+}
+
+// Diagnostics (round 25, "slight jitter in general movement"): per published frame -- which is what the headset shows,
+// one after the other -- the game time between their views (the world's step per shown frame) and how many game frames
+// were committed for it; logged every 10 s.
+void NotePublished(const view::PresentedFrameInfo& info) {
+    static LONGLONG lastQpc = 0;
+    static std::uint32_t lastSerial = 0;
+    static double sum = 0.0, sum2 = 0.0, lo = 1e9, hi = 0.0, since = 0.0;
+    static long n = 0, gameFrames = 0;
+    if (!info.qpc) return;
+    if (lastQpc && info.serial != lastSerial) {
+        const double step = QpcMs(info.qpc - lastQpc);
+        if (step > 0.0 && step < 250.0) {
+            sum += step;
+            sum2 += step * step;
+            lo = step < lo ? step : lo;
+            hi = step > hi ? step : hi;
+            ++n;
+            gameFrames += static_cast<long>(info.serial - lastSerial);
+            since += step;
+        }
+    }
+    lastQpc = info.qpc;
+    lastSerial = info.serial;
+    if (since >= 10000.0 && n > 0) {
+        const double mean = sum / n, sd = std::sqrt(std::fmax(0.0, sum2 / n - mean * mean));
+        MLOG("bridge: %ld frames shown in %.1f s -- the world stepped %.2f ms a frame (%.2f..%.2f, sd %.2f), %.2f game frames "
+             "each (paced %d)", n, since / 1000.0, mean, lo, hi, sd, static_cast<double>(gameFrames) / n, info.paced ? 1 : 0);
+        sum = sum2 = since = 0.0;
+        lo = 1e9;
+        hi = 0.0;
+        n = gameFrames = 0;
+    }
+}
 
 struct RtGuard {
     RtGuard() { EnterCriticalSection(&g_rtLock); }
@@ -139,7 +188,11 @@ void Publish(IDirect3DDevice9* dev) {
         reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), 0, 0));
     const std::uint64_t ack = static_cast<std::uint64_t>(InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), 0, 0));
-    if (ack != published) return;  // host hasn't taken the last frame yet: skip, never block
+    // Uncapped: only once the host has taken the last frame (the rest are skipped, never blocking). Paced: every frame is
+    // one the headset should show -- one the host hasn't taken yet doesn't hold this one back (it takes the newest; the
+    // ring's GPU waits keep the slots safe), up to the ring's depth (shared_frame.hpp).
+    const bool paced = g_pacingHooked && g_hdr->pace != 0;
+    if (paced ? published - ack >= kRing : ack != published) return;
 
     const std::uint64_t n = published + 1;
     const UINT slot = static_cast<UINT>(n % kRing);
@@ -183,9 +236,12 @@ void Publish(IDirect3DDevice9* dev) {
 
     // The pose/FOV this image was rendered with (M3); the host submits it with exactly these.
     shared::SlotMeta meta{};
-    view::MetaForPresentedFrame(meta);
+    view::PresentedFrameInfo info{};
+    view::MetaForPresentedFrame(meta, &info);
     g_hdr->slotMeta[slot] = meta;
+    g_hdr->slotViewQpc[slot] = info.qpc;
     MemoryBarrier();
+    NotePublished(info);
 
     InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), static_cast<LONG>(slot));
     InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), static_cast<LONG64>(n));
@@ -225,6 +281,8 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int 
     g_rtLockInit = true;
     const DWORD pid = GetCurrentProcessId();
     const std::wstring name = L"Local\\MOHAVR_" + std::to_wstring(pid);
+    g_frameEvent = CreateEventW(nullptr, FALSE, FALSE, (L"Local\\MOHAVR_Frame_" + std::to_wstring(pid)).c_str());
+    g_presentEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     g_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Header), name.c_str());
     if (!g_mapping) { MLOG("bridge: CreateFileMapping failed (%lu)", GetLastError()); return; }
     g_hdr = static_cast<Header*>(MapViewOfFile(g_mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Header)));
@@ -252,6 +310,7 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int 
     g_hdr->throwSeq = 0;
     g_hdr->weaponKind = 0;
     for (int i = 0; i < 4; ++i) g_hdr->freeHand[i] = 0.0f;
+    g_hdr->pace = 0;  // until the host says (its menu's Frame pacing)
 
     const std::wstring exe = ModuleDir() + L"\\MOHAVR-host.exe";
     std::wstring cmd = L"\"" + exe + L"\" --game-pid " + std::to_wstring(pid);
@@ -270,7 +329,44 @@ void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int 
     MLOG("bridge: started MOHAVR-host.exe pid %lu (shared memory %ls)", pi.dwProcessId, name.c_str());
 }
 
+namespace {
+void PresentImpl(IDirect3DDevice9* device);
+}
+
 void OnPresent(IDirect3DDevice9* device) {
+    PresentImpl(device);
+    // Counted after the publish: the game thread's paced Draw waits for this before it commits the next frame.
+    g_presentsSeen.fetch_add(1, std::memory_order_release);
+    if (g_presentEvent) SetEvent(g_presentEvent);
+}
+
+std::uint32_t PresentsSeen() { return g_presentsSeen.load(std::memory_order_acquire); }
+
+bool WaitPresents(std::uint32_t target, unsigned timeoutMs) {
+    LARGE_INTEGER t0, t;
+    QueryPerformanceCounter(&t0);
+    while (static_cast<std::int32_t>(PresentsSeen() - target) < 0) {
+        QueryPerformanceCounter(&t);
+        const double spent = QpcMs(t.QuadPart - t0.QuadPart);
+        if (!g_presentEvent || spent >= timeoutMs) return false;
+        WaitForSingleObject(g_presentEvent, static_cast<DWORD>(timeoutMs - spent) + 1);
+    }
+    return true;
+}
+
+void SetPacingAvailable(bool on) { g_pacingHooked = on; }
+
+bool HostRunning() {
+    return g_frameEvent && g_hdr && !g_hostExitLogged && g_hdr->hostState == static_cast<std::uint32_t>(shared::HostState::Running);
+}
+
+int WaitHostFrame(unsigned timeoutMs) {
+    if (!HostRunning()) return -1;
+    return WaitForSingleObject(g_frameEvent, timeoutMs) == WAIT_OBJECT_0 ? 1 : 0;
+}
+
+namespace {
+void PresentImpl(IDirect3DDevice9* device) {
     if (!g_hdr) return;
     ++g_presents;
     if (!g_setupTried) {
@@ -295,5 +391,6 @@ void OnPresent(IDirect3DDevice9* device) {
     if (g_hostExitLogged) return;
     Publish(device);
 }
+}  // namespace
 
 }  // namespace mohavr::bridge

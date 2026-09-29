@@ -12,6 +12,22 @@
 namespace mohavr::host {
 namespace {
 
+XrQuaternionf QMul(const XrQuaternionf& a, const XrQuaternionf& b) {
+    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+}
+XrQuaternionf QConj(const XrQuaternionf& q) { return {-q.x, -q.y, -q.z, q.w}; }
+XrVector3f QRot(const XrQuaternionf& q, const XrVector3f& v) {
+    const XrQuaternionf r = QMul(QMul(q, XrQuaternionf{v.x, v.y, v.z, 0.0f}), QConj(q));
+    return {r.x, r.y, r.z};
+}
+// The head's heading only (a turn about LOCAL's up, +Y): R_y(heading) * (0,0,-1) = the head's forward, flattened.
+XrQuaternionf Heading(const XrQuaternionf& q) {
+    const float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
+    const float h = std::atan2(-fx, -fz);
+    return {0.0f, std::sin(h * 0.5f), 0.0f, std::cos(h * 0.5f)};
+}
+
 // XINPUT_GAMEPAD_* button bits.
 constexpr std::uint16_t kBits[] = {
     0x1000, 0x2000, 0x4000, 0x8000,  // A B X Y
@@ -26,8 +42,9 @@ constexpr const wchar_t* kTargetKeys[] = {L"A",     L"B",    L"X",      L"Y",   
 // Defaults (headset round 5, the player's choice) on top of MOHA's own pad layout (MOHAPlayerInput.uc):
 // Xbox A = reload/use/flare -> B and the right grip; Xbox B = switch weapon -> Y; Xbox X = crouch (a press
 // toggles the stance) -> a flick of the right stick down; Xbox Y = jump -> A; RB = grenade -> X;
-// LB = alt fire -> left grip; LS = sprint (latched, SprintToggle) -> left stick click; RS = melee.
-constexpr const wchar_t* kTargetDefaults[] = {L"b,rgrip", L"y",    L"rflickdown", L"a",    L"lgrip", L"x",
+// LB = alt fire (a weapon attachment on/off) -> nothing (round 24: the left grip is for the foregrip and holsters);
+// LS = sprint (latched, SprintToggle) -> left stick click; RS = melee.
+constexpr const wchar_t* kTargetDefaults[] = {L"b,rgrip", L"y",    L"rflickdown", L"a",    L"none",  L"x",
                                               L"lthumb",  L"rthumb", L"menu",     L"none", L"none",  L"none",
                                               L"none",    L"none",   L"ltrigger", L"rtrigger"};
 constexpr const wchar_t* kSrcNames[] = {L"none",   L"a",      L"b",        L"x",        L"y",      L"lgrip",
@@ -50,6 +67,7 @@ int SrcByName(const std::wstring& n) {
 }  // namespace
 
 bool Pad::Init(XrInstance instance, const std::wstring& ini) {
+    holdLost_ = GetPrivateProfileIntW(L"Hands", L"HoldLost", 1, ini.c_str()) != 0;
     // [Controls] Target=src[,src...] -- unknown names fall back to the default (and say so).
     auto parse = [&](const wchar_t* list, Src (&out)[kMaxSources]) {
         for (auto& o : out) o = kNone;
@@ -336,6 +354,13 @@ void Pad::ReadTests(double now) {
                         testPose_[0].on = testPose_[1].on = false;
                         MLOG("pad: test poses off");
                     }
+                } else if (!strcmp(tok, "lost")) {
+                    // "lost=l|r|both|none": those hands report no tracking (the runtime dropping idle controllers).
+                    aimLine = true;
+                    testLost_[0] = !strcmp(v, "l") || !strcmp(v, "both");
+                    testLost_[1] = !strcmp(v, "r") || !strcmp(v, "both");
+                    MLOG("pad: test tracking loss: left %s, right %s", testLost_[0] ? "lost" : "tracked",
+                         testLost_[1] ? "lost" : "tracked");
                 } else if (!strcmp(tok, "throwvel")) {
                     aimLine = true;
                     if (sscanf_s(v, "%f,%f,%f", &testThrowVel_[0], &testThrowVel_[1], &testThrowVel_[2]) == 3) {
@@ -511,7 +536,36 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
         out[h].orientation = {yp.x * cz + yp.y * sz, yp.y * cz - yp.x * sz, yp.z * cz + yp.w * sz, yp.w * cz - yp.z * sz};
         valid |= 1u << h;
     }
+    for (int h = 0; h < 2; ++h)
+        if (testLost_[h]) valid &= ~(1u << h);
     return valid;
+}
+
+std::uint32_t Pad::HoldLost(const XrPosef& head, XrPosef (&pose)[2], std::uint32_t valid) {
+    std::uint32_t held = 0;
+    const XrQuaternionf qy = Heading(head.orientation), qyi = QConj(qy);
+    static const char* kSide[] = {"left", "right"};
+    for (int h = 0; h < 2; ++h) {
+        if (valid & (1u << h)) {
+            const XrVector3f d{pose[h].position.x - head.position.x, pose[h].position.y - head.position.y,
+                               pose[h].position.z - head.position.z};
+            heldRel_[h] = {QMul(qyi, pose[h].orientation), QRot(qyi, d)};
+            haveRel_[h] = true;
+            if (heldNow_[h]) {
+                heldNow_[h] = false;
+                MLOG("pad: the %s hand is tracked again", kSide[h]);
+            }
+        } else if (holdLost_ && haveRel_[h]) {
+            const XrVector3f d = QRot(qy, heldRel_[h].position);
+            pose[h] = {QMul(qy, heldRel_[h].orientation), {head.position.x + d.x, head.position.y + d.y, head.position.z + d.z}};
+            held |= 1u << h;
+            if (!heldNow_[h]) {
+                heldNow_[h] = true;
+                MLOG("pad: the %s hand lost tracking -- held where it was until it's back (Hands.HoldLost)", kSide[h]);
+            }
+        }
+    }
+    return held;
 }
 
 float Pad::GripValue(XrSession s, int hand) const {

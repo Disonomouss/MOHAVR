@@ -33,5 +33,12 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]);
 // frame (world; rows forward, right, up, origin), and whether the other hand is on the foregrip. False when the gun
 // isn't drawn in the hand.
 bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHanded);
+// Weapon.LeftHandMirror with the gun in the left hand: CurrentMove and HandFrames are then in a mirror world (reflected
+// across the body's centre plane), and the parts are drawn back through the mirror.
+bool Mirrored();
+// How the player's body (the pawn: location and yaw) moved since the player view CurrentMove and HandFrames come from
+// (world, row-major: a point carried by the body then -> now = p * w). The next tick's bake is one move behind the eyes
+// without it (Weapon.CatchUp). False when unknown (no view, another pawn, a jump of over 1 m).
+bool BodyMoveSinceView(float (&w)[16]);
 
 }  // namespace mohavr::viewmodel

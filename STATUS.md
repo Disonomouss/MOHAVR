@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-25 (overnight, end of the unattended checklist)_
+_Last updated: 2026-09-29 (round 25 deployed; the "Next" list is current, the history below it is kept)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -116,8 +116,15 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 24** (deployed): the first-person arms don't play the sprint animation (`Weapon.SprintArms=idle`,
-   a MidHook in the arms' activity node tick); the speed-detected sprint lock is removed. Round 23: hit cross and tracers
+2. **HEADSET-TESTS round 25** (deployed): left-hand mode drawn mirrored (`Weapon.LeftHandMirror`; the proxy's
+   determinant sign for culling), the left grip unmapped (`[Controls] LB=none`), controllers that stop tracking held
+   relative to the head (`Hands.HoldLost`), and movement: the arms play idle while walking (`Weapon.WalkArms`), the move
+   carried with the body (`Weapon.CatchUp`), frame pacing as a live menu switch (off by default; the player's A/B).
+   Round 24: sprint passed; slight jitter/rubber banding in all movement, the left grip toggled attachments, the gun
+   went double after ~10 s idle (the Quest dropped the controllers), left-hand mode had the right arm reach across;
+   dual wielding researched and parked by the player (ENGINE-NOTES 5af). Round 24 as deployed: the first-person arms
+   don't play the sprint animation (`Weapon.SprintArms=idle`, a MidHook in the arms' activity node tick); the
+   speed-detected sprint lock is removed. Round 23: hit cross and tracers
    passed; the lock failed (never engaged on the ground). Round 23 as deployed: the hit cross hidden (`HUD.HitMarker`), tracers off (`Weapon.Tracers`; they
    start at the third-person gun), the gun hand held on its controller while sprinting (`Weapon.SprintLock`). Round 22:
    shots passed (225 logged, from the gun, on the dot), crosshair gone. Round 22 as deployed: the red dot's trace uses the bullets' own collision flags (0x268BF, per-poly;
@@ -134,9 +141,9 @@ address-space budget for D3D9On12.
    saved as the player's `[Hands] FreeHand`). Round 18: arm jitter gone, foregrip/reload rules passed; the grenade's
    free hand and stray shots failed (fixed here). Arm IK and the
    earlier hand features are on by default. The player will tune per-gun fits in play and say when.
-   **Backlog (the player's):** pick up grenades lying on the ground (the game pools them) and throw them back; the
-   left hand free (off the gun) following its controller; a mirrored arms model for the left hand; the HUD crosshair
-   in controller modes; a full manual reload.
+   **Backlog (the player's):** pick up grenades lying on the ground (the game pools them) and throw them back; dual
+   wielding (parked: one weapon at a time in the game, options ranked in ENGINE-NOTES 5af); per-gun fit defaults once
+   the player reports theirs; a full manual reload.
 3. **Address space:** a control soak without D3D9On12 on the same route; texture-pool limits if needed.
 
 ## Risks

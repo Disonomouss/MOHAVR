@@ -625,7 +625,8 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   Component: SkeletalMesh `+0x1F4`, MeshObject `+0x21C`, SpaceBases `+0x224` (TArray<FMatrix>, component space),
   LocalAtoms `+0x230` (reflection), ActiveMorphs `+0x290`, PredictedLODLevel `+0x2B8`; PrimitiveComponent
   LocalToWorld is script-declared (reflection).
-- **The rig is inverted** (a hand-driven FPS rig): Root(0) → Anchor(1) → HipsOffset(2) → Hips(3) → Spine(4) →
+- **The rig is inverted** (a hand-driven FPS rig): Root(0) → HipsOffset(2) (Anchor(1) is Root's other child -- corrected
+  2026-09-29 from the cooked parent indices, 5ah) → Hips(3) → Spine(4) →
   Spine1(5) → Spine2(6) → Neck(7) / Tripod(8) → Camera(9); legs 10-17 under Hips. **RightHand(18)** is a child of
   HipsOffset; its fingers 19-33; **RightForeArm(34)** is the hand's child (at the elbow), **RightArm(35)** the
   forearm's (at the shoulder joint), RightArmRoll(36) and **RightShoulder(37)** (clavicle) the arm's; forearm roll
@@ -821,6 +822,108 @@ agent), plus probes.
 - **Why the speed-detected lock failed (round 23):** its threshold (~500) was above the game's for most weapons (sprints
   at 421-495 went unlocked), it restarted its ramp on every flicker around the threshold, and it fired during the
   parachute glide.
+
+## 5ae. Left-hand mode drawn mirrored, and why culling needed the proxy's determinant (2026-09-29, round 25)
+
+- **The problem:** the arm IK (and every game animation) is right-handed: with the gun in the left hand the right arm
+  reached across the chest to it.
+- **Weapon.LeftHandMirror (default 1):** with the gun in the left hand (gunFlags bit 4), viewmodel.cpp works in a mirror
+  world -- reflected across the body's centre plane (through the tracked head, normal = the body's right axis from the
+  game camera's yaw): the gun frame and both controller frames become `MirrorFrame(f, R)` (own Y flipped, then the world
+  reflected, so they stay right-handed); D = camInv x the mirrored gun frame. The bake and the IK run as for a right hand
+  (arms_ik only flips the shoulders' right axis); the proxy hook draws the parts through `R` (L2W x R, R x W2L; R is its
+  own inverse). The game's animations (reload, bolt, pin pull) come out left-handed, the gun mirrored.
+- **Culling** (research agent): the cull mode comes only from `FPrimitiveSceneProxy::LocalToWorldDeterminant`
+  (**proxy +0xA0**, float): the element's ReverseCulling bit = det < 0, read right after the 0x10EEA470 call by
+  FSkeletalMeshSceneProxy::DrawDynamicElements (0x10D06571) and its two decal paths (0x10D06AD5, 0x10D06F52), all
+  `comiss xmm0,[ebx+0xA0]`. Writers: FScene::AddPrimitive (0x10A974C9) and the per-tick UpdateTransformCommand
+  (0x10A9771B), both before the frame's draws; source comp+0x60 (USkeletalMeshComponent::SetTransformedToWorld
+  0x10CFBED0). Not the per-view matrix, not the bones. The hook sets the sign (never flips it: it runs for both eyes and
+  every pass) for first-person parts only; the three readers' bytes are checked at install. Lighting is unaffected
+  (the vertex shader gets L2W/W2L and full T/B/N; the reflection is consistent). First-person parts cast no shadows.
+  Frustum culling uses the component's bounds sphere (fCustomBoundsSize: 1000 arms, 100 gun) at the component origin.
+- **[S]:** a left-hand draw of the BAR (the left hand at the right-shoulder holster): mirror off -- the right arm
+  crosses to the gun; mirror on -- the left arm holds the gun from the left, the right hand free on its controller, all
+  solid (before the culling fix the mirrored gun drew as a dark inside-out silhouette).
+
+## 5af. One weapon at a time: what an off-hand grenade or pistol would take (2026-09-29, research; parked)
+
+Research agent (read-only, the scripts incl. the map packages' weapon classes, Ghidra). **The player parked this.**
+- No quick grenade: RB = `SwitchGrenade` (MOHAPlayerInput.uc:500); throwing always makes the grenade the active weapon;
+  after a throw the game raises another grenade (or `WeaponEmpty` -> `SwitchGrenade` cycles types or returns to
+  `LastSmallArmsWeapon`); no automatic return to the gun. `SwitchPreviousWeapon` (MOHAPlayerController.uc:892) returns
+  from any grenade.
+- The grenade leaves on an AnimNotify (`OnProjectileToss` in `grenademkiia_fire` at 0.09 s / `_alt_fire` at 0.038 s),
+  not a timer: suppressing activities 17/18 would stop throws. Release-to-spawn measured 117-124 ms.
+- Switching: old weapon PutDownTime + new EquipTime (Stg44/BAR/K98/Garand 0.30 s, Colt 0.33 s, grenades 0.20 s);
+  `Weapon.EquipTime`/`PutDownTime` are plain floats (writable; the Colt upgrade resets EquipTime on equip). The old
+  weapon's attachment (its first-person mesh) is destroyed at WeaponIsDown; there's never a second weapon mesh.
+- `UObject::ProcessEvent` = vtable +0xF0 = 0x109CE980 (thiscall Function, Parms, Result); it rejects functions with a
+  native index (Spawn, Destroy, SetTimer...).
+- Options ranked: A1 swap-and-return (low), A2 fast swap (+ short equip times, lower/raise activities to idle), A3 the
+  mod throws an inactive grenade weapon through ProcessEvent so the gun stays (high), B4 two firing guns (very high).
+
+## 5ag. Controllers that stop tracking (2026-09-29, round 24 -> 25)
+
+- Round 24's log: both aim poses went "none" for 5.3 s (19:43:55); while no hand is tracked the gun fell back to the
+  game's own flat-screen placement in front of the eyes (seen double) -- the player: "after 10 seconds idle ... until
+  you move or input" (the Quest drops idle controllers / switches to hand tracking).
+- **Hands.HoldLost (default 1):** host `Pad::HoldLost` after `LocateHands`: a tracked hand's pose is kept relative to the
+  head's position and heading (yaw only); a lost hand is put back there and still reported valid. `lost=l|r|both|none`
+  in pad_cmd.txt simulates it. [S]: tracked vs lost frames look the same with the hold; without it the gun jumps to the
+  game's placement.
+
+## 5ah. Movement jitter: the camera is an animated bone, the move lagged a tick, the game ran uncapped (2026-09-29, round 25)
+
+Research workflow wf_6ebf7b6e (the camera chain, the mod's view integration, frame pacing; the chain re-checked by a
+fourth agent), plus simulator measurements (`logs/modlogs/r25-walk-*`).
+- **The game camera is the arms' `Cam` socket.** GetPawnViewLocationNative 0x10E81DE0 (vt+0x494 of both pawn vtables,
+  0x11571C60 and 0x115877E0) = FPArms (+0x874) socket CameraSocketName (+0x9F8, 'Cam' = bone Camera, no offset) via
+  0x10D00FA0 (SpaceBases[i] x LocalToWorld), + R.Z x fJumpCameraOffset (+0x948) + R x the weapon's GetViewOffset + R x the
+  debug offsets (ints +0x6EC..+0x6F4); fallback Location + (0, 0, AnimatedStanceHeights[eCurrentStance] (+0x640) -
+  CollisionHeight). The view rotation is the same socket's (GetViewRotationNative 0x10E81D70), else Controller.Rotation.
+  CalcCamera then adds the weapon's ProcessViewPush and the camera modifiers (MOHACamMod_ScreenShake). UWorld::Tick
+  0x10B3BB60 runs UpdateCamera after every tick (ProcessEvent at 0x10B3C48D; skipped while paused): the camera reads the
+  frame's final pose.
+- **Bone chain:** Root(0) → HipsOffset(2) → Hips(3) → Spine(4) → Spine1(5) → Spine2(6) → Tripod(8) → Camera(9) (5x
+  corrected). UpdateSkelControls 0x10E7E7A0 drives HipControl on HipsOffset (RotateArms_Pitch about the camera, so pitch
+  leaves it in place; -CollisionHeight; the stance spring vCurrentStanceHeightMod +0x898 at fStanceHeightRestoreForce 3/s;
+  ironsights lean/peek; vCurrentAnimOffset_AS +0x960; ShakeOffset +0xACC) and LagControl on Hips (<= 4 units). MOHA's
+  ForceUpdateComponents override 0x10E83580 runs on every MoveActor and SetQuickRotation, which is why the parts update
+  several times a frame (5ad; the 37-unit ones are stepUp's probe, MaxStepHeight 35 + 2.0 at 0x115A2070).
+- **The walk bob:** STAND_WALK (1) = MOHAAnimNodeLinearBlendBySpeed (the weapon's idle -> <weapon>_run by speed),
+  CROUCH_WALK (3) the *_walk loops; they move the Camera bone 0.6-2.9 units side to side (~1.25 Hz), 0.2-1.6 up (~2.5 Hz)
+  and 0.1-2.1 fore/aft, <= 0.45 deg yaw (decoded from VM_AnimSet_NoBazooka). The VR view is built on that camera
+  (vr_view OnViewPoint: g_world.base = the game's loc), so the world swayed against the eyes. **Weapon.WalkArms=idle**
+  (default): the SprintArms MidHook (0x10E66482) also turns 1 and 3 into 0 for the local FPArms (crouch-idle is 0 too;
+  footsteps are timer-driven -- SetFootstepTimer/NextFootstep; prone isn't used: no crawl sequences in the anim set, and
+  Prone_Crawl_In/Out end on OnAnimEnd, so 5/6 are left alone). [S] (running ~380 u/s, `view: moving` log): the camera
+  against the body 0.0 / 0.0 / 0.5 cm peak to peak fwd/right/up (the game's walk: up to 4.7 / 20.4 / 1.5, the 20 cm while
+  a strafe began), and a 70-deg turn of the gun hand during a run (round 24's log had it once) gone.
+- **The move lagged a tick:** viewmodel::OnPlayerView builds D = camInv x gunFrame at Draw N; the bake applies it in tick
+  N+1, after the body moved by W = P_N^-1 P_now (P: the pawn's Location +0xE8 and yaw +0xF8), so the drawn gun sat
+  (R_gun R_cam^-1 - I) x the move off (0.68 x with the gun 40 deg off the view's axis), the free hand and the shoulders
+  the whole move, and a snap turn jumped them for a frame. **Weapon.CatchUp=1** (default): D' = W^-1 D W and the IK's
+  targets (the head, both controller frames) x W (viewmodel::BodyMoveSinceView; none over 1 m -- a teleport). It holds in
+  the mirror world (the mirror plane moves with the body: W^-1 R W). [S]: the gun held 40 deg to the side, running,
+  strafing, sprinting: the gun hand within 0.4 cm of its controller (0.5 in the left hand; 2-8 cm without). The per-move
+  log (`armik: a walk/a sprint of N ms`) now measures against the controller moved with the body, either way.
+- **Frame pacing:** uncapped (122-330 fps), the host took the first frame published after each ack, so the world time of
+  each shown frame varied by up to a game frame. **The menu's Frame pacing** (hdr->pace, shared block v13; default the
+  shipped `[Bridge] Pace=0`, the player's own once toggled): Hook_Draw first waits for the previous Draw's Present
+  (bridge::PresentsSeen, counted after the publish; 25 ms timeout, 2 s backoff after 3 misses), then for the host's frame
+  event `Local\MOHAVR_Frame_<pid>` (auto-reset; the host sets it once per XR frame after writing the poses and taking the
+  last frame; 25 ms timeout). A paced frame is always the one presented next, so MetaForPresentedFrame pairs it by that
+  (g_current), not by the render-thread-lag rule. Paced, the game publishes up to kRing ahead of the ack (the host takes
+  the newest; slot = F % kRing, not publishedSlot). [S]: one game frame per shown frame (uncapped 2-18), ~80 Draws/s
+  instead of 160-220, no timeouts, toggled live both ways. The host logs `perf: the world shown was X ms behind each XR
+  frame (sd Y)` -- the sd is the jitter: in the simulator 17 ms (sd 8) paced vs 21 ms (sd 6) uncapped, but its loop stalls
+  20% of its frames (worst 33 ms) and catches up in bursts (80 of its 90 events a second get a Draw); the headset's loop
+  is steady (round 24: worst 12-13 ms, 0 late). Smoothness is [H].
+- **Not done (options):** a bob-free VR base from the pawn's own state (would also still the jump dip, recoil push,
+  screen shake and weapon view offset, but splits the view from the game camera: the gun's D and the shot start must stay
+  on the game's); step-ups snap the camera up to 35 units (MOHA has no eye smoothing: OldZ is unused); the paced frame's
+  poses could be predicted one frame further (it is shown one frame after its Draw).
 
 ## 6. Content and UnrealScript
 

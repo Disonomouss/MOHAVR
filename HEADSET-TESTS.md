@@ -935,11 +935,75 @@ flicker -- the pull toward the sprint pose.
 2. Do the arms look OK while sprinting, and when you start and stop? (yes / describe)
 3. Anything else odd? (describe)
 
+**Answers:** 1 "Looks good. There is some slight jitter in general movement not just sprinting, maybe a slight rubber
+banding feeling." · 2 "Feels good." · 3 "Left grip is add/remove attachment button, unmap it. After 10 seconds idle, gun
+goes back to double vision until you move or input. Possibly an idle animation." Then: "Currently when you unholster a
+weapon with the left hand, an arm extends from the right shoulder to the left hand position and holds the gun. I'd also
+like the holster system to allow dual wielding" (dual wielding: researched, then parked by the player -- ENGINE-NOTES 5af).
+
+**Log received:** yes, `logs/modlogs/20260929-194803-MOHAVR.log` and `-MOHAVR-host.log`. 21 sprints: the gun hand turned
+0-3 deg in its controller's frame (once 71 deg, at 19:40:47 -- the walk animation's, see round 25) and moved 1.3-8.4 cm
+(once 20.5): the walk pose giving way to idle, plus the move's one-frame lag. Both aim poses went "none" for 5.3 s at
+19:43:55: the Quest had stopped tracking the idle controllers, and without a tracked hand the gun fell back to the game's
+own placement in front of the eyes (the double gun). The headset's XR loop was steady: 11.11 ms, worst 12-13 ms, 0 late;
+the game ran uncapped at 122-146 fps.
+
+**Verdict:** sprint PASSED. General movement jitter, the left grip, the double gun after idling and left-hand mode:
+round 25.
+
+**Deployed for this round:** the shipped defaults, no overrides.
+
+---
+
+## Round 25: prepared 2026-09-29, left-hand mode, steadier movement, controllers that sleep
+**Changed:**
+- **Left-hand mode:** with the gun in your left hand, the arms are drawn mirrored -- the left arm holds the gun, the
+  right hand is free on its controller (`Weapon.LeftHandMirror=1`). The game's own animations (reload, bolt, pin pull)
+  come out left-handed. [S]: a left-hand draw of the BAR from the right-shoulder holster -- the left arm holds it from
+  the left, all solid (`logs/shots/r25-left-arms-ab.png`).
+- **The left grip no longer toggles the weapon attachment** (`[Controls] LB=none`).
+- **Controllers that stop tracking** (the Quest drops an idle controller after ~10 s): the hand now stays where it was,
+  relative to your head, until it's tracked again (`Hands.HoldLost=1`) -- no more double gun. [S]: a hand switched to
+  "lost" looks the same as a tracked one; without the hold the gun jumps to the game's placement.
+- **Movement**, three changes:
+  1. **Walking no longer sways the view or the gun:** the arms play their idle animation while walking, as they already do
+     while sprinting (`Weapon.WalkArms=idle`). The game's camera is a bone of the first-person arms, so the walk and run
+     animations swayed the whole world against your eyes -- up to 3 cm side to side and 2 cm back and forth at your step
+     rate -- and the gun 3-9 cm in your hand. [S]: running, the camera now moves 0.0 / 0.0 / 0.5 cm against the body
+     (forward / right / up; with the walk animation up to 4.7 / 20.4 / 1.5), and a 71-degree turn of the gun during a run
+     (seen once in round 24's log) is gone. Walking speed and footsteps are unchanged.
+  2. **The gun and arms keep up with you** (`Weapon.CatchUp=1`): they were placed from the previous frame's view, so while
+     moving they trailed by a frame's movement -- a few cm with the gun held to the side, and it changed with every
+     frame. [S]: with the gun held 40 degrees to the side while running, strafing and sprinting, the gun hand stayed within
+     0.4 cm of its controller (0.5 in the left hand; 2-8 cm before).
+  3. **Frame pacing, new in the menu, off to start:** "Frame pacing" makes the game draw exactly one frame per headset
+     frame, right after your poses arrive, so the world steps evenly from frame to frame. Off, the game runs uncapped and
+     each frame shows the world at a slightly uneven moment. [S]: it works -- one game frame per headset frame (2-18
+     before), about 60% less rendering, the world shown 4 ms fresher, switchable while playing. The simulator can't judge
+     whether it's smoother (its own frame loop stutters); that's your call.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. **Left hand:** draw a gun with your left hand (the holsters). Watch both arms; reload; fire. Then the pistol and a
+   grenade in the left hand.
+2. **Walking:** walk and run around (stick), strafe, stop and start -- with the gun in front, then held off to the side.
+3. **Frame pacing:** open the menu (left menu button) -> Frame pacing -> on (left stick right), close, and do the same
+   walking; then turn it off again. Your choice is kept.
+4. **Idle controllers:** put the controllers down for 20 s, look around, pick them up: the gun should stay put.
+5. **Left grip:** squeeze it with a gun in hand: nothing should happen.
+
+**Questions:**
+1. Left-hand mode: the left arm holds the gun, the right hand free, animations OK? (yes / describe)
+2. Walking: any jitter or rubber banding left, gun in front and to the side? (describe)
+3. Frame pacing on vs off while moving: smoother, the same, or worse (stutter, lag)? Which do you want as the default?
+4. Controllers put down: no more double gun? (yes / describe)
+5. Left grip: nothing happens now? (yes/no)
+6. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults, no overrides.
+**Deployed for this round:** the shipped defaults (Frame pacing starts off; the menu turns it on).
 
 ---
 

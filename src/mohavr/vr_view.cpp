@@ -65,9 +65,37 @@ struct AppliedFrame {
     DWORD        thread;
     bool         valid;
     bool         cinema;   // rendered as a flat full-screen image (menu/cutscene): no view, show on the quad
+    LONGLONG     qpc;      // when its view was computed (diagnostics: the world's step per shown frame)
+    std::uint32_t serial;  // one per committed frame
+    bool         paced;    // its Draw waited for the previous Present (frame pacing): it is the one presented next
 };
 CRITICAL_SECTION g_lock;
 AppliedFrame g_building{}, g_current{}, g_previous{};
+std::uint32_t g_commitSerial = 0;
+
+// Frame pacing (round 25, "slight jitter in general movement ... a slight rubber banding feeling"; hdr->pace, the host
+// menu's Frame pacing, default the shipped [Bridge] Pace): uncapped, the game ran at 120-330 fps and the host took
+// whichever frame was presented first after each headset frame, so the world time between two shown frames varied by up
+// to a game frame (a few cm at a run) and 40-70% of the frames were rendered for nothing. Paced, each Draw first waits for the previous Draw's Present (so the frame the render thread presents is
+// always the one committed last: MetaForPresentedFrame), then for the host's frame event (set once per headset frame,
+// just after it wrote that frame's poses): one game frame per headset frame, the world stepping one frame at a time.
+struct Pacing {
+    std::uint32_t presentTarget = 0;  // PresentsSeen() once the last Draw's frame is presented
+    bool          expectPresent = false;
+    bool          paced = false;      // this Draw's waits both came in time
+    unsigned      presentMisses = 0;  // Present waits timed out in a row
+    DWORD         presentBackoff = 0; // no Present waits until then (Draws that don't present: a minimised window?)
+    // 10 s statistics
+    double        waitMs = 0.0, worstWaitMs = 0.0, since = 0.0;
+    long          draws = 0, frameTimeouts = 0, presentTimeouts = 0;
+    LONGLONG      last = 0;
+} g_pace;
+
+double QpcMs(LONGLONG q) {
+    static LARGE_INTEGER f{};
+    if (!f.QuadPart) QueryPerformanceFrequency(&f);
+    return 1000.0 * static_cast<double>(q) / static_cast<double>(f.QuadPart);
+}
 
 // Per CalcSceneView call (game thread only).
 bool         g_thisViewActive = false;
@@ -209,13 +237,72 @@ void UpdateCinemaMode(bool menu) {
 }
 
 void CommitCinemaFrame() {
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
     EnterCriticalSection(&g_lock);
     g_previous = g_current;
     g_current = AppliedFrame{};
     g_current.thread = GetCurrentThreadId();
     g_current.valid = true;
     g_current.cinema = true;
+    g_current.qpc = q.QuadPart;
+    g_current.serial = ++g_commitSerial;
+    g_current.paced = g_pace.paced;
     LeaveCriticalSection(&g_lock);
+}
+
+// Frame pacing, at the start of each Draw (game thread): see Pacing.
+void PaceBeforeDraw() {
+    g_pace.paced = false;
+    const shared::Header* hdr = bridge::SharedHeader();
+    if (!hdr || !hdr->pace || !bridge::HostRunning()) return;
+    LARGE_INTEGER t0, t1;
+    QueryPerformanceCounter(&t0);
+    bool presented = false;
+    const DWORD now = GetTickCount();
+    const bool backoff = g_pace.presentBackoff && static_cast<LONG>(now - g_pace.presentBackoff) < 0;
+    if (g_pace.expectPresent && !backoff) {
+        presented = bridge::WaitPresents(g_pace.presentTarget, 25);
+        if (presented) {
+            g_pace.presentMisses = 0;
+        } else {
+            ++g_pace.presentTimeouts;
+            if (++g_pace.presentMisses >= 3) {
+                // Draws without a Present (a minimised window?): stop waiting for them for a while.
+                g_pace.presentMisses = 0;
+                g_pace.presentBackoff = (now + 2000) | 1;
+                static int logged = 0;
+                if (logged++ < 10) MLOG("pace: three Draws in a row were not presented -- not waiting for Presents for 2 s");
+            }
+        }
+    }
+    const int frame = bridge::WaitHostFrame(25);
+    if (frame < 0) return;  // no host running: nothing to pace to
+    if (frame == 0) ++g_pace.frameTimeouts;
+    g_pace.paced = presented && frame == 1;
+    QueryPerformanceCounter(&t1);
+    const double waited = QpcMs(t1.QuadPart - t0.QuadPart);
+    g_pace.waitMs += waited;
+    g_pace.worstWaitMs = waited > g_pace.worstWaitMs ? waited : g_pace.worstWaitMs;
+    ++g_pace.draws;
+    if (g_pace.last) g_pace.since += QpcMs(t1.QuadPart - g_pace.last);
+    g_pace.last = t1.QuadPart;
+    if (g_pace.since >= 10000.0) {
+        MLOG("pace: %ld Draws in %.1f s (%.1f a second) -- waited %.2f ms a Draw (worst %.1f), %ld host frames and %ld Presents "
+             "timed out", g_pace.draws, g_pace.since / 1000.0, 1000.0 * g_pace.draws / g_pace.since, g_pace.waitMs / g_pace.draws,
+             g_pace.worstWaitMs, g_pace.frameTimeouts, g_pace.presentTimeouts);
+        g_pace.waitMs = g_pace.worstWaitMs = g_pace.since = 0.0;
+        g_pace.draws = g_pace.frameTimeouts = g_pace.presentTimeouts = 0;
+    }
+}
+
+// At the end of each Draw: the Present the next Draw waits for. One Present per Draw; a Present from elsewhere (it
+// runs ahead) is absorbed by the max, a missing one resyncs after its wait timed out.
+void PaceAfterDraw() {
+    const std::uint32_t seen = bridge::PresentsSeen();
+    const std::uint32_t next = g_pace.expectPresent && g_pace.paced ? g_pace.presentTarget + 1 : seen + 1;
+    g_pace.presentTarget = static_cast<std::int32_t>(next - (seen + 1)) > 0 ? next : seen + 1;
+    g_pace.expectPresent = true;
 }
 
 // Weapon.HideViewModel / HideBody: the pawn's own exec functions, re-issued every 3 s (idempotent) so a
@@ -284,6 +371,7 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
 }
 
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
+    PaceBeforeDraw();
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
@@ -296,11 +384,13 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera
         CommitCinemaFrame();
+        PaceAfterDraw();
         return;
     }
     const bool want = g_cfg.headTracking && g_cfg.stereo && hdr && (hdr->viewValid & 1u) && arr && arr[1] == 1 && arr[0];
     if (!want) {
         g_drawHook.thiscall<void>(self, viewport, canvas);
+        PaceAfterDraw();
         return;
     }
     void* player = *reinterpret_cast<void**>(arr[0]);
@@ -328,6 +418,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
         g_loggedStereo = true;
         MLOG("stereo: first two-player Draw -- %d CalcSceneView calls", g_eyeCounter);
     }
+    PaceAfterDraw();
 }
 
 // CalcSceneView entry: stack arg 1 = ULocalPlayer* (this). In a stereo Draw, the first call is
@@ -425,6 +516,61 @@ void ApplySnapTurn(const shared::Header* hdr, std::uintptr_t localPlayer, const 
     if (logged++ < 8) MLOG("snap: controller yaw %+d (%.0f deg) -> %d", delta, delta * 360.0 / 65536.0, *yaw);
 }
 
+// Diagnostics (round 25, "slight jitter in general movement ... a slight rubber banding feeling"): while the body moves,
+// how far the game camera -- the base of both eyes -- sways against it (the arms' walk animation moves the Cam socket;
+// Weapon.WalkArms), per 5 s of moving: peak to peak forward/right/up in the body's frame, and the camera's yaw against
+// the body's. A stance change inside a window shows as up to 65 cm up.
+void TrackCameraSway(const float* loc, int camYaw) {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    struct Sway {
+        std::uintptr_t pawn = 0;
+        LONGLONG last = 0;
+        float    lastLoc[3] = {};
+        float    lo[4] = {}, hi[4] = {};
+        double   moving = 0.0, dist = 0.0;
+        long     frames = 0;
+        int      logged = 0;
+    };
+    static Sway s;
+    if (!pawn) return;
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    const int pyaw = *reinterpret_cast<const int*>(pawn + addr::kActorRotation + 4);
+    const double dt = s.last ? QpcMs(q.QuadPart - s.last) / 1000.0 : 0.0;
+    const float dx = pl[0] - s.lastLoc[0], dy = pl[1] - s.lastLoc[1];
+    const float step = std::sqrt(dx * dx + dy * dy);
+    const bool fresh = pawn != s.pawn || dt <= 0.0 || dt > 0.25;
+    s.pawn = pawn;
+    s.last = q.QuadPart;
+    for (int i = 0; i < 3; ++i) s.lastLoc[i] = pl[i];
+    if (fresh || step / dt < 50.0) {  // standing (or a jump in time): the window only counts moving frames
+        if (fresh) s.frames = 0;
+        return;
+    }
+    const float yaw = UnrToRad(pyaw), c = std::cos(yaw), sn = std::sin(yaw);
+    const float rx = loc[0] - pl[0], ry = loc[1] - pl[1];
+    const float v[4] = {rx * c + ry * sn, -rx * sn + ry * c, loc[2] - pl[2],
+                        static_cast<float>(static_cast<std::int16_t>(static_cast<std::uint16_t>((camYaw - pyaw) & 0xFFFF))) * (360.0f / 65536.0f)};
+    for (int i = 0; i < 4; ++i) {
+        s.lo[i] = s.frames ? (v[i] < s.lo[i] ? v[i] : s.lo[i]) : v[i];
+        s.hi[i] = s.frames ? (v[i] > s.hi[i] ? v[i] : s.hi[i]) : v[i];
+    }
+    ++s.frames;
+    s.moving += dt;
+    s.dist += step;
+    if (s.moving >= 5.0) {
+        if (s.logged < 60) {
+            ++s.logged;
+            MLOG("view: moving %.1f s at %.0f u/s -- the game camera swayed fwd %.1f right %.1f up %.1f cm (peak to peak, in the "
+                 "body's frame) and turned %.2f deg against it (Weapon.WalkArms=%s)", s.moving, s.dist / s.moving,
+                 s.hi[0] - s.lo[0], s.hi[1] - s.lo[1], s.hi[2] - s.lo[2], s.hi[3] - s.lo[3], g_cfg.walkArms ? "idle" : "game");
+        }
+        s.moving = s.dist = 0.0;
+        s.frames = 0;
+    }
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -473,6 +619,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
         g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};
+        TrackCameraSway(loc, rot[1]);
     }
     // Stereo: this eye's own pose (orientation and position); mono: the head.
     const shared::Pose& p = g_thisStereo ? eye[g_thisEye] : head;
@@ -537,7 +684,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
 
     // Record what this view was rendered with (the projection hook refines the FOV). A frame is
     // complete after eye 1 (stereo) or the single view (mono).
+    LARGE_INTEGER viewQpc;
+    QueryPerformanceCounter(&viewQpc);
     EnterCriticalSection(&g_lock);
+    if (g_thisEye == 0) g_building.qpc = viewQpc.QuadPart;
     g_building.pose[g_thisEye] = p;
     g_building.fov[g_thisEye] = g_thisFov;
     g_building.stereo = g_thisStereo;
@@ -709,6 +859,8 @@ void CommitFrameIfComplete() {
     g_current = g_building;
     g_current.thread = GetCurrentThreadId();
     g_current.valid = true;
+    g_current.serial = ++g_commitSerial;
+    g_current.paced = g_pace.paced;
     LeaveCriticalSection(&g_lock);
 }
 
@@ -819,6 +971,8 @@ bool Install(const Config& cfg) {
             if (res) {
                 g_drawHook = std::move(*res);
                 MLOG("stereo: inline hook UGameViewportClient::Draw at 0x%08X installed", static_cast<unsigned>(addr::kViewportClientDraw));
+                // Frame pacing waits in this hook (PaceBeforeDraw), whenever the host's hdr->pace is on.
+                bridge::SetPacingAvailable(true);
                 if (cfg.hudMode == 1 && Hook(g_hudMatrixHook, addr::kHudMatrixPush, OnHudMatrix, "HUD canvas matrix"))
                     Hook(g_hudHook, addr::kHudViewRead, OnHudView, "HUD canvas (per eye)");
             } else {
@@ -834,10 +988,13 @@ bool Install(const Config& cfg) {
     return true;
 }
 
-bool MetaForPresentedFrame(shared::SlotMeta& meta) {
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info) {
     EnterCriticalSection(&g_lock);
-    // With UE3's render thread the frame being presented was computed one game frame earlier.
-    const AppliedFrame& v = (g_current.valid && g_current.thread == GetCurrentThreadId()) ? g_current : g_previous;
+    // With UE3's render thread the frame being presented was computed one game frame earlier -- unless its Draw was
+    // paced (frame pacing): the next Draw waits for this Present before it commits, so the last one committed is this.
+    const AppliedFrame& v =
+        (g_current.valid && (g_current.thread == GetCurrentThreadId() || g_current.paced)) ? g_current : g_previous;
+    if (info) *info = PresentedFrameInfo{v.qpc, v.serial, v.paced};
     const bool ok = v.valid && !v.cinema;
     if (ok) {
         for (int e = 0; e < 2; ++e) {

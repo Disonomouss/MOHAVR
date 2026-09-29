@@ -17,7 +17,10 @@ struct Config {
     bool  hudCrosshair  = false;  // [HUD] Crosshair -- the game's own crosshair (0: hidden; the red dot aims)
     bool  hudHitMarker  = false;  // [HUD] HitMarker -- the red cross on a hit (0: hidden)
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the unseen body's gun)
+    bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
+    bool  walkArms      = true;   // [Weapon] WalkArms -- the first-person arms play idle while walking too (idle | game)
+    bool  catchUp       = true;   // [Weapon] CatchUp -- the gun, arms and free hand follow the body's move since their view
     int  renderResX     = 2880;      // [Render] ResX/ResY -- the game's resolution (windowed), 0 = the game's own (M9)
     int  renderResY     = 1620;
     bool lockWindow     = true;   // [Render] LockWindow -- keep the game window at its render size (stereo split)

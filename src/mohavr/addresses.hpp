@@ -203,6 +203,14 @@ inline constexpr std::uintptr_t kControllerPawn  = 0x1E0;
 inline constexpr std::uintptr_t kViewModelTransform = 0x10EEA470;
 inline constexpr std::uint8_t   kViewModelTransformBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x81, 0xEC, 0x04, 0x01, 0x00, 0x00, 0x53, 0x8B, 0xD9};
 inline constexpr std::uintptr_t kProxyComponent = 0xF0, kProxyLocalToWorld = 0x20, kProxyWorldToLocal = 0x60;
+// FPrimitiveSceneProxy::LocalToWorldDeterminant (float): the only thing the cull mode comes from -- the element's
+// ReverseCulling bit is set when it's < 0 (not from the per-view matrix). Copied from the component (+0x60) at AddPrimitive
+// and by the per-tick UpdateTransformCommand (both before the frame's draws), and read right after the 0x10EEA470 call by
+// FSkeletalMeshSceneProxy::DrawDynamicElements and its two decal paths: `comiss xmm0,[ebx+0xA0]` at the three sites below
+// (research agent, round 25). Weapon.LeftHandMirror sets its sign in the hook for mirrored first-person parts.
+inline constexpr std::uintptr_t kProxyLocalToWorldDeterminant = 0xA0;
+inline constexpr std::uintptr_t kProxyDetReaderDraw = 0x10D06571, kProxyDetReaderDecalA = 0x10D06AD5, kProxyDetReaderDecalB = 0x10D06F52;
+inline constexpr std::uint8_t   kProxyDetReaderBytes[] = {0x0F, 0x2F, 0x83, 0xA0, 0x00, 0x00, 0x00};
 inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshComponent.FOV (float)
 
 // --- M8 arm IK (ENGINE-NOTES 5x) ---
@@ -263,6 +271,9 @@ inline constexpr Signature kSignatures[] = {
     {"bullet trace after",                 kBulletTraceAfter, kBulletTraceAfterBytes, sizeof(kBulletTraceAfterBytes)},
     {"activity tick load",                 kActivityTickLoad, kActivityTickLoadBytes, sizeof(kActivityTickLoadBytes)},
     {"activity tick compare",              kActivityTickCmp, kActivityTickCmpBytes, sizeof(kActivityTickCmpBytes)},
+    {"proxy determinant read (draw)",      kProxyDetReaderDraw, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
+    {"proxy determinant read (decal A)",   kProxyDetReaderDecalA, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
+    {"proxy determinant read (decal B)",   kProxyDetReaderDecalB, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
 };
 
 }  // namespace mohavr::addr

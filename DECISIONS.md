@@ -125,3 +125,24 @@ missed most sprints and jittered on flicker), fight a 20-unit, 60-90 degree swin
 animating. Removing the animation at the one node that plays it needs no detection, timers or reference pose, and also
 stills the camera's sprint shake (the camera comes from the arms' Cam socket).
 **Costs:** a MidHook in the anim tick (filtered to the local pawn's FPArms); the sprint looks like standing, not running.
+
+### D14. The walk animation goes too, and the move is carried with the body — Decided 2026-09-29 (round 25)
+`Weapon.WalkArms=idle` extends D13 to walking and crouch-walking; `Weapon.CatchUp=1` carries the gun's move (and the arm
+IK's targets) along with the body's move since the view it was built from (ENGINE-NOTES 5ah).
+**Why:** the VR view is built on the game camera, a bone of the animated arms, so every step swayed the world against
+the eyes; removing the animation at its node stills it with nothing to detect (as D13). The move's one-tick lag is exact
+to remove: the body's move between the view and the bake is known (the pawn's location and yaw).
+**Costs:** the arms look like standing while walking (in VR the hands are the controllers anyway); CatchUp assumes the
+camera and the hand frames move with the body between the view and the bake (the hands' own motion in that tick isn't
+predicted). **Not chosen:** a bob-free VR base built from the pawn's state -- more general, but it splits the view from
+the game camera (the gun's move and the shot start must stay on the game's) and filters deliberate moves too.
+
+### D15. Frame pacing is the player's switch, in the menu, off by default — Decided 2026-09-29 (round 25)
+The game can start each Draw on the host's per-XR-frame event: one game frame per headset frame, paired with its poses
+by identity and published without waiting for the host's ack. The menu's Frame pacing turns it on and off live
+(hdr->pace); the shipped `[Bridge] Pace` (0) is its default.
+**Why:** uncapped, the headset showed frames at uneven world times, which pacing removes on a steady XR loop -- but the
+simulator's loop isn't steady (it stalls and catches up), so it proves pacing works, not that it is smoother (standing
+rule 7). A live switch lets the player compare both in one session.
+**Costs:** a Draw waits up to 25 ms when the host doesn't signal (headset asleep: the game slows to ~40 fps); a frame
+that takes longer than a headset frame shows a frame late, as uncapped.

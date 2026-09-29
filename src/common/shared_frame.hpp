@@ -7,14 +7,15 @@
 // Frame handoff (mono in M2; per-eye slots come with stereo):
 //   * the game owns a ring of kRing shared D3D12 textures and two shared fences;
 //   * game: publishes frame N (1, 2, 3, ...) into slot N % kRing only when the host has
-//     acknowledged frame N-1 (ackFrame == publishedFrame). Before overwriting the slot it
+//     acknowledged frame N-1 (ackFrame == publishedFrame) -- paced (`pace`, v13), when it has
+//     acknowledged frame N-kRing (N <= ackFrame + kRing). Before overwriting the slot it
 //     GPU-waits hostFence >= N - kRing, copies, signals gameFence = N, then stores
-//     publishedSlot and publishedFrame (in that order);
-//   * host: sees publishedFrame F > its last, sets ackFrame = F, GPU-waits gameFence >= F,
-//     copies slot F % kRing into its own texture, signals hostFence = F.
-//   Every published frame is consumed exactly once, so hostFence always catches up and the
-//   game's GPU wait never deadlocks. The game never blocks on the CPU: when the host hasn't
-//   acknowledged yet, the game simply skips publishing that frame.
+//     slotMeta/slotViewQpc, publishedSlot and publishedFrame (in that order);
+//   * host: sees publishedFrame F > its last, reads slot F % kRing's meta, sets ackFrame = F,
+//     GPU-waits gameFence >= F, copies slot F % kRing into its own texture, signals hostFence = F.
+//   The host always takes the newest frame; one it skipped needs no signal of its own (hostFence
+//   = F covers it), so hostFence always catches up and the game's GPU wait never deadlocks. The
+//   game never blocks on the CPU: when the host is behind, it simply skips publishing that frame.
 //
 // Handles are NT handles valid in the GAME process; the host DuplicateHandle()s them in.
 #pragma once
@@ -27,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 12;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand
+inline constexpr std::uint32_t kVersion = 13;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -164,6 +165,14 @@ struct Header {
     // --- v12: host -> game (the menu's Free hand): how the free support hand sits on its controller, on top of the
     // mirrored gun-hand grip -- pitch, yaw, roll (degrees, about the wrist) and forward (cm).
     volatile float         freeHand[4];
+
+    // --- v13: host -> game: frame pacing (the menu's Frame pacing; default the shipped [Bridge] Pace): 1 = the game
+    // starts each Draw on the host's frame event (Local\MOHAVR_Frame_<gamePid>), one game frame per XR frame.
+    volatile std::uint32_t pace;
+    std::uint32_t          pad13;
+    // game -> host, per slot, written before publishedFrame: when that frame's view was computed (QPC; one clock for
+    // both processes). The host logs how far behind each XR frame the world it shows is (round 25).
+    std::int64_t           slotViewQpc[kRing];
 };
 #pragma pack(pop)
 
@@ -187,7 +196,9 @@ static_assert(offsetof(Header, cmd) == 1112, "shared::Header layout must match b
 static_assert(offsetof(Header, throwVel) == 1180, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, weaponKind) == 1192, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, freeHand) == 1200, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1216, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pace) == 1216, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, slotViewQpc) == 1224, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1248, "shared::Header layout must match between x86 and x64");
 
 // The gun fit (v8) as one value. foreFwd/foreUp (cm, the gun's frame from the gun hand's controller: where the other
 // hand holds the foregrip) are the host's only -- they shape gunPose.

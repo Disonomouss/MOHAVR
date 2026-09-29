@@ -23,7 +23,14 @@ bool Install(const Config& cfg);
 
 // Called by the bridge on the render thread when publishing a frame: the render pose/FOV of the
 // frame being presented. Returns false (meta.hasView = 0) if head tracking wasn't applied.
-bool MetaForPresentedFrame(shared::SlotMeta& meta);
+// `info` (diagnostics): when that frame's view was computed (QPC), its serial (one per committed frame) and whether
+// its Draw was paced (frame pacing, hdr->pace).
+struct PresentedFrameInfo {
+    std::int64_t  qpc;
+    std::uint32_t serial;
+    bool          paced;
+};
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr);
 
 // M7: a tracked pose (head or controller, OpenXR LOCAL) as a ray in the world, mapped exactly like the
 // eyes of the player's last head-tracked view: `pos` and unit `fwd` in Unreal units/axes. `unitsPerMeter`

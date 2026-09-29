@@ -43,11 +43,15 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
     c.hudHitMarker   = get(L"HUD", L"HitMarker", c.hudHitMarker);
     c.weaponTracers  = get(L"Weapon", L"Tracers", c.weaponTracers);
+    c.leftHandMirror = get(L"Weapon", L"LeftHandMirror", c.leftHandMirror);
     {
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"Weapon", L"SprintArms", L"idle", v, 16, ini.c_str());
         c.sprintArms = (!_wcsicmp(v, L"game") || !wcscmp(v, L"0")) ? 0 : (!_wcsicmp(v, L"walk") || !wcscmp(v, L"1")) ? 1 : 2;
+        GetPrivateProfileStringW(L"Weapon", L"WalkArms", c.walkArms ? L"idle" : L"game", v, 16, ini.c_str());
+        c.walkArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
     }
+    c.catchUp        = get(L"Weapon", L"CatchUp", c.catchUp);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
@@ -105,6 +109,8 @@ Config LoadConfig(const std::wstring& dir) {
     MLOG("config: Camera.HeadTracking=%d HeadPosition=%d HeadsetProjection=%d Stereo=%d UnitsPerMeter=%.1f "
          "DisableMotionBlur=%d DisableDepthOfField=%d", c.headTracking, c.headPosition, c.headsetProjection, c.stereo,
          c.unitsPerMeter, c.noMotionBlur, c.noDepthOfField);
+    MLOG("config: Weapon.WalkArms=%s Weapon.SprintArms=%d Weapon.CatchUp=%d (frame pacing: the host's [Bridge] Pace and "
+         "its menu)", c.walkArms ? "idle" : "game", c.sprintArms, c.catchUp);
     if (c.bridgeHost && !c.d3d9On12) MLOG("config: Bridge.Host=1 needs Bridge.D3D9On12=1 -- the host will not be started");
     if (c.headTracking && !c.bridgeHost) MLOG("config: Camera.HeadTracking=1 needs Bridge.Host=1 (the host supplies the head pose)");
     if (c.bridgeHost && c.xrEnabled) MLOG("config: Bridge.Host=1 and OpenXR.Enabled=1 -- using the host; in-process OpenXR is off");

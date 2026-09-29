@@ -236,7 +236,8 @@ void MarkBaked(std::uintptr_t comp) {
 std::vector<M4> g_longGunPose;
 
 // The arms: body, shoulders and the two-bone solves on top of the baked move (bones already = saved * A * L2W^-1).
-void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4& A, const M4& invL2W) {
+// `carry`: the body's move since the view the head and the hand frames come from (Weapon.CatchUp; else identity).
+void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4& A, const M4& invL2W, const M4& carry) {
     // The shoulders: anchored to the tracked head (Weapon.ShoulderWidth apart, ShoulderDrop below the eyes,
     // ShoulderBack behind, turned with the body) -- the game's rig has them at eye height behind the eye. The torso moves
     // with them (by their mean shift).
@@ -244,8 +245,17 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     for (int s = 0; s < 2; ++s) bodyShoulder[s] = anchor[s] = Origin(Mul(saved[g_rig.side[s].arm], l2w));
     float head[3], yaw = 0.0f, upm = 100.0f;
     if (view::HeadInWorld(head, yaw, upm)) {
+        const V3 h = Origin(Mul(Translate(V3{head[0], head[1], head[2]}), carry));
+        head[0] = h.x;
+        head[1] = h.y;
+        head[2] = h.z;
+        yaw += std::atan2(carry.m[0][1], carry.m[0][0]);
         const float k = upm / 100.0f;  // cm -> units
-        const V3 fwd{std::cos(yaw), std::sin(yaw), 0.0f}, right{-std::sin(yaw), std::cos(yaw), 0.0f};
+        const V3 fwd{std::cos(yaw), std::sin(yaw), 0.0f};
+        // In the mirror world (left-hand mode, viewmodel::Mirrored) the body's right is the real left: the gun arm's
+        // shoulder is the left one, drawn back through the mirror.
+        const float side = viewmodel::Mirrored() ? -1.0f : 1.0f;
+        const V3 right{-std::sin(yaw) * side, std::cos(yaw) * side, 0.0f};
         const V3 base = Sub(Sub(V3{head[0], head[1], head[2]}, V3{0.0f, 0.0f, g_cfg.shoulderDrop * k}), Scale(fwd, g_cfg.shoulderBack * k));
         anchor[0] = Add(base, Scale(right, 0.5f * g_cfg.shoulderWidth * k));
         anchor[1] = Sub(base, Scale(right, 0.5f * g_cfg.shoulderWidth * k));
@@ -268,6 +278,8 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         M4 gunCtrl, offCtrl;
         std::memcpy(gunCtrl.m, gunF, sizeof(gunCtrl.m));
         std::memcpy(offCtrl.m, offF, sizeof(offCtrl.m));
+        gunCtrl = Mul(gunCtrl, carry);
+        offCtrl = Mul(offCtrl, carry);
         // The gun hand in its controller's frame -- taken from a long gun held still and kept (round 18: mirroring the
         // grenade grip put the free hand wrong; round 19: a frame of the long gun's put-away animation, or the
         // parachute's, had been kept -- the hand bent back with the grenade).
@@ -404,15 +416,18 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     }
 }
 
-// Diagnostics: per sprint (MOHAPlayerPawn.CurrentActivity == PLAYER_ACTIVITY_STAND_SPRINT, which Stand_Sprint's
-// BeginState sets and every other state replaces), how far the drawn gun hand moved in its controller's frame from where
-// it was just before -- the headset log shows whether the sprint still moves the gun (Weapon.SprintArms, viewmodel.cpp).
+// Diagnostics: per walk or sprint (MOHAPlayerPawn.CurrentActivity 1-3 = walk, sprint, crouch-walk, which the Stand_Walk,
+// Stand_Sprint and Crouch_Walk BeginStates set and every other state replaces), how far the drawn gun hand moved in its
+// controller's frame from where it was just before -- the headset log shows whether moving still moves the gun
+// (Weapon.SprintArms and WalkArms, viewmodel.cpp; Weapon.CatchUp). The controller is taken where the eyes see it: moved
+// with the body since the view its frame came from, whatever CatchUp is.
 // Only each frame's last arms update counts: while moving the parts update up to 6 times a frame (gun, arms, gun, arms...),
 // two of them 37 cm higher, and only the last is drawn (probe, round 24). A frame's updates come within ~1 ms; frames
 // are 4+ ms apart; a sample 20+ cm from the frame before is one of the undrawn ones and is skipped.
 struct SprintDiag {
     std::uintptr_t pawn = 0;
     bool     in = false, havePending = false, pendingSprint = false, haveLast = false;
+    bool     pendingRun = false, sprinted = false;  // the pending sample / this move had the sprint activity
     DWORD    start = 0;
     M4       before, pending, last;
     float    maxOff = 0.0f, maxDeg = 0.0f;
@@ -429,7 +444,7 @@ float AngleBetween(const M4& a, const M4& b) {
     return std::acos(std::fmax(-1.0f, std::fmin(1.0f, (tr - 1.0f) * 0.5f))) * 57.29578f;
 }
 
-void CommitSprintSample(const M4& hand, bool sprinting, float upm) {
+void CommitSprintSample(const M4& hand, bool moving, bool running, float upm) {
     SprintDiag& s = g_sprintDiag;
     static unsigned inRow = 0;
     if (s.haveLast && Len(Sub(Origin(hand), Origin(s.last))) > 20.0f * upm / 100.0f && inRow < 2) {
@@ -440,26 +455,29 @@ void CommitSprintSample(const M4& hand, bool sprinting, float upm) {
     inRow = 0;
     s.last = hand;
     s.haveLast = true;
-    if (sprinting) {
+    if (moving) {
         if (!s.in) {
             s.in = true;
+            s.sprinted = false;
             s.start = GetTickCount();
             s.maxOff = s.maxDeg = 0.0f;
             s.skipped = 0;
         }
+        s.sprinted = s.sprinted || running;
         s.maxOff = std::fmax(s.maxOff, Len(Sub(Origin(hand), Origin(s.before))));
         s.maxDeg = std::fmax(s.maxDeg, AngleBetween(s.before, hand));
         return;
     }
     if (s.in) {
         s.in = false;
-        if (s.logged < 40) {
+        if (s.logged < 60) {
             ++s.logged;
             static const char* kArms[] = {"game", "walk", "idle"};
-            MLOG("armik: sprint of %u ms -- the gun hand moved up to %.1f cm and turned up to %.0f deg in its controller's frame "
-                 "(Weapon.SprintArms=%s; %u odd samples skipped)",
-                 static_cast<unsigned>(GetTickCount() - s.start), s.maxOff * 100.0f / upm, s.maxDeg,
-                 kArms[g_cfg.sprintArms < 0 || g_cfg.sprintArms > 2 ? 0 : g_cfg.sprintArms], s.skipped);
+            MLOG("armik: %s of %u ms -- the gun hand moved up to %.1f cm and turned up to %.0f deg in its controller's frame "
+                 "(Weapon.WalkArms=%s SprintArms=%s CatchUp=%d; %u odd samples skipped)",
+                 s.sprinted ? "a sprint" : "a walk", static_cast<unsigned>(GetTickCount() - s.start), s.maxOff * 100.0f / upm,
+                 s.maxDeg, g_cfg.walkArms ? "idle" : "game", kArms[g_cfg.sprintArms < 0 || g_cfg.sprintArms > 2 ? 0 : g_cfg.sprintArms],
+                 g_cfg.catchUp ? 1 : 0, s.skipped);
         }
     }
     s.before = hand;
@@ -467,7 +485,8 @@ void CommitSprintSample(const M4& hand, bool sprinting, float upm) {
 
 void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     const int co = names::PropertyOffset(pawn, "CurrentActivity");
-    const bool sprinting = co >= 0 && *reinterpret_cast<const std::uint8_t*>(pawn + co) == 2;
+    const std::uint8_t act = co >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + co) : 0;
+    const bool sprinting = act == 1 || act == 2 || act == 3;  // walking, sprinting, crouch-walking
     SprintDiag& s = g_sprintDiag;
     LARGE_INTEGER q, f;
     QueryPerformanceCounter(&q);
@@ -482,10 +501,11 @@ void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     if (s.havePending && t - s.lastT > 0.002) {  // a new frame: the last one's last update was the drawn one
         float head[3], yaw = 0.0f, upm = 100.0f;
         view::HeadInWorld(head, yaw, upm);
-        CommitSprintSample(s.pending, s.pendingSprint, upm > 1.0f ? upm : 100.0f);
+        CommitSprintSample(s.pending, s.pendingSprint, s.pendingRun, upm > 1.0f ? upm : 100.0f);
     }
     s.pending = handInCtrl;
     s.pendingSprint = sprinting;
+    s.pendingRun = act == 2;
     s.havePending = true;
     s.lastT = t;
 }
@@ -530,23 +550,34 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     sv->comp = comp;
     sv->bones.assign(bones, bones + num);
 
-    M4 l2w, D;
+    M4 l2w, D, W = kIdentity;
     std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
     std::memcpy(D.m, d, sizeof(D.m));
+    // The body's move since the player view D and the hand frames come from: one tick, 3-5 cm a frame at a walk.
+    {
+        float w[16];
+        if (viewmodel::BodyMoveSinceView(w)) std::memcpy(W.m, w, sizeof(W.m));
+    }
+    // Weapon.CatchUp (round 25, "slight jitter in general movement ... rubber banding"): left alone, the parts trail the
+    // eyes by that move -- the gun by (R_gun R_cam^-1 - I) x the move (up to a few cm with the gun off the view's axis, and
+    // it changes with every frame's length), the free hand and the shoulders by all of it; a snap turn jumps them for a
+    // frame. Carried along instead: D' = W^-1 D W, and the IK's targets x W (ENGINE-NOTES 5ah).
+    const M4 carry = g_cfg.catchUp ? W : kIdentity;
+    if (g_cfg.catchUp) D = Mul(Mul(AffineInverse(W), D), W);
     const M4 invL2W = AffineInverse(l2w);
     const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
     for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
     if (arms && g_rig.ok && static_cast<int>(sv->bones.size()) == num) {
-        // Where the drawn gun hand sits in its controller's frame (the per-sprint log).
+        // Where the drawn gun hand sits in its controller's frame (the per-move log), the controller where the eyes see it.
         float gf[16], of[16];
         bool ov = false, th = false;
         if (viewmodel::HandFrames(gf, of, ov, th)) {
             M4 gunCtrl;
             std::memcpy(gunCtrl.m, gf, sizeof(gunCtrl.m));
-            TrackSprint(pawn, Mul(Mul(sv->bones[g_rig.side[0].hand], A), AffineInverse(gunCtrl)));
+            TrackSprint(pawn, Mul(Mul(sv->bones[g_rig.side[0].hand], A), AffineInverse(Mul(gunCtrl, W))));
         }
-        SolveArms(bones, sv->bones, l2w, A, invL2W);
+        SolveArms(bones, sv->bones, l2w, A, invL2W, carry);
     }
     MarkBaked(comp);
     static int logged = 0;

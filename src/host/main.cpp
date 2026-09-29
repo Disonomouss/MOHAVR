@@ -445,6 +445,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     bool screenYReal = false;  // screenY came from a really tracked head pose
     SetState(HostState::Running, "session created");
 
+    // Frame pacing (the menu's Frame pacing -> hdr->pace; game side vr_view.cpp): the game's frame event, set once per XR
+    // frame after this frame's poses are written and the last game frame taken -- a paced game starts its next Draw on
+    // it. The game creates it; an older game DLL has none.
+    HANDLE frameEvent = OpenEventW(EVENT_MODIFY_STATE, FALSE, (L"Local\\MOHAVR_Frame_" + std::to_wstring(gamePid)).c_str());
+    MLOG("host: game frame event %s", frameEvent ? "open (set once per XR frame)" : "not found (no pacing)");
+
     // On-request capture of what the host received (the harness's view of the VR side).
     HANDLE captureEvent = CreateEventW(nullptr, FALSE, FALSE, L"Local\\MOHAVR_HostCapture");
     std::wstring capturePath;
@@ -469,6 +475,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     bool recenterBumpPending = false;
     long xrFrames = 0;
     long newFrames = 0;
+    long repeats = 0, repeatRun = 0, longestRepeat = 0;  // XR frames without a new game frame (10 s window)
+    std::int64_t lastViewQpc = 0;                         // the game's view time of the frame in `last` (v13)
+    double lagSum = 0.0, lagSum2 = 0.0, lagLo = 1e9, lagHi = -1e9;  // XR frame time - that view time (10 s window)
+    long lagN = 0;
     while (GameAlive(game)) {
         XrEventDataBuffer ev{XR_TYPE_EVENT_DATA_BUFFER};
         while (xrPollEvent(instance, &ev) == XR_SUCCESS) {
@@ -513,10 +523,20 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             ++n;
             since += dt;
             if (since >= 10.0) {
-                MLOG("perf: XR frame %.2f ms avg (%.1f Hz), worst %.1f ms, %ld of %ld late (> 1.5 frames at 90 Hz)", sum / n,
-                     1000.0 * n / sum, worst, late, n);
+                MLOG("perf: XR frame %.2f ms avg (%.1f Hz), worst %.1f ms, %ld of %ld late (> 1.5 frames at 90 Hz); %ld showed the "
+                     "last game frame again (at most %ld in a row)", sum / n, 1000.0 * n / sum, worst, late, n, repeats, longestRepeat);
+                if (lagN > 0) {
+                    const double mean = lagSum / lagN, sd = std::sqrt(std::fmax(0.0, lagSum2 / lagN - mean * mean));
+                    MLOG("perf: the world shown was %.1f ms behind each XR frame (sd %.2f ms, %.1f..%.1f) -- the sd is the jitter "
+                         "while moving (at a run, 1 ms = 0.5 cm)", mean, sd, lagLo, lagHi);
+                }
                 sum = worst = since = 0.0;
                 n = late = 0;
+                repeats = longestRepeat = 0;
+                lagSum = lagSum2 = 0.0;
+                lagLo = 1e9;
+                lagHi = -1e9;
+                lagN = 0;
             }
         }
         mohavr::host::MenuInput mi;
@@ -661,6 +681,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
                 // M7: the aim poses, at the same time and in the same space as the head.
                 handBits = handsOk ? pad.LocateHands(local, fs.predictedDisplayTime, headLoc.pose, handPose) : 0u;
+                // A hand the runtime stops tracking (round 24: after ~10 s without moving, the Quest drops idle
+                // controllers, and the gun fell back to the game's flat-screen placement, seen double) stays put.
+                if (handsOk) handBits |= pad.HoldLost(headLoc.pose, handPose, handBits);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -786,8 +809,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         const std::uint64_t f = static_cast<std::uint64_t>(
             InterlockedCompareExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->publishedFrame), 0, 0));
         if (f > shown) {
-            const UINT slot = static_cast<UINT>(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&g_hdr->publishedSlot), 0, 0));
-            lastMeta = g_hdr->slotMeta[slot % kRing];  // written by the game before it published f
+            // Frame f's own slot (not publishedSlot, which a paced game may already have moved on to the next frame).
+            const UINT slot = static_cast<UINT>(f % kRing);
+            lastMeta = g_hdr->slotMeta[slot];  // written by the game before it published f
+            lastViewQpc = g_hdr->slotViewQpc[slot];
             {
                 // Diagnostics (headset round 8): log whenever what we submit changes kind or FOV.
                 static mohavr::shared::SlotMeta seen{};
@@ -833,7 +858,25 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (captureEvent && WaitForSingleObject(captureEvent, 0) == WAIT_OBJECT_0) {
                 Inspect(dev, ctx, last, "on request", capturePath.c_str());
             }
+            repeatRun = 0;
+        } else if (shown) {
+            ++repeats;
+            longestRepeat = ++repeatRun > longestRepeat ? repeatRun : longestRepeat;
         }
+        if (lastViewQpc && shown) {
+            // How far behind this XR frame the world it shows is (the game's view time of the frame in `last`). Motion is
+            // smooth when this stays the same from frame to frame: its spread is the jitter (round 25).
+            const double lag = 1000.0 * static_cast<double>(qpcNow.QuadPart - lastViewQpc) / static_cast<double>(qpf.QuadPart);
+            if (lag > -50.0 && lag < 250.0) {
+                lagSum += lag;
+                lagSum2 += lag * lag;
+                lagLo = lag < lagLo ? lag : lagLo;
+                lagHi = lag > lagHi ? lag : lagHi;
+                ++lagN;
+            }
+        }
+        // This frame's poses are written and the last game frame is taken: a paced game starts its next Draw now.
+        if (frameEvent) SetEvent(frameEvent);
 
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};
         XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
