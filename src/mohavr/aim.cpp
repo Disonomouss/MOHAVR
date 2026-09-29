@@ -5,6 +5,7 @@
 #include <safetyhook.hpp>
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "addresses.hpp"
@@ -32,8 +33,28 @@ struct AimFrame {
     DWORD tick;
     float start[3];  // the game's shot start (its untracked eye)
     float point[3];  // where the aim ray hits (or its end)
+    float from[3];   // where the aim ray was traced from (the gun; past anything it started inside)
+    float dir[3];    // the aim ray's direction
+    float upm;       // units per metre
+    std::uintptr_t actor;  // what it hit (0: nothing)
 };
 AimFrame g_frame{};
+
+// The player's shot: armed by GetBaseAimRotation, then taken up by the bullet's trace (game thread only).
+struct ShotState {
+    bool           armed, active, followOn, fromGun;
+    DWORD          tick;
+    float          aim[3];                     // the base aim given (unit)
+    float          eye[3], start[3], end[3];   // the game's start; the trace's start and end
+    float          dot[3], dotDist;            // the red dot's point when the shot went (and its distance, m)
+    float          turn;                       // degrees between the aim given and the game's shot line
+    DWORD          frameAge;                   // ms since the aim frame
+    std::uintptr_t source, hitPtr, blocker;    // blocker: 1 = something unnamed
+    unsigned       count, logged;
+    bool           layoutBad;
+};
+ShotState     g_shot{};
+SafetyHookMid g_bulletPre, g_bulletPost;
 
 // UWorld::SingleLineCheck through its LTCG convention (addresses.hpp): stack (this, Hit, Source, End, Start,
 // Extent), EAX = flags, ECX = 0, callee pops. Returns nonzero when nothing was hit.
@@ -64,7 +85,8 @@ __declspec(naked) int __stdcall CallSingleLineCheck(void* /*world*/, void* /*hit
     }
 }
 
-// The trace; false (and `hit` = end) when nothing is in the way.
+// The trace, with the player's bullets' flags (per-poly collision; addresses.hpp); false (and `hit` = end) when
+// nothing is in the way.
 bool Trace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3],
            std::uintptr_t* actor = nullptr) {
     void* world = *reinterpret_cast<void**>(addr::kGWorld);
@@ -75,7 +97,7 @@ bool Trace(std::uintptr_t source, const float (&start)[3], const float (&end)[3]
     *reinterpret_cast<int*>(result + addr::kCheckResultItem) = -1;
     const float extent[3] = {0.0f, 0.0f, 0.0f};
     const int clear = CallSingleLineCheck(world, result, reinterpret_cast<void*>(source), end, start, extent,
-                                          addr::kTraceFlagsActors, addr::kSingleLineCheck);
+                                          addr::kTraceFlagsBullet, addr::kSingleLineCheck);
     if (clear) return false;
     std::memcpy(hit, result + addr::kCheckResultLocation, sizeof(hit));
     if (actor) *actor = *reinterpret_cast<const std::uintptr_t*>(result + addr::kCheckResultActor);
@@ -139,6 +161,44 @@ void Publish(float distance, std::uint32_t source) {
 // Frames since the last ray log, and those whose hand read met the host mid-write (kept the last aim).
 unsigned g_frames = 0, g_torn = 0, g_near = 0, g_triggers = 0;
 
+bool IsPassThrough(std::uintptr_t actor) {
+    return actor && (names::IsA(actor, "Trigger") || names::IsA(actor, "TriggerVolume"));
+}
+
+// A trace the way the game's bullets go (0x10F0CF10): through Triggers and TriggerVolumes. Each one hit has its
+// bProjTarget cleared and the trace goes on; all of them are set back at the end (round 21: setting each back before
+// the next trace made two overlapping triggers hit in turn until the loop gave up, and the aim point sat at the gun).
+bool TraceThrough(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3],
+                  std::uintptr_t* actorOut) {
+    struct Cleared {
+        volatile std::uint32_t* word;
+        std::uint32_t           mask;
+    };
+    Cleared cleared[16];
+    int n = 0;
+    std::uintptr_t actor = 0;
+    bool h = Trace(source, start, end, hit, &actor);
+    while (h && n < 16 && IsPassThrough(actor)) {
+        int off = -1;
+        std::uint32_t mask = 0;
+        if (!names::BoolProperty(actor, "bProjTarget", off, mask)) break;
+        auto* word = reinterpret_cast<volatile std::uint32_t*>(actor + static_cast<std::uintptr_t>(off));
+        if (!(*word & mask)) break;  // hit with it already off: take the hit rather than loop
+        *word = *word & ~mask;
+        cleared[n++] = {word, mask};
+        h = Trace(source, start, end, hit, &actor);
+    }
+    for (int i = n - 1; i >= 0; --i) *cleared[i].word = *cleared[i].word | cleared[i].mask;
+    g_triggers += static_cast<unsigned>(n);
+    if (actorOut) *actorOut = h ? actor : 0;
+    return h;
+}
+
+float Dist(const float (&a)[3], const float (&b)[3]) {
+    const float x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2];
+    return std::sqrt(x * x + y * y + z * z);
+}
+
 // The last base aim this hook gave the player (for AddSpread).
 int   g_lastAim[3] = {0, 0, 0};
 DWORD g_lastAimTick = 0;
@@ -183,6 +243,13 @@ void __fastcall Hook_GetBaseAimRotation(std::uintptr_t self, void* /*edx*/, void
     result[2] = 0;
     for (int i = 0; i < 3; ++i) g_lastAim[i] = result[i];
     g_lastAimTick = GetTickCount();
+    // A shot follows (PerformWeaponTrace: GetAdjustedAim, then CalcWeaponFire): arm the bullet-trace hook.
+    const float len = std::sqrt(vx * vx + vy * vy + vz * vz);
+    g_shot.armed = true;
+    g_shot.tick = g_lastAimTick;
+    g_shot.aim[0] = vx / len;
+    g_shot.aim[1] = vy / len;
+    g_shot.aim[2] = vz / len;
     static int logged = 0;
     if (logged < 12) {
         ++logged;
@@ -190,6 +257,126 @@ void __fastcall Hook_GetBaseAimRotation(std::uintptr_t self, void* /*edx*/, void
              static_cast<unsigned>(self), before[0] & 0xFFFF, before[1] & 0xFFFF, result[0], result[1], g_frame.point[0],
              g_frame.point[1], g_frame.point[2], g_frame.start[0], g_frame.start[1], g_frame.start[2]);
     }
+}
+
+// v turned by the rotation that takes unit a onto unit b (the shortest one).
+void TurnLike(const float (&a)[3], const float (&b)[3], float (&v)[3]) {
+    const float k[3] = {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
+    const float s = std::sqrt(k[0] * k[0] + k[1] * k[1] + k[2] * k[2]);
+    const float c = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    if (s < 1e-6f) return;
+    const float u[3] = {k[0] / s, k[1] / s, k[2] / s};
+    const float uv[3] = {u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
+    const float ud = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    for (int i = 0; i < 3; ++i) v[i] = v[i] * c + uv[i] * s + u[i] * ud * (1.0f - c);
+}
+
+// The bullet's SingleLineCheck in 0x10F0CDE0 (addresses.hpp). Aim.ShotFromGun: the player's shot starts at the gun
+// and runs along the red dot's ray -- the same ray, start and flags as the dot, so they can't disagree (round 21: the
+// shot from the eye towards the dot's point met other things on the way) -- unless something stands between the eye
+// and the gun (a hand through a wall). Aim.ShotLog: where each shot went.
+void OnBulletTrace(SafetyHookContext& ctx) {
+    if ((!g_shot.armed && !g_shot.followOn) || g_shot.layoutBad) return;
+    const std::uintptr_t esp = ctx.esp;
+    // The call's arguments as addresses.hpp has them: [esp] GWorld, [esp+8] Source (pushed from EBX).
+    if (*reinterpret_cast<const std::uintptr_t*>(esp) != *reinterpret_cast<const std::uintptr_t*>(addr::kGWorld) ||
+        *reinterpret_cast<const std::uintptr_t*>(esp + 8) != ctx.ebx) {
+        g_shot.layoutBad = true;
+        MLOG("aim: the bullet trace's stack isn't as expected -- Aim.ShotFromGun / ShotLog stand down");
+        return;
+    }
+    const std::uintptr_t source = ctx.ebx;
+    float* endP = *reinterpret_cast<float**>(esp + 0xC);
+    float* startP = *reinterpret_cast<float**>(esp + 0x10);
+    const float* extP = *reinterpret_cast<const float**>(esp + 0x14);
+    if (!source || !endP || !startP) return;
+    // The same shot going on past a trigger (0x10F0CF10 recurses from the hit, towards the same end).
+    if (g_shot.followOn) {
+        if (source == g_shot.source && std::fabs(endP[0] - g_shot.end[0]) < 1.0f && std::fabs(endP[1] - g_shot.end[1]) < 1.0f &&
+            std::fabs(endP[2] - g_shot.end[2]) < 1.0f) {
+            g_shot.active = true;
+            g_shot.hitPtr = *reinterpret_cast<const std::uintptr_t*>(esp + 4);
+            return;
+        }
+        g_shot.followOn = false;
+    }
+    if (!g_shot.armed || GetTickCount() - g_shot.tick > 100) return;
+    const std::uintptr_t pawn = LocalPawn(LocalController());
+    if (source != pawn) return;
+    if (extP && (extP[0] != 0.0f || extP[1] != 0.0f || extP[2] != 0.0f)) return;  // a box trace (melee)
+    float d[3] = {endP[0] - startP[0], endP[1] - startP[1], endP[2] - startP[2]};
+    const float range = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    if (range < 1.0f) return;
+    for (float& x : d) x /= range;
+    if (d[0] * g_shot.aim[0] + d[1] * g_shot.aim[1] + d[2] * g_shot.aim[2] < 0.95f) return;  // not along this shot's aim
+    g_shot.armed = false;
+    ++g_shot.count;
+    g_shot.source = source;
+    g_shot.hitPtr = *reinterpret_cast<const std::uintptr_t*>(esp + 4);
+    g_shot.active = true;
+    g_shot.fromGun = false;
+    g_shot.blocker = 0;
+    for (int i = 0; i < 3; ++i) {
+        g_shot.eye[i] = startP[i];
+        g_shot.dot[i] = g_frame.point[i];
+    }
+    g_shot.dotDist = Dist(g_frame.from, g_frame.point) / (g_frame.upm > 1.0f ? g_frame.upm : 100.0f);
+    g_shot.frameAge = GetTickCount() - g_frame.tick;
+    {
+        const float c = d[0] * g_shot.aim[0] + d[1] * g_shot.aim[1] + d[2] * g_shot.aim[2];
+        g_shot.turn = std::acos(std::fmin(1.0f, std::fmax(-1.0f, c))) * 180.0f / kPi;
+    }
+    if (g_cfg.aimShotFromGun && g_frame.valid && GetTickCount() - g_frame.tick < 250) {
+        // The dot's ray, turned by whatever the game's spread did to the base aim (none with Aim.Spread=0).
+        float dir[3] = {g_frame.dir[0], g_frame.dir[1], g_frame.dir[2]};
+        TurnLike(g_shot.aim, d, dir);
+        float at[3];
+        std::uintptr_t blocker = 0;
+        if (TraceThrough(source, g_shot.eye, g_frame.from, at, &blocker)) {
+            g_shot.blocker = blocker ? blocker : 1;
+        } else {
+            for (int i = 0; i < 3; ++i) {
+                startP[i] = g_frame.from[i];
+                endP[i] = g_frame.from[i] + dir[i] * range;
+            }
+            g_shot.fromGun = true;
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        g_shot.start[i] = startP[i];
+        g_shot.end[i] = endP[i];
+    }
+}
+
+// Right after it: where the bullet went (the Hit at esp+0x14).
+void OnBulletTraceDone(SafetyHookContext& ctx) {
+    if (!g_shot.active) return;
+    g_shot.active = false;
+    const std::uintptr_t hit = ctx.esp + 0x14;
+    if (hit != g_shot.hitPtr || ctx.ebx != g_shot.source) return;  // not the Hit we saw go in
+    const std::uintptr_t actor = *reinterpret_cast<const std::uintptr_t*>(hit + addr::kCheckResultActor);
+    const float* loc = reinterpret_cast<const float*>(hit + addr::kCheckResultLocation);
+    if (actor && IsPassThrough(actor)) {  // the game goes on through it: log where it ends up
+        g_shot.followOn = true;
+        return;
+    }
+    g_shot.followOn = false;
+    if (!g_cfg.aimShotLog || g_shot.logged >= 400) return;
+    ++g_shot.logged;
+    const float upm = g_frame.upm > 1.0f ? g_frame.upm : 100.0f;
+    const float at[3] = {actor ? loc[0] : g_shot.end[0], actor ? loc[1] : g_shot.end[1], actor ? loc[2] : g_shot.end[2]};
+    char from[160];
+    if (g_shot.fromGun)
+        sprintf_s(from, "from the gun (%.2f m from the eye)", Dist(g_shot.eye, g_shot.start) / upm);
+    else if (g_shot.blocker)
+        sprintf_s(from, "from the eye -- %s between the eye and the gun",
+                  g_shot.blocker > 1 ? names::Name(g_shot.blocker).c_str() : "something");
+    else
+        sprintf_s(from, "from the eye");
+    MLOG("shot %u: %s; hit %s at %.0f %.0f %.0f (%.1f m) -- %.0f cm from the red dot's point (%.1f m; the game's line %.2f deg "
+         "off the aim; aim frame %u ms old)",
+         g_shot.count, from, actor ? names::Name(actor).c_str() : "nothing", at[0], at[1], at[2], Dist(g_shot.start, at) / upm,
+         Dist(at, g_shot.dot) * 100.0f / upm, g_shot.dotDist, g_shot.turn, g_shot.frameAge);
 }
 
 }  // namespace
@@ -229,6 +416,27 @@ bool Install(const Config& cfg) {
             }
         } else {
             MLOG("aim: AddSpread bytes differ -- the game's spread stays");
+        }
+    }
+    if (cfg.aimShotFromGun || cfg.aimShotLog) {
+        // Standing rule 4: the flags the bullet traces with, its call and the instruction after it.
+        if (patch::BytesMatch(addr::kBulletTraceFlagsSite, addr::kBulletTraceFlagsSiteBytes, sizeof(addr::kBulletTraceFlagsSiteBytes)) &&
+            patch::BytesMatch(addr::kBulletTraceCall, addr::kBulletTraceCallBytes, sizeof(addr::kBulletTraceCallBytes)) &&
+            patch::BytesMatch(addr::kBulletTraceAfter, addr::kBulletTraceAfterBytes, sizeof(addr::kBulletTraceAfterBytes))) {
+            auto pre = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kBulletTraceCall), OnBulletTrace);
+            auto post = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kBulletTraceAfter), OnBulletTraceDone);
+            if (pre && post) {
+                g_bulletPre = std::move(*pre);
+                g_bulletPost = std::move(*post);
+                MLOG("aim: bullet trace hooked at 0x%08X/0x%08X (Aim.ShotFromGun=%d: %s; Aim.ShotLog=%d)",
+                     static_cast<unsigned>(addr::kBulletTraceCall), static_cast<unsigned>(addr::kBulletTraceAfter),
+                     cfg.aimShotFromGun, cfg.aimShotFromGun ? "shots start at the gun, along the red dot's ray" : "shots from the eye",
+                     cfg.aimShotLog);
+            } else {
+                MLOG("aim: bullet trace hooks failed -- shots start at the eye, no shot log");
+            }
+        } else {
+            MLOG("aim: bullet trace bytes differ -- shots start at the eye, no shot log");
         }
     }
     static const char* kNames[] = {"game", "head", "left hand", "right hand"};
@@ -278,41 +486,14 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     const float end[3] = {pos[0] + fwd[0] * reach, pos[1] + fwd[1] * reach, pos[2] + fwd[2] * reach};
     float point[3];
     std::uintptr_t actor = 0;
-    bool hit = Trace(pawn, pos, end, point, &actor);
-    const float step = 20.0f * upm / 100.0f;
     float from[3] = {pos[0], pos[1], pos[2]};
-    int stepsOn = 0;
-    for (int guard = 0; hit && guard < 12; ++guard) {
-        // Triggers: the game's own shots pass through them (Weapon.PassThroughDamage: CalcWeaponFire clears the
-        // trigger's bProjTarget and traces again) -- so does the aim (round 20: standing in Trigger_1 the ray hit it
-        // at every step and the aim went to a point 1 m ahead).
-        if (actor && (names::IsA(actor, "Trigger") || names::IsA(actor, "TriggerVolume"))) {
-            int off = -1;
-            std::uint32_t mask = 0;
-            if (names::BoolProperty(actor, "bProjTarget", off, mask)) {
-                ++g_triggers;
-                auto* word = reinterpret_cast<volatile std::uint32_t*>(actor + static_cast<std::uintptr_t>(off));
-                const std::uint32_t was = *word;
-                *word = was & ~mask;
-                const std::uintptr_t trigger = actor;
-                hit = Trace(pawn, from, end, point, &actor);
-                *word = was;
-                static int loggedTrig = 0;
-                if (loggedTrig < 6) {
-                    ++loggedTrig;
-                    MLOG("aim: passed through %s (%s), as the game's shots do%s%s", names::Name(trigger).c_str(),
-                         names::ClassName(trigger).c_str(), (was & mask) ? "" : " (its bProjTarget was already off)",
-                         hit && actor == trigger ? " -- NOT: it was hit again" : "");
-                }
-                if (!(hit && actor == trigger)) continue;  // else: step past it like anything else
-            }
-        }
-        // A hit right at the start means the ray began inside something (headset rounds 18-19: runs of 0.0 / 0.2 m
-        // hits while walking -- the aim then pointed from the eye at the hand). Step along the ray past it, 20 cm at
-        // a time, up to 1 m.
-        const float fx = point[0] - from[0], fy = point[1] - from[1], fz = point[2] - from[2];
-        if (fx * fx + fy * fy + fz * fz >= step * step || stepsOn >= 5) break;
-        ++stepsOn;
+    bool hit = TraceThrough(pawn, from, end, point, &actor);
+    // A hit right at the start means the ray began inside something (headset rounds 18-19: runs of 0.0 / 0.2 m hits
+    // while walking -- the aim then pointed from the eye at the hand). Step along the ray past it, 20 cm at a time, up
+    // to 1 m.
+    const float step = 20.0f * upm / 100.0f;
+    for (int stepsOn = 1; hit && stepsOn <= 5; ++stepsOn) {
+        if (Dist(point, from) >= step) break;
         ++g_near;
         static int loggedNear = 0;
         static std::uintptr_t seenNear = 0;
@@ -323,8 +504,14 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
                  actor ? names::ClassName(actor).c_str() : "?", actor == pawn ? " = the player" : "", stepsOn * 20);
         }
         for (int k = 0; k < 3; ++k) from[k] = pos[k] + fwd[k] * step * static_cast<float>(stepsOn);
-        hit = Trace(pawn, from, end, point, &actor);
+        hit = TraceThrough(pawn, from, end, point, &actor);
     }
+    for (int k = 0; k < 3; ++k) {
+        g_frame.from[k] = from[k];
+        g_frame.dir[k] = fwd[k];
+    }
+    g_frame.upm = upm;
+    g_frame.actor = hit ? actor : 0;
     g_frame.valid = true;
     g_frame.tick = GetTickCount();
     std::memcpy(g_frame.start, shotStart, sizeof(g_frame.start));

@@ -155,10 +155,22 @@ inline constexpr std::uintptr_t kGWorld = 0x116DCE78;       // UWorld* (execTrac
 // AddSpread (vtable +0x170); *Result = the spread aim.
 inline constexpr std::uintptr_t kExecAddSpread = 0x10E4E310;
 inline constexpr std::uint8_t   kExecAddSpreadBytes[] = {0x83, 0xEC, 0x18, 0x56, 0x8B, 0x74, 0x24, 0x20, 0x8B, 0x46, 0x1C};
-// The flags execTrace builds for Trace(..., bTraceActors=true): 0x20BF | 0x4000 (SingleLineCheck adds 0x400). The aim
-// trace leaves out TRACE_Volumes (0x08): blocking volumes (player clip, invisible walls) stop players, not bullets --
-// hitting them put the aim point short of what the ray points at (headset round 18).
-inline constexpr std::uint32_t  kTraceFlagsActors = 0x60BF & ~0x08u;
+// The player's bullets: EALAWeapon.CalcWeaponFire -> execCalcWeaponFireNative (native table entry at 0x11612348 ->
+// "intAEALAWeaponexecCalcWeaponFireNative", 0x10E4CF90) -> 0x10F0CF10 (TraceOwner, Start, End, Extent, ImpactList):
+// traces with 0x10F0CDE0 and, on a Trigger/TriggerVolume, clears its bProjTarget (+0x78 bit 0x40000), recurses from
+// the hit and sets it back. 0x10F0CDE0 calls SingleLineCheck(GWorld, &Hit, Source, End*, Start*, Extent*) with
+// EAX = 0x268BF: TRACE_ProjTargets | 0x4000 | 0x800 (material) | 0x20000 (per-poly collision). The aim trace uses the
+// same flags (round 22: its simple-collision trace had put the red dot where bullets don't go).
+inline constexpr std::uintptr_t kBulletTraceFlagsSite = 0x10F0CE5C;  // mov eax,0x268BF
+inline constexpr std::uint8_t   kBulletTraceFlagsSiteBytes[] = {0xB8, 0xBF, 0x68, 0x02, 0x00};
+inline constexpr std::uint32_t  kTraceFlagsBullet = 0x268BF;
+// The bullet's SingleLineCheck call (MidHook before it: [esp] GWorld, +4 &Hit, +8 Source, +0xC End*, +0x10 Start*,
+// +0x14 Extent*; End/Start point at 0x10F0CF10's own by-value Start/End, which it goes on to use) and the instruction
+// after it (MidHook: the Hit at esp+0x14, its Actor at esp+0x18, Location at esp+0x1C).
+inline constexpr std::uintptr_t kBulletTraceCall = 0x10F0CE93;
+inline constexpr std::uint8_t   kBulletTraceCallBytes[] = {0xE8, 0x08, 0x72, 0xC5, 0xFF};
+inline constexpr std::uintptr_t kBulletTraceAfter = 0x10F0CE98;
+inline constexpr std::uint8_t   kBulletTraceAfterBytes[] = {0x8D, 0x44, 0x24, 0x14, 0xE8, 0x1F, 0x03, 0xCE, 0xFF};
 // FCheckResult (execTrace's initialisation): Next +0, Actor +4, Location +8, Normal +0x14, Time +0x20 (1.0 =
 // no hit), Item +0x24 (-1), then Material/Component/BoneName/...: 0x44 bytes in all.
 inline constexpr std::uintptr_t kCheckResultActor = 0x04, kCheckResultLocation = 0x08, kCheckResultTime = 0x20,
@@ -234,6 +246,9 @@ inline constexpr Signature kSignatures[] = {
     {"MOHA skel UpdateTransform",          kMohaSkelUpdateTransform, kMohaSkelUpdateTransformBytes, sizeof(kMohaSkelUpdateTransformBytes)},
     {"skel MeshObject->Update call",       kSkelMeshObjectUpdateCall, kSkelMeshObjectUpdateCallBytes, sizeof(kSkelMeshObjectUpdateCallBytes)},
     {"execAddSpread",                      kExecAddSpread, kExecAddSpreadBytes, sizeof(kExecAddSpreadBytes)},
+    {"bullet trace flags",                 kBulletTraceFlagsSite, kBulletTraceFlagsSiteBytes, sizeof(kBulletTraceFlagsSiteBytes)},
+    {"bullet trace call",                  kBulletTraceCall, kBulletTraceCallBytes, sizeof(kBulletTraceCallBytes)},
+    {"bullet trace after",                 kBulletTraceAfter, kBulletTraceAfterBytes, sizeof(kBulletTraceAfterBytes)},
 };
 
 }  // namespace mohavr::addr

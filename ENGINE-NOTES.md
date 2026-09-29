@@ -737,6 +737,31 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   of the upper arm's length off the shoulder-wrist line), otherwise down and a little out; the forearm roll bones'
   twist is unwrapped frame to frame and held within 150 degrees.
 
+## 5ab. The player's bullets, natively (2026-09-29, round 21 -> 22)
+
+- **EALAWeapon.CalcWeaponFire** = `CalcWeaponFireNative(GetTraceOwner(), StartTrace, EndTrace, GetTraceExtentsHelper(),
+  ImpactList)`: native `execCalcWeaponFireNative` 0x10E4CF90 (table entry 0x11612348) -> **0x10F0CF10**
+  (ImpactInfo* out, TraceOwner, Start by value, End by value, Extent, ImpactList). It traces with **0x10F0CDE0**,
+  then: a hit whose class chain has Trigger or TriggerVolume -> `bProjTarget` (+0x78 bit 0x40000) cleared, recurse from
+  the hit towards the same End, set back after; a PortalTeleporter -> the portal transform. Also used by
+  WeaponAttachment (third-person effects, owner = the attachment) and vehicles.
+- **0x10F0CDE0**: Source = TraceOwner (or `TraceOwner->vfunc(0x2BC)`'s +0x1E0 when set); `SingleLineCheck(GWorld,
+  &Hit, Source, End*, Start*, Extent*)` with **EAX = 0x268BF** (`mov eax,0x268BF` at 0x10F0CE5C) = 0x20BF
+  (ProjTargets) | 0x4000 | 0x800 (material) | **0x20000 (per-poly collision)**. End*/Start* point at 0x10F0CF10's own
+  by-value Start/End, which it goes on to use (RayDir, the pass-through recursion) -> changing them before the call
+  moves the whole shot.
+- **The aim trace now uses 0x268BF** (was 0x60BF & ~0x08: simple collision, no volumes -- the red dot's point was on
+  collision hulls the bullets don't use). Its trigger pass-through keeps every trigger it passed cleared until the end
+  (round 21's one-at-a-time version ping-ponged between two overlapping triggers: 11,296 passes in 1,066 frames and the
+  aim point at the gun).
+- **Aim.ShotFromGun (default 1):** MidHook at the bullet's SingleLineCheck call **0x10F0CE93** (`E8 08 72 C5 FF`;
+  [esp] GWorld, +4 &Hit, +8 Source = EBX, +0xC End*, +0x10 Start*, +0x14 Extent*): for the player's shot (armed by our
+  GetBaseAimRotation, Source = the pawn, zero extent, along the given aim) Start/End become the red dot's ray (its start
+  past anything it began inside; the game's range), unless the eye -> gun segment is blocked. MidHook at **0x10F0CE98**
+  (`8D 44 24 14 ...`; Hit at esp+0x14) logs the hit (`Aim.ShotLog`, "shot N:" lines, the first 400).
+- **Verified [S]:** 18 shots at three gun angles, all from the gun, 0 cm from the red dot's point at the moment of the
+  shot; the game's shot line 0.00-0.03 deg from the aim given. With ShotFromGun=0 and the new flags: 0-2 cm.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

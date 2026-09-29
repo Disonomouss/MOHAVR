@@ -826,6 +826,44 @@ ended 1 m out (3610 "started inside" in one 5-s line); otherwise StaticMeshActor
 3. Shots still on the red dot? (yes/no)
 4. Anything else odd? (describe)
 
+**Answers:** 1 "Red dot toggle works." · 2 "Looks good" · 3 "Issue persists."
+
+**Log received:** yes, `logs/modlogs/20260929-164154-MOHAVR.log`. The last minute: aim points at **0.0 m** (at the gun)
+with up to 11,296 trigger pass-throughs in 1,066 frames -- two overlapping triggers: each was set back before the
+next trace, so they hit in turn until the loop gave up at the gun.
+
+**Verdict:** red dot switch PASSED; pistol arm PASSED; shots FAILED (round 22).
+
+**Found (round 22), with Ghidra:** the player's bullets don't use the script's Trace: EALAWeapon.CalcWeaponFire calls
+the native CalcWeaponFireNative (0x10F0CF10), which traces with flags **0x268BF** -- per-poly collision (0x20000),
+volumes and material -- where the aim trace used the simple-collision 0x60BF without volumes. The red dot's point came
+from simple collision hulls (bigger or smaller than the meshes the bullets hit), so the shot from the eye towards it
+met other surfaces. The native passes triggers by keeping every one it passed switched off until it's done.
+
+---
+
+## Round 22: prepared 2026-09-29, the shot and the red dot on the same ray
+**Changed:**
+- **The red dot now uses exactly the bullets' collision** (the flags the game's own bullet trace uses).
+- **Triggers:** passed the way the game's bullets pass them (all kept off until the trace is done) -- no more aim point
+  stuck at the gun.
+- **Shots start at the gun** and run along the red dot's ray (`Aim.ShotFromGun=1`), unless something is between your
+  eyes and the gun (a hand through a wall): the same ray, start and collision as the dot.
+- **Every shot is logged** (`Aim.ShotLog=1`, the first 400): where it started, what it hit, and how far from the red
+  dot -- so if anything is still off, the log says exactly what and where.
+- [S]: 18 shots at three gun angles (2-8 m, slabs and roof): all from the gun, **0 cm** from the red dot's point;
+  the game's own shot line within 0.03 deg of the aim (no hidden spread or recoil). With the old start (from the
+  eye) and the new collision: 0-2 cm.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Shoot everything: near, far, while walking, along walls, over and around cover, rifle, BAR and pistol.
+2. If a shot goes wrong, just keep playing -- the log records every shot.
+
+**Questions:**
+1. Do shots land on the red dot now? (yes / when not)
+2. Is the game's crosshair gone? (yes/no)
+3. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

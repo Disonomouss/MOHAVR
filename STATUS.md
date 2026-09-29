@@ -116,7 +116,10 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 21** (deployed): menu Red dot switch, the game's crosshair hidden (`HUD.Crosshair`), the aim
+2. **HEADSET-TESTS round 22** (deployed): the red dot's trace uses the bullets' own collision flags (0x268BF, per-poly;
+   found in the native CalcWeaponFireNative), triggers passed like the bullets do, shots start at the gun along the
+   dot's ray (`Aim.ShotFromGun`), a per-shot log (`Aim.ShotLog`). Round 21: red dot switch and pistol arm passed; shots
+   failed (two overlapping triggers ping-ponged, aim at the gun). Round 21 as deployed: menu Red dot switch, the game's crosshair hidden (`HUD.Crosshair`), the aim
    passes through triggers like the game's bullets, the free arm with a pistol/grenade from the rifle's arm pose
    (`Weapon.FreeArmPose`), steadier elbow bend and forearm twist. Round 20: shots passed, shoulders better, the elbow
    hinge (`Weapon.ElbowHinge=2`). Round 20 as deployed: the aim ray steps out of whatever it starts inside (round 19's log: runs of
