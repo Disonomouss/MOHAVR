@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-29 (round 26 deployed; the "Next" list is current, the history below it is kept)_
+_Last updated: 2026-09-30 (round 27 deployed; the "Next" list is current, the history below it is kept)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -116,7 +116,12 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 26** (deployed): left-hand mode fixed (the shoulders not flipped in the mirror world; the grip
+2. **HEADSET-TESTS round 27** (deployed): the muzzle flash at the drawn barrel, both hands (`Weapon.MuzzleFlash=barrel`,
+   D18; round 26's "doesn't render" was wrong -- the flame shows for one frame, the game's too; `Debug.MuzzleFreeze`
+   pauses the world after a shot to see it, ENGINE-NOTES 5aj). Round 26: the player asked to move the flash, its other
+   questions carry over; the game log was lost (a simulator deploy left in place ran the player's next two launches;
+   `deploy.ps1` now keeps the logs it finds). Round 26 as deployed: left-hand mode fixed (the shoulders not flipped in
+   the mirror world; the grip
    applied after mirroring; the aim line's sideways offset mirrored by the host), the jump and landing animations replaced
    by idle (`Weapon.JumpArms`), the jump camera lift left out (`Camera.JumpLift=0`), the brass from the drawn gun and the
    muzzle flash hidden (`Weapon.Brass`, `Weapon.MuzzleFlash`; execActivateSystem hooked), frame pacing on by default (D16).
@@ -156,6 +161,10 @@ address-space budget for D3D9On12.
   312 MB)** at the landing, but the 30-min soak went down to **205 MB free (largest block 102 MB)** after the
   player walked into the town (streaming; it plateaued). Eye render targets in M3/M4 still come out of this. Re-measure after every addition
   with `tools/measure-variant.ps1`.
+- **A rare startup hang:** twice in many simulator launches (2026-09-25; 2026-09-30 00:36) the game sat on a black
+  screen: it ran (120 fps; a pawn and HUD within 3 s) and CalcSceneView ran (mono views), but the viewport Draw never
+  did, so no stereo and every frame black; a relaunch was fine. Cause unknown (a guess: a startup movie that never ends,
+  during which UE3 skips the viewport Draw). Logs `logs/modlogs/r26-frz3-l2-hang-*`. If the player meets it: relaunch.
 - **The desktop window under 9On12 is white.** Solved by the host mirror (`Bridge.Mirror=1`/`2`).
 - **Engine-side stereo** in this 2007 UE3 branch is unknown, so the effort for M4 is unknown
   until researched.

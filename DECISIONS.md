@@ -162,3 +162,14 @@ pending transform onto the drawn gun or suppresses its spawning (ENGINE-NOTES 5a
 at the drawn muzzle but it doesn't render (in the simulator; the brass, world-space emitters, does) -- not resolved within
 the time box. Hidden is deterministic; the brass from the drawn gun is right.
 **Costs:** no muzzle flash (the muzzle light still flashes at the game's barrel); `barrel` stays as an option to retry.
+**Revised by D18** (round 27): the moved flash does render at the barrel; its flame shows for one frame and the captures
+missed it.
+
+### D18. The player's muzzle flash at the drawn barrel — Decided 2026-09-30 (round 27; revises D17)
+`Weapon.MuzzleFlash=barrel` is the shipped default (`hide` and `game` stay).
+**Why:** the player asked for the flash at the barrel ("Move to gun barrel if possible, hide otherwise"; after round 26:
+"Move the flash."). It renders there: its flame shows for about one frame, like the game's own, which round 26's captures
+missed; frozen right after a shot (Debug.MuzzleFreeze) it sits at the drawn muzzle in either hand, and traced frame by
+frame it lives and draws exactly like the game's (ENGINE-NOTES 5aj).
+**Costs:** the muzzle light still flashes at the game's gun pose (a light, not a sprite); if the gun isn't drawn moved
+(no bake in the last 250 ms) the flash stays where the game put it.

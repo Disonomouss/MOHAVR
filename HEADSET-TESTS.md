@@ -1049,6 +1049,46 @@ FAILED (crossed arms, the grip mirrored wrong -- round 26); idle controllers unt
 4. Controllers put down: no more double gun? (yes / describe)
 5. Anything else odd? (describe)
 
+**Answers:** (the player's words) "Move the flash." -- the only reply; questions 1, 2, 4 and 5 carry over to round 27.
+
+**Log received:** the host log only, `logs/modlogs/20260930-0006-MOHAVR-host.prev.log` (Virtual Desktop, 23:24:47-23:28:02,
+3 min 15 s: the gun drawn in the left hand with the StG44, the Colt and the BAR, hands switched five times, a grenade;
+paced, the world 10.9 ms behind each XR frame with a spread of 0.4-0.8 ms). The game log is lost: a simulator test
+config Claude left deployed after an interrupted test (~23:41) was still in the game folder when the player launched at
+23:54 and 00:06, so those two launches ran on the simulator, not the headset, and overwrote it. `tools\deploy.ps1
+deploy` now keeps any MOHAVR logs it finds in the game folder (`logs/modlogs/<stamp>-predeploy-*`) before deploying.
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 27: prepared 2026-09-30, the muzzle flash at your barrel
+**Changed:**
+- **The muzzle flash is at the barrel of the gun in your hand**, either hand (`Weapon.MuzzleFlash=barrel`, now the
+  default). Round 26 said it didn't show there -- wrong: its flame lasts about one frame (the game's own too), and the
+  simulator captures missed it. [S]: the world paused right after a shot, the flame at the BAR's muzzle in the right hand
+  (`logs/shots/004827-frz3-def.png`) and in the left (`logs/shots/004448-frz3-l2.png`). The muzzle light (it lights the
+  surroundings; it isn't the flame) still comes from where the game holds the gun.
+- Otherwise as round 26: left-hand mode fixed, jumps and landings without the animation, brass from your gun, pacing on.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Fire single shots and long bursts with the rifle, the BAR and the pistol, gun in front and out to the side, in each
+   hand.
+2. Draw guns with your left hand (rifle, pistol, a grenade): arms, gun position, reload, fire.
+3. Walk over rough ground, step off ledges, jump.
+4. Put the controllers down for 20 s, look around, pick them up.
+If the game stays black at the start, quit and relaunch (a rare startup hang, seen twice in testing), and
+say so.
+
+**Questions:**
+1. The flash: at the barrel of the gun in your hand, in both hands? Any flash left in front of your face? (yes/no,
+   describe)
+2. Brass coming from your gun? (yes/no)
+3. Left hand: arms from the right shoulders, the gun sitting right in your hand? (yes / describe)
+4. Rough ground, ledges, jumps: any animation or view bump left? (describe)
+5. Controllers put down: no more double gun? (yes / describe)
+6. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

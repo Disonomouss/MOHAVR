@@ -12,10 +12,12 @@
 #include "aim.hpp"
 #include "arms_ik.hpp"
 #include "config.hpp"
+#include "game_exec.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
+#include "vr_view.hpp"
 
 namespace mohavr::muzzle {
 namespace {
@@ -67,6 +69,8 @@ float Det3(const M4& a) {
 Config           g_cfg;
 SafetyHookInline g_hook;
 int              g_logged = 0, g_checked = 0;
+int              g_freezeIn = -1;    // Debug.MuzzleFreeze: Draws left until the world is paused (-1: not armed)
+std::uintptr_t   g_frozenFlash = 0;  // the flash the freeze logs
 
 enum Kind { kNone, kFlash, kBrass };
 const char* const kKindName[] = {"", "muzzle flash", "brass"};
@@ -143,6 +147,12 @@ void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void*
     }
     g_hook.thiscall<void>(psc, stack, result);
     if (kind == kNone) return;
+    static bool frozeOnce = false;
+    if (kind == kFlash && g_cfg.debugMuzzleFreeze > 0 && !frozeOnce) {
+        frozeOnce = true;
+        g_freezeIn = g_cfg.debugMuzzleFreeze - 1;  // 1: at the first Draw after the activation
+        g_frozenFlash = psc;
+    }
     if (mode == 0) {
         // hide: ActivateSystem cleared it; with it set the emitters skip spawning (bursts too) until the next shot.
         int so = -1;
@@ -166,11 +176,59 @@ void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void*
     }
 }
 
+// Debug.MuzzleFreeze: the flash each Draw until the freeze -- its transform, its particles' bounds (zero once they are
+// all dead) and when it was last rendered (the renderer sets it: advancing = drawn).
+void TraceFlash(int draw) {
+    const std::uintptr_t psc = g_frozenFlash;
+    if (!psc) return;
+    auto off = [](std::uintptr_t obj, const char* n) { return obj ? names::PropertyOffset(obj, n) : -1; };
+    const int lo = off(psc, "LocalToWorld"), bo = off(psc, "Bounds"), ro = off(psc, "LastRenderTime"), oo = off(psc, "Owner");
+    const std::uintptr_t owner = oo >= 0 ? names::ReadPointer(psc + oo) : 0;
+    const int wo = off(owner, "WorldInfo"), aro = off(owner, "LastRenderTime");
+    const std::uintptr_t wi = wo >= 0 ? names::ReadPointer(owner + wo) : 0;
+    const int tso = off(wi, "TimeSeconds");
+    int ao = -1, so = -1;
+    std::uint32_t am = 0, sm = 0;
+    const int active = names::BoolProperty(psc, "bIsActive", ao, am) ? ((*reinterpret_cast<const std::uint32_t*>(psc + ao) & am) ? 1 : 0) : -1;
+    const int suppress =
+        names::BoolProperty(psc, "bSuppressSpawning", so, sm) ? ((*reinterpret_cast<const std::uint32_t*>(psc + so) & sm) ? 1 : 0) : -1;
+    const float* l2w = lo >= 0 ? reinterpret_cast<const float*>(psc + lo) : nullptr;
+    const float* b = bo >= 0 ? reinterpret_cast<const float*>(psc + bo) : nullptr;  // Origin, BoxExtent, SphereRadius
+    auto f = [](std::uintptr_t obj, int o) { return obj && o >= 0 ? *reinterpret_cast<const float*>(obj + o) : -1.0f; };
+    MLOG("muzzle: trace Draw %d -- L2W %.1f %.1f %.1f, bounds %.1f %.1f %.1f extent %.1f %.1f %.1f r %.1f, rendered %.4f (owner %.4f, "
+         "world %.4f), active %d suppress %d",
+         draw, l2w ? l2w[12] : 0.0f, l2w ? l2w[13] : 0.0f, l2w ? l2w[14] : 0.0f, b ? b[0] : 0.0f, b ? b[1] : 0.0f, b ? b[2] : 0.0f,
+         b ? b[3] : 0.0f, b ? b[4] : 0.0f, b ? b[5] : 0.0f, b ? b[6] : 0.0f, f(psc, ro), f(owner, aro), f(wi, tso), active, suppress);
+}
+
 }  // namespace
+
+// Debug.MuzzleFreeze: the flash's flame shows for about one frame (the game's own too; in slow motion as well, where its
+// smoke lives ~15 Draws), too short for a capture to catch; paused, it stays where it was drawn, and the log gives its
+// transform and the left eye's view to project it.
+void OnDraw(std::uintptr_t localPlayer) {
+    if (g_freezeIn < 0 || !localPlayer) return;
+    TraceFlash(g_cfg.debugMuzzleFreeze - g_freezeIn);
+    if (g_freezeIn-- > 0) return;
+    // Needs the cheat manager (EnableCheats); the world stops ticking, the flash's particles stay as they are.
+    const bool ok = gexec::Run(localPlayer, L"FreezeFrame 0");
+    MLOG("muzzle: Debug.MuzzleFreeze -- the world paused %d Draws after the flash (%s)", g_cfg.debugMuzzleFreeze,
+         ok ? "FreezeFrame handled" : "FreezeFrame not handled: EnableCheats first");
+    float eye[3], fov[4];
+    int rot[3];
+    const int lo = g_frozenFlash ? names::PropertyOffset(g_frozenFlash, "LocalToWorld") : -1;
+    if (lo >= 0 && view::LastEye0(eye, rot, fov)) {
+        const float* l2w = reinterpret_cast<const float*>(g_frozenFlash + lo);
+        MLOG("muzzle: freeze -- eye0 at %.2f %.2f %.2f rot %d %d %d fov L%.4f R%.4f U%.4f D%.4f; flash origin %.2f %.2f %.2f "
+             "x-axis %.3f %.3f %.3f y-axis %.3f %.3f %.3f z-axis %.3f %.3f %.3f", eye[0], eye[1], eye[2], rot[0], rot[1], rot[2],
+             fov[0], fov[1], fov[2], fov[3], l2w[12], l2w[13], l2w[14], l2w[0], l2w[1], l2w[2], l2w[4], l2w[5], l2w[6], l2w[8],
+             l2w[9], l2w[10]);
+    }
+}
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
-    static const char* const kModes[] = {"hide", "game", "moved"};
+    auto mode = [](int v, const char* moved) { return v == 0 ? "hide" : v == 1 ? "game" : moved; };
     if (cfg.muzzleFlash == 1 && cfg.brass == 1) {
         MLOG("muzzle: Weapon.MuzzleFlash=game Brass=game -- the flash and the brass where the game puts them");
         return false;
@@ -187,8 +245,8 @@ bool Install(const Config& cfg) {
         return false;
     }
     g_hook = std::move(*res);
-    MLOG("muzzle: Weapon.MuzzleFlash=%s Brass=%s -- execActivateSystem hooked at 0x%08X", kModes[cfg.muzzleFlash & 3],
-         kModes[cfg.brass & 3], static_cast<unsigned>(addr::kExecActivateSystem));
+    MLOG("muzzle: Weapon.MuzzleFlash=%s Brass=%s -- execActivateSystem hooked at 0x%08X", mode(cfg.muzzleFlash, "barrel"),
+         mode(cfg.brass, "gun"), static_cast<unsigned>(addr::kExecActivateSystem));
     return true;
 }
 

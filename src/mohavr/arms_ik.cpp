@@ -633,8 +633,11 @@ bool BakedMove(std::uintptr_t comp, float (&d)[16]) {
 
 bool IsBaked(std::uintptr_t comp) {
     const DWORD now = GetTickCount();
+    // Debug.MuzzleFreeze pauses the world, so nothing is re-baked: the last bake stays valid, else the proxy hook would
+    // move the baked parts a second time after 250 ms (the frozen frame showed the gun turned ~20 deg off the flash).
+    const DWORD window = g_cfg.debugMuzzleFreeze > 0 ? 0xFFFFFFFFu : 250u;
     for (int i = 0; i < 4; ++i)
-        if (g_bakedComp[i].load(std::memory_order_relaxed) == comp && now - g_bakedTick[i].load(std::memory_order_relaxed) < 250)
+        if (g_bakedComp[i].load(std::memory_order_relaxed) == comp && now - g_bakedTick[i].load(std::memory_order_relaxed) < window)
             return true;
     return false;
 }

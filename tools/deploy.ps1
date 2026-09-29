@@ -72,6 +72,14 @@ switch ($Action) {
             $text = [regex]::Replace($text, $pattern, "`${1}$val")
         }
 
+        # Standing rule 11: a deploy over a deployed mod must not lose the logs of what was played since (round 26: the
+        # player's headset session was rotated away by the launches that followed a test deploy). Kept as undeploy does.
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        foreach ($l in 'MOHAVR.log', 'MOHAVR.prev.log', 'MOHAVR-host.log', 'MOHAVR-host.prev.log') {
+            $p = Join-Path $bin $l
+            if (Test-Path $p) { Copy-Item $p (Join-Path $modLogs "$stamp-predeploy-$l") }
+        }
+
         Copy-Item $src $target -Force
         $hostSrc = Join-Path $root 'build\x64\MOHAVR-host.exe'
         if (Test-Path $hostSrc) { Copy-Item $hostSrc (Join-Path $bin 'MOHAVR-host.exe') -Force }

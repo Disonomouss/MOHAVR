@@ -17,7 +17,7 @@ struct Config {
     bool  hudCrosshair  = false;  // [HUD] Crosshair -- the game's own crosshair (0: hidden; the red dot aims)
     bool  hudHitMarker  = false;  // [HUD] HitMarker -- the red cross on a hit (0: hidden)
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the gun's game pose)
-    int   muzzleFlash   = 0;      // [Weapon] MuzzleFlash -- the player's muzzle flash: 0 hide, 1 game, 2 barrel (experimental)
+    int   muzzleFlash   = 2;      // [Weapon] MuzzleFlash -- the player's muzzle flash: 0 hide, 1 game, 2 at the drawn barrel
     int   brass         = 2;      // [Weapon] Brass -- the player's ejected brass: 0 hide, 1 game, 2 from the drawn gun
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
@@ -52,6 +52,7 @@ struct Config {
     bool debugSwapHalves = false; // [Debug] SwapHalves -- left eye in the right half (experiments only)
     bool debugTraceScissor = false;  // [Debug] TraceScissor -- log scissor rects set while the viewport is offset
     bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
+    int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)
     bool debugGameCommands = false;  // [Debug] GameCommands -- run console commands from %TEMP%\MOHAVR\game_cmd.txt (tests)
     int  bridgeMirror   = 1;      // [Bridge]  Mirror -- the host's desktop mirror: 0 off, 1 over the game window, 2 own window
     bool bridgeHost     = true;   // [Bridge]  Host -- start MOHAVR-host.exe and hand it the frames (D10; needs D3D9On12)

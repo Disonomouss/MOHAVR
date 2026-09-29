@@ -167,6 +167,9 @@ struct WorldMap {
     float        pitch;    // the game's own view pitch (radians) -- the first-person gun is placed with it
 };
 WorldMap g_world{};
+// Debug.MuzzleFreeze: the left eye's final view location and rotation, last stereo frame.
+float g_eye0Loc[3] = {};
+int   g_eye0Rot[3] = {};
 float g_gameCam[3] = {};  // the game's own camera at the player's last view (its shots start there)
 
 float UnitsPerMeter(const shared::Header* hdr) {
@@ -381,6 +384,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
     RunTestCommands(arr);
+    if (arr && arr[1] >= 1 && arr[0]) muzzle::OnDraw(*reinterpret_cast<const std::uintptr_t*>(arr[0]));
     RunHostCommand(arr, hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
@@ -745,6 +749,12 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
+    if (g_thisStereo && g_thisEye == 0) {
+        for (int i = 0; i < 3; ++i) {
+            g_eye0Loc[i] = loc[i];
+            g_eye0Rot[i] = rot[i];
+        }
+    }
     if (g_thisStereo) {
         g_thisFov = fov[g_thisEye];
     } else {
@@ -1059,6 +1069,21 @@ bool Install(const Config& cfg) {
     armsik::Install(cfg);     // M8: the arms reach from the body to the gun
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     MLOG("throw: Hands.Throw=%d (x%.2f)", cfg.throwByHand, cfg.throwScale);
+    return true;
+}
+
+bool LastEye0(float (&loc)[3], int (&rot)[3], float (&fov)[4]) {
+    EnterCriticalSection(&g_lock);
+    const shared::Fov f = g_current.fov[0];
+    LeaveCriticalSection(&g_lock);
+    for (int i = 0; i < 3; ++i) {
+        loc[i] = g_eye0Loc[i];
+        rot[i] = g_eye0Rot[i];
+    }
+    fov[0] = f.tanLeft;
+    fov[1] = f.tanRight;
+    fov[2] = f.tanUp;
+    fov[3] = f.tanDown;
     return true;
 }
 

@@ -31,6 +31,8 @@ struct PresentedFrameInfo {
     bool          paced;
 };
 bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr);
+// Debug.MuzzleFreeze: the left eye's last view location, rotation (Unreal units) and FOV tangents L R U D.
+bool LastEye0(float (&loc)[3], int (&rot)[3], float (&fov)[4]);
 
 // M7: a tracked pose (head or controller, OpenXR LOCAL) as a ray in the world, mapped exactly like the
 // eyes of the player's last head-tracked view: `pos` and unit `fwd` in Unreal units/axes. `unitsPerMeter`

@@ -962,7 +962,7 @@ The player: "A similar animation to sprint happens when walking over rough terra
 - Not touched: the recoil push (ApplyPush, 0.4-3 units per shot) and the screen shake's location and rotation are added
   after the socket too, so they still move the view and the gun against the hand (not reported).
 
-## 5aj. The muzzle flash and the brass: at the game's gun pose; the brass moved, the flash hidden (2026-09-29, round 26)
+## 5aj. The muzzle flash and the brass: at the game's gun pose; both moved to the drawn gun (2026-09-29/30, rounds 26-27)
 
 The player (round 25): "Muzzle flash is visible in front of player instead of on gun barrel. Move to gun barrel if
 possible, hide otherwise." Research agent (read-only), then probes.
@@ -987,15 +987,28 @@ possible, hide otherwise." Research agent (read-only), then probes.
   ActivateSystem is exactly the moved one; the casings fly out of the drawn gun's ejection port (slow motion:
   `EnableCheats` + `SloMo 0.05` through Debug.GameCommands; `logs/shots/r26-mz-slobarrel-muzzle.png`). The ShellEject
   systems are world-space emitters. In left-hand mode the port is at the mirrored side, the casings fly right.
-- **The flash moved to the barrel (Weapon.MuzzleFlash=barrel) doesn't show in the simulator:** its transform and its
-  particles' bounds are at the drawn muzzle (logged frame by frame after activation: the bounds' centre at the muzzle,
-  drifting forward along the gun, radius 80-160), but no capture shows the flash there -- also with the gun model
-  hidden (not occlusion), and in slow motion; the same flash at the game's pose shows plainly (a large orange burst in
-  front of the face). The first-person flashes' flame sprites are local-space emitters (BAR: 2 local 0.1 s + 1 world
-  1.0 s; `psys_sum.py` in the round-26 scratchpad), the brass world-space -- the difference between what shows moved and
-  what doesn't; not resolved (time box). **Weapon.MuzzleFlash=hide** (default): the flash suppressed; [S] slow-motion
-  captures with the left hand -- the game's flash in front of the face (a frame scoring 269 flame-coloured pixels)
-  gone (max 12, noise). The muzzle light (MuzzleFlashDLight, lighting only) still flashes at the game's barrel.
+- **[S] the flash at the drawn barrel (Weapon.MuzzleFlash=barrel, the default from round 27)** renders there, in both
+  hands. Round 26 concluded it didn't show -- wrong: **its flame shows for about one frame**, the game's own as well, and
+  the captures missed it. Paused at the first Draw after the shot (Debug.MuzzleFreeze, below; BAR; simulator), the flame
+  sits at the drawn muzzle: right hand 45.9 cm from the game's spot, projected to (800, 515) px of the left eye, where the
+  flame leaves the muzzle (`logs/shots/004827-frz3-def.png`, shipped defaults); left hand (mirrored, the gun turned 20 deg
+  left: the flash's yaw 70 deg, its roll mirrored) 70.7 cm, projected to (393, 515) px, at the mirrored gun's muzzle
+  (`logs/shots/004448-frz3-l2.png`). Traced each Draw in slow motion (SloMo 0.05), the moved flash and the game's live
+  alike: particles from the 3rd Draw through the 15th / 16th (about 0.02 s of game time; the bounds at their muzzle,
+  growing forward; LastRenderTime advancing every Draw, so drawn), yet frozen at the 8th Draw neither shows a flame any
+  more, only faint smoke (`logs/shots/005953-frz4-mid8.png` moved, `010310-frz4-vmgame.png` the game's). The view-model
+  proxy hook (0x10EEA470) is never called for the flash's proxy (counted: 0 calls), and local- vs world-space emitters
+  (round 26's guess) make no difference. The muzzle light (MuzzleFlashDLight, lighting only), the tracers and the fire
+  sounds still come from the game's gun pose.
+- **Debug.MuzzleFreeze=N** (the [S] tool): N Draws after the first flash the mod runs `FreezeFrame 0` (needs
+  `EnableCheats` first, e.g. through Debug.GameCommands, and `Camera.CinemaScreen=0`, as the pause shows the cursor);
+  until then it traces the flash each Draw (L2W, bounds, LastRenderTime against WorldInfo.TimeSeconds), then logs its
+  transform with the left eye's final view (location, rotation, FOV tangents): project the origin with
+  u = (tan_h - L)/(R - L), v = (U - tan_v)/(U - D) into the left half of a capture (`harness.ps1 shot`). Paused, nothing
+  is re-baked: arms_ik's IsBaked window (250 ms) ran out and the proxy hook moved the gun a second time (the first frozen
+  frames showed the gun ~20 deg off its flash), so under Debug.MuzzleFreeze the last bake stays valid.
+- **Weapon.MuzzleFlash=hide:** the flash suppressed; [S] slow-motion captures with the left hand -- the game's flash in
+  front of the face (a frame scoring 269 flame-coloured pixels) gone (max 12, noise).
 
 ## 6. Content and UnrealScript
 
