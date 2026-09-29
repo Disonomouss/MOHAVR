@@ -762,6 +762,29 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
 - **Verified [S]:** 18 shots at three gun angles, all from the gun, 0 cm from the red dot's point at the moment of the
   shot; the game's shot line 0.00-0.03 deg from the aim given. With ShotFromGun=0 and the new flags: 0-2 cm.
 
+## 5ac. The hit marker, tracers and the sprint animation (2026-09-29, round 22 -> 23)
+
+- **Hit marker:** `MOHAHUD.hud_weaponHitNotify` (MOHAHUDImg, +0x5B4 in MOHAHUD_SP): `OnNotifyWeaponHit()` (called by
+  EALASmallArms and MOHAPlayerController on a hit) does `EnableElement(true)` + a fade. `HUD.HitMarker=0` clears its
+  `bRender` each view, as for the crosshair.
+- **Tracers:** `SmallArmsAttachment.UpdateTracerData` (from EALASmallArms after each shot) -> every `TracerFrequency`th
+  shot `TurnOnTracer`, which starts the beam at the **attachment's** mesh socket `CurrentWeaponSockets.BarrelTip` -- the
+  third-person gun in the (unseen) body's hand. `MOHAPawn.CurrentWeaponAttachment` (+0x4A8); `CreateTracers[2]` (byte,
+  +0x2F0 on Attachment_Stg44/Colt45) = 0 makes UpdateTracerData return. `Weapon.Tracers=0` zeroes it each view. (From
+  the barrel instead: the socket query `GetSocketWorldLocationAndRotation` for that mesh would have to return the
+  first-person muzzle through D -- not done.)
+- **Sprint:** `Stand_Sprint` when speed > GroundSpeed x weapon multiplier x 1.01 (measured 582 vs GroundSpeed 490).
+  The sprint animation moves the arms' gun hand ~20 units and turns it 60-90 deg (component space: idle (-12.8, -46,
+  23.7), sprinting (0..6, -28..-33, 33..40)). **The first-person gun is attached to that hand**: its root bone is
+  identity and its LocalToWorld follows the hand. **Per frame the arms component updates 3 times** (the first with
+  the previous frame's LocalToWorld), then the gun once, at the arms' final hand. While moving, the arms' component also
+  moves against the game camera (so a component-space lock left the hand 8-20 units off).
+- **Weapon.SprintLock (default 1):** the gun hand's pose relative to the game camera (hand x L2W x camInv, camInv from
+  the same view as D) is followed (smoothed) while not sprinting; while sprinting (and 400 ms after, then easing out
+  over 250 ms; in over 100 ms) a world move `Xw = inverse(hand x L2W) x target x cam` puts it back, applied before D to
+  every first-person part (`A = L2W x Xw x D`) -- the gun, attached to the hand, follows. [S]: the drawn gun hand stays
+  within 1.5-2.0 cm of its pre-sprint place in its controller's frame (3.6-37.5 cm without).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -29,6 +29,8 @@ bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter);
 // Arm IK: the move the first-person parts are drawn with (world, row-major FMatrix: LocalToWorld' = LocalToWorld *
 // d) and its inverse; false when they're drawn where the game put them (or the game's own way).
 bool CurrentMove(float (&d)[16], float (&dInv)[16]);
+// The same, with the game camera's inverse it was made for (the sprint lock anchors the gun hand to the camera).
+bool CurrentMove(float (&d)[16], float (&dInv)[16], float (&camInv)[16]);
 // Arm IK: the gun hand's controller frame (the gun's axes, its origin at the controller) and the other controller's
 // frame (world; rows forward, right, up, origin), and whether the other hand is on the foregrip. False when the gun
 // isn't drawn in the hand.

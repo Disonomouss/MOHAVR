@@ -39,6 +39,9 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudDown        = getf(L"HUD", L"Down", c.hudDown, -2.0f, 2.0f);
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
     c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
+    c.hudHitMarker   = get(L"HUD", L"HitMarker", c.hudHitMarker);
+    c.weaponTracers  = get(L"Weapon", L"Tracers", c.weaponTracers);
+    c.sprintLock     = get(L"Weapon", L"SprintLock", c.sprintLock);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);

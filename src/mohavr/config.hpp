@@ -15,6 +15,9 @@ struct Config {
     float hudDown       = 0.1f;
     float hudScale      = 0.5f;   // [HUD] Scale -- the HUD's own pixel size inside the panel (1 = as designed)
     bool  hudCrosshair  = false;  // [HUD] Crosshair -- the game's own crosshair (0: hidden; the red dot aims)
+    bool  hudHitMarker  = false;  // [HUD] HitMarker -- the red cross on a hit (0: hidden)
+    bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the unseen body's gun)
+    bool  sprintLock    = true;   // [Weapon] SprintLock -- the gun hand stays on the controller while sprinting
     int  renderResX     = 2880;      // [Render] ResX/ResY -- the game's resolution (windowed), 0 = the game's own (M9)
     int  renderResY     = 1620;
     bool lockWindow     = true;   // [Render] LockWindow -- keep the game window at its render size (stereo split)

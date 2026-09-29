@@ -146,6 +146,69 @@ M4 Stretch(V3 pivot, V3 axis, float k) {
     return r;
 }
 
+// Rotations as quaternions (for blending rigid transforms). Row-vector matrices: v' = v * m, so the column-vector
+// rotation is the transpose of the 3x3 block.
+struct Quat {
+    float w, x, y, z;
+};
+Quat QuatOf(const M4& a) {
+    const float r00 = a.m[0][0], r01 = a.m[1][0], r02 = a.m[2][0];
+    const float r10 = a.m[0][1], r11 = a.m[1][1], r12 = a.m[2][1];
+    const float r20 = a.m[0][2], r21 = a.m[1][2], r22 = a.m[2][2];
+    Quat q{};
+    const float tr = r00 + r11 + r22;
+    if (tr > 0.0f) {
+        const float s = std::sqrt(tr + 1.0f) * 2.0f;
+        q = {0.25f * s, (r21 - r12) / s, (r02 - r20) / s, (r10 - r01) / s};
+    } else if (r00 > r11 && r00 > r22) {
+        const float s = std::sqrt(1.0f + r00 - r11 - r22) * 2.0f;
+        q = {(r21 - r12) / s, 0.25f * s, (r01 + r10) / s, (r02 + r20) / s};
+    } else if (r11 > r22) {
+        const float s = std::sqrt(1.0f + r11 - r00 - r22) * 2.0f;
+        q = {(r02 - r20) / s, (r01 + r10) / s, 0.25f * s, (r12 + r21) / s};
+    } else {
+        const float s = std::sqrt(1.0f + r22 - r00 - r11) * 2.0f;
+        q = {(r10 - r01) / s, (r02 + r20) / s, (r12 + r21) / s, 0.25f * s};
+    }
+    return q;
+}
+M4 FromQuat(const Quat& q, V3 t) {
+    const float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z, xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+    const float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+    const float r[3][3] = {{1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy)},
+                           {2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx)},
+                           {2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)}};
+    M4 m{};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) m.m[i][j] = r[j][i];
+    m.m[3][0] = t.x;
+    m.m[3][1] = t.y;
+    m.m[3][2] = t.z;
+    m.m[3][3] = 1.0f;
+    return m;
+}
+// a -> b by t (0..1): the rotation by slerp, the translation linearly (rigid transforms).
+M4 BlendRigid(const M4& a, const M4& b, float t) {
+    const Quat qa = QuatOf(a);
+    Quat qb = QuatOf(b);
+    float d = qa.w * qb.w + qa.x * qb.x + qa.y * qb.y + qa.z * qb.z;
+    if (d < 0.0f) {
+        qb = {-qb.w, -qb.x, -qb.y, -qb.z};
+        d = -d;
+    }
+    float ka = 1.0f - t, kb = t;
+    if (d < 0.9995f) {
+        const float th = std::acos(d), s = std::sin(th);
+        ka = std::sin((1.0f - t) * th) / s;
+        kb = std::sin(t * th) / s;
+    }
+    Quat q{ka * qa.w + kb * qb.w, ka * qa.x + kb * qb.x, ka * qa.y + kb * qb.y, ka * qa.z + kb * qb.z};
+    const float n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+    q = {q.w / n, q.x / n, q.y / n, q.z / n};
+    const V3 ta = Origin(a), tb = Origin(b);
+    return FromQuat(q, Add(Scale(ta, 1.0f - t), Scale(tb, t)));
+}
+
 Config           g_cfg;
 SafetyHookInline g_hook;  // UMOHASkeletalMeshComponent::UpdateTransform: puts the game's pose back afterwards
 SafetyHookMid    g_mid;   // just before MeshObject->Update: bakes the move (and the IK)
@@ -404,6 +467,70 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     }
 }
 
+// Weapon.SprintLock (round 22: "sprinting has an animation that overrides the arms"): the sprint animation carries the
+// gun hand ~20 units away and turns it 60-90 degrees, and the gun (attached to that hand) with it. While sprinting, a
+// world-space correction puts the gun hand back where it was just before -- applied before D to the arms and, right
+// after them each frame, to the gun (probe: the arms update 3 times a frame, then the gun, at the arms' final hand).
+struct SprintFix {
+    bool  haveRef = false;
+    M4    ref;                 // the gun hand relative to the game camera while not sprinting, smoothed
+    M4    xw = kIdentity;      // the correction (world, before D) for the arms' latest pose
+    float weight = 0.0f;
+    DWORD tick = 0, start = 0, last = 0;
+    bool  on = false;
+};
+SprintFix g_sprint;
+
+// The pawn sprints when it moves faster than it can walk (MOHAPlayerPawn.GetLocomotionState: speed > GroundSpeed x the
+// weapon's multiplier x 1.01; measured 582 sprinting, 490 walking with GroundSpeed 490).
+bool PawnSprinting(std::uintptr_t pawn) {
+    const int vo = names::PropertyOffset(pawn, "Velocity"), go = names::PropertyOffset(pawn, "GroundSpeed");
+    float v[3];
+    if (vo < 0 || go < 0 || !names::ReadVector(pawn + vo, v)) return false;
+    const float ground = *reinterpret_cast<const float*>(pawn + go);
+    return ground > 1.0f && v[0] * v[0] + v[1] * v[1] > (ground * 1.02f) * (ground * 1.02f);
+}
+
+// The reference is camera-relative: while sprinting the arms' component also moves against the camera (a bob that D,
+// made from the camera, doesn't take out -- a component-space lock left the hand 8-20 units off its controller).
+void UpdateSprintFix(const std::vector<M4>& saved, std::uintptr_t pawn, const M4& l2w, const M4& camInv) {
+    const M4 handWorld = Mul(saved[g_rig.side[0].hand], l2w);
+    const M4 hand = Mul(handWorld, camInv);  // the gun hand, camera-relative
+    const DWORD now = GetTickCount();
+    const bool sprinting = PawnSprinting(pawn);
+    if (sprinting) {
+        if (!g_sprint.on) {
+            g_sprint.on = true;
+            g_sprint.start = now;
+            static int logged = 0;
+            if (logged++ < 4) MLOG("armik: sprinting%s", g_cfg.sprintLock ? " -- the gun hand held where it was (Weapon.SprintLock)" : "");
+        }
+        g_sprint.last = now;
+    } else {
+        g_sprint.on = false;
+    }
+    // In over 100 ms; held 400 ms after the sprint while the animation settles back, then out over 250 ms.
+    const DWORD since = now - g_sprint.last;
+    float w = 0.0f;
+    if (g_sprint.haveRef && g_sprint.last != 0 && since < 650) {
+        w = since < 400 ? 1.0f : 1.0f - static_cast<float>(since - 400) / 250.0f;
+        w = std::fmin(w, static_cast<float>(now - g_sprint.start) / 100.0f);
+    } else {
+        // Not sprinting: the reference follows the hand, smoothed (a recoil kick doesn't become it).
+        g_sprint.ref = g_sprint.haveRef ? BlendRigid(g_sprint.ref, hand, 0.1f) : hand;
+        g_sprint.haveRef = true;
+    }
+    g_sprint.weight = std::fmax(0.0f, std::fmin(1.0f, w));
+    g_sprint.tick = now;
+    if (g_sprint.weight <= 0.0f) {
+        g_sprint.xw = kIdentity;
+        return;
+    }
+    // Where the hand goes (camera-relative; eased by blending the pose itself), then the world move that takes it there.
+    const M4 target = g_sprint.weight < 1.0f ? BlendRigid(hand, g_sprint.ref, g_sprint.weight) : g_sprint.ref;
+    g_sprint.xw = Mul(Mul(AffineInverse(handWorld), target), AffineInverse(camInv));
+}
+
 // Just before MeshObject->Update (EBX = the component; its LocalToWorld is final): bake the move into a first-person
 // part of the player's (and, for the arms, the IK).
 void OnMeshUpdate(SafetyHookContext& ctx) {
@@ -419,8 +546,8 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
-    float d[16], dInv[16];
-    if (!viewmodel::CurrentMove(d, dInv)) return;
+    float d[16], dInv[16], ci[16];
+    if (!viewmodel::CurrentMove(d, dInv, ci)) return;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     if (!pawn) return;
     const bool arms = names::Outer(comp) == pawn;  // the arms' Outer is the pawn, the gun's its weapon
@@ -448,10 +575,36 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
     std::memcpy(D.m, d, sizeof(D.m));
     const M4 invL2W = AffineInverse(l2w);
-    const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
+    M4 fix = kIdentity;  // Weapon.SprintLock: before D, for the arms and the gun alike
+    {
+        M4 camInv;
+        std::memcpy(camInv.m, ci, sizeof(camInv.m));
+        if (arms && g_rig.ok) UpdateSprintFix(sv->bones, pawn, l2w, camInv);  // either way: the sprint log measures
+        if (g_cfg.sprintLock && g_sprint.weight > 0.0f && GetTickCount() - g_sprint.tick < 250) fix = g_sprint.xw;
+    }
+    const M4 A = Mul(Mul(l2w, fix), D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
     for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
-    if (arms && g_rig.ok && static_cast<int>(sv->bones.size()) == num) SolveArms(bones, sv->bones, l2w, A, invL2W);
+    if (arms && g_rig.ok && static_cast<int>(sv->bones.size()) == num) {
+        // Where the drawn gun hand sits in its controller's frame: steady before, and (with SprintLock) during a sprint.
+        float gf[16], of[16];
+        bool ov = false, th = false;
+        if (viewmodel::HandFrames(gf, of, ov, th)) {
+            M4 gunCtrl;
+            std::memcpy(gunCtrl.m, gf, sizeof(gunCtrl.m));
+            const V3 r = Origin(Mul(Mul(sv->bones[g_rig.side[0].hand], A), AffineInverse(gunCtrl)));
+            static V3 before{};
+            static unsigned n = 0, logged = 0;
+            if (!g_sprint.on) {
+                before = r;
+            } else if ((++n % 45) == 0 && logged < 30) {
+                ++logged;
+                MLOG("armik: sprint: the gun hand at %.1f %.1f %.1f in its controller's frame (%.1f %.1f %.1f before; %.1f off)",
+                     r.x, r.y, r.z, before.x, before.y, before.z, Len(Sub(r, before)));
+            }
+        }
+        SolveArms(bones, sv->bones, l2w, A, invL2W);
+    }
     MarkBaked(comp);
     static int logged = 0;
     if (logged < 2) {

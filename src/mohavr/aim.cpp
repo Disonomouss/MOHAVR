@@ -126,29 +126,64 @@ std::uintptr_t LocalController() {
     return player ? *reinterpret_cast<const std::uintptr_t*>(player + addr::kLocalPlayerActor) : 0;
 }
 
-// HUD.Crosshair=0: the game's crosshair (MOHAHUD.hud_cursor, a MOHAHUDCursor) is drawn only while its
-// CursorRenderingEnabled is set (read by the native Render alone) -- cleared here, and again whenever the game sets it.
-void HideGameCrosshair(std::uintptr_t ctrl) {
+// Clears a script bool of `object` if set; true if it was.
+bool ClearBool(std::uintptr_t object, const char* flag) {
+    int off = -1;
+    std::uint32_t mask = 0;
+    if (!object || !names::BoolProperty(object, flag, off, mask)) return false;
+    auto* word = reinterpret_cast<volatile std::uint32_t*>(object + static_cast<std::uintptr_t>(off));
+    if (!(*word & mask)) return false;
+    *word = *word & ~mask;
+    return true;
+}
+
+// The game's HUD bits that point where the gun doesn't (cleared each view, before the HUD draws):
+// - HUD.Crosshair=0: MOHAHUD.hud_cursor (a MOHAHUDCursor) -- its own CursorRenderingEnabled (read by the native Render
+//   alone; the game sets it again every frame) and the element's bRender (what EnableElement sets);
+// - HUD.HitMarker=0: MOHAHUD.hud_weaponHitNotify, the red cross OnNotifyWeaponHit shows for a moment on a hit (round 22).
+void HideHudBits(std::uintptr_t ctrl) {
     const int ho = names::PropertyOffset(ctrl, "myHUD");
     const std::uintptr_t hud = ho >= 0 ? names::ReadPointer(ctrl + ho) : 0;
-    const int co = hud ? names::PropertyOffset(hud, "hud_cursor") : -1;
-    const std::uintptr_t cursor = co >= 0 ? names::ReadPointer(hud + co) : 0;
-    if (!cursor) return;
-    // Both its own switch and the HUD element's (MOHAHUDObj.bRender, what EnableElement sets): the game sets
-    // CursorRenderingEnabled again every frame.
-    for (const char* flag : {"bRender", "CursorRenderingEnabled"}) {
-        int off = -1;
-        std::uint32_t mask = 0;
-        if (!names::BoolProperty(cursor, flag, off, mask)) continue;
-        auto* word = reinterpret_cast<volatile std::uint32_t*>(cursor + static_cast<std::uintptr_t>(off));
-        if (!(*word & mask)) continue;
-        *word = *word & ~mask;
-        static int logged = 0;
-        if (logged < 4) {
-            ++logged;
-            MLOG("aim: the game's crosshair hidden (%s.%s off; HUD.Crosshair=0)", names::Name(cursor).c_str(), flag);
+    if (!hud) return;
+    if (!g_cfg.hudCrosshair) {
+        const int co = names::PropertyOffset(hud, "hud_cursor");
+        const std::uintptr_t cursor = co >= 0 ? names::ReadPointer(hud + co) : 0;
+        for (const char* flag : {"bRender", "CursorRenderingEnabled"}) {
+            static int logged = 0;
+            if (ClearBool(cursor, flag) && logged < 4) {
+                ++logged;
+                MLOG("aim: the game's crosshair hidden (%s.%s off; HUD.Crosshair=0)", names::Name(cursor).c_str(), flag);
+            }
         }
     }
+    if (!g_cfg.hudHitMarker) {
+        const int mo = names::PropertyOffset(hud, "hud_weaponHitNotify");
+        const std::uintptr_t marker = mo >= 0 ? names::ReadPointer(hud + mo) : 0;
+        static int logged = 0;
+        if (ClearBool(marker, "bRender") && logged < 3) {
+            ++logged;
+            MLOG("aim: the hit marker hidden (%s.bRender off; HUD.HitMarker=0)", names::Name(marker).c_str());
+        }
+    }
+}
+
+// Weapon.Tracers=0: the player's tracers start at the third-person gun's barrel (SmallArmsAttachment.TurnOnTracer:
+// the attachment mesh's BarrelTip socket -- the unseen body's hand, not the gun in yours; round 22). Its
+// CreateTracers[fire mode] = 0 makes UpdateTracerData return before spawning one.
+void HideTracers(std::uintptr_t pawn) {
+    const int ao = names::PropertyOffset(pawn, "CurrentWeaponAttachment");
+    const std::uintptr_t att = ao >= 0 ? names::ReadPointer(pawn + ao) : 0;
+    const int to = att ? names::PropertyOffset(att, "CreateTracers") : -1;
+    if (to < 0) return;
+    auto* create = reinterpret_cast<volatile std::uint8_t*>(att + static_cast<std::uintptr_t>(to));
+    if (!create[0] && !create[1]) return;
+    static int logged = 0;
+    if (logged < 4) {
+        ++logged;
+        MLOG("aim: tracers off for %s (CreateTracers %u %u -> 0 0; Weapon.Tracers=0)", names::Name(att).c_str(), create[0], create[1]);
+    }
+    create[0] = 0;
+    create[1] = 0;
 }
 
 void Publish(float distance, std::uint32_t source) {
@@ -449,7 +484,8 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     if (!g_installed) return;
     const shared::Header* hdr = bridge::SharedHeader();
     const std::uintptr_t pawn = LocalPawn(ctrl);
-    if (ctrl && !g_cfg.hudCrosshair) HideGameCrosshair(ctrl);
+    if (ctrl && (!g_cfg.hudCrosshair || !g_cfg.hudHitMarker)) HideHudBits(ctrl);
+    if (pawn && !g_cfg.weaponTracers) HideTracers(pawn);
     if (!hdr || !pawn) {
         g_frame.valid = false;
         Publish(0.0f, 0);

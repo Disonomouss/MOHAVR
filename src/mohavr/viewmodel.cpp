@@ -398,6 +398,19 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     return true;
 }
 
+bool CurrentMove(float (&d)[16], float (&dInv)[16], float (&camInv)[16]) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    if (!s.valid || GetTickCount() - s.tick > 250) return false;
+    std::memcpy(d, s.d.m, sizeof(d));
+    std::memcpy(dInv, s.dInv.m, sizeof(dInv));
+    std::memcpy(camInv, s.camInv.m, sizeof(camInv));
+    return true;
+}
+
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter) {
     if (!g_line.valid) return false;
     for (int i = 0; i < 3; ++i) {

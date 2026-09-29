@@ -864,6 +864,41 @@ met other surfaces. The native passes triggers by keeping every one it passed sw
 2. Is the game's crosshair gone? (yes/no)
 3. Anything else odd? (describe)
 
+**Answers:** 1 "Yes, I only played a bit but was able to shoot where I wanted." · 2 "It is gone, could you also get rid
+of the hit detection marker, a red cross shows on screen when you shoot an enemy." · 3 "Sprinting has an animation
+that overrides the arms. Guns have a visible tracer that does not come from the gun barrel, I'd like to either hide it
+or have it come from the barrel."
+
+**Log received:** yes, `logs/modlogs/20260929-171948-MOHAVR.log`: 225 shots, all from the gun; 210 within 2 cm of the
+red dot; the rest: both ray and dot hitting nothing (the weapon's range 163.8 m vs the dot's 300 m), an enemy stepping
+into the line (21 m / 36 m), an ammo pickup (14 cm).
+
+**Verdict:** shots PASSED; crosshair gone PASSED. New: the hit marker, sprint, tracers (round 23).
+
+---
+
+## Round 23: prepared 2026-09-29, no hit marker, no tracers, the gun stays in the hand while sprinting
+**Changed:**
+- **The red hit cross is hidden** (`HUD.HitMarker=0`), the same way as the crosshair.
+- **Tracers are off** (`Weapon.Tracers=0`): the game starts them at the third-person gun's barrel (the unseen body's
+  hand), not at the gun in your hand. Starting them at your gun's barrel is possible later (more work).
+- **Sprinting:** the sprint animation no longer carries the gun and arms away (`Weapon.SprintLock=1`): the gun hand is
+  held where it was just before, eased in and out.
+- [S]: sprinting in the simulator, the gun hand stays within 2 cm of where it was in its controller's frame (without
+  the lock it swung 4-38 cm); the rifle's tracers switch off (CreateTracers 1 0 -> 0 0). The hit cross only shows on a
+  hit, which the simulator's start has no enemy for: [H].
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Shoot some enemies: the red cross shouldn't appear.
+2. Sprint with the rifle, the BAR and the pistol; watch the gun and both arms, and when you stop.
+3. Fire long bursts: no tracers.
+
+**Questions:**
+1. Hit cross gone? (yes/no)
+2. Sprinting: the gun stays in your hand, arms look right, starting and stopping smooth? (yes / describe)
+3. Tracers gone -- and do you want them back from the barrel later? (yes/no)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
