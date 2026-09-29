@@ -173,3 +173,13 @@ missed; frozen right after a shot (Debug.MuzzleFreeze) it sits at the drawn muzz
 frame it lives and draws exactly like the game's (ENGINE-NOTES 5aj).
 **Costs:** the muzzle light still flashes at the game's gun pose (a light, not a sprite); if the gun isn't drawn moved
 (no bake in the last 250 ms) the flash stays where the game put it.
+
+### D19. The left hand's brass mirrored by a negative scale — Decided 2026-09-30 (round 28)
+`Weapon.BrassMirror=1`: with the gun drawn mirrored, the brass component gets `Scale3D.Y` negative on top of its
+rotation, so its LocalToWorld is the exact mirrored frame (ENGINE-NOTES 5aj).
+**Why:** the player saw the left hand's casings fly the wrong way. The templates throw casings in the socket's frame,
+several of them forward as well as sideways (the Garand +200 along X), so a proper rotation that mirrors the sideways
+throw would reverse the forward one; only a reflection mirrors every gun's brass exactly.
+**Costs:** each casing mesh is drawn mirrored too; at 10x it renders as a solid mirror image, but where the mesh
+particles' cull mode comes from wasn't found (the time box) -- if casings ever look hollow, `BrassMirror=0` restores
+round 27's behaviour.

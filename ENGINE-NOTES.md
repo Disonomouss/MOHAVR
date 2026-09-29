@@ -962,7 +962,7 @@ The player: "A similar animation to sprint happens when walking over rough terra
 - Not touched: the recoil push (ApplyPush, 0.4-3 units per shot) and the screen shake's location and rotation are added
   after the socket too, so they still move the view and the gun against the hand (not reported).
 
-## 5aj. The muzzle flash and the brass: at the game's gun pose; both moved to the drawn gun (2026-09-29/30, rounds 26-27)
+## 5aj. The muzzle flash and the brass: at the game's gun pose; both moved to the drawn gun (2026-09-29/30, rounds 26-28)
 
 The player (round 25): "Muzzle flash is visible in front of player instead of on gun barrel. Move to gun barrel if
 possible, hide otherwise." Research agent (read-only), then probes.
@@ -1009,6 +1009,26 @@ possible, hide otherwise." Research agent (read-only), then probes.
   frames showed the gun ~20 deg off its flash), so under Debug.MuzzleFreeze the last bake stays valid.
 - **Weapon.MuzzleFlash=hide:** the flash suppressed; [S] slow-motion captures with the left hand -- the game's flash in
   front of the face (a frame scoring 269 flame-coloured pixels) gone (max 12, noise).
+- **[S] the brass through the left hand's mirror (Weapon.BrassMirror=1, the default from round 28).** Round 27, in the
+  headset: "with left hand the brass comes out of the wrong ride of the gun and flys off in the wrong direction". The
+  brass templates (`ShellEjectParticleTemplate` per gun in DefaultWeapon.ini, e.g. `HUS_VFX_BAR_muzzle.ShellEject`; the
+  data is cooked into the level, read from the decompressed `Var_Flk_P`) are one world-space mesh emitter each (casing
+  meshes, material `GCm_Wpn_emptyShells`; MeshRotation with bInheritParent), whose StartVelocity and StartLocation are in
+  the socket's frame and go through the component's full LocalToWorld at spawn. StartVelocity min..max: BAR
+  (-50..50, 150, 100), Thompson (-45..45, 125..150, 20..150), G43 (-30..30, 100..125, 150..175), Springfield
+  (-50..50, 175..225, 25..50), K98 (-50..50, 175..215, 35..50), Colt (-10..10, 55..70, 135..145), but Garand (200,
+  175..200, 125..150), STG44 (50..150, 250..300, 100), MP40 (0..75, 100..150, 150..175), C96 (-30..10, 20..40,
+  140..170): thrown along the socket's +Y (sideways) and +Z (up), several also forward along X, so no proper rotation
+  mirrors them all. The moved frame's own Y flipped back (a rotator can't reflect) threw them the right-hand way, across
+  the gun. A negative **Scale3D.Y** on the component, with that rotation, makes LocalToWorld the exact mirrored frame, and
+  ActivateSystem applies it (the applied Y axis logged 0.94 -0.34 -0.05 left-handed against -0.94 -0.34 -0.05
+  right-handed). The mesh emitter sizes each casing by the component's Scale x Scale3D (FParticleMeshEmitterInstance's
+  UpdateBoundingBox 0x10CAEBC0 reads component +0x1C8 Scale, +0x1CC Scale3D; its StaticType 0x11622A30, vtable
+  0x1150DDD0), so the casings are mirrored as well: drawn 10x (a research run) the mirrored casing is a solid, lit mirror
+  image of the right-hand one, not inside-out (`logs/shots/095035-frz5-l-bigs.png`, `095136-frz5-r-bigs.png`; the mesh
+  particles' draw path, and where its cull mode comes from, not located within the time box). [S] left hand, 15 Draws
+  after a shot: the casing out to the left of the mirrored BAR (`logs/shots/095427-frz5-l-def.png`, shipped defaults);
+  without it, across to the right (`094007-frz5-l-old.png`); the right hand unchanged (`094122-frz5-r-ref.png`).
 
 ## 6. Content and UnrealScript
 

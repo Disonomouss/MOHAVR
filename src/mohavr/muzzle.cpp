@@ -92,8 +92,22 @@ Kind Classify(std::uintptr_t psc, std::uintptr_t& gun) {
     return k;
 }
 
+// The brass through the left hand's mirror (round 27: "the brass comes out of the wrong side of the gun and flies off in
+// the wrong direction"): its emitters are world-space casing meshes whose start velocity and offset go through the
+// component's full LocalToWorld at spawn, in the socket's frame (BAR: +Y 150 sideways, +Z 100 up; the Garand +200 along
+// X too), so a rotator alone throws them unmirrored. A negative Scale3D.Y on top of the rotation (its Y flipped back)
+// makes LocalToWorld the exact mirrored frame (ActivateSystem applies it; the casing meshes, sized by Scale x Scale3D,
+// draw as solid mirror images). Positive otherwise, as the game creates it (SetScale 1).
+void SetBrassMirrored(std::uintptr_t psc, bool mirrored) {
+    const int so = names::PropertyOffset(psc, "Scale3D");
+    if (so < 0) return;
+    float& y = reinterpret_cast<float*>(psc + so)[1];
+    y = mirrored ? -std::fabs(y) : std::fabs(y);
+}
+
 // barrel: the component's pending transform (the game's socket) x the gun's drawn move (and the left hand's mirror).
 void MoveToDrawnGun(std::uintptr_t psc, Kind kind, std::uintptr_t gun) {
+    if (kind == kBrass) SetBrassMirrored(psc, false);
     float d[16];
     if (!gun || !armsik::BakedMove(gun, d)) return;  // the gun isn't drawn moved: leave it where the game put it
     const int to = names::PropertyOffset(psc, "Translation"), ro = names::PropertyOffset(psc, "Rotation");
@@ -113,8 +127,10 @@ void MoveToDrawnGun(std::uintptr_t psc, Kind kind, std::uintptr_t gun) {
         move = Mul(move, m);
     }
     M4 s = Mul(RotationTranslation(r0, t0), move);
-    if (Det3(s) < 0.0f)  // through the mirror: a rotator can't reflect -- its own Y (across the barrel) flipped back
+    const bool reflected = Det3(s) < 0.0f;
+    if (reflected)  // through the mirror: a rotator can't reflect -- its own Y (across the barrel) flipped back
         for (int j = 0; j < 3; ++j) s.m[1][j] = -s.m[1][j];
+    if (kind == kBrass && g_cfg.brassMirror) SetBrassMirrored(psc, reflected);
     int r1[3];
     ToRotator(s, r1);
     for (int i = 0; i < 3; ++i) {
@@ -126,8 +142,9 @@ void MoveToDrawnGun(std::uintptr_t psc, Kind kind, std::uintptr_t gun) {
         ++g_logged;
         const float dx = t[0] - t0[0], dy = t[1] - t0[1], dz = t[2] - t0[2];
         MLOG("muzzle: the %s moved to the drawn gun -- from %.1f %.1f %.1f to %.1f %.1f %.1f (%.1f cm), rotation %d %d %d -> "
-             "%d %d %d", kKindName[kind], t0[0], t0[1], t0[2], t[0], t[1], t[2], std::sqrt(dx * dx + dy * dy + dz * dz), r0[0],
-             r0[1], r0[2], r[0], r[1], r[2]);
+             "%d %d %d%s", kKindName[kind], t0[0], t0[1], t0[2], t[0], t[1], t[2], std::sqrt(dx * dx + dy * dy + dz * dz), r0[0],
+             r0[1], r0[2], r[0], r[1], r[2],
+             !reflected ? "" : kind == kBrass && g_cfg.brassMirror ? " (mirrored: Scale3D.Y negative)" : " (mirrored: its Y flipped back)");
     }
 }
 
@@ -170,8 +187,9 @@ void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void*
         if (lo >= 0) {
             ++g_checked;
             const float* l2w = reinterpret_cast<const float*>(psc + lo);
-            MLOG("muzzle: the %s's LocalToWorld origin after ActivateSystem %.1f %.1f %.1f (wanted %.1f %.1f %.1f)",
-                 kKindName[kind], l2w[12], l2w[13], l2w[14], want[0], want[1], want[2]);
+            MLOG("muzzle: the %s's LocalToWorld origin after ActivateSystem %.1f %.1f %.1f (wanted %.1f %.1f %.1f), its Y axis "
+                 "%.2f %.2f %.2f",
+                 kKindName[kind], l2w[12], l2w[13], l2w[14], want[0], want[1], want[2], l2w[4], l2w[5], l2w[6]);
         }
     }
 }
@@ -245,8 +263,9 @@ bool Install(const Config& cfg) {
         return false;
     }
     g_hook = std::move(*res);
-    MLOG("muzzle: Weapon.MuzzleFlash=%s Brass=%s -- execActivateSystem hooked at 0x%08X", mode(cfg.muzzleFlash, "barrel"),
-         mode(cfg.brass, "gun"), static_cast<unsigned>(addr::kExecActivateSystem));
+    MLOG("muzzle: Weapon.MuzzleFlash=%s Brass=%s BrassMirror=%d -- execActivateSystem hooked at 0x%08X",
+         mode(cfg.muzzleFlash, "barrel"), mode(cfg.brass, "gun"), cfg.brassMirror ? 1 : 0,
+         static_cast<unsigned>(addr::kExecActivateSystem));
     return true;
 }
 

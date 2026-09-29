@@ -19,6 +19,7 @@ struct Config {
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the gun's game pose)
     int   muzzleFlash   = 2;      // [Weapon] MuzzleFlash -- the player's muzzle flash: 0 hide, 1 game, 2 at the drawn barrel
     int   brass         = 2;      // [Weapon] Brass -- the player's ejected brass: 0 hide, 1 game, 2 from the drawn gun
+    bool  brassMirror   = true;   // [Weapon] BrassMirror -- with the gun in the left hand, the brass thrown mirrored too
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
     bool  walkArms      = true;   // [Weapon] WalkArms -- the first-person arms play idle while walking too (idle | game)

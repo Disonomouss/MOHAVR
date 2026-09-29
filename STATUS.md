@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-30 (round 27 deployed; the "Next" list is current, the history below it is kept)_
+_Last updated: 2026-09-30 (round 28 deployed; the "Next" list is current, the history below it is kept)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -116,7 +116,10 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 27** (deployed): the muzzle flash at the drawn barrel, both hands (`Weapon.MuzzleFlash=barrel`,
+2. **HEADSET-TESTS round 28** (deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
+   Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
+   falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,
+   across the gun). Round 27 as deployed: the muzzle flash at the drawn barrel, both hands (`Weapon.MuzzleFlash=barrel`,
    D18; round 26's "doesn't render" was wrong -- the flame shows for one frame, the game's too; `Debug.MuzzleFreeze`
    pauses the world after a shot to see it, ENGINE-NOTES 5aj). Round 26: the player asked to move the flash, its other
    questions carry over; the game log was lost (a simulator deploy left in place ran the player's next two launches;

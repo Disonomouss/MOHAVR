@@ -1089,6 +1089,37 @@ say so.
 5. Controllers put down: no more double gun? (yes / describe)
 6. Anything else odd? (describe)
 
+**Answers:** (the player's words) 1. "Flash is good" · 2. "Brass is good right handed, but with left hand the brass comes
+out of the wrong ride of the gun and flys off in the wrong direction." · 3. "Looks good" · 4. "Looks good" · 5. "Fixed"
+
+**Log received:** yes, kept by the next deploy's pre-deploy copy: `logs/modlogs/20260930-093750-predeploy-MOHAVR.log`
+and `-MOHAVR-host.log` (Virtual Desktop, 09:23:34-09:28:23: the gun drawn in the left hand three times in the last
+minute; no errors). The 1.5 KB `-MOHAVR.prev.log` is Steam relaunching the exe 0.7 s earlier.
+
+**Verdict:** the flash at the barrel, left-hand mode, jumps and falls, and idle controllers (Hands.HoldLost) **passed**;
+the brass passed right-handed and **failed left-handed** (thrown the right-hand way) -- round 28.
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 28: prepared 2026-09-30, the brass from your left-hand gun
+**Changed:**
+- **Left-hand brass:** with the gun in your left hand, the casings now fly out of the mirrored gun's side and away from
+  it, the mirror image of your right hand (`Weapon.BrassMirror=1`). Before, they flew the right-hand way, across the gun.
+  [S]: frozen 15 frames after a shot with the BAR in the left hand, the casing is out to the left of the gun
+  (`logs/shots/095427-frz5-l-def.png`); before the fix it crossed to the right (`logs/shots/094007-frz5-l-old.png`).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play. Fire the rifle, the BAR and the pistol with the
+gun in your left hand, then in your right.
+
+**Questions:**
+1. Left hand: does the brass come out of the gun's side and fly away from it, like your right hand's, mirrored? (yes /
+   describe)
+2. Right hand: still right? (yes / describe)
+3. Do the casings look normal (solid brass, not hollow or see-through)? (yes / describe)
+4. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
