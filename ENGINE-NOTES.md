@@ -785,6 +785,43 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   every first-person part (`A = L2W x Xw x D`) -- the gun, attached to the hand, follows. [S]: the drawn gun hand stays
   within 1.5-2.0 cm of its pre-sprint place in its controller's frame (3.6-37.5 cm without).
 
+## 5ad. The first-person sprint animation, the pawn's state, and part updates per frame (2026-09-29, round 24)
+
+Research workflow wf_ae7690d5 (Ghidra, the scripts, VM_Tree parsed from MOHAGame.xxx; offsets cross-checked by a second
+agent), plus probes.
+- **Object state:** `UObject.StateFrame` +0x18 (FStateFrame*), `FStateFrame.StateNode` +0x2C (UState*); the state's name
+  is the node's FName at +0x2C/+0x30; StateNode == the object's Class means "no state" (execGetStateName 0x109CD9F0 =
+  GNatives[284]; execIsInState 0x109CD7B0, execGotoState 0x109CC570, UObject::GotoState 0x109BE3D0 writes it). Other
+  FStateFrame fields: +0x14 Node, +0x1C Code, +0x30 ProbeMask, +0x38 LatentAction, +0x3C StateStack.
+- **Sprint state machine:** Stand.CheckForIdleStateChange -> GetLocomotionState: SPRINT when VSize(Velocity) >
+  GroundSpeed (490) x the weapon's MoveSpeedMultipler x 1.01 && IsSprintEnabled (sprint held, not aiming, standing, an
+  Idle-derived state). Multipliers (DefaultWeapon.ini): Colt45/Mauser/grenades 1.0, MP40 0.95, Thompson/shotgun 0.90,
+  Garand/Stg44 0.88, K98 0.87, BAR/G43 0.85, Springfield 0.80, Panzerschreck 0.75, M18 0.70. Sprint speed =
+  x fSprintSpeedMult 1.35 on the forward share, x stick magnitude: the game sprints whenever stick x (1 + 0.35 f) > 1.01.
+  No hysteresis. `Stand_Sprint.BeginState` -> `SetActivity(2)`: `CurrentActivity` (byte, pawn +0x884) = 2 exactly
+  while in Stand_Sprint; `fActivityBlendTime` +0x894 = 0.25 s.
+- **The animation:** only the arms' AnimTree (`FPArms`, VM_Arms, ViewModel_AnimTree.VM_Tree): its root activity node
+  (MOHAAnimNodePlayerActivity, `pawn.ActivityNode` +0x96C; Children TArray +0xC0/+0xC4, 0x40-byte entries, Anim +0x08,
+  Weight +0x0C) has one child per EPlayerActivity; child 2 = a MOHAAnimNodeWeaponType with one `<weapon>_sprint` loop per
+  weapon (18 frames, 0.6 s), faded in and out over 0.25 s (0 s into Fire/Throw). No weapon code or weapon animation is
+  involved: the gun is attached to the arms' `RightGun` socket, and the game camera comes from FPArms' `Cam` socket
+  (GetPawnViewLocationNative 0x10E81DE0).
+- **The activity node's tick** (UMOHAAnimNodePlayerActivity::TickAnim 0x10E66400): ESI = node, EBX = [ESI+0x3C]
+  SkelComponent, EDI = [EBX+0x4C] its Owner (class-checked a MOHAPlayerPawn), `movzx eax,[edi+0x884]` at 0x10E6647B,
+  `cmp eax,[esi+0xE0]` (ActiveChildIndex) at 0x10E66482, and EAX pushed unchanged at 0x10E664A8 as the child to blend to
+  (vtable +0x190 with PlaybackLength +0x890, blend time +0x894). **Weapon.SprintArms** (default idle): a MidHook there
+  turns 2 into 0 (idle) or 1 (walk) for the local pawn's own FPArms -- the arms never blend into the sprint loop; speed,
+  zoom, blur and sound (state-driven) are unchanged. Installed whatever Weapon.ViewModel is. The children it switches to
+  are blend nodes, not sequences, so the re-trigger path (ECX) restarts nothing (review wf_19864723). [S]: the drawn gun
+  hand turned <= 1 deg in its controller's frame while sprinting (84 deg with the game's animation), 3-9 cm (the walk bob
+  vs the idle pose).
+- **Part updates per frame while moving:** the arms and the gun (gun first) update up to 6 times a frame; two of them sit
+  37 cm higher and the first lags one frame of motion; only the last pair is drawn (steady to 0.1 cm frame to frame).
+  The per-sprint log ("armik: sprint of N ms -- ...") uses each frame's last arms update.
+- **Why the speed-detected lock failed (round 23):** its threshold (~500) was above the game's for most weapons (sprints
+  at 421-495 went unlocked), it restarted its ramp on every flicker around the threshold, and it fired during the
+  parachute glide.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -134,10 +134,51 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
     }
 }
 
+SafetyHookMid g_activityHook;
+unsigned      g_sprintSwaps = 0;
+
+// Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
+// lock on top of it jittered and missed sprints): the first-person arms' activity node ticks with EAX = the pawn's
+// CurrentActivity (addresses.hpp). For the local player's own arms, sprint (2) becomes idle (0) or walk (1), so they
+// never blend into the <weapon>_sprint loop; the gun (on the arms' RightGun socket) and the game camera (FPArms' Cam
+// socket) follow. The pawn still sprints -- speed, zoom, blur and sound come from its Stand_Sprint state, not this node.
+void OnActivityTick(SafetyHookContext& ctx) {
+    if (ctx.eax != 2) return;  // PLAYER_ACTIVITY_STAND_SPRINT
+    const std::uintptr_t pawn = ctx.edi;
+    if (!pawn || pawn != aim::LocalPlayerPawn()) return;
+    const int ao = names::PropertyOffset(pawn, "FPArms");
+    if (ao < 0 || names::ReadPointer(pawn + ao) != ctx.ebx) return;  // the first-person arms' tree only
+    const std::uintptr_t to = g_cfg.sprintArms == 1 ? 1u : 0u;
+    if (*reinterpret_cast<const int*>(ctx.esi + addr::kActivityNodeActiveChild) != static_cast<int>(to) && g_sprintSwaps < 20) {
+        ++g_sprintSwaps;  // a sprint starting (the node is about to blend)
+        MLOG("viewmodel: sprinting -- the arms play %s instead of the sprint animation (Weapon.SprintArms)", to ? "walk" : "idle");
+    }
+    ctx.eax = to;
+}
+
 }  // namespace
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
+    // Weapon.SprintArms is its own switch: it works whatever Weapon.ViewModel is (the game camera's sprint shake comes from
+    // the arms too).
+    if (cfg.sprintArms != 0) {
+        // Standing rule 4: the load of CurrentActivity and the compare the MidHook replaces.
+        if (patch::BytesMatch(addr::kActivityTickLoad, addr::kActivityTickLoadBytes, sizeof(addr::kActivityTickLoadBytes)) &&
+            patch::BytesMatch(addr::kActivityTickCmp, addr::kActivityTickCmpBytes, sizeof(addr::kActivityTickCmpBytes))) {
+            auto mid = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kActivityTickCmp), OnActivityTick);
+            if (mid) {
+                g_activityHook = std::move(*mid);
+                MLOG("viewmodel: Weapon.SprintArms=%s -- the arms' activity tick hooked at 0x%08X", cfg.sprintArms == 1 ? "walk" : "idle",
+                     static_cast<unsigned>(addr::kActivityTickCmp));
+            } else {
+                MLOG("viewmodel: activity tick hook failed (error %d) -- the game's sprint animation stays",
+                     static_cast<int>(mid.error().type));
+            }
+        } else {
+            MLOG("viewmodel: activity tick bytes differ -- the game's sprint animation stays");
+        }
+    }
     if (cfg.viewModel == 0) {
         MLOG("viewmodel: Weapon.ViewModel=0 -- the game's own first-person gun (flat-screen FOV)");
         return false;
@@ -395,19 +436,6 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     if (!s.valid || GetTickCount() - s.tick > 250) return false;
     std::memcpy(d, s.d.m, sizeof(d));
     std::memcpy(dInv, s.dInv.m, sizeof(dInv));
-    return true;
-}
-
-bool CurrentMove(float (&d)[16], float (&dInv)[16], float (&camInv)[16]) {
-    if (!g_installed || g_cfg.viewModel != 2) return false;
-    State s;
-    AcquireSRWLockShared(&g_lock);
-    s = g_state;
-    ReleaseSRWLockShared(&g_lock);
-    if (!s.valid || GetTickCount() - s.tick > 250) return false;
-    std::memcpy(d, s.d.m, sizeof(d));
-    std::memcpy(dInv, s.dInv.m, sizeof(dInv));
-    std::memcpy(camInv, s.camInv.m, sizeof(camInv));
     return true;
 }
 

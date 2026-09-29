@@ -5,8 +5,10 @@
 
 .EXAMPLE
     tools/sim_window_shot.ps1 -Out logs\shots\x.png
+    tools/sim_window_shot.ps1 -Out logs\shots\x.png -Size 1600x900   # restore and resize the window first (it can end
+                                                                    # up squeezed to a few pixels behind the game)
 #>
-param([string]$Class = 'OpenXR Simulator', [string]$Out, [long]$Handle = 0)
+param([string]$Class = 'OpenXR Simulator', [string]$Out, [long]$Handle = 0, [string]$Size = '')
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -15,6 +17,8 @@ public class WS {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint f);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
 }
 '@
 $h = [IntPtr]$Handle
@@ -32,6 +36,11 @@ public static IntPtr Find(string cls, uint pid) { IntPtr found = IntPtr.Zero; En
     $h = [WE]::Find($Class, $(if ($hostProc) { [uint32]$hostProc.Id } else { [uint32]0 }))
 }
 if ($h -eq [IntPtr]::Zero) { throw "no window of class $Class" }
+if ($Size -match '^(\d+)x(\d+)$') {
+    [void][WS]::ShowWindow($h, 9)                                                                   # SW_RESTORE
+    [void][WS]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, [int]$Matches[1], [int]$Matches[2], 0x0006)  # NOMOVE|NOZORDER
+    Start-Sleep -Milliseconds 600                                                                   # a few frames
+}
 $r = New-Object WS+RECT
 [void][WS]::GetClientRect($h, [ref]$r)
 $bmp = New-Object Drawing.Bitmap ($r.R - $r.L), ($r.B - $r.T)

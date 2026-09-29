@@ -107,3 +107,21 @@ uses too, so moving it would mean hooking the script VM or disturbing the camera
 native hook and lands every hit exactly where the ray points, at any distance.
 **Costs:** one engine line trace per frame; a target the hand can see but the eye can't (around a corner) is hit
 from the eye's side. Projectiles (grenades) still leave from the gun.
+
+### D12. Shots start at the gun, on the red dot's ray — Decided 2026-09-29 (round 22; revises D11's cost)
+The player's bullets go through the native `CalcWeaponFireNative`; a MidHook at its SingleLineCheck call (ENGINE-NOTES
+5ab) moves the player's shot onto the red dot's ray from the gun (`Aim.ShotFromGun=1`), unless the eye -> gun segment is
+blocked; the aim trace uses the bullets' own flags (per-poly collision).
+**Why:** bending from the eye (D11) put shots elsewhere whenever the eye's line met something the gun's didn't, and the
+aim trace's simple collision disagreed with the bullets' per-poly one. One ray, one start, the same flags: the dot and the
+shot can't disagree (225 headset shots: all from the gun, 210 within 2 cm).
+**Costs:** one more MidHook pair in the bullet path; a hand pushed through a wall falls back to the eye.
+
+### D13. Replace the first-person sprint animation, don't compensate it — Decided 2026-09-29 (round 24)
+`Weapon.SprintArms=idle` makes the first-person arms' activity node see idle (or walk) while the pawn sprints (a MidHook
+in its tick, ENGINE-NOTES 5ad), instead of correcting the drawn gun each frame (round 22's `Weapon.SprintLock`).
+**Why:** the correction had to guess when the animation plays (speed thresholds differ per weapon and stick; the lock
+missed most sprints and jittered on flicker), fight a 20-unit, 60-90 degree swing, and still left the elbows and shoulders
+animating. Removing the animation at the one node that plays it needs no detection, timers or reference pose, and also
+stills the camera's sprint shake (the camera comes from the arms' Cam socket).
+**Costs:** a MidHook in the anim tick (filtered to the local pawn's FPArms); the sprint looks like standing, not running.

@@ -116,7 +116,9 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 23** (deployed): the hit cross hidden (`HUD.HitMarker`), tracers off (`Weapon.Tracers`; they
+2. **HEADSET-TESTS round 24** (deployed): the first-person arms don't play the sprint animation (`Weapon.SprintArms=idle`,
+   a MidHook in the arms' activity node tick); the speed-detected sprint lock is removed. Round 23: hit cross and tracers
+   passed; the lock failed (never engaged on the ground). Round 23 as deployed: the hit cross hidden (`HUD.HitMarker`), tracers off (`Weapon.Tracers`; they
    start at the third-person gun), the gun hand held on its controller while sprinting (`Weapon.SprintLock`). Round 22:
    shots passed (225 logged, from the gun, on the dot), crosshair gone. Round 22 as deployed: the red dot's trace uses the bullets' own collision flags (0x268BF, per-poly;
    found in the native CalcWeaponFireNative), triggers passed like the bullets do, shots start at the gun along the

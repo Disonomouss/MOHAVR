@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <cwchar>
+
 #include "log.hpp"
 
 namespace mohavr {
@@ -41,7 +43,11 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
     c.hudHitMarker   = get(L"HUD", L"HitMarker", c.hudHitMarker);
     c.weaponTracers  = get(L"Weapon", L"Tracers", c.weaponTracers);
-    c.sprintLock     = get(L"Weapon", L"SprintLock", c.sprintLock);
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Weapon", L"SprintArms", L"idle", v, 16, ini.c_str());
+        c.sprintArms = (!_wcsicmp(v, L"game") || !wcscmp(v, L"0")) ? 0 : (!_wcsicmp(v, L"walk") || !wcscmp(v, L"1")) ? 1 : 2;
+    }
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);

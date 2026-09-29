@@ -899,6 +899,42 @@ into the line (21 m / 36 m), an ammo pickup (14 cm).
 3. Tracers gone -- and do you want them back from the barrel later? (yes/no)
 4. Anything else odd? (describe)
 
+**Answers:** 1 "Yes" · 2 "The gun stays in hand at first but is jittering as if it is being pulled to sprint animation
+position. Occasionally it enters the animation." · 3 "Gone and can stay gone."
+
+**Log received:** yes, `logs/modlogs/20260929-175244-MOHAVR.log` and `.prev.log` (two game runs). The speed-detected
+lock fired only during the parachute glide (a false positive) and **never on the ground**: the game's sprint threshold is
+per weapon (GroundSpeed x MoveSpeedMultipler x 1.01: Stg44 435.5, BAR 420.7, Colt 494.9) and the lock's was ~500, so the
+sprint animation mostly played with no lock; when the speed hovered near 500 the lock's 100 ms ramp-in restarted on every
+flicker -- the pull toward the sprint pose.
+
+**Verdict:** hit cross PASSED; tracers off PASSED (stay off); sprint FAILED (round 24).
+
+---
+
+## Round 24: prepared 2026-09-29, the arms no longer play the sprint animation
+**Changed:**
+- **Sprinting:** instead of fighting the game's sprint animation, the first-person arms simply don't play it: while you
+  sprint they hold the gun as when standing (`Weapon.SprintArms=idle`; `walk` and `game` are the alternatives). The gun
+  can't be pulled out of your hand, and the sprint's view shake goes too. Sprinting itself (speed, zoom, sound) is
+  unchanged.
+- The old speed-detected sprint lock is gone.
+- [S]: sprinting in the simulator, the gun hand turned up to **1 deg** in its controller's frame with `idle` (84 deg with
+  the game's animation); side-by-side screenshots standing vs sprinting show the gun in the same place
+  (`logs/shots/r24-sprint-ab.png`). The log now records every sprint: "armik: sprint of N ms -- the gun hand moved up to
+  X cm and turned up to Y deg". An adversarial review of the change (3 lenses, each finding checked by a skeptic)
+  confirmed two minor issues -- the per-sprint log across a level change, and the switch being skipped with
+  ViewModel=0 -- both fixed.
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Sprint with the rifle, the BAR, the pistol and a grenade: straight, diagonally, with the stick half pushed.
+2. Start and stop sprinting a few times; fire or reload right after a sprint.
+
+**Questions:**
+1. Does the gun stay in your hand while sprinting, with no jitter or pull? (yes / describe)
+2. Do the arms look OK while sprinting, and when you start and stop? (yes / describe)
+3. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

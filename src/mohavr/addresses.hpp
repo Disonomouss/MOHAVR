@@ -171,6 +171,18 @@ inline constexpr std::uintptr_t kBulletTraceCall = 0x10F0CE93;
 inline constexpr std::uint8_t   kBulletTraceCallBytes[] = {0xE8, 0x08, 0x72, 0xC5, 0xFF};
 inline constexpr std::uintptr_t kBulletTraceAfter = 0x10F0CE98;
 inline constexpr std::uint8_t   kBulletTraceAfterBytes[] = {0x8D, 0x44, 0x24, 0x14, 0xE8, 0x1F, 0x03, 0xCE, 0xFF};
+// UMOHAAnimNodePlayerActivity::TickAnim (0x10E66400; the first-person arms' activity blend list, VM_Tree's
+// MOHAAnimNodePlayerActivities; research workflow wf_ae7690d5 + capstone on Ghidra's bytes, round 24): ESI = the node,
+// EBX = its SkelComponent ([ESI+0x3C]), EDI = that component's Owner ([EBX+0x4C], class-checked a MOHAPlayerPawn).
+// 0x10E6647B loads EAX = pawn.CurrentActivity (byte +0x884); 0x10E66482 compares it with the node's ActiveChildIndex
+// (+0xE0), and if they differ (or the activity was set again: ECX) pushes EAX unchanged at 0x10E664A8 as the child to blend
+// to (vtable +0x190 with PlaybackLength +0x890 and fActivityBlendTime +0x894). Child 2 = PLAYER_ACTIVITY_STAND_SPRINT (the
+// <weapon>_sprint loops, 0.25 s in and out), 1 = walk, 0 = idle.
+inline constexpr std::uintptr_t kActivityTickLoad = 0x10E6647B;  // movzx eax, byte [edi+0x884]
+inline constexpr std::uint8_t   kActivityTickLoadBytes[] = {0x0F, 0xB6, 0x87, 0x84, 0x08, 0x00, 0x00};
+inline constexpr std::uintptr_t kActivityTickCmp = 0x10E66482;   // cmp eax,[esi+0xE0]; jne +4 (MidHook here)
+inline constexpr std::uint8_t   kActivityTickCmpBytes[] = {0x3B, 0x86, 0xE0, 0x00, 0x00, 0x00, 0x75, 0x04};
+inline constexpr std::uintptr_t kActivityNodeActiveChild = 0xE0;  // AnimNodeBlendList.ActiveChildIndex (int)
 // FCheckResult (execTrace's initialisation): Next +0, Actor +4, Location +8, Normal +0x14, Time +0x20 (1.0 =
 // no hit), Item +0x24 (-1), then Material/Component/BoneName/...: 0x44 bytes in all.
 inline constexpr std::uintptr_t kCheckResultActor = 0x04, kCheckResultLocation = 0x08, kCheckResultTime = 0x20,
@@ -249,6 +261,8 @@ inline constexpr Signature kSignatures[] = {
     {"bullet trace flags",                 kBulletTraceFlagsSite, kBulletTraceFlagsSiteBytes, sizeof(kBulletTraceFlagsSiteBytes)},
     {"bullet trace call",                  kBulletTraceCall, kBulletTraceCallBytes, sizeof(kBulletTraceCallBytes)},
     {"bullet trace after",                 kBulletTraceAfter, kBulletTraceAfterBytes, sizeof(kBulletTraceAfterBytes)},
+    {"activity tick load",                 kActivityTickLoad, kActivityTickLoadBytes, sizeof(kActivityTickLoadBytes)},
+    {"activity tick compare",              kActivityTickCmp, kActivityTickCmpBytes, sizeof(kActivityTickCmpBytes)},
 };
 
 }  // namespace mohavr::addr
