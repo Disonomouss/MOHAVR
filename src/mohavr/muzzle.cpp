@@ -1,0 +1,195 @@
+#include "muzzle.hpp"
+
+#include <windows.h>
+
+#include <safetyhook.hpp>
+
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+
+#include "addresses.hpp"
+#include "aim.hpp"
+#include "arms_ik.hpp"
+#include "config.hpp"
+#include "log.hpp"
+#include "names.hpp"
+#include "patch.hpp"
+#include "viewmodel.hpp"
+
+namespace mohavr::muzzle {
+namespace {
+
+constexpr float kUnrToRad = 3.14159265f / 32768.0f;
+
+// Unreal's FMatrix: row vectors (v' = v * M), rows = X/Y/Z axes, then the origin.
+struct M4 {
+    float m[4][4];
+};
+
+M4 Mul(const M4& a, const M4& b) {
+    M4 r{};
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            r.m[i][j] = a.m[i][0] * b.m[0][j] + a.m[i][1] * b.m[1][j] + a.m[i][2] * b.m[2][j] + a.m[i][3] * b.m[3][j];
+    return r;
+}
+
+// FRotationTranslationMatrix (rotator in Unreal units).
+M4 RotationTranslation(const int (&rot)[3], const float (&t)[3]) {
+    const float sp = std::sin(rot[0] * kUnrToRad), cp = std::cos(rot[0] * kUnrToRad);
+    const float sy = std::sin(rot[1] * kUnrToRad), cy = std::cos(rot[1] * kUnrToRad);
+    const float sr = std::sin(rot[2] * kUnrToRad), cr = std::cos(rot[2] * kUnrToRad);
+    return M4{{{cp * cy, cp * sy, sp, 0.0f},
+               {sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp, 0.0f},
+               {-(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp, 0.0f},
+               {t[0], t[1], t[2], 1.0f}}};
+}
+
+// FMatrix::Rotator: pitch and yaw from X, roll from Z and Y against the unrolled Y axis.
+void ToRotator(const M4& m, int (&rot)[3]) {
+    const float(&x)[4] = m.m[0], (&y)[4] = m.m[1], (&z)[4] = m.m[2];
+    const float pitch = std::atan2(x[2], std::sqrt(x[0] * x[0] + x[1] * x[1]));
+    const float yaw = std::atan2(x[1], x[0]);
+    const float syx = -std::sin(yaw), syy = std::cos(yaw);
+    const float roll = std::atan2(z[0] * syx + z[1] * syy, y[0] * syx + y[1] * syy);
+    rot[0] = static_cast<int>(std::lround(pitch / kUnrToRad));
+    rot[1] = static_cast<int>(std::lround(yaw / kUnrToRad));
+    rot[2] = static_cast<int>(std::lround(roll / kUnrToRad));
+}
+
+float Det3(const M4& a) {
+    const float (&m)[4][4] = a.m;
+    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+}
+
+Config           g_cfg;
+SafetyHookInline g_hook;
+int              g_logged = 0, g_checked = 0;
+
+enum Kind { kNone, kFlash, kBrass };
+const char* const kKindName[] = {"", "muzzle flash", "brass"};
+
+// The local player's weapon attachment's flash or brass component, and the gun its sockets are on.
+Kind Classify(std::uintptr_t psc, std::uintptr_t& gun) {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!pawn || !psc) return kNone;
+    const int ao = names::PropertyOffset(pawn, "CurrentWeaponAttachment");
+    const std::uintptr_t att = ao >= 0 ? names::ReadPointer(pawn + ao) : 0;
+    if (!att) return kNone;
+    const int fo = names::PropertyOffset(att, "MuzzleFlashPSComponent"), bo = names::PropertyOffset(att, "ShellEjectPSComponent");
+    Kind k = kNone;
+    if (fo >= 0 && names::ReadPointer(att + fo) == psc) k = kFlash;
+    else if (bo >= 0 && names::ReadPointer(att + bo) == psc) k = kBrass;
+    if (k == kNone) return kNone;
+    const int mo = names::PropertyOffset(att, "Mesh");  // WeaponAttachment.Mesh: the first-person gun for the player
+    gun = mo >= 0 ? names::ReadPointer(att + mo) : 0;
+    return k;
+}
+
+// barrel: the component's pending transform (the game's socket) x the gun's drawn move (and the left hand's mirror).
+void MoveToDrawnGun(std::uintptr_t psc, Kind kind, std::uintptr_t gun) {
+    float d[16];
+    if (!gun || !armsik::BakedMove(gun, d)) return;  // the gun isn't drawn moved: leave it where the game put it
+    const int to = names::PropertyOffset(psc, "Translation"), ro = names::PropertyOffset(psc, "Rotation");
+    int uo = -1;
+    std::uint32_t um = 0;
+    if (to < 0 || ro < 0 || !names::BoolProperty(psc, "bNeedsUpdateTransform", uo, um)) return;
+    float* t = reinterpret_cast<float*>(psc + to);
+    int* r = reinterpret_cast<int*>(psc + ro);
+    const float t0[3] = {t[0], t[1], t[2]};
+    const int r0[3] = {r[0], r[1], r[2]};
+    M4 move;
+    std::memcpy(move.m, d, sizeof(move.m));
+    float mirror[16];
+    if (viewmodel::DrawMirror(mirror)) {
+        M4 m;
+        std::memcpy(m.m, mirror, sizeof(m.m));
+        move = Mul(move, m);
+    }
+    M4 s = Mul(RotationTranslation(r0, t0), move);
+    if (Det3(s) < 0.0f)  // through the mirror: a rotator can't reflect -- its own Y (across the barrel) flipped back
+        for (int j = 0; j < 3; ++j) s.m[1][j] = -s.m[1][j];
+    int r1[3];
+    ToRotator(s, r1);
+    for (int i = 0; i < 3; ++i) {
+        t[i] = s.m[3][i];
+        r[i] = r1[i];
+    }
+    *reinterpret_cast<std::uint32_t*>(psc + uo) |= um;  // as SetTranslation leaves it: ActivateSystem applies it
+    if (g_logged < 8) {
+        ++g_logged;
+        const float dx = t[0] - t0[0], dy = t[1] - t0[1], dz = t[2] - t0[2];
+        MLOG("muzzle: the %s moved to the drawn gun -- from %.1f %.1f %.1f to %.1f %.1f %.1f (%.1f cm), rotation %d %d %d -> "
+             "%d %d %d", kKindName[kind], t0[0], t0[1], t0[2], t[0], t[1], t[2], std::sqrt(dx * dx + dy * dy + dz * dz), r0[0],
+             r0[1], r0[2], r[0], r[1], r[2]);
+    }
+}
+
+// Weapon.MuzzleFlash / Brass: 0 hide, 1 the game's, 2 on the drawn gun.
+int ModeOf(Kind kind) { return kind == kFlash ? g_cfg.muzzleFlash : kind == kBrass ? g_cfg.brass : 1; }
+
+void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void* stack, void* result) {
+    std::uintptr_t gun = 0;
+    const Kind kind = Classify(psc, gun);
+    const int mode = ModeOf(kind);
+    float want[3] = {};
+    const bool move = kind != kNone && mode == 2;
+    if (move) {
+        MoveToDrawnGun(psc, kind, gun);
+        const int to = names::PropertyOffset(psc, "Translation");
+        if (to >= 0) std::memcpy(want, reinterpret_cast<const void*>(psc + to), sizeof(want));
+    }
+    g_hook.thiscall<void>(psc, stack, result);
+    if (kind == kNone) return;
+    if (mode == 0) {
+        // hide: ActivateSystem cleared it; with it set the emitters skip spawning (bursts too) until the next shot.
+        int so = -1;
+        std::uint32_t sm = 0;
+        if (names::BoolProperty(psc, "bSuppressSpawning", so, sm)) *reinterpret_cast<std::uint32_t*>(psc + so) |= sm;
+        if (g_logged < 4) {
+            ++g_logged;
+            MLOG("muzzle: the %s hidden (Weapon.%s=hide)", kKindName[kind], kind == kFlash ? "MuzzleFlash" : "Brass");
+        }
+        return;
+    }
+    if (move && g_checked < 4) {
+        // [S] check: the transform ActivateSystem applied is the moved one.
+        const int lo = names::PropertyOffset(psc, "LocalToWorld");
+        if (lo >= 0) {
+            ++g_checked;
+            const float* l2w = reinterpret_cast<const float*>(psc + lo);
+            MLOG("muzzle: the %s's LocalToWorld origin after ActivateSystem %.1f %.1f %.1f (wanted %.1f %.1f %.1f)",
+                 kKindName[kind], l2w[12], l2w[13], l2w[14], want[0], want[1], want[2]);
+        }
+    }
+}
+
+}  // namespace
+
+bool Install(const Config& cfg) {
+    g_cfg = cfg;
+    static const char* const kModes[] = {"hide", "game", "moved"};
+    if (cfg.muzzleFlash == 1 && cfg.brass == 1) {
+        MLOG("muzzle: Weapon.MuzzleFlash=game Brass=game -- the flash and the brass where the game puts them");
+        return false;
+    }
+    // Standing rule 4: the exec's bytes, through its call to UParticleSystemComponent::ActivateSystem.
+    if (!patch::BytesMatch(addr::kExecActivateSystem, addr::kExecActivateSystemBytes, sizeof(addr::kExecActivateSystemBytes))) {
+        MLOG("muzzle: execActivateSystem bytes differ -- standing down (the game's flash)");
+        return false;
+    }
+    auto res = safetyhook::InlineHook::create(reinterpret_cast<void*>(addr::kExecActivateSystem),
+                                              reinterpret_cast<void*>(&Hook_ExecActivateSystem));
+    if (!res) {
+        MLOG("muzzle: inline hook failed (error %d) -- the game's flash", static_cast<int>(res.error().type));
+        return false;
+    }
+    g_hook = std::move(*res);
+    MLOG("muzzle: Weapon.MuzzleFlash=%s Brass=%s -- execActivateSystem hooked at 0x%08X", kModes[cfg.muzzleFlash & 3],
+         kModes[cfg.brass & 3], static_cast<unsigned>(addr::kExecActivateSystem));
+    return true;
+}
+
+}  // namespace mohavr::muzzle

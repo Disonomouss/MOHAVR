@@ -39,6 +39,7 @@ M4 Mul(const M4& a, const M4& b) {
 M4 Frame(const float (&x)[3], const float (&y)[3], const float (&z)[3], const float (&t)[3]) {
     return M4{{{x[0], x[1], x[2], 0.0f}, {y[0], y[1], y[2], 0.0f}, {z[0], z[1], z[2], 0.0f}, {t[0], t[1], t[2], 1.0f}}};
 }
+constexpr float kAxisX[3] = {1.0f, 0.0f, 0.0f}, kAxisY[3] = {0.0f, 1.0f, 0.0f}, kAxisZ[3] = {0.0f, 0.0f, 1.0f};
 
 // The reflection across the plane through p with unit normal n (row vectors: x' = x - 2((x - p).n) n); its own inverse.
 M4 Reflection(const float (&p)[3], const float (&n)[3]) {
@@ -186,7 +187,7 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
 }
 
 SafetyHookMid g_activityHook;
-unsigned      g_sprintSwaps = 0, g_walkSwaps = 0;
+unsigned      g_sprintSwaps = 0, g_walkSwaps = 0, g_jumpSwaps = 0;
 
 // Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
 // lock on top of it jittered and missed sprints): the first-person arms' activity node ticks with EAX = the pawn's
@@ -197,20 +198,26 @@ unsigned      g_sprintSwaps = 0, g_walkSwaps = 0;
 // crouch-walking (3) become idle too. The walk and run loops sway the Cam socket -- the game camera, which the VR view is
 // built on -- up to 3 cm side to side, 1.6 cm up and down and 2 cm fore and aft (ENGINE-NOTES 5ah), and the gun 3-9 cm in
 // the hand. Crouch-idle is activity 0 as well; footsteps run on a timer, not on the animation.
+// Weapon.JumpArms (round 26: "a similar animation to sprint happens when walking over rough terrain or falling a small
+// distance"): jump start, falling and the soft and hard landings (26-29) become idle too -- a drop of over 75 units
+// plays them (CheckForAnimatedJumpTransition), and they move the camera 18-24 units and up to 17 deg. The JumpStart,
+// JumpIdle and JumpEnd states run on timers and Landed, not on the animations ending, so nothing waits for them.
 void OnActivityTick(SafetyHookContext& ctx) {
     const bool sprint = ctx.eax == 2 && g_cfg.sprintArms != 0;               // PLAYER_ACTIVITY_STAND_SPRINT
     const bool walk = (ctx.eax == 1 || ctx.eax == 3) && g_cfg.walkArms;  // PLAYER_ACTIVITY_STAND_WALK, _CROUCH_WALK
-    if (!sprint && !walk) return;
+    const bool jump = ctx.eax >= 26 && ctx.eax <= 29 && g_cfg.jumpArms;  // _JUMP_START, _JUMP_IDLE, _JUMP_END_SOFT/_HARD
+    if (!sprint && !walk && !jump) return;
     const std::uintptr_t pawn = ctx.edi;
     if (!pawn || pawn != aim::LocalPlayerPawn()) return;
     const int ao = names::PropertyOffset(pawn, "FPArms");
     if (ao < 0 || names::ReadPointer(pawn + ao) != ctx.ebx) return;  // the first-person arms' tree only
     const std::uintptr_t to = sprint && g_cfg.sprintArms == 1 ? 1u : 0u;
-    unsigned& swaps = sprint ? g_sprintSwaps : g_walkSwaps;
+    unsigned& swaps = sprint ? g_sprintSwaps : walk ? g_walkSwaps : g_jumpSwaps;
     if (*reinterpret_cast<const int*>(ctx.esi + addr::kActivityNodeActiveChild) != static_cast<int>(to) && swaps < 20) {
-        ++swaps;  // a sprint or walk starting (the node is about to blend)
-        MLOG("viewmodel: %s -- the arms play %s instead of the %s animation (Weapon.%s)", sprint ? "sprinting" : "walking",
-             to ? "walk" : "idle", sprint ? "sprint" : "walk", sprint ? "SprintArms" : "WalkArms");
+        ++swaps;  // a sprint, walk or jump starting (the node is about to blend)
+        MLOG("viewmodel: %s -- the arms play %s instead of the %s animation (Weapon.%s)",
+             sprint ? "sprinting" : walk ? "walking" : "jumping or landing", to ? "walk" : "idle",
+             sprint ? "sprint" : walk ? "walk" : "jump", sprint ? "SprintArms" : walk ? "WalkArms" : "JumpArms");
     }
     ctx.eax = to;
 }
@@ -219,24 +226,24 @@ void OnActivityTick(SafetyHookContext& ctx) {
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
-    // Weapon.SprintArms and WalkArms are their own switches: they work whatever Weapon.ViewModel is (the game camera's
-    // sprint shake and walk sway come from the arms too).
-    if (cfg.sprintArms != 0 || cfg.walkArms) {
+    // Weapon.SprintArms, WalkArms and JumpArms are their own switches: they work whatever Weapon.ViewModel is (the game
+    // camera's sprint shake, walk sway and landing dip come from the arms too).
+    if (cfg.sprintArms != 0 || cfg.walkArms || cfg.jumpArms) {
         // Standing rule 4: the load of CurrentActivity and the compare the MidHook replaces.
         if (patch::BytesMatch(addr::kActivityTickLoad, addr::kActivityTickLoadBytes, sizeof(addr::kActivityTickLoadBytes)) &&
             patch::BytesMatch(addr::kActivityTickCmp, addr::kActivityTickCmpBytes, sizeof(addr::kActivityTickCmpBytes))) {
             auto mid = safetyhook::MidHook::create(reinterpret_cast<void*>(addr::kActivityTickCmp), OnActivityTick);
             if (mid) {
                 g_activityHook = std::move(*mid);
-                MLOG("viewmodel: Weapon.SprintArms=%s WalkArms=%s -- the arms' activity tick hooked at 0x%08X",
+                MLOG("viewmodel: Weapon.SprintArms=%s WalkArms=%s JumpArms=%s -- the arms' activity tick hooked at 0x%08X",
                      cfg.sprintArms == 0 ? "game" : cfg.sprintArms == 1 ? "walk" : "idle", cfg.walkArms ? "idle" : "game",
-                     static_cast<unsigned>(addr::kActivityTickCmp));
+                     cfg.jumpArms ? "idle" : "game", static_cast<unsigned>(addr::kActivityTickCmp));
             } else {
-                MLOG("viewmodel: activity tick hook failed (error %d) -- the game's sprint and walk animations stay",
+                MLOG("viewmodel: activity tick hook failed (error %d) -- the game's sprint, walk and jump animations stay",
                      static_cast<int>(mid.error().type));
             }
         } else {
-            MLOG("viewmodel: activity tick bytes differ -- the game's sprint and walk animations stay");
+            MLOG("viewmodel: activity tick bytes differ -- the game's sprint, walk and jump animations stay");
         }
     }
     if (cfg.viewModel == 0) {
@@ -436,10 +443,8 @@ void OnPlayerView() {
         if (!view::PoseFrameToWorld(gun, pos, axes, upm)) return;
         const shared::GunFit fit = CurrentFit(hdr);
         const float (&gf)[3] = axes[0], (&gr)[3] = axes[1], (&gu)[3] = axes[2];
-        // The camera-frame grip point lands on the controller: the gun frame's origin is moved back by it.
-        float t[3];
-        for (int i = 0; i < 3; ++i) t[i] = pos[i] - (fit.grip[0] * gf[i] + fit.grip[1] * gr[i] + fit.grip[2] * gu[i]);
-        M4 gunFrame = Frame(gf, gr, gu, t);
+        // The gun hand's controller frame (the host's gun pose: the controller, pitched by the fit's angle).
+        M4 ctrlFrame = Frame(gf, gr, gu, pos);
         // Weapon.LeftHandMirror (round 25: in left-hand mode the right arm reached across the chest to the gun): with the
         // gun in the left hand, work in a mirror world -- reflected across the body's centre plane (through the head,
         // across the body's right axis) -- where the left controller is a right hand and the game's right-handed
@@ -448,9 +453,14 @@ void OnPlayerView() {
         if (g_cfg.leftHandMirror && (flags & 4u) && view::HeadInWorld(head, hyaw, hupm)) {
             const float n[3] = {-sy, cy, 0.0f};  // the body's right axis (the game camera's yaw)
             mirror = Reflection(head, n);
-            gunFrame = MirrorFrame(gunFrame, mirror);
+            ctrlFrame = MirrorFrame(ctrlFrame, mirror);
             mirroredNow = true;
         }
+        // The camera-frame grip point lands on the controller: the gun frame is the controller's, its origin moved back by
+        // the grip -- in the mirror world for the left hand, where the fit (tuned on the right hand) applies as it is and
+        // comes out mirrored (round 26: put on before the mirror, its sideways part landed on the wrong side, 2 x 11 cm).
+        const float back[3] = {-fit.grip[0], -fit.grip[1], -fit.grip[2]};
+        const M4 gunFrame = Mul(Frame(kAxisX, kAxisY, kAxisZ, back), ctrlFrame);
         d = Mul(camInv, gunFrame);
         dInv = Mul(RigidInverse(gunFrame), cam);
         // The aim line: the host's, mapped the same way.
@@ -470,8 +480,7 @@ void OnPlayerView() {
             seenFlags = flags;
         }
         // For the arm IK: the gun's frame, and the other controller's (the free hand follows it off the foregrip).
-        gunFrameNow = Frame(gf, gr, gu, pos);  // the gun hand's controller frame (its origin at the controller)
-        if (mirroredNow) gunFrameNow = MirrorFrame(gunFrameNow, mirror);
+        gunFrameNow = ctrlFrame;  // the gun hand's controller frame (its origin at the controller; mirrored with the gun)
         twoHandedNow = (flags & 2u) != 0;
         shared::Pose hand[2];
         std::uint32_t hv = 0;
@@ -501,13 +510,6 @@ void OnPlayerView() {
     g_state.camInv = camInv;
     ReleaseSRWLockExclusive(&g_lock);
 }
-bool Mirrored() {
-    if (!g_installed || g_cfg.viewModel != 2) return false;
-    AcquireSRWLockShared(&g_lock);
-    const bool m = g_state.valid && g_state.mirrored;
-    ReleaseSRWLockShared(&g_lock);
-    return m;
-}
 
 bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHanded) {
     if (!g_installed || g_cfg.viewModel != 2) return false;
@@ -532,6 +534,18 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     if (!s.valid || GetTickCount() - s.tick > 250) return false;
     std::memcpy(d, s.d.m, sizeof(d));
     std::memcpy(dInv, s.dInv.m, sizeof(dInv));
+    return true;
+}
+
+bool DrawMirror(float (&r)[16]) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    // As the proxy hook decides it for the first-person parts.
+    if (!s.mirrored || !s.valid || GetTickCount() - s.tick > 250) return false;
+    std::memcpy(r, s.mirror.m, sizeof(r));
     return true;
 }
 

@@ -213,6 +213,19 @@ inline constexpr std::uintptr_t kProxyDetReaderDraw = 0x10D06571, kProxyDetReade
 inline constexpr std::uint8_t   kProxyDetReaderBytes[] = {0x0F, 0x2F, 0x83, 0xA0, 0x00, 0x00, 0x00};
 inline constexpr std::uintptr_t kMohaSkelMeshFov = 0x3D0;  // UMOHASkeletalMeshComponent.FOV (float)
 
+// --- round 26: the player's muzzle flash and brass at the drawn gun (muzzle.cpp, ENGINE-NOTES 5aj) ---
+// UParticleSystemComponent::execActivateSystem (native table entry 0x116165F0 -> "intUParticleSystemComponentexecActivate
+// System" at 0x1151A540): thiscall, ECX = the component, [esp+4] FFrame& Stack, [esp+8] Result, RET 8. It finishes the
+// parameters, then `mov eax,esi; call 0x10BDBC40` (UParticleSystemComponent::ActivateSystem, this in EAX), which applies
+// the transform SetTranslation/SetRotation left pending (UpdateComponent 0x10AE7110) before any particle spawns. The 48
+// bytes run through that call (execDeactivateSystem at 0x10D640D0 shares the first 37). Research agent, round 26; read
+// from the exe.
+inline constexpr std::uintptr_t kExecActivateSystem = 0x10D640A0;
+inline constexpr std::uint8_t   kExecActivateSystemBytes[] = {
+    0x8B, 0x44, 0x24, 0x04, 0x83, 0x40, 0x1C, 0x01, 0x56, 0x8B, 0xF1, 0x8B, 0x48, 0x1C, 0x80, 0x39,
+    0x41, 0x75, 0x12, 0x83, 0xC1, 0x01, 0x6A, 0x00, 0x89, 0x48, 0x1C, 0x8B, 0x48, 0x18, 0x50, 0xFF,
+    0x15, 0xC4, 0x35, 0x6B, 0x11, 0x8B, 0xC6, 0xE8, 0x74, 0x7B, 0xE7, 0xFF, 0x5E, 0xC2, 0x08, 0x00};
+
 // --- M8 arm IK (ENGINE-NOTES 5x) ---
 // UMOHASkeletalMeshComponent::UpdateTransform (fastcall, ECX = component; slot in the arms' vtable 0x11587D38):
 // bLockTranslation, then USkeletalMeshComponent::UpdateTransform 0x10CFAC10, which ends with
@@ -274,6 +287,7 @@ inline constexpr Signature kSignatures[] = {
     {"proxy determinant read (draw)",      kProxyDetReaderDraw, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
     {"proxy determinant read (decal A)",   kProxyDetReaderDecalA, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
     {"proxy determinant read (decal B)",   kProxyDetReaderDecalB, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
+    {"particle execActivateSystem",        kExecActivateSystem, kExecActivateSystemBytes, sizeof(kExecActivateSystemBytes)},
 };
 
 }  // namespace mohavr::addr

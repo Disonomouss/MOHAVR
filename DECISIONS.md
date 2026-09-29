@@ -146,3 +146,19 @@ simulator's loop isn't steady (it stalls and catches up), so it proves pacing wo
 rule 7). A live switch lets the player compare both in one session.
 **Costs:** a Draw waits up to 25 ms when the host doesn't signal (headset asleep: the game slows to ~40 fps); a frame
 that takes longer than a headset frame shows a frame late, as uncapped.
+
+### D16. Frame pacing on by default — Decided 2026-09-29 (round 26; revises D15)
+The shipped `[Bridge] Pace` is 1; the menu switch stays.
+**Why:** the player compared both in the headset and noticed no difference, and asked for the recommendation; the round-25
+log measured it: paced, the world was 10.9 ms behind each XR frame with a spread of 0.4-1.0 ms, uncapped 14-21 ms with
+1.3-3.2 ms (3-5x steadier, fresher), and the game renders 90 frames a second instead of 120-330 (the GPU is shared with
+the headset's encoder).
+**Costs:** as D15: with the headset asleep the game slows to ~40 fps (the waits time out).
+
+### D17. The player's muzzle flash hidden, the brass moved — Decided 2026-09-29 (round 26)
+`Weapon.MuzzleFlash=hide`, `Weapon.Brass=gun`: one hook on execActivateSystem either moves a particle component's
+pending transform onto the drawn gun or suppresses its spawning (ENGINE-NOTES 5aj).
+**Why:** the player asked for the flash at the barrel, else hidden. Moved there, the flash's transform and particles are
+at the drawn muzzle but it doesn't render (in the simulator; the brass, world-space emitters, does) -- not resolved within
+the time box. Hidden is deterministic; the brass from the drawn gun is right.
+**Costs:** no muzzle flash (the muzzle light still flashes at the game's barrel); `barrel` stays as an option to retry.

@@ -769,8 +769,9 @@ HUD exec functions are all reachable. `FOutputDevice::Logf` (FUN_109D8D60) forma
   EALASmallArms and MOHAPlayerController on a hit) does `EnableElement(true)` + a fade. `HUD.HitMarker=0` clears its
   `bRender` each view, as for the crosshair.
 - **Tracers:** `SmallArmsAttachment.UpdateTracerData` (from EALASmallArms after each shot) -> every `TracerFrequency`th
-  shot `TurnOnTracer`, which starts the beam at the **attachment's** mesh socket `CurrentWeaponSockets.BarrelTip` -- the
-  third-person gun in the (unseen) body's hand. `MOHAPawn.CurrentWeaponAttachment` (+0x4A8); `CreateTracers[2]` (byte,
+  shot `TurnOnTracer`, which starts the beam at the **attachment's** mesh socket `CurrentWeaponSockets.BarrelTip` --
+  for the local player that mesh *is* the first-person gun, in the game's own pose in front of the face (corrected in
+  round 26, 5aj: there is no separate third-person gun). `MOHAPawn.CurrentWeaponAttachment` (+0x4A8); `CreateTracers[2]` (byte,
   +0x2F0 on Attachment_Stg44/Colt45) = 0 makes UpdateTracerData return. `Weapon.Tracers=0` zeroes it each view. (From
   the barrel instead: the socket query `GetSocketWorldLocationAndRotation` for that mesh would have to return the
   first-person muzzle through D -- not done.)
@@ -845,6 +846,17 @@ agent), plus probes.
 - **[S]:** a left-hand draw of the BAR (the left hand at the right-shoulder holster): mirror off -- the right arm
   crosses to the gun; mirror on -- the left arm holds the gun from the left, the right hand free on its controller, all
   solid (before the culling fix the mirrored gun drew as a dark inside-out silhouette).
+- **Round 25 in the headset: the arms crossed** (the right shoulder reached to the left hand and vice versa) **and the gun
+  sat wrong in the hand.** Two mistakes of mixing the worlds, both fixed in round 26: (1) arms_ik flipped the shoulders'
+  right axis in the mirror world -- but there the gun is in the rig's right hand on the right, so its shoulders are where
+  they always are; (2) the fit's grip point was put on in the real world and then mirrored, so its sideways part (grip Y,
+  ~11 units) landed on the wrong side (2 x 11 cm off). Now the controller frame is mirrored first and the grip applied in
+  the mirror world (gunFrame = T(-grip) x MirrorFrame(ctrl)); the host mirrors the aim line's sideways offset (fit
+  rayRight) for a left gun hand (hands.cpp, reading [Weapon] LeftHandMirror). The simulator test that "passed" had both
+  hands near the middle, where crossed arms look plausible. [S] round 26: the same rifle drawn right-handed and
+  left-handed at mirrored poses (hands 28 cm out, the gun turned 20 deg out, head 30 deg down) -- the left-hand image
+  flipped matches the right-hand one: the arms from their own shoulders, the gun in the hand alike
+  (`logs/shots/r26-lh-fix-compare.png`). Mirroring swaps the sleeves' details (the rig's right arm is drawn on the left).
 
 ## 5af. One weapon at a time: what an off-hand grenade or pistol would take (2026-09-29, research; parked)
 
@@ -919,11 +931,71 @@ fourth agent), plus simulator measurements (`logs/modlogs/r25-walk-*`).
   instead of 160-220, no timeouts, toggled live both ways. The host logs `perf: the world shown was X ms behind each XR
   frame (sd Y)` -- the sd is the jitter: in the simulator 17 ms (sd 8) paced vs 21 ms (sd 6) uncapped, but its loop stalls
   20% of its frames (worst 33 ms) and catches up in bursts (80 of its 90 events a second get a Draw); the headset's loop
-  is steady (round 24: worst 12-13 ms, 0 late). Smoothness is [H].
+  is steady (round 24: worst 12-13 ms, 0 late). **[H] round 25:** the player noticed no difference, but the log shows it:
+  uncapped the world was 14-21 ms behind each XR frame, sd 1.3-3.2 ms; paced 10.9 ms, sd 0.4-1.0 ms (3-5x steadier,
+  3-10 ms fresher). On by default since round 26 (D16).
 - **Not done (options):** a bob-free VR base from the pawn's own state (would also still the jump dip, recoil push,
   screen shake and weapon view offset, but splits the view from the game camera: the gun's D and the shot start must stay
   on the game's); step-ups snap the camera up to 35 units (MOHA has no eye smoothing: OldZ is unused); the paced frame's
   poses could be predicted one frame further (it is shown one frame after its Draw).
+
+## 5ai. Jumps and falls: the landing animations and the jump camera lift (2026-09-29, round 26)
+
+The player: "A similar animation to sprint happens when walking over rough terrain or falling a small distance."
+- **Falls play animated jump states:** JumpStart (26) / JumpIdle (27) / JumpEnd (28 soft, 29 hard, by Velocity.Z against
+  fHardJumpLandingSpeed) -- MOHAPlayerPawn.uc ~4236-4330; a drop off any ledge over 75 units enters them
+  (CheckForAnimatedJumpTransition). They run on timers (JumpStartTimerDone after fJumpStartAnimTime, JumpEndTimerDone ->
+  ActivityDoneEvent) and Landed, **not on the animations ending** -- so the arms can play something else. The landing
+  moved the game camera 11-18 cm and turned the gun hand ~68-72 deg in its controller's frame (the round-25 headset log's
+  per-walk lines right after landings: 64-72 deg). **Weapon.JumpArms=idle** (default): the activity MidHook turns 26-29
+  into 0 as well. [S] (a fall with a soft landing): the camera moved 0.5 cm against the body, the gun hand <= 2 deg
+  (with the game's: 14/18/11 cm, 68 deg). New log: `view: in the air N ms -- the game camera moved ... (jump activities:
+  ...)` per jump or fall (Physics == PHYS_Falling, by reflection), to 0.8 s after landing.
+- **A deliberate jump (Xbox Y / the controller's A) plays no jump animation** (none of 26-29 in the log): it is the
+  procedural jump -- fJumpCameraOffset (pawn, reflection; rises toward fMaxJumpCameraOffset, falls back at 80 units/s
+  after landing), added along the view's up axis in GetPawnViewLocationNative (ApplyJumpCameraOffset 0x10E81FD0), *after*
+  the arms' Cam socket. It lifted the VR view up to 8 cm on every jump, and since the gun is placed against the game
+  camera (D = C^-1 G) while the arms stay on the socket, the gun dropped as far below the hand (the per-walk log: 8.0-8.2
+  cm after each jump). **Camera.JumpLift=0** (default): vr_view OnViewPoint takes it back out of the camera (along
+  FRotationMatrix's Z at the view's pitch/yaw) before the eyes and g_world are built; aim keeps the game's camera
+  (g_gameCam), where its shots start. [S]: jumps 0.4-0.5 cm (was 7.8-8.4), the gun hand 0.3 cm (was 8.0-8.2).
+- Not touched: the recoil push (ApplyPush, 0.4-3 units per shot) and the screen shake's location and rotation are added
+  after the socket too, so they still move the view and the gun against the hand (not reported).
+
+## 5aj. The muzzle flash and the brass: at the game's gun pose; the brass moved, the flash hidden (2026-09-29, round 26)
+
+The player (round 25): "Muzzle flash is visible in front of player instead of on gun barrel. Move to gun barrel if
+possible, hide otherwise." Research agent (read-only), then probes.
+- **One gun mesh:** WeaponAttachment's `Mesh` = `ThirdPersonMesh` = `WeaponMeshComponent`; for the local player that is
+  the first-person gun (FOV 65) on FPArms' `RightGun` socket (WeaponAttachment.uc AttachTo 154-220 attaches it to a body
+  only for other pawns; EALAWeapon.AttachmentChanged 930-940; MOHAPlayerPawn.AttachNewWeaponMesh 1171-1198). So the
+  flash, the brass, the tracers, the muzzle light and the fire sounds all sit at that gun's sockets **in the game's own
+  pose** (the mod moves the gun only in its render copy): ~0.5-0.9 m in front of the camera.
+- **Placement:** SmallArmsAttachment.StartMuzzleFlash / StartShellEjectParticles: `GetSocketWorldLocationAndRotation(
+  BarrelTip / ShellEject_Player)`, `PSC.SetTranslation`, `SetRotation`, `ActivateSystem` (the components are
+  SetAbsolute(true,true,true), DPG 2 for the local player). execSetTranslation/Rotation only store the fields and set
+  `bNeedsUpdateTransform` (the attachment isn't static); **ActivateSystem** (C++ 0x10BDBC40, this in EAX) applies it
+  (UpdateComponent 0x10AE7110 -> UpdateTransform) before it re-initialises the emitters, and particles spawn on the
+  next tick. Its exec, **execActivateSystem 0x10D640A0** (native table entry 0x116165F0; thiscall, ECX = the component,
+  [esp+4] FFrame&, [esp+8] Result, RET 8; the 48 bytes through the call are pinned), is the hook point:
+  `muzzle.cpp` compares the component with the local pawn's attachment's MuzzleFlashPSComponent / ShellEjectPSComponent
+  (reflection), and either moves the pending `Translation`/`Rotation` (reflection) by the gun's drawn move -- the D' of
+  the gun's last bake (arms_ik BakedMove, after CatchUp) and the left hand's mirror (a reflected frame gets its own Y
+  flipped back: a rotator can't reflect) -- then sets `bNeedsUpdateTransform`; or, after the call, sets
+  `bSuppressSpawning` (ActivateSystem clears it; the emitters then skip spawning, bursts too, until the next shot).
+- **[S] brass (Weapon.Brass=gun, default):** moved 20-44 cm onto the drawn gun per shot; its LocalToWorld after
+  ActivateSystem is exactly the moved one; the casings fly out of the drawn gun's ejection port (slow motion:
+  `EnableCheats` + `SloMo 0.05` through Debug.GameCommands; `logs/shots/r26-mz-slobarrel-muzzle.png`). The ShellEject
+  systems are world-space emitters. In left-hand mode the port is at the mirrored side, the casings fly right.
+- **The flash moved to the barrel (Weapon.MuzzleFlash=barrel) doesn't show in the simulator:** its transform and its
+  particles' bounds are at the drawn muzzle (logged frame by frame after activation: the bounds' centre at the muzzle,
+  drifting forward along the gun, radius 80-160), but no capture shows the flash there -- also with the gun model
+  hidden (not occlusion), and in slow motion; the same flash at the game's pose shows plainly (a large orange burst in
+  front of the face). The first-person flashes' flame sprites are local-space emitters (BAR: 2 local 0.1 s + 1 world
+  1.0 s; `psys_sum.py` in the round-26 scratchpad), the brass world-space -- the difference between what shows moved and
+  what doesn't; not resolved (time box). **Weapon.MuzzleFlash=hide** (default): the flash suppressed; [S] slow-motion
+  captures with the left hand -- the game's flash in front of the face (a frame scoring 269 flame-coloured pixels)
+  gone (max 12, noise). The muzzle light (MuzzleFlashDLight, lighting only) still flashes at the game's barrel.
 
 ## 6. Content and UnrealScript
 

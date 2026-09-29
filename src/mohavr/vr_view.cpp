@@ -6,16 +6,19 @@
 
 #include <atomic>
 #include <cmath>
+#include <cstring>
 
 #include "addresses.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
 #include "bridge.hpp"
 #include "throwing.hpp"
+#include "muzzle.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
 #include "log.hpp"
+#include "names.hpp"
 #include "patch.hpp"
 
 namespace mohavr::view {
@@ -164,6 +167,7 @@ struct WorldMap {
     float        pitch;    // the game's own view pitch (radians) -- the first-person gun is placed with it
 };
 WorldMap g_world{};
+float g_gameCam[3] = {};  // the game's own camera at the player's last view (its shots start there)
 
 float UnitsPerMeter(const shared::Header* hdr) {
     const float live = hdr ? hdr->unitsPerMeter : 0.0f;
@@ -516,6 +520,55 @@ void ApplySnapTurn(const shared::Header* hdr, std::uintptr_t localPlayer, const 
     if (logged++ < 8) MLOG("snap: controller yaw %+d (%.0f deg) -> %d", delta, delta * 360.0 / 65536.0, *yaw);
 }
 
+// Diagnostics (round 26, "a similar animation to sprint happens when walking over rough terrain or falling a small
+// distance"): per jump or fall (the pawn's Physics == PHYS_Falling), from take-off to 0.8 s after landing (the landing
+// animation plays then), how far the game camera moved against the body -- peak to peak forward/right/up in the body's
+// frame -- and which jump activities played (Weapon.JumpArms).
+void TrackJumpSway(std::uintptr_t pawn, const float* loc, int camYaw, LONGLONG now) {
+    struct Air {
+        bool     on = false;
+        LONGLONG start = 0, landed = 0;
+        float    lo[4] = {}, hi[4] = {};
+        unsigned acts = 0;  // bit per jump activity seen (26-29)
+        int      logged = 0;
+    };
+    static Air a;
+    const int po = names::PropertyOffset(pawn, "Physics"), ao = names::PropertyOffset(pawn, "CurrentActivity");
+    if (po < 0) return;
+    const std::uint8_t physics = *reinterpret_cast<const std::uint8_t*>(pawn + po);
+    const std::uint8_t act = ao >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + ao) : 0;
+    const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    const int pyaw = *reinterpret_cast<const int*>(pawn + addr::kActorRotation + 4);
+    const float yaw = UnrToRad(pyaw), c = std::cos(yaw), sn = std::sin(yaw);
+    const float rx = loc[0] - pl[0], ry = loc[1] - pl[1];
+    const float v[4] = {rx * c + ry * sn, -rx * sn + ry * c, loc[2] - pl[2],
+                        static_cast<float>(static_cast<std::int16_t>(static_cast<std::uint16_t>((camYaw - pyaw) & 0xFFFF))) * (360.0f / 65536.0f)};
+    const bool falling = physics == 2;  // PHYS_Falling
+    if (!a.on) {
+        if (!falling) return;
+        a = Air{true, now, 0, {v[0], v[1], v[2], v[3]}, {v[0], v[1], v[2], v[3]}, 0, a.logged};
+    }
+    for (int i = 0; i < 4; ++i) {
+        a.lo[i] = v[i] < a.lo[i] ? v[i] : a.lo[i];
+        a.hi[i] = v[i] > a.hi[i] ? v[i] : a.hi[i];
+    }
+    if (act >= 26 && act <= 29) a.acts |= 1u << (act - 26);
+    if (falling) {
+        a.landed = 0;
+        return;
+    }
+    if (!a.landed) a.landed = now;
+    if (QpcMs(now - a.landed) < 800.0) return;
+    if (a.logged < 40) {
+        ++a.logged;
+        MLOG("view: in the air %.0f ms -- the game camera moved fwd %.1f right %.1f up %.1f cm against the body and turned %.1f deg "
+             "(jump activities:%s%s%s%s; Weapon.JumpArms=%s)", QpcMs(a.landed - a.start), a.hi[0] - a.lo[0], a.hi[1] - a.lo[1],
+             a.hi[2] - a.lo[2], a.hi[3] - a.lo[3], (a.acts & 1u) ? " start" : "", (a.acts & 2u) ? " falling" : "",
+             (a.acts & 4u) ? " soft landing" : "", (a.acts & 8u) ? " hard landing" : "", g_cfg.jumpArms ? "idle" : "game");
+    }
+    a.on = false;
+}
+
 // Diagnostics (round 25, "slight jitter in general movement ... a slight rubber banding feeling"): while the body moves,
 // how far the game camera -- the base of both eyes -- sways against it (the arms' walk animation moves the Cam socket;
 // Weapon.WalkArms), per 5 s of moving: peak to peak forward/right/up in the body's frame, and the camera's yaw against
@@ -537,6 +590,7 @@ void TrackCameraSway(const float* loc, int camYaw) {
     QueryPerformanceCounter(&q);
     const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
     const int pyaw = *reinterpret_cast<const int*>(pawn + addr::kActorRotation + 4);
+    TrackJumpSway(pawn, loc, camYaw, q.QuadPart);
     const double dt = s.last ? QpcMs(q.QuadPart - s.last) / 1000.0 : 0.0;
     const float dx = pl[0] - s.lastLoc[0], dy = pl[1] - s.lastLoc[1];
     const float step = std::sqrt(dx * dx + dy * dy);
@@ -615,10 +669,29 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
     if (g_cinema) return;  // flat: the game's own camera, untouched; the frame is marked "no view"
 
+    // The game's own camera, where its shots start (aim): before JumpLift below and before the head.
+    const float gameCam[3] = {loc[0], loc[1], loc[2]};
+    // Camera.JumpLift=0 (round 26): a jump lifts the game's camera by fJumpCameraOffset (up to 8 units, along the view's
+    // up axis) on top of the arms' Cam socket (GetPawnViewLocationNative 0x10E81DE0, ENGINE-NOTES 5ah). In VR it bumped
+    // the whole view on every jump, and the gun -- placed against that camera -- dropped as far below the hand. Left out.
+    if (!g_cfg.jumpLift && g_viewIsPlayers) {
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        const int jo = pawn ? names::PropertyOffset(pawn, "fJumpCameraOffset") : -1;
+        const float lift = jo >= 0 ? *reinterpret_cast<const float*>(pawn + jo) : 0.0f;
+        if (lift != 0.0f && lift > -50.0f && lift < 50.0f) {
+            const float p = UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF)), y = UnrToRad(rot[1]);
+            // FRotationMatrix's Z (up) axis, roll 0: (-sin p cos y, -sin p sin y, cos p).
+            loc[0] += std::sin(p) * std::cos(y) * lift;
+            loc[1] += std::sin(p) * std::sin(y) * lift;
+            loc[2] -= std::cos(p) * lift;
+        }
+    }
+
     const float gameYaw = UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
         g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};
+        std::memcpy(g_gameCam, gameCam, sizeof(g_gameCam));
         TrackCameraSway(loc, rot[1]);
     }
     // Stereo: this eye's own pose (orientation and position); mono: the head.
@@ -699,7 +772,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = true;
     if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi) {
         viewmodel::OnPlayerView();  // first: the aim follows the gun's barrel
-        aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_world.base);
+        aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_gameCam);
         throwing::OnPlayerView();
     }
 
@@ -984,6 +1057,7 @@ bool Install(const Config& cfg) {
     viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
     throwing::Configure(cfg);
     armsik::Install(cfg);     // M8: the arms reach from the body to the gun
+    muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     MLOG("throw: Hands.Throw=%d (x%.2f)", cfg.throwByHand, cfg.throwScale);
     return true;
 }

@@ -220,6 +220,25 @@ Saved g_saved[4];
 std::atomic<std::uintptr_t> g_bakedComp[4];
 std::atomic<DWORD> g_bakedTick[4];
 
+// Game thread: the move each part was last baked with (after CatchUp) -- what the muzzle flash and the brass are moved by
+// to sit on the drawn gun (muzzle.cpp).
+struct BakedMoveRec {
+    std::uintptr_t comp = 0;
+    M4             d{};
+    DWORD          tick = 0;
+};
+BakedMoveRec g_bakedMoves[4];
+
+void NoteBakedMove(std::uintptr_t comp, const M4& d) {
+    const DWORD now = GetTickCount();
+    int slot = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (g_bakedMoves[i].comp == comp) { slot = i; break; }
+        if (now - g_bakedMoves[i].tick > now - g_bakedMoves[slot].tick) slot = i;
+    }
+    g_bakedMoves[slot] = BakedMoveRec{comp, d, now};
+}
+
 void MarkBaked(std::uintptr_t comp) {
     const DWORD now = GetTickCount();
     int slot = 0;
@@ -251,11 +270,10 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         head[2] = h.z;
         yaw += std::atan2(carry.m[0][1], carry.m[0][0]);
         const float k = upm / 100.0f;  // cm -> units
-        const V3 fwd{std::cos(yaw), std::sin(yaw), 0.0f};
-        // In the mirror world (left-hand mode, viewmodel::Mirrored) the body's right is the real left: the gun arm's
-        // shoulder is the left one, drawn back through the mirror.
-        const float side = viewmodel::Mirrored() ? -1.0f : 1.0f;
-        const V3 right{-std::sin(yaw) * side, std::cos(yaw) * side, 0.0f};
+        // In left-hand mode (Weapon.LeftHandMirror) this is the mirror world, where the gun is in the rig's right hand on the
+        // right: its shoulders are where they always are, and the mirror puts the gun arm's on the left when drawn (round
+        // 26: flipping them here crossed the arms -- the right shoulder reached to the left hand and vice versa).
+        const V3 fwd{std::cos(yaw), std::sin(yaw), 0.0f}, right{-std::sin(yaw), std::cos(yaw), 0.0f};
         const V3 base = Sub(Sub(V3{head[0], head[1], head[2]}, V3{0.0f, 0.0f, g_cfg.shoulderDrop * k}), Scale(fwd, g_cfg.shoulderBack * k));
         anchor[0] = Add(base, Scale(right, 0.5f * g_cfg.shoulderWidth * k));
         anchor[1] = Sub(base, Scale(right, 0.5f * g_cfg.shoulderWidth * k));
@@ -564,6 +582,7 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     // frame. Carried along instead: D' = W^-1 D W, and the IK's targets x W (ENGINE-NOTES 5ah).
     const M4 carry = g_cfg.catchUp ? W : kIdentity;
     if (g_cfg.catchUp) D = Mul(Mul(AffineInverse(W), D), W);
+    NoteBakedMove(comp, D);
     const M4 invL2W = AffineInverse(l2w);
     const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
@@ -601,6 +620,16 @@ void __fastcall Hook_UpdateTransform(std::uintptr_t comp) {  // ECX = the compon
 }
 
 }  // namespace
+
+bool BakedMove(std::uintptr_t comp, float (&d)[16]) {
+    const DWORD now = GetTickCount();
+    for (const BakedMoveRec& r : g_bakedMoves) {
+        if (r.comp != comp || now - r.tick > 250) continue;
+        std::memcpy(d, r.d.m, sizeof(d));
+        return true;
+    }
+    return false;
+}
 
 bool IsBaked(std::uintptr_t comp) {
     const DWORD now = GetTickCount();

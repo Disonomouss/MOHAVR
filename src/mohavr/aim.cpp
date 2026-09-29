@@ -167,8 +167,9 @@ void HideHudBits(std::uintptr_t ctrl) {
     }
 }
 
-// Weapon.Tracers=0: the player's tracers start at the third-person gun's barrel (SmallArmsAttachment.TurnOnTracer:
-// the attachment mesh's BarrelTip socket -- the unseen body's hand, not the gun in yours; round 22). Its
+// Weapon.Tracers=0: the player's tracers start at the attachment mesh's BarrelTip socket (SmallArmsAttachment.TurnOnTracer)
+// -- the first-person gun, but in the game's own pose in front of the face, not the gun drawn in your hand (round 22;
+// round 26 corrected: the local player has no separate third-person gun). Its
 // CreateTracers[fire mode] = 0 makes UpdateTracerData return before spawning one.
 void HideTracers(std::uintptr_t pawn) {
     const int ao = names::PropertyOffset(pawn, "CurrentWeaponAttachment");

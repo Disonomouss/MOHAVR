@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-29 (round 25 deployed; the "Next" list is current, the history below it is kept)_
+_Last updated: 2026-09-29 (round 26 deployed; the "Next" list is current, the history below it is kept)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -116,7 +116,12 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 25** (deployed): left-hand mode drawn mirrored (`Weapon.LeftHandMirror`; the proxy's
+2. **HEADSET-TESTS round 26** (deployed): left-hand mode fixed (the shoulders not flipped in the mirror world; the grip
+   applied after mirroring; the aim line's sideways offset mirrored by the host), the jump and landing animations replaced
+   by idle (`Weapon.JumpArms`), the jump camera lift left out (`Camera.JumpLift=0`), the brass from the drawn gun and the
+   muzzle flash hidden (`Weapon.Brass`, `Weapon.MuzzleFlash`; execActivateSystem hooked), frame pacing on by default (D16).
+   Round 25: jitter passed, left grip passed, pacing measured (sd 0.5 vs 1.3-3.2 ms), left-hand mode failed, idle controllers
+   untested. Round 25 as deployed: left-hand mode drawn mirrored (`Weapon.LeftHandMirror`; the proxy's
    determinant sign for culling), the left grip unmapped (`[Controls] LB=none`), controllers that stop tracking held
    relative to the head (`Hands.HoldLost`), and movement: the arms play idle while walking (`Weapon.WalkArms`), the move
    carried with the body (`Weapon.CatchUp`), frame pacing as a live menu switch (off by default; the player's A/B).

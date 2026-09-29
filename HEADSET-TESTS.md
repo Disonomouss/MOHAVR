@@ -880,7 +880,8 @@ into the line (21 m / 36 m), an ammo pickup (14 cm).
 ## Round 23: prepared 2026-09-29, no hit marker, no tracers, the gun stays in the hand while sprinting
 **Changed:**
 - **The red hit cross is hidden** (`HUD.HitMarker=0`), the same way as the crosshair.
-- **Tracers are off** (`Weapon.Tracers=0`): the game starts them at the third-person gun's barrel (the unseen body's
+- **Tracers are off** (`Weapon.Tracers=0`): the game starts them at the gun's barrel in its own pose (round 26: not a separate
+  third-person gun as thought here; the unseen body's
   hand), not at the gun in your hand. Starting them at your gun's barrel is possible later (more work).
 - **Sprinting:** the sprint animation no longer carries the gun and arms away (`Weapon.SprintLock=1`): the gun hand is
   held where it was just before, eased in and out.
@@ -999,11 +1000,60 @@ round 25.
 5. Left grip: nothing happens now? (yes/no)
 6. Anything else odd? (describe)
 
+**Answers:** 1 "Left hand is still wrong. Arms are crossed, arm extends from right shoulder to position of left hand and
+vice versa. Position is also wrong, like right hands were before my adjustments." · 2 "No jitter, looks good." · 3 "Noticed
+no difference. Your recommendation as default." · 4 "Untested" · 5 "Nothing happens." · Also: "Muzzle flash is visible in
+front of player instead of on gun barrel. Move to gun barrel if possible, hide otherwise." "A similar animation to sprint
+happens when walking over rough terrain or falling a small distance."
+
+**Log received:** yes, `logs/modlogs/20260929-221539-MOHAVR.log` and `-MOHAVR-host.log`. Frame pacing, on vs off in the
+same session: the world shown 10.9 ms behind each XR frame with a spread (sd) of 0.4-1.0 ms paced, 14-21 ms with 1.3-3.2
+ms uncapped; paced at exactly 90 Draws a second, ~8 ms to spare each, no timeouts in steady play. Walking: the camera
+against the body 0.0 fwd, 0.4-0.7 cm up (walk arms idle); but windows with 14-46 cm and up to 14 deg, and per-walk gun turns
+of 64-72 deg right after landings -- the jump and landing animations. Left hand drawn 6 times.
+
+**Verdict:** jitter PASSED (walk arms, catch-up); left grip PASSED; frame pacing -> on by default (D16); left-hand mode
+FAILED (crossed arms, the grip mirrored wrong -- round 26); idle controllers untested (again in round 26).
+
+**Deployed for this round:** the shipped defaults (Frame pacing starts off; the menu turns it on).
+
+---
+
+## Round 26: prepared 2026-09-29, left-hand mode fixed, no jump animations, the flash and brass
+**Changed:**
+- **Left-hand mode, fixed:** the arms no longer cross -- each arm comes from its own shoulder -- and the gun sits in your
+  left hand the way it sits in your right (your gun fits apply, mirrored; the red dot's line too). [S]: the same rifle
+  drawn right- and left-handed at mirrored poses: the left-hand picture flipped matches the right-hand one
+  (`logs/shots/r26-lh-fix-compare.png`); the pistol and a grenade in the left hand too.
+- **Jumps and falls:** stepping off a ledge or over rough ground played the game's jump and landing animations, which
+  swung the view and the gun; the arms now keep their idle pose (`Weapon.JumpArms=idle`). A jump also lifted the view up
+  to 8 cm and dropped the gun as far in your hand; that lift is gone (`Camera.JumpLift=0`). [S]: a fall with a landing --
+  the view 0.5 cm, the gun <= 2 deg in the hand (with the animation: 11-18 cm, 68 deg); a jump -- the view 0.5 cm, the gun
+  0.3 cm (8 cm before).
+- **Muzzle flash hidden, brass from your gun:** the game put both where it holds the gun itself, in front of your face.
+  The brass now flies out of the gun in your hand (`Weapon.Brass=gun`). The flash could be moved to your barrel, but
+  there it doesn't show (the simulator), so it's hidden (`Weapon.MuzzleFlash=hide`; `barrel` is there to try).
+- **Frame pacing is on by default** (your menu setting was already on).
+
+**How to try it:** Claude has deployed. Launch as usual, get into play.
+1. Draw guns with your left hand (rifle, pistol, a grenade): arms, gun position, reload, fire.
+2. Walk over rough ground, step off ledges, jump.
+3. Fire long bursts with the rifle and the BAR, gun in front and to the side: no flash in front of your face, brass from
+   the gun.
+4. Put the controllers down for 20 s, look around, pick them up: the gun should stay put (untested in round 25).
+
+**Questions:**
+1. Left hand: arms from the right shoulders, the gun sitting right in your hand? (yes / describe)
+2. Rough ground, ledges, jumps: any animation or view bump left? (describe)
+3. Firing: no flash in front of your face? Brass coming from your gun? Do you miss the flash? (yes/no, describe)
+4. Controllers put down: no more double gun? (yes / describe)
+5. Anything else odd? (describe)
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
-**Deployed for this round:** the shipped defaults (Frame pacing starts off; the menu turns it on).
+**Deployed for this round:** the shipped defaults.
 
 ---
 

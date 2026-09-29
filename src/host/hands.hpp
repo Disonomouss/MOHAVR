@@ -89,6 +89,7 @@ private:
     Zone        zones_[kHolsters];
     HolsterSpot spots_[kHolsters]{}, defaultSpots_[kHolsters]{};
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;
+    bool  mirrorLeft_ = true;  // the game draws the left hand's gun mirrored ([Weapon] LeftHandMirror): so is the aim line
     float gripWas_[2]{};
     bool  held_[2]{};          // grip pressed (hysteresis)
     bool  consumed_[2]{};      // this press was used by a gesture

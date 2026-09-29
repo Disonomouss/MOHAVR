@@ -83,8 +83,10 @@ void Hands::Init(const std::wstring& ini) {
     holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
     foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
-    MLOG("hands: holsters %d (%s / %s / %s / %s), foregrip %d, reload gesture %d", holsters_, zones_[0].command.c_str(),
-         zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(), foregrip_, reloadGesture_);
+    mirrorLeft_ = GetPrivateProfileIntW(L"Weapon", L"LeftHandMirror", 1, ini.c_str()) != 0;
+    MLOG("hands: holsters %d (%s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
+         zones_[0].command.c_str(), zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(), foregrip_,
+         reloadGesture_, mirrorLeft_);
 }
 
 Hands::Output Hands::Update(const Input& in) {
@@ -221,7 +223,10 @@ Hands::Output Hands::Update(const Input& in) {
         out.gunValid = true;
         out.gun = gun;
         out.aimRay.orientation = gun.orientation;
-        const V3 start = Add(gunPos, Rotate(gun.orientation, V3{in.fit.rayRight / 100.0f, in.fit.rayUp / 100.0f, 0.0f}));
+        // The fit is tuned on the right hand; the game draws a left hand's gun mirrored (Weapon.LeftHandMirror), so its
+        // barrel is as far to the left of the controller as the right hand's is to the right (round 26).
+        const float rayRight = (g == 0 && mirrorLeft_) ? -in.fit.rayRight : in.fit.rayRight;
+        const V3 start = Add(gunPos, Rotate(gun.orientation, V3{rayRight / 100.0f, in.fit.rayUp / 100.0f, 0.0f}));
         out.aimRay.position = {start.x, start.y, start.z};
     }
     for (int h = 0; h < 2; ++h) out.consumed[h] = held_[h] && consumed_[h];

@@ -50,6 +50,17 @@ Config LoadConfig(const std::wstring& dir) {
         c.sprintArms = (!_wcsicmp(v, L"game") || !wcscmp(v, L"0")) ? 0 : (!_wcsicmp(v, L"walk") || !wcscmp(v, L"1")) ? 1 : 2;
         GetPrivateProfileStringW(L"Weapon", L"WalkArms", c.walkArms ? L"idle" : L"game", v, 16, ini.c_str());
         c.walkArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
+        GetPrivateProfileStringW(L"Weapon", L"JumpArms", c.jumpArms ? L"idle" : L"game", v, 16, ini.c_str());
+        c.jumpArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
+        auto mode = [&](const wchar_t* key, int def, const wchar_t* moved) {
+            GetPrivateProfileStringW(L"Weapon", key, L"", v, 16, ini.c_str());
+            if (!_wcsicmp(v, L"hide") || !wcscmp(v, L"0")) return 0;
+            if (!_wcsicmp(v, L"game") || !wcscmp(v, L"1")) return 1;
+            if (!_wcsicmp(v, moved) || !wcscmp(v, L"2")) return 2;
+            return def;
+        };
+        c.muzzleFlash = mode(L"MuzzleFlash", c.muzzleFlash, L"barrel");
+        c.brass = mode(L"Brass", c.brass, L"gun");
     }
     c.catchUp        = get(L"Weapon", L"CatchUp", c.catchUp);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
@@ -96,6 +107,7 @@ Config LoadConfig(const std::wstring& dir) {
     }
     c.noMotionBlur   = get(L"Camera", L"DisableMotionBlur", c.noMotionBlur);
     c.noDepthOfField = get(L"Camera", L"DisableDepthOfField", c.noDepthOfField);
+    c.jumpLift       = get(L"Camera", L"JumpLift", c.jumpLift);
     c.xrEnabled      = get(L"OpenXR", L"Enabled", c.xrEnabled);
     wchar_t buf[MAX_PATH] = L"";
     GetPrivateProfileStringW(L"OpenXR", L"RuntimeJson", L"", buf, MAX_PATH, ini.c_str());
@@ -109,8 +121,9 @@ Config LoadConfig(const std::wstring& dir) {
     MLOG("config: Camera.HeadTracking=%d HeadPosition=%d HeadsetProjection=%d Stereo=%d UnitsPerMeter=%.1f "
          "DisableMotionBlur=%d DisableDepthOfField=%d", c.headTracking, c.headPosition, c.headsetProjection, c.stereo,
          c.unitsPerMeter, c.noMotionBlur, c.noDepthOfField);
-    MLOG("config: Weapon.WalkArms=%s Weapon.SprintArms=%d Weapon.CatchUp=%d (frame pacing: the host's [Bridge] Pace and "
-         "its menu)", c.walkArms ? "idle" : "game", c.sprintArms, c.catchUp);
+    MLOG("config: Weapon.WalkArms=%s JumpArms=%s SprintArms=%d CatchUp=%d MuzzleFlash=%d Brass=%d Camera.JumpLift=%d (frame "
+         "pacing: the host's [Bridge] Pace and its menu)", c.walkArms ? "idle" : "game", c.jumpArms ? "idle" : "game",
+         c.sprintArms, c.catchUp, c.muzzleFlash, c.brass, c.jumpLift);
     if (c.bridgeHost && !c.d3d9On12) MLOG("config: Bridge.Host=1 needs Bridge.D3D9On12=1 -- the host will not be started");
     if (c.headTracking && !c.bridgeHost) MLOG("config: Camera.HeadTracking=1 needs Bridge.Host=1 (the host supplies the head pose)");
     if (c.bridgeHost && c.xrEnabled) MLOG("config: Bridge.Host=1 and OpenXR.Enabled=1 -- using the host; in-process OpenXR is off");

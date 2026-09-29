@@ -21,5 +21,7 @@ bool Install(const Config& cfg);
 
 // Render thread: whether this first-person part's bone matrices already carry the move (drawn as is).
 bool IsBaked(std::uintptr_t component);
+// Game thread: the move this part was last baked with (world, row-major: drawn = the game's pose x d), if within 250 ms.
+bool BakedMove(std::uintptr_t component, float (&d)[16]);
 
 }  // namespace mohavr::armsik
