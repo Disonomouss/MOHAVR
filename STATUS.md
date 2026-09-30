@@ -118,10 +118,10 @@ address-space budget for D3D9On12.
    decals, A/B in menus).
 2. **HEADSET-TESTS round 29** (deployed): movement where you look (`Controls.MoveDirection=head`, D20, ENGINE-NOTES
    5al) and the crash recorder (`Debug.CrashDump`) for the pause-menu crash (twice in the gun-fit sessions, 5ak).
-   **Gun fits, in progress (the player, before anything else):** fitted StG44, BAR, Colt, Mk II frag, Thompson,
-   Garand, C96, Gammon, stick grenade; left: Springfield, K98, G43, MP40, M12 shotgun, M18, Panzerschreck. Then they ship
-   as defaults. The grenade pickup is parked (the player); a full manual reload is next after the fits (upgrades only
-   show/hide parts of one mesh, ENGINE-NOTES 5ak -- the extended magazines matter there).
+   **Gun fits done** for the 14 loadout weapons and shipped as per-weapon defaults (a shipped [GunFit]; the M18 and
+   Panzerschreck keep the global default; mission-only weapons later). **Next: manual reload** (D21): Step 0 research
+   running (gun skeletons, reload/ammo logic, anims and the empty pose, integration), then Step 1 box magazines with the
+   empty-gun visuals. The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

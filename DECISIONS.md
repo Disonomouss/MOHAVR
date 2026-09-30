@@ -190,3 +190,14 @@ the menu.
 **Why:** the player asked for it; the aim already comes from the controller and turning from the right stick, so the
 body's heading only decided where "forward" walks.
 **Costs:** looking around while walking steers the walk (the usual trade of head-directed locomotion).
+
+### D21. Manual reload: the player's design — Decided 2026-09-30 (before Step 0)
+A physical reload replaces the game's reload animation, gun by gun: box magazines first (Thompson, MP40, StG44, BAR,
+G43, Colt, maybe the C96), then the Garand's clip, then the bolt actions, the shotgun and the launchers (Claude's order,
+at the player's "your choice"). The player's choices: new magazines come from a pouch in the **middle of the belt**; the
+magazine drops by **a button on the gun hand or by pulling it out** with the off hand; **racking is required** after an
+empty magazine; rounds left in a dropped magazine go **back into reserve**; the gun **shows empty** (slide or bolt back,
+chamber open) while its magazine is empty.
+**Why:** the player's requests (round 29 follow-up). Guns without data keep today's gesture reload (the off hand at the
+magazine sends the game's own Reload).
+**Costs:** per-gun data (bones, travel, grab points) and per-gun testing; later guns need their own mechanics.
