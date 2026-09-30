@@ -122,6 +122,7 @@ void Menu::ApplySavedSettings() {
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::wstring shipped(exe);
     shipped = shipped.substr(0, shipped.find_last_of(L'\\')) + L"\\MOHAVR.ini";
+    shippedPath_ = shipped;
     const int defSnap = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"SnapTurn", 0, shipped.c_str()));
     const int saved = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"SnapTurn", -1, iniPath_.c_str()));
     snapDeg_ = 0;
@@ -226,17 +227,11 @@ void Menu::SyncWeapon() {
     std::memcpy(key, hdr_->weaponKey, sizeof(key));
     key[47] = 0;
     weaponKey_ = key;
-    fit_ = fitDefault_;
+    fit_ = WeaponDefault();
     bool saved = false;
     if (!weaponKey_.empty()) {
-        const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
-        wchar_t b[128] = L"";
-        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", b, 128, iniPath_.c_str());
-        shared::GunFit f = fitDefault_;
-        const int n = b[0] ? swscanf_s(b, L"%f %f %f %f %f %f %f %f", &f.grip[0], &f.grip[1], &f.grip[2], &f.angle, &f.rayUp,
-                                       &f.rayRight, &f.foreFwd, &f.foreUp)
-                           : 0;
-        if (n == 6 || n == 8) {  // 6: saved before the foregrip existed (it keeps the default)
+        shared::GunFit f = fit_;
+        if (ReadFit(iniPath_, f)) {
             fit_ = f;
             saved = true;
         }
@@ -244,6 +239,28 @@ void Menu::SyncWeapon() {
     MLOG("menu: weapon '%s' -- fit %s: grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f", weaponKey_.c_str(),
          saved ? "saved" : "default", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
     PublishFit();
+}
+
+// [GunFit] <weapon> = gx gy gz angle rayUp rayRight foreFwd foreUp (6 values: saved before the foregrip existed).
+bool Menu::ReadFit(const std::wstring& ini, shared::GunFit& f) const {
+    if (weaponKey_.empty() || ini.empty()) return false;
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    wchar_t b[128] = L"";
+    GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", b, 128, ini.c_str());
+    shared::GunFit t = f;
+    const int n = b[0] ? swscanf_s(b, L"%f %f %f %f %f %f %f %f", &t.grip[0], &t.grip[1], &t.grip[2], &t.angle, &t.rayUp,
+                                   &t.rayRight, &t.foreFwd, &t.foreUp)
+                       : 0;
+    if (n != 6 && n != 8) return false;
+    f = t;
+    return true;
+}
+
+// The weapon's shipped fit (round 30: the player's fits for the loadout weapons), else the global default.
+shared::GunFit Menu::WeaponDefault() const {
+    shared::GunFit f = fitDefault_;
+    ReadFit(shippedPath_, f);
+    return f;
 }
 
 void Menu::PublishFit() {
@@ -368,7 +385,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         if (in.down) selected_ = (selected_ + 1) % fCount;
         if (in.left || in.right) AdjustFit(selected_, in.right ? 1.0f : -1.0f);
         if (in.select && selected_ == fReset && !weaponKey_.empty()) {
-            fit_ = fitDefault_;
+            fit_ = WeaponDefault();
             PublishFit();
             const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
             WritePrivateProfileStringW(L"GunFit", wkey.c_str(), nullptr, iniPath_.c_str());

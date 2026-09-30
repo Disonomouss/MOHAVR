@@ -79,6 +79,8 @@ private:
     void Save();
     // Gun fit (M8): follows hdr->weaponKey, loads that weapon's fit from the player's ini, publishes it.
     void SyncWeapon();
+    bool ReadFit(const std::wstring& ini, shared::GunFit& f) const;
+    shared::GunFit WeaponDefault() const;
     void PublishFit();
     void SaveFit();
     void AdjustFit(int item, float dir);
@@ -91,6 +93,7 @@ private:
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
     int                     width_ = 1024, height_ = 990;
+    std::wstring            shippedPath_;  // MOHAVR.ini next to the host: the shipped [GunFit] per weapon
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
     bool                    visible_ = false;
