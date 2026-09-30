@@ -80,6 +80,12 @@ private:
     void RenderHolsterPage();
     void SaveHolster(int i);
     void RenderFreeHandPage();
+    void RenderGripPage();
+    // Round 32, the Reload grip page: the player's adjustments of the weapon in hand's three grips, [ReloadGrip]
+    // <weapon>.<mag|hold|bolt> = forward up right tilt turn roll, published to the game (hdr->gripAdj).
+    void LoadGrips();
+    void SaveGrip(int which);
+    void PublishGrips();
     void PublishFreeHand(bool save);
     void SetUnitsPerMeter(float v, bool save);
     void SetHeightOffset(float v, bool save);
@@ -111,7 +117,10 @@ private:
     int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
     std::wstring            iniPath_;
-    int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand
+    int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand, 4 reload grip
+    int                     tab_ = 0;                 // the main page's tab (round 32)
+    int                     gripSel_ = 0;             // the Reload grip page's grip
+    float                   gripAdj_[3][6]{};         // the weapon in hand's grips (cm, degrees)
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
     HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the 5th: the magazine pouch)

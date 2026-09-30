@@ -17,6 +17,7 @@
 #include "addresses.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
+#include "bridge.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -61,6 +62,8 @@ struct GunLine {
     std::string              taped;             // twin magazines: the second magazine's bone (taped when it shows)
     Vec3                     tapedA, tapedB;    // the pair's bone at rest in taped state A and B (mesh space)
     float                    tapedRot = 0.0f;   // B is turned this far about Z from A (degrees)
+    bool                     grabTrigger = false;  // round 32: the magazine is grabbed only with the off hand's trigger held
+    bool                     triggerRack = false;  // round 32: the gun hand's trigger releases a locked-back action
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -153,6 +156,8 @@ void ParseLines(const std::wstring& ini) {
         g.tapedB = ParseVec(Token(line, "TapedB"));
         const std::string tr = Token(line, "TapedRot");
         g.tapedRot = tr.empty() ? 0.0f : static_cast<float>(atof(tr.c_str()));
+        g.grabTrigger = Token(line, "GrabTrigger") == "1";
+        g.triggerRack = Token(line, "TriggerRack") == "1";
         g_lines.push_back(g);
     }
     wchar_t take[128] = L"";
@@ -932,6 +937,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (!found) g_variant.push_back({key, v < 0 ? 0 : v, taped});
     }
     float pre[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    float preBase[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};  // the half in the gun (a held pair's hand hold)
     bool havePre = false;
     int poseNow = 0, halfDrawn = 0;
     if (taped && v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
@@ -952,6 +958,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         }
         g_flipKey = key;
         g_flipTick = tick;
+        if (s.half != poseNow) PairMove(*l, poseNow, static_cast<float>(s.half), preBase);
         const float u = g_flipU * g_flipU * (3.0f - 2.0f * g_flipU);  // ease in and out
         if (std::fabs(u - static_cast<float>(poseNow)) > 1e-4f) {
             PairMove(*l, poseNow, u, pre);
@@ -968,7 +975,8 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     const Vec3 grabW = Xform(grabMesh, 1.0f, a);
     float pullCm = 0.0f, heldGap = -1.0f, heldTurn = -1.0f;
     // The in-gun grab frame (G's axes at the grab point) and, held, the magazine's frame: where a drop falls from.
-    float fgrab[16], fheld[16], invL2W[16];
+    float fgrab[16], fheld[16], invL2W[16], inHandMove[16];
+    bool haveInHandMove = false;
     AffineInverse(l2w, invL2W);
     const DWORD nowTick = GetTickCount();
     if (haveRf) {
@@ -1053,6 +1061,8 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         Mul(a, fgrabInv, m1);
         Mul(m1, fheld, m2);
         Mul(m2, invL2W, hold);
+        std::memcpy(inHandMove, hold, sizeof(inHandMove));
+        haveInHandMove = true;
         for (int j : r->mag)
             if (j >= 0 && j < num) {
                 float m[16];
@@ -1140,14 +1150,48 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     // Round 31, the reload grips: the off hand takes the game's own grip -- on the magazine while grabbed, on the one it
     // holds, on the handle while racking -- the part's drawn frame x the grip (the hand in the part's frame).
     g_gripNow.grip = nullptr;
+    // Round 32: the player's adjustments of this gun's grips (the menu's Reload grip page).
+    float adj[3][6] = {};
+    shared::Header* hdrA = bridge::SharedHeader();
+    if (hdrA) shared::ReadGripAdj(hdrA, key.c_str(), adj);
+    auto gripOf = [&](const GripData* gd, int which, float* out) {  // the hand in the part's frame, adjusted
+        Mat12(gd->hand, out);
+        const float* d = adj[which];
+        if (d[0] == 0 && d[1] == 0 && d[2] == 0 && d[3] == 0 && d[4] == 0 && d[5] == 0) return;
+        // Turned at the wrist about the gun's axes (mesh: X left, Y down, Z forward), then moved along them.
+        const float k = 0.0174533f, t = d[3] * k, y = d[4] * k, r2 = d[5] * k;
+        const float rx[16] = {1, 0, 0, 0, 0, std::cos(t), std::sin(t), 0, 0, -std::sin(t), std::cos(t), 0, 0, 0, 0, 1};
+        const float ry[16] = {std::cos(y), 0, -std::sin(y), 0, 0, 1, 0, 0, std::sin(y), 0, std::cos(y), 0, 0, 0, 0, 1};
+        const float rz[16] = {std::cos(r2), std::sin(r2), 0, 0, -std::sin(r2), std::cos(r2), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        float rot[16], tmp[16], m[16];
+        Mul(rx, ry, tmp);
+        Mul(tmp, rz, rot);
+        const float hx = out[12], hy = out[13], hz = out[14];
+        out[12] = out[13] = out[14] = 0.0f;
+        Mul(out, rot, m);
+        m[12] = hx - d[2];  // right = -X
+        m[13] = hy - d[1];  // up = -Y
+        m[14] = hz + d[0];  // forward = +Z
+        std::memcpy(out, m, sizeof(m));
+    };
     if (g_cfg.reloadGrips && haveRf) {
         const char* kind = magState == 1 ? "mag" : magState == 2 ? "hold" : racking ? "bolt" : nullptr;
+        const int which = magState == 1 ? 0 : magState == 2 ? 1 : 2;
         const GripData* gd = kind ? FindGrip(key, kind) : nullptr;
         const int part = !gd ? -1 : racking && magState != 1 && magState != 2 ? b : (v >= 0 ? r->mag[v] : -1);
         if (gd && part >= 0 && part < num) {
             float partW[16], hand[16];
-            Mul(bones + 16 * part, l2w, partW);
-            Mat12(gd->hand, hand);
+            if (magState == 2 && haveInHandMove) {
+                // A held (taped) pair: the hand holds it by the half that came out of the gun; a flip turns the pair in
+                // the hand (round 32: the hold on the flipped pose turned the flip back out).
+                float m[16], m2[16];
+                Mul(saved + 16 * part, preBase, m);
+                Mul(m, inHandMove, m2);
+                Mul(m2, l2w, partW);
+            } else {
+                Mul(bones + 16 * part, l2w, partW);
+            }
+            gripOf(gd, which, hand);
             Mul(hand, partW, g_gripNow.target);
             g_gripNow.grip = gd;
             g_gripNow.tick = nowTick;
@@ -1163,10 +1207,10 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (gd && armsik::FreeHandRel(relM)) {
             float handT[16], grip[16], gripInv[16], boneW[16], rest[16], restInv[16], grabInBone[16], fheldW[16], offInv[16], rel[16];
             Mul(relM, off, handT);
-            Mat12(gd->hand, grip);
+            gripOf(gd, 1, grip);
             AffineInverse(grip, gripInv);
             Mul(gripInv, handT, boneW);
-            posed(r->mag[v], rest);
+            Mul(saved + 16 * r->mag[v], preBase, rest);  // the half in the gun (not the flipped one drawn)
             Mul(rest, a, rest);
             AffineInverse(rest, restInv);
             Mul(fgrab, restInv, grabInBone);
@@ -1585,7 +1629,8 @@ void OnDraw(shared::Header* hdr) {
     // Converted only with this Draw's geometry (a gun mid-switch, or one whose data failed, is not).
     hdr->reloadCaps = (line && geoOk ? 1u : 0u) | (geoOk && g_geo.haveBolt ? 2u : 0u) | (g_blockAllowed ? 4u : 0u) |
                       (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u) |
-                      (geoOk && line && TapedNow(key) ? 32u : 0u) | (geoOk && g_geo.haveHeld ? 64u : 0u);
+                      (geoOk && line && TapedNow(key) ? 32u : 0u) | (geoOk && g_geo.haveHeld ? 64u : 0u) |
+                      (geoOk && line && line->grabTrigger ? 128u : 0u) | (geoOk && line && line->triggerRack ? 256u : 0u);
     if (geoOk) {
         const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
         float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};

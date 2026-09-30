@@ -123,7 +123,7 @@ GUNS = [
     ('Attachment_G43', 'g43_reload_1', 'DE_G43_AnimSet', 'g43_gun_reload_1', 'DE_G43_Rigged', 'magazine', (0, 3.0, 20.0), 'Bolt', (2.4, -1.3, -4.9), (0.33, 1.18, 2.05)),
     ('Attachment_Stg44', 'stg_reload_1', 'DE_STG44_AnimSet', 'stg_gun_reload_1', 'DE_STG44_Rigged', 'single_magazine', (0, 11.5, 19.6), 'Bolt', (2.9, 0, 0), (0.41, 1.08, 1.66)),
     ('Attachment_Bar', 'bar_reload_2', 'US_BAR_AnimSet', 'bar_gun_reload_2', 'US_BAR1918_Rigged', 'magazine', (0, 8.5, 20.2), 'Bolt', (1.7, -0.1, 2.9), (0.35, 0.86, 1.57)),
-    ('Attachment_Thompson', 'thompson_reload_3', 'Thompson_Rigged_Anims', 'thompson_gun_reload_3', 'US_Thompson_Rigged', 'upgrade_03_drum', (0, 1.5, 11.5), 'Bolt', (0, 1.0, 0.5), (0.50, 1.45, 2.52)),
+    ('Attachment_Thompson', 'thompson_reload_3', 'Thompson_Rigged_Anims', 'thompson_gun_reload_3', 'US_Thompson_Rigged', 'upgrade_03_drum', (0, 5.0, 11.5), 'Bolt', (0, 1.0, 0.5), (0.50, 1.45, 2.52)),
     ('Attachment_MP40', 'mp40_reload_2', 'MP40_AnimSet', 'mp40_gun_reload_2', 'MP40_rigged', 'upgrade_02_64rdMagazine', (-1.2, 14.4, 30.8), 'Bolt', (4.5, 0, -3.4), (0.35, 0.97, 1.53)),
     ('Attachment_Colt45', 'colt45_reload', 'US_M1911A1_AnimSet', 'colt45_gun_reload', 'US_M1911A1_Pistol_Rigged', 'magazine', (0, 6.3, -1.3), 'gunSlide', (0.1, -0.3, -4.0), (0.05, 0.72, 1.45)),
     ('Attachment_Mauser', 'mauser_reload_3', 'Mauser_AnimSet', 'mauser_gun_reload_3', 'DE_Mauser_Rigged', 'upgrade_02_magazine', (-0.1, 6.7, 11.3), 'Bolt', (0, 0.5, -0.2), (0.20, 0.39, 1.45)),

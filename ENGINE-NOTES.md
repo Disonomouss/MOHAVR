@@ -1225,6 +1225,24 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
   held magazines meet the well turned 16-68 deg (inserted at InsertAngle 75); the Colt's 101 deg (its grip pushes the
   magazine up on an open palm: palm up in the headset). `pad_cmd` `@magin` = the aim point that seats a held magazine.
 
+**Round 32 [S] (2026-09-30, `logs/modlogs/reload-r32-*`, `reload-r32b-*`, `logs/shots/*-r32-*`, `r32-menu.png`):**
+- **The flip in the hand:** the hold grip and `magHeld` take the pair's pose for the half that came out of the gun
+  (`preBase`), not the flipped one drawn; round 31 held the flipped pose, so the hand turned the pair back and the
+  insert direction flipped. Now the pair turns in the fist and meets the well as before the flip (BAR: 68 deg both, with
+  the test hand unturned).
+- **The Thompson's drum:** a disc 18.6 wide, 18.5 tall, 5.4 deep centred at mesh (0, 1.6, 11.5) (`geo.txt`) -- the old
+  grab point was its centre, up in the receiver. Now (0, 5.0, 11.5) with MagR 11: grabbed at its lower rim, not the
+  foregrip.
+- **GrabTrigger** (MP40; caps bit7): the magazine is a press candidate only with the off hand's trigger held; the trigger
+  is kept from the pad near the magazine and while it is held. Grip alone: nothing; trigger + grip: grabbed.
+- **TriggerRack** (Colt; caps bit8): a locked-back action (bit3) that needs a rack (bit4) is released by the gun hand's
+  trigger (RACK, that press kept from the pad): clip 0 -> 7.
+- **Grip adjustments** (shared block v16 `gripKey`, `gripAdj[3][6]`, seqlock `gripSeq`; the menu's Reload grip page,
+  `[ReloadGrip] <weapon>.<mag|hold|bolt>` in the player's ini): the hand in the part's frame turned at the wrist about
+  the gun's mesh axes (tilt X, turn Y, roll Z), then moved along them (forward +Z, up -Y, right -X).
+- **The menu in tabs** (General / Weapons / Hands; the tab row is item -1). `[Controls] LT=none` (the player: the left
+  trigger no longer zooms). `[Hands] HandPoint=-6 -4 3` (the player's) is the shipped default.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

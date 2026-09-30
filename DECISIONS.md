@@ -234,3 +234,11 @@ onto the part with the animation's fingers, and a held magazine sits in the hand
 **Costs:** baked data from the animations (regenerate if the guns change); where the animation's left hand never
 touches a part (the Colt's slide and magazine grab, the C96's grab) the hand stays with the controller; a held
 magazine is turned the way the animation holds it, so the player lines it up by turning the wrist.
+
+### D24. The left trigger is the mod's, not the game's zoom — Decided 2026-09-30 (round 32, the player)
+`[Controls] LT=none`: the off hand's trigger flips twin magazines and arms the MP40's magazine grab; the game's aim /
+zoom (LT) is not mapped (in VR the player aims down the sights). Per-gun reload quirks the player asked for: the MP40's
+magazine is grabbed only with the off hand's trigger held (`GrabTrigger`), the Colt's trigger also releases its
+locked-back slide once a magazine is in (`TriggerRack`).
+**Why:** the player's requests (round 31 answers).
+**Costs:** no zoom on the pad (it can be mapped back in `[Controls]`).

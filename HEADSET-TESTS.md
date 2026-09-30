@@ -1271,6 +1271,63 @@ first). Movement where you look still to judge; the guns not tried in round 30 g
 7. Movement where you look (round 29)?
 8. Anything else odd?
 
+**Answers:** (the player's words, 2026-09-30)
+1. Yes, check the values I chose. (HandPoint -6 -4 3, ForegripRadius 8, ReloadRingScale 70: the hand point is now the
+   shipped default.)
+2. Some.
+3. Some weapons the mag grip is not right, needs to be adjustable.
+4. The mag does not visibly flip; after pressing the trigger I have to turn the mag around physically to insert it.
+5. Great.
+6. The Thompson is a little off, and if I try to grab the drum when it is inserted it grabs the foregrip instead. The
+   StG44 is good.
+7. Forgot again.
+8. The menu is getting cluttered: make tabs and organize it.
+Also: the Colt needs to be rackable by pressing the trigger as well as by grabbing the slide. The MP40 is difficult to
+reload with the foregrip: just for this gun, hold the off hand's trigger and then press the grip to grab the magazine,
+not the foregrip. And: unbind the left trigger from zoom.
+
+**Follow-up (round 32):** all of it (below).
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 32: prepared 2026-09-30, grips you can adjust, a tabbed menu, the BAR flip fixed
+**Changed:**
+- **The menu has tabs** (General / Weapons / Hands): push up past the first item to reach the tabs, left / right to
+  switch. Weapons: Gun fit, Manual reload, **Reload grip**; Hands: Holsters and pouch, the hand point, the ring sizes,
+  Free hand.
+- **Reload grip** (Weapons tab): per gun, pick the grip (magazine grab / held magazine / handle), then move your hand on
+  it (forward, up, right, cm) and turn it at the wrist (tilt, turn, roll). Hold the part to see it. Saved per gun.
+- **The BAR's flip is in your hand now:** the pair turns over in your fist and you insert it the same way as before the
+  flip (last round the hand turned with it, so you had to turn it back yourself).
+- **Thompson:** the drum is grabbed where you hold it (its lower half, a bigger ring), so the foregrip no longer wins.
+- **MP40:** hold the off hand's trigger, then squeeze the grip, to grab the magazine; the grip alone takes the foregrip.
+- **Colt:** with a new magazine in the locked-back pistol, pulling the trigger releases the slide (as well as racking
+  it by hand).
+- **The left trigger no longer zooms** (the game's aim is unmapped: `[Controls] LT=none`).
+- Your hand point (-6 -4 3) is the shipped default now.
+[S]: the tabs and the grip page, the BAR flip in the hand, the Thompson drum grab, the MP40 grab (grip alone: nothing;
+trigger + grip: grabbed), the Colt's trigger release (clip 0 -> 7).
+
+**How to try it:**
+1. The menu: the tabs; Weapons > Reload grip with a gun in hand -- adjust the grips that looked wrong.
+2. The BAR: pull the pair, flip it, insert.
+3. The Thompson: grab the drum. The MP40: trigger + grip on the magazine; grip alone on the foregrip.
+4. The Colt: empty it, new magazine, pull the trigger.
+5. Walk while looking around (round 29, still to judge).
+
+**Questions:**
+1. The tabs: easier?
+2. Reload grip: could you fix the grips that were off (which guns, what values)?
+3. The BAR's flip: right now?
+4. Thompson drum, MP40 trigger grab, Colt trigger release: right?
+5. Aiming with the left trigger gone: fine?
+6. Movement where you look (round 29)?
+7. Anything else odd?
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

@@ -111,6 +111,7 @@ Hands::Output Hands::Update(const Input& in) {
     rin.gunHand = g;
     rin.fitAngle = in.fit.angle;
     rin.offTrigger = in.trigger[o];
+    rin.gunTrigger = in.trigger[g];
     rin.now = in.now;
     for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
     if (reload_) reload_->SetRingScale(ringScale_);
@@ -276,6 +277,9 @@ Hands::Output Hands::Update(const Input& in) {
         out.target[0] = rout.target[0];
         out.targetOk[2] = rout.targetOk[1];
         out.target[2] = rout.target[1];
+        // Tests put the aim point at a target: the ones for a spot are moved by the hand point, so it lands there.
+        const V3 hpOff = Sub(pt[o], P(in.aim[o].position));
+        for (int i = 0; i < 3; ++i) out.target[i] = {out.target[i].x - hpOff.x, out.target[i].y - hpOff.y, out.target[i].z - hpOff.z};
         out.targetOk[3] = rout.targetOk[2];
         out.target[3] = rout.target[2];
     }

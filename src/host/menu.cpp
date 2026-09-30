@@ -17,7 +17,26 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
+            kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kItemCount };
+// Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
+// right switch tabs there, down goes into the tab's items (up from the first comes back).
+enum Tab { tGeneral, tWeapons, tHands, kTabCount };
+const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
+const int kTabItems[kTabCount][12] = {
+    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
+    {kGunFit, kReload, kGripPage, kClose, -1},
+    {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
+};
+int TabCount(int t) {
+    int n = 0;
+    while (n < 12 && kTabItems[t][n] >= 0) ++n;
+    return n;
+}
+// The Reload grip page (round 32): which grip, the hand moved on the part and turned at the wrist, per weapon.
+enum GripItem { gWhich, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
+const char* kGripNames[3] = {"magazine grab", "held magazine", "handle / bolt"};
+const wchar_t* kGripKinds[3] = {L"mag", L"hold", L"bolt"};
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -25,8 +44,7 @@ enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fFore
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
 // The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
 // x y z r); the rings' visibility ([Hands] Rings = never / near / always).
-enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hPointFwd, hPointUp, hPointIn, hForeSize, hRingScale, hReset,
-                   hBack, hCount };
+enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
@@ -282,6 +300,8 @@ void Menu::SyncWeapon() {
     MLOG("menu: weapon '%s' -- fit %s: grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f", weaponKey_.c_str(),
          saved ? "saved" : "default", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight);
     PublishFit();
+    LoadGrips();
+    PublishGrips();
 }
 
 // [GunFit] <weapon> = gx gy gz angle rayUp rayRight foreFwd foreUp (6 values: saved before the foregrip existed).
@@ -327,6 +347,39 @@ void Menu::SaveFit() {
     swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp,
                fit_.rayRight, fit_.foreFwd, fit_.foreUp);
     WritePrivateProfileStringW(L"GunFit", wkey.c_str(), b, iniPath_.c_str());
+}
+
+void Menu::LoadGrips() {
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    for (int g = 0; g < 3; ++g) {
+        for (float& v : gripAdj_[g]) v = 0.0f;
+        if (weaponKey_.empty() || iniPath_.empty()) continue;
+        wchar_t b[128] = L"";
+        GetPrivateProfileStringW(L"ReloadGrip", (wkey + L"." + kGripKinds[g]).c_str(), L"", b, 128, iniPath_.c_str());
+        if (b[0])
+            swscanf_s(b, L"%f %f %f %f %f %f", &gripAdj_[g][0], &gripAdj_[g][1], &gripAdj_[g][2], &gripAdj_[g][3], &gripAdj_[g][4],
+                      &gripAdj_[g][5]);
+    }
+}
+
+void Menu::SaveGrip(int which) {
+    if (weaponKey_.empty() || iniPath_.empty()) return;
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    const float* a = gripAdj_[which];
+    wchar_t b[128];
+    swprintf_s(b, L"%.1f %.1f %.1f %.0f %.0f %.0f", a[0], a[1], a[2], a[3], a[4], a[5]);
+    WritePrivateProfileStringW(L"ReloadGrip", (wkey + L"." + kGripKinds[which]).c_str(), b, iniPath_.c_str());
+}
+
+void Menu::PublishGrips() {
+    if (!hdr_) return;
+    InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->gripSeq));  // odd: writing
+    const size_t n = weaponKey_.size() < 47 ? weaponKey_.size() : 47;
+    std::memcpy(hdr_->gripKey, weaponKey_.c_str(), n);
+    hdr_->gripKey[n] = 0;
+    for (int g = 0; g < 3; ++g)
+        for (int k = 0; k < 6; ++k) hdr_->gripAdj[g][k] = gripAdj_[g][k];
+    InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->gripSeq));  // even: done
 }
 
 // Stick right = the gun forward / right / up, muzzle up, the aim line up / right. (The grip is the gun's point put
@@ -393,9 +446,17 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
     SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
     const bool backFromPage = visible_ && ((page_ == 1 && (in.back || (in.select && selected_ == fBack))) ||
                                            (page_ == 2 && (in.back || (in.select && selected_ == hBack))) ||
-                                           (page_ == 3 && (in.back || (in.select && selected_ == eqBack))));
+                                           (page_ == 3 && (in.back || (in.select && selected_ == eqBack))) ||
+                                           (page_ == 4 && (in.back || (in.select && selected_ == gBack))));
     if (backFromPage) {
-        selected_ = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : kFreeHandPage;  // back on the item that opened it
+        // Back on the item that opened it, in its tab.
+        const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : kGripPage;
+        for (int t = 0; t < kTabCount; ++t)
+            for (int i = 0; i < TabCount(t); ++i)
+                if (kTabItems[t][i] == opener) {
+                    tab_ = t;
+                    selected_ = i;
+                }
         page_ = 0;
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -433,6 +494,31 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
             WritePrivateProfileStringW(L"GunFit", wkey.c_str(), nullptr, iniPath_.c_str());
             MLOG("menu: %s fit reset to the defaults", weaponKey_.c_str());
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
+    if (page_ == 4) {
+        if (in.up) selected_ = (selected_ + gCount - 1) % gCount;
+        if (in.down) selected_ = (selected_ + 1) % gCount;
+        if ((in.left || in.right) && selected_ == gWhich) gripSel_ = (gripSel_ + (in.right ? 1 : 2)) % 3;
+        if ((in.left || in.right) && selected_ >= gFwd && selected_ <= gRoll && !weaponKey_.empty()) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            float& v = gripAdj_[gripSel_][selected_ - gFwd];
+            v = selected_ >= gTilt ? std::fmax(-90.0f, std::fmin(90.0f, v + dir * 5.0f)) : std::fmax(-15.0f, std::fmin(15.0f, v + dir * 0.5f));
+            SaveGrip(gripSel_);
+            PublishGrips();
+            const float* a = gripAdj_[gripSel_];
+            MLOG("menu: %s %s grip -> %.1f %.1f %.1f cm, %.0f %.0f %.0f deg", weaponKey_.c_str(), kGripNames[gripSel_], a[0], a[1], a[2],
+                 a[3], a[4], a[5]);
+        }
+        if (in.select && selected_ == gReset && !weaponKey_.empty()) {
+            for (float& v : gripAdj_[gripSel_]) v = 0.0f;
+            const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+            WritePrivateProfileStringW(L"ReloadGrip", (wkey + L"." + kGripKinds[gripSel_]).c_str(), nullptr, iniPath_.c_str());
+            PublishGrips();
+            MLOG("menu: %s %s grip reset", weaponKey_.c_str(), kGripNames[gripSel_]);
         }
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -478,29 +564,6 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                     moved = false;
                     MLOG("menu: rings -> %ls", kRingModes[ringsMode_]);
                     break;
-                case hPointFwd:
-                case hPointUp:
-                case hPointIn: {
-                    float& v = handPoint_[selected_ - hPointFwd];
-                    v = std::fmax(-0.15f, std::fmin(0.15f, v + dir * 0.01f));
-                    SaveHands();
-                    moved = false;
-                    MLOG("menu: hand point -> %.0f %.0f %.0f cm (forward, up, in)", handPoint_[0] * 100.0f, handPoint_[1] * 100.0f,
-                         handPoint_[2] * 100.0f);
-                    break;
-                }
-                case hForeSize:
-                    foregripR_ = std::fmax(0.04f, std::fmin(0.25f, foregripR_ + dir * 0.01f));
-                    SaveHands();
-                    moved = false;
-                    MLOG("menu: foregrip ring -> %.0f cm", foregripR_ * 100.0f);
-                    break;
-                case hRingScale:
-                    ringScale_ = std::fmax(0.3f, std::fmin(2.0f, ringScale_ + dir * 0.1f));
-                    SaveHands();
-                    moved = false;
-                    MLOG("menu: reload rings -> %.0f%%", ringScale_ * 100.0f);
-                    break;
                 default: moved = false; break;
             }
             if (moved) {
@@ -520,73 +583,99 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         return;
     }
 
-    if (in.up) selected_ = (selected_ + kItemCount - 1) % kItemCount;
-    if (in.down) selected_ = (selected_ + 1) % kItemCount;
-    if (in.left || in.right) {
+    // The main page, in tabs: up / down through the tab row (-1) and the tab's items; left / right switch tabs on the row
+    // and adjust an item.
+    const int count = TabCount(tab_);
+    if (selected_ >= count) selected_ = count - 1;
+    if (in.up) selected_ = selected_ < 0 ? count - 1 : selected_ - 1;
+    if (in.down) selected_ = selected_ + 1 >= count ? -1 : selected_ + 1;
+    const int item = selected_ >= 0 ? kTabItems[tab_][selected_] : -1;
+    if ((in.left || in.right) && selected_ < 0) {
+        tab_ = (tab_ + (in.right ? 1 : kTabCount - 1)) % kTabCount;
+        MLOG("menu: tab %s", kTabNames[tab_]);
+    } else if (in.left || in.right) {
         const float dir = in.right ? 1.0f : -1.0f;
-        if (selected_ == kWorldScale) {
+        if (item == kWorldScale) {
             SetUnitsPerMeter(unitsPerMeter_ + dir * kScaleStep, true);
             MLOG("menu: world scale -> %.1f", unitsPerMeter_);
-        } else if (selected_ == kHeight) {
+        } else if (item == kHeight) {
             SetHeightOffset(heightOffset_ + dir * kHeightStep, true);
             MLOG("menu: height offset -> %+.2f m", heightOffset_);
-        } else if (selected_ == kTurn) {
+        } else if (item == kTurn) {
             int i = 0;
             while (i < 2 && kSnapSteps[i] != snapDeg_) ++i;
             i = (i + (in.right ? 1 : 2)) % 3;
             snapDeg_ = kSnapSteps[i];
             Save();
             MLOG("menu: turning -> %s %d", snapDeg_ ? "snap" : "smooth", snapDeg_);
-        } else if (selected_ == kSticks) {
+        } else if (item == kSticks) {
             swapSticks_ = !swapSticks_;
             Save();
             MLOG("menu: sticks -> %s", swapSticks_ ? "swapped (right moves, left turns)" : "normal (left moves, right turns)");
-        } else if (selected_ == kMove) {
+        } else if (item == kMove) {
             moveByHead_ = !moveByHead_;
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"Controls", L"MoveDirection", moveByHead_ ? L"head" : L"body", iniPath_.c_str());
             MLOG("menu: move direction -> %s", moveByHead_ ? "head (forward is where you look)" : "body (the game's own)");
-        } else if (selected_ == kGunHand) {
+        } else if (item == kGunHand) {
             startLeft_ = !startLeft_;
             Save();
             MLOG("menu: gun hand -> %s", startLeft_ ? "left" : "right");
-        } else if (selected_ == kRedDot) {
+        } else if (item == kRedDot) {
             redDot_ = !redDot_;
             Save();
             MLOG("menu: red dot -> %s", redDot_ ? "on" : "off");
-        } else if (selected_ == kPacing) {
+        } else if (item == kPacing) {
             pacing_ = !pacing_;
             if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Bridge", L"Pace", pacing_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: frame pacing -> %s", pacing_ ? "on (one game frame per headset frame)" : "off (the game runs uncapped)");
-        } else if (selected_ == kReload) {
+        } else if (item == kReload) {
             manualReload_ = !manualReload_;
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"Weapon", L"ManualReload", manualReload_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: manual reload -> %s", manualReload_ ? "on" : "off (the game's own reload)");
+        } else if (item == kHandFwd || item == kHandUp || item == kHandIn) {
+            float& v = handPoint_[item - kHandFwd];
+            v = std::fmax(-0.15f, std::fmin(0.15f, v + dir * 0.01f));
+            SaveHands();
+            MLOG("menu: hand point -> %.0f %.0f %.0f cm (forward, up, in)", handPoint_[0] * 100.0f, handPoint_[1] * 100.0f,
+                 handPoint_[2] * 100.0f);
+        } else if (item == kForeSize) {
+            foregripR_ = std::fmax(0.04f, std::fmin(0.25f, foregripR_ + dir * 0.01f));
+            SaveHands();
+            MLOG("menu: foregrip ring -> %.0f cm", foregripR_ * 100.0f);
+        } else if (item == kRingScale) {
+            ringScale_ = std::fmax(0.3f, std::fmin(2.0f, ringScale_ + dir * 0.1f));
+            SaveHands();
+            MLOG("menu: reload rings -> %.0f%%", ringScale_ * 100.0f);
         }
     }
     if (in.select) {
-        if (selected_ == kGunFit) {
+        if (item == kGunFit) {
             page_ = 1;
             selected_ = 0;
             MLOG("menu: gun fit page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
-        } else if (selected_ == kHolsterPage) {
+        } else if (item == kHolsterPage) {
             page_ = 2;
             selected_ = 0;
             MLOG("menu: holsters page");
-        } else if (selected_ == kFreeHandPage) {
+        } else if (item == kFreeHandPage) {
             page_ = 3;
             selected_ = 0;
             MLOG("menu: free hand page");
-        } else if (selected_ == kRecenter) {
+        } else if (item == kGripPage) {
+            page_ = 4;
+            selected_ = 0;
+            MLOG("menu: reload grip page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+        } else if (item == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
-        } else if (selected_ == kResetScale) {
+        } else if (item == kResetScale) {
             const float def = (hdr_ && hdr_->defaultUnitsPerMeter > 1.0f) ? hdr_->defaultUnitsPerMeter : 100.0f;
             SetUnitsPerMeter(def, true);
             MLOG("menu: world scale reset to %.1f", def);
-        } else if (selected_ == kClose) {
+        } else if (item == kClose) {
             Close();
             return;
         }
@@ -610,8 +699,20 @@ void Menu::Render() {
         RenderHolsterPage();
     } else if (page_ == 3) {
         RenderFreeHandPage();
+    } else if (page_ == 4) {
+        RenderGripPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
+    // The tab row: the current tab lit; framed while the row itself is selected (left / right switch).
+    for (int t = 0; t < kTabCount; ++t) {
+        ImGui::SameLine(t == 0 ? 220.0f : 0.0f, 28.0f);
+        const bool cur = t == tab_;
+        const ImVec4 col = cur ? (selected_ < 0 ? ImVec4(0.95f, 0.8f, 0.45f, 1.0f) : ImVec4(0.85f, 0.85f, 0.85f, 1.0f))
+                               : ImVec4(0.45f, 0.45f, 0.45f, 1.0f);
+        char tl[48];
+        snprintf(tl, sizeof(tl), cur && selected_ < 0 ? "< %s >" : cur ? "[ %s ]" : "  %s  ", kTabNames[t]);
+        ImGui::TextColored(col, "%s", tl);
+    }
     ImGui::Separator();
 
     const float ipdMm = hdr_ ? 1000.0f * std::sqrt(std::pow(hdr_->eye[1].px - hdr_->eye[0].px, 2.0f) +
@@ -619,43 +720,102 @@ void Menu::Render() {
                                                    std::pow(hdr_->eye[1].pz - hdr_->eye[0].pz, 2.0f))
                               : 64.0f;
     char label[128];
-    snprintf(label, sizeof(label), "World scale      <  %.0f  >", unitsPerMeter_);
-    ImGui::Selectable(label, selected_ == kWorldScale);
-    ImGui::PushFont(nullptr, 28.0f);
-    ImGui::TextDisabled("   higher = smaller world   (eyes %.1f units apart)", ipdMm * unitsPerMeter_ / 1000.0f);
-    ImGui::PopFont();
-    snprintf(label, sizeof(label), "Height           <  %+.0f cm  >", heightOffset_ * 100.0f);
-    ImGui::Selectable(label, selected_ == kHeight);
-    if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
-    else snprintf(label, sizeof(label), "Turning          <  smooth  >");
-    ImGui::Selectable(label, selected_ == kTurn);
-    snprintf(label, sizeof(label), "Sticks           <  %s  >", swapSticks_ ? "move right, turn left" : "move left, turn right");
-    ImGui::Selectable(label, selected_ == kSticks);
-    snprintf(label, sizeof(label), "Move direction   <  %s  >", moveByHead_ ? "where you look" : "body");
-    ImGui::Selectable(label, selected_ == kMove);
-    snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
-    ImGui::Selectable(label, selected_ == kGunHand);
-    snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");
-    ImGui::Selectable(label, selected_ == kRedDot);
-    snprintf(label, sizeof(label), "Frame pacing     <  %s  >", pacing_ ? "on" : "off");
-    ImGui::Selectable(label, selected_ == kPacing);
-    ImGui::PushFont(nullptr, 28.0f);
-    ImGui::TextDisabled("   on = one game frame per headset frame");
-    ImGui::PopFont();
-    snprintf(label, sizeof(label), "Manual reload    <  %s  >", manualReload_ ? "on" : "off");
-    ImGui::Selectable(label, selected_ == kReload);
-    snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
-    ImGui::Selectable(label, selected_ == kGunFit);
-    snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);
-    ImGui::Selectable(label, selected_ == kHolsterPage);
-    ImGui::Selectable("Free hand  (how your other hand sits)", selected_ == kFreeHandPage);
-    ImGui::Selectable("Recentre (face forward, here)", selected_ == kRecenter);
-    snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
-    ImGui::Selectable(label, selected_ == kResetScale);
-    ImGui::Selectable("Close", selected_ == kClose);
+    auto note = [&](const char* text) {
+        ImGui::PushFont(nullptr, 28.0f);
+        ImGui::TextDisabled("   %s", text);
+        ImGui::PopFont();
+    };
+    for (int i = 0; i < TabCount(tab_); ++i) {
+        const int it = kTabItems[tab_][i];
+        const bool sel = selected_ == i;
+        switch (it) {
+            case kWorldScale:
+                snprintf(label, sizeof(label), "World scale      <  %.0f  >", unitsPerMeter_);
+                ImGui::Selectable(label, sel);
+                snprintf(label, sizeof(label), "higher = smaller world   (eyes %.1f units apart)", ipdMm * unitsPerMeter_ / 1000.0f);
+                note(label);
+                break;
+            case kHeight:
+                snprintf(label, sizeof(label), "Height           <  %+.0f cm  >", heightOffset_ * 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kTurn:
+                if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
+                else snprintf(label, sizeof(label), "Turning          <  smooth  >");
+                ImGui::Selectable(label, sel);
+                break;
+            case kSticks:
+                snprintf(label, sizeof(label), "Sticks           <  %s  >", swapSticks_ ? "move right, turn left" : "move left, turn right");
+                ImGui::Selectable(label, sel);
+                break;
+            case kMove:
+                snprintf(label, sizeof(label), "Move direction   <  %s  >", moveByHead_ ? "where you look" : "body");
+                ImGui::Selectable(label, sel);
+                break;
+            case kGunHand:
+                snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
+                ImGui::Selectable(label, sel);
+                break;
+            case kRedDot:
+                snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                break;
+            case kPacing:
+                snprintf(label, sizeof(label), "Frame pacing     <  %s  >", pacing_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("on = one game frame per headset frame");
+                break;
+            case kRecenter: ImGui::Selectable("Recentre (face forward, here)", sel); break;
+            case kResetScale:
+                snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kGunFit:
+                snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+                ImGui::Selectable(label, sel);
+                break;
+            case kReload:
+                snprintf(label, sizeof(label), "Manual reload    <  %s  >", manualReload_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                break;
+            case kGripPage:
+                snprintf(label, sizeof(label), "Reload grip  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+                ImGui::Selectable(label, sel);
+                note("where your hand sits on the magazine / handle");
+                break;
+            case kHolsterPage:
+                snprintf(label, sizeof(label), "Holsters and pouch  (rings: %ls)", kRingModes[ringsMode_]);
+                ImGui::Selectable(label, sel);
+                break;
+            case kHandFwd:
+                snprintf(label, sizeof(label), "Hand point fwd/back   <  %+.0f  >", handPoint_[0] * 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kHandUp:
+                snprintf(label, sizeof(label), "Hand point up/down    <  %+.0f  >", handPoint_[1] * 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kHandIn:
+                snprintf(label, sizeof(label), "Hand point in/out     <  %+.0f  >", handPoint_[2] * 100.0f);
+                ImGui::Selectable(label, sel);
+                note("the white dot: put it in your hand (in = toward the palm)");
+                break;
+            case kForeSize:
+                snprintf(label, sizeof(label), "Foregrip ring         <  %.0f across  >", foregripR_ * 200.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kRingScale:
+                snprintf(label, sizeof(label), "Reload rings          <  %.0f%%  >", ringScale_ * 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kFreeHandPage: ImGui::Selectable("Free hand  (how your other hand sits)", sel); break;
+            case kClose: ImGui::Selectable("Close", sel); break;
+            default: break;
+        }
+    }
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
-    ImGui::TextDisabled("Left stick: choose / adjust    Trigger: select    Menu: close");
+    ImGui::TextDisabled("Stick: choose / adjust (up: the tabs)   Trigger: select   Menu: close");
     ImGui::PopFont();
     }
     ImGui::PopFont();
@@ -738,23 +898,47 @@ void Menu::RenderHolsterPage() {
     ImGui::Selectable(label, selected_ == hSize);
     snprintf(label, sizeof(label), "Rings                 <  %ls  >", kRingModes[ringsMode_]);
     ImGui::Selectable(label, selected_ == hRings);
-    snprintf(label, sizeof(label), "Hand point fwd/back   <  %+.0f  >", handPoint_[0] * 100.0f);
-    ImGui::Selectable(label, selected_ == hPointFwd);
-    snprintf(label, sizeof(label), "Hand point up/down    <  %+.0f  >", handPoint_[1] * 100.0f);
-    ImGui::Selectable(label, selected_ == hPointUp);
-    snprintf(label, sizeof(label), "Hand point in/out     <  %+.0f  >", handPoint_[2] * 100.0f);
-    ImGui::Selectable(label, selected_ == hPointIn);
-    snprintf(label, sizeof(label), "Foregrip ring         <  %.0f across  >", foregripR_ * 200.0f);
-    ImGui::Selectable(label, selected_ == hForeSize);
-    snprintf(label, sizeof(label), "Reload rings          <  %.0f%%  >", ringScale_ * 100.0f);
-    ImGui::Selectable(label, selected_ == hRingScale);
     ImGui::Selectable("Reset this spot", selected_ == hReset);
     ImGui::Selectable("Back", selected_ == hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
-    ImGui::TextDisabled("Hand point: move the white dot into your hand (in = toward the palm).");
     ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
+    ImGui::PopFont();
+}
+
+// Round 32: where the hand sits on the gun's magazine / handle -- the game's own reload grip, moved and turned.
+void Menu::RenderGripPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Reload grip");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  %s", weaponKey_.empty() ? "(no gun in hand)" : weaponKey_.c_str());
+    ImGui::Separator();
+    const bool on = !weaponKey_.empty();
+    const float* a = gripAdj_[gripSel_];
+    char label[128];
+    snprintf(label, sizeof(label), "Grip                  <  %s  >", kGripNames[gripSel_]);
+    ImGui::Selectable(label, selected_ == gWhich);
+    if (!on) ImGui::BeginDisabled();
+    snprintf(label, sizeof(label), "Forward / back        <  %+.1f  >", a[0]);
+    ImGui::Selectable(label, selected_ == gFwd);
+    snprintf(label, sizeof(label), "Up / down             <  %+.1f  >", a[1]);
+    ImGui::Selectable(label, selected_ == gUp);
+    snprintf(label, sizeof(label), "Right / left          <  %+.1f  >", a[2]);
+    ImGui::Selectable(label, selected_ == gRight);
+    snprintf(label, sizeof(label), "Tilt (muzzle up)      <  %+.0f\xC2\xB0  >", a[3]);
+    ImGui::Selectable(label, selected_ == gTilt);
+    snprintf(label, sizeof(label), "Turn                  <  %+.0f\xC2\xB0  >", a[4]);
+    ImGui::Selectable(label, selected_ == gTurn);
+    snprintf(label, sizeof(label), "Roll                  <  %+.0f\xC2\xB0  >", a[5]);
+    ImGui::Selectable(label, selected_ == gRoll);
+    ImGui::Selectable("Reset this grip", selected_ == gReset);
+    if (!on) ImGui::EndDisabled();
+    ImGui::Selectable("Back", selected_ == gBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Moves your hand on the part (cm) and turns it at the wrist;");
+    ImGui::TextDisabled("a held magazine moves the other way in your hand.");
+    ImGui::TextDisabled("Hold the part to see it. Saved for this gun.   B: back");
     ImGui::PopFont();
 }
 

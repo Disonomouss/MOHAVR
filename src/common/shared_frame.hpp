@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 15;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine
+inline constexpr std::uint32_t kVersion = 16;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -181,7 +181,9 @@ struct Header {
     std::uint32_t          reloadCaps;     // bit0 converted gun in hand, bit1 action bone(s) found, bit2 hook installed,
                                            // bit3 alt-fire mode, bit4 the game's block filter passes for this gun now,
                                            // bit5 a taped (twin) magazine pair: the off hand's trigger flips it,
-                                           // bit6 magHeld valid (the reload grips)
+                                           // bit6 magHeld valid (the reload grips), bit7 the magazine is grabbed
+                                           // only with the off hand's trigger held (GrabTrigger), bit8 the gun hand's
+                                           // trigger releases a locked-back action (TriggerRack)
     char                   reloadKey[48];  // the attachment class the geometry is for
     float                  magGrab[3];     // the in-gun magazine's grab point = the insert target
     float                  magOut[3];      // unit: the way the magazine leaves the well
@@ -213,6 +215,13 @@ struct Header {
     // un-mirrored). Written with the geometry (reloadGeoSeq); valid when reloadCaps bit6.
     Pose                   magHeld;        // 1464
     std::uint32_t          pad15;          // 1492
+    // --- v16 (round 32): the player's reload-grip adjustments for the weapon in hand (the menu's Reload grip page; host
+    // writes, seqlock gripSeq). Per grip (0 the magazine grabbed, 1 held, 2 the handle / bolt): the hand moved on the
+    // part -- forward, up, right (units ~ cm) -- and turned at the wrist about the gun's axes -- tilt, turn, roll (deg).
+    volatile std::uint32_t gripSeq;        // 1496
+    char                   gripKey[48];    // 1500
+    float                  gripAdj[3][6];  // 1548
+    std::uint32_t          pad16;          // 1620
 };
 #pragma pack(pop)
 
@@ -252,7 +261,9 @@ static_assert(offsetof(Header, rack) == 1424, "shared::Header layout must match 
 static_assert(offsetof(Header, reloadEvtSeq) == 1428, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, reloadEvt) == 1432, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, magHeld) == 1464, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1496, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, gripSeq) == 1496, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, gripAdj) == 1548, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1624, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -300,6 +311,29 @@ inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
 #endif
     seq = s1;
     return h->reloadGeoSeq == s1;
+}
+
+// Seqlock read of the grip adjustments (v16) for `key`; false if mid-write or for another weapon.
+inline bool ReadGripAdj(const Header* h, const char* key, float (&adj)[3][6]) {
+    const std::uint32_t s1 = h->gripSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    bool same = true;
+    for (int i = 0; i < 48; ++i) {
+        if (h->gripKey[i] != key[i]) {
+            same = false;
+            break;
+        }
+        if (!key[i]) break;
+    }
+    for (int g = 0; g < 3; ++g)
+        for (int k = 0; k < 6; ++k) adj[g][k] = h->gripAdj[g][k];
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    return same && h->gripSeq == s1;
 }
 
 // The gun fit (v8) as one value. foreFwd/foreUp (cm, the gun's frame from the gun hand's controller: where the other

@@ -56,7 +56,8 @@ public:
         bool    offHeld = false;               // the off hand's grip held (hands.cpp's hysteresis)
         float   release[2]{};                  // the release button, per physical hand
         float   fitAngle = 0.0f;               // the gun fit's angle (degrees): a pouch magazine sits in the hand likewise
-        float   offTrigger = 0.0f;             // the off hand's trigger: flips a held taped pair
+        float   offTrigger = 0.0f;             // the off hand's trigger: flips a held taped pair (MP40: arms the grab)
+        float   gunTrigger = 0.0f;             // the gun hand's trigger: releases a locked-back action (Colt)
         double  now = 0.0;
     };
     struct Ring {
@@ -131,6 +132,8 @@ private:
     bool          relHeld_[2]{}, maskLatch_[2]{};
     bool          flipped_ = false;                // the held taped pair turned: its other half toward the well
     bool          trigHeld_ = false, trigLatch_ = false;
+    float         offTrigger_ = 0.0f;              // this frame's (the press test comes before Frame)
+    bool          gunTrigHeld_ = false, gunTrigLatch_ = false;
     struct Pending {
         std::uint32_t type, hash;
         double        at;

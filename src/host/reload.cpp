@@ -167,6 +167,7 @@ bool ManualReload::Begin(const In& in) {
     if (active != active_) MLOG("reload: %s%s%s", active ? "drives the gun (" : "stops driving the gun (", active ? geo_.key : why, ")");
     active_ = active;
     press_ = kPressNone;
+    offTrigger_ = in.offTrigger;
     if (!active_) {
         // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped, the action is let go
         // without a rack.
@@ -192,7 +193,9 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
             which = kPressPouch;
         }
     }
-    if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f) {
+    // Round 32 (GrabTrigger, the MP40): the magazine only with the off hand's trigger held, so the grip takes the foregrip.
+    const bool magArmed = !(geo_.caps & 128u) || offTrigger_ >= 0.5f;
+    if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f && magArmed) {
         const float s = Len(Sub(P(hand), P(lastGrabW_))) / (geo_.magGrabR * ringScale_);
         if (s < best) {
             best = s;
@@ -366,7 +369,27 @@ void ManualReload::Frame(const In& in, Out& out) {
         trigHeld_ = false;
         trigLatch_ = false;
     }
-    out.maskTrigger[o] = twin || trigLatch_;
+    // GrabTrigger (the MP40): the off hand's trigger is the grab's, not the game's aim, near the magazine and while it is
+    // in the hand.
+    const bool grabTrig = (geo_.caps & 128u) &&
+                          ((mag_ == kInGun && Len(Sub(offP, grabW)) < 2.0f * geo_.magGrabR * ringScale_) || mag_ == kGrabbed ||
+                           mag_ == kInHand);
+    out.maskTrigger[o] = twin || trigLatch_ || grabTrig;
+    // TriggerRack (the Colt): with a magazine in a locked-back action, the gun hand's trigger releases it (a RACK); that
+    // press is kept from the game.
+    if (!gunTrigHeld_ && in.gunTrigger >= 0.6f) {
+        gunTrigHeld_ = true;
+        if ((geo_.caps & 256u) && (geo_.state & 8u) && (geo_.state & 16u) && !boltHeld_) {
+            gunTrigLatch_ = true;
+            Queue(shared::kReloadRack, in.now);
+            MLOG("reload: RACK (the trigger released the action)");
+            Pulse(out, g, 0.8f, 40.0f);
+        }
+    } else if (gunTrigHeld_ && in.gunTrigger < 0.4f) {
+        gunTrigHeld_ = false;
+        gunTrigLatch_ = false;
+    }
+    if (gunTrigLatch_) out.maskTrigger[g] = true;
     float dist = 1e9f, angle = 180.0f;
     const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
     lastNow_ = in.now;
