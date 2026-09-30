@@ -1128,6 +1128,15 @@ gun in your left hand, then in your right.
 
 **Deployed for this round:** the shipped defaults.
 
+**Gun-fit session (2026-09-30 10:22-10:24 and 10:31-10:43, Virtual Desktop):** the player tuned fits in the Gun fit
+page: Thompson, M1 Garand, C96 Mauser, Gammon and stick grenades (saved 10:42:40; the StG44, BAR, Colt and Mk II frag
+were done before). Then: "game crashed on pause screen" -- a crash inside D3D9On12 while the game drew a mesh as the
+pause menu opened, no mod code on the stack, not reproduced in 40 simulator pause cycles (ENGINE-NOTES 5ak; logs
+`logs/modlogs/20260930-104543-r29crash-*`, dump `logs/dumps/MOHA.exe.31496.dmp`). The first session's game log was
+rotated away by the second launch; its host log is `-MOHAVR-host.prev.log`. Still to fit: Springfield, K98, G43, MP40,
+M12 shotgun, M18 recoilless rifle, Panzerschreck (and the sniper K98 / G43 and MG42 if carried). Upgrades don't change a
+gun's model, so one fit per gun covers them (ENGINE-NOTES 5ak).
+
 ---
 
 ## Template

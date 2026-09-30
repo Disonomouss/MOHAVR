@@ -116,7 +116,11 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
+2. **Gun fits, in progress (the player, before anything else):** fitted StG44, BAR, Colt, Mk II frag, Thompson,
+   Garand, C96, Gammon, stick grenade; left: Springfield, K98, G43, MP40, M12 shotgun, M18, Panzerschreck. Then they ship
+   as defaults. The grenade pickup is parked (the player); a full manual reload is next after the fits (upgrades only
+   show/hide parts of one mesh, ENGINE-NOTES 5ak -- the extended magazines matter there).
+   **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,
    across the gun). Round 27 as deployed: the muzzle flash at the drawn barrel, both hands (`Weapon.MuzzleFlash=barrel`,
@@ -164,6 +168,9 @@ address-space budget for D3D9On12.
   312 MB)** at the landing, but the 30-min soak went down to **205 MB free (largest block 102 MB)** after the
   player walked into the town (streaming; it plateaued). Eye render targets in M3/M4 still come out of this. Re-measure after every addition
   with `tools/measure-variant.ps1`.
+- **One game crash (2026-09-30, the pause menu):** inside D3D9On12's copy for a DrawIndexedPrimitive (a vertex range
+  larger than its buffer), no mod code on the stack, not reproduced (ENGINE-NOTES 5ak). Watch for a second one.
+- **The host crashes on shutdown** after every Virtual Desktop session (after its clean exit; harmless so far).
 - **A rare startup hang:** twice in many simulator launches (2026-09-25; 2026-09-30 00:36) the game sat on a black
   screen: it ran (120 fps; a pawn and HUD within 3 s) and CalcSceneView ran (mono views), but the viewport Draw never
   did, so no stereo and every frame black; a relaunch was fine. Cause unknown (a guess: a startup movie that never ends,

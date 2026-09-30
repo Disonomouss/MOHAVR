@@ -1030,6 +1030,27 @@ possible, hide otherwise." Research agent (read-only), then probes.
   after a shot: the casing out to the left of the mirrored BAR (`logs/shots/095427-frz5-l-def.png`, shipped defaults);
   without it, across to the right (`094007-frz5-l-old.png`); the right hand unchanged (`094122-frz5-r-ref.png`).
 
+## 5ak. Weapon upgrades, and the pause-menu crash of 2026-09-30 (gun-fit session)
+
+- **Upgrades don't change the model** (MOHAWeaponUpgrade.uc): each gun is one skeletal mesh with its upgrade parts built
+  in; an upgrade shows or hides them through SkelControlSingleBone controls (UpgradeMeshesToAdd / ToReplace /
+  ToHideOnly, on the weapon's mesh and the attachment's), and changes ammo, kick and accuracy. The attachment class (the
+  `[GunFit]` key) and the mesh origin stay the same, so one fit per gun covers every upgrade level. The player's save has
+  every upgrade (extended magazines shown -- relevant to a manual reload). `NumExpLevels` in DefaultWeapon.ini only sets
+  the thresholds; editing it would be a game-file change (standing rule 1) -- a test that needs no upgrades would do it in
+  memory.
+- **The game crashed once** (10:43:16, as the pause menu opened: `cinema: ON` is the last game-thread line), the only
+  MOHA.exe crash on record: an access violation in ucrtbase memcpy reading 0x1A580000, called by d3d9on12.dll from
+  d3d9.dll from the game's DrawIndexedPrimitive (FUN_10902550 +0x148 on the device, from the mesh-element draw
+  FUN_10A9A0B0): a triangle list of 3156 vertices (2146 triangles); the copy was 3156 x 48 bytes, so D3D9On12 copied the
+  element's whole vertex range from a buffer that was smaller or already freed. No mod code on the stack. The minidump
+  holds no heap, so the mesh isn't known (`logs/dumps/MOHA.exe.31496.dmp`; `%LOCALAPPDATA%\CrashDumps` keeps the
+  latest). Not reproduced: 40 pause/resume cycles in gameplay in the simulator (`pausestress`, 20 into the flat menu view).
+- **The host crashes on shutdown** after its clean "exit 0" (0xC0000409 fail-fast, module unknown, the same offset every
+  time): at the end of every Virtual Desktop session since 2026-09-25, never with the simulator -- in the VD runtime's
+  teardown, after the host's work is done. Harmless so far; a clean fix would skip the runtime's teardown
+  (TerminateProcess after flushing the log).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
