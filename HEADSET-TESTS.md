@@ -1169,6 +1169,56 @@ gun's model, so one fit per gun covers them (ENGINE-NOTES 5ak).
 
 ---
 
+## Round 30: prepared 2026-09-30, reloading by hand
+**Changed:**
+- **Manual reload** (D21/D22; `[Weapon] ManualReload=1`, the menu's "Manual reload"): the Thompson, MP40, StG44, BAR,
+  G43, Colt and C96 (with its 20-round magazine) are reloaded by your hands; the game no longer reloads them itself.
+  - **Drop the magazine:** B on your gun hand (Y when the gun is in your left hand), or grab the magazine with your other
+    hand (grip) and pull it out about 4 cm: it comes away in your hand.
+  - **A new one:** once the gun's magazine is out, reach to the pouch at the middle of your belt and squeeze the grip.
+  - **Insert:** bring it to the magazine well (within about 5 cm, roughly lined up): it snaps in. Let go anywhere else and
+    it's dropped (its rounds go back to your reserve -- nothing is lost).
+  - **Rack:** an empty gun shows it (G43, Colt, C96 locked back; Thompson and MP40 bolt forward; StG44 and BAR charging
+    handle back). Grab the handle or slide with your other hand: when it's held back, a small tug and let go; when it's
+    forward, pull it all the way back and let go.
+  - A closed-bolt gun (StG44, G43, Colt, C96) keeps its chambered round when you drop a magazine that still has rounds.
+  - **Twin magazines** (BAR and StG44 with Dual Magazines): pull the pair out, squeeze the trigger of the hand holding it
+    to flip it, insert the other half. Each half keeps its own rounds.
+  - **Sounds:** each gun's own magazine-out, magazine-in and rack sounds, and a cloth sound at the pouch.
+  - **Rings** (with Rings = near): the magazine's grab spot, the well while you hold one, the pouch while the gun's
+    magazine is out, the handle when a rack is needed. The pouch moves like a holster on the Holsters page.
+  - Other guns (Garand, K98, Springfield, shotgun, launchers) keep today's reload gesture.
+  [S]: every step with every gun, both hands, the fallbacks, the sounds (ENGINE-NOTES 5am: M1-M7, twin magazines).
+- **Still to judge from round 29:** movement where you look.
+
+**How to try it:** Claude has deployed. Launch as usual.
+1. Fire a gun dry: does it look empty? Drop the magazine with B, take one from your belt, insert it, rack.
+2. Drop a half-full magazine by pulling it out; take a new one.
+3. The BAR (and StG44 if you have it): twin magazines -- pull the pair, flip with the trigger, insert.
+4. Draw with your left hand once: Y drops the magazine.
+5. Walk while looking around (round 29).
+
+**Questions:**
+1. Empty guns: do they read as empty? (per gun if not)
+2. B / Y to drop: right? Any accidental drops?
+3. Pulling out (4 cm) and the snap-in (5 cm, 40 deg): too easy, too hard?
+4. The magazine in your hand: does it sit right in your fist? (It sits at the controller's tip now; it can be moved.)
+5. The pouch: place and size?
+6. Racking: right per gun? (the Colt's short slide, the MP40's long pull)
+7. Twin magazines: the trigger flip OK? Should a half you already used be allowed back in? (it is now)
+8. Sounds: audible, right level, right sounds?
+9. Holding an SMG by its magazine: do you grab the magazine by accident?
+10. Movement where you look (round 29): right? Comfortable?
+11. Anything else odd?
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
