@@ -1296,7 +1296,7 @@ above a traced floor; logs `logs/modlogs/land2..land8-MOHAVR.log`), on the save'
 - **The botched landing** (the save's; a flare -- Space, activity 40 for ~9 frames -- sent 1 s or 0.3 s before
   touchdown still gave 41) rolls the arms' Cam socket down from 168 cm to **17.8 cm above the feet** within 0.7 s of
   touchdown (t 14.0 s after leaving the ground; three runs: 17.8 / 17.8 / 17.9 cm), under 50 cm for over a second.
-  In VR the view keeps the head's orientation (the tumble's pitch and yaw are replaced), so the player looks out level
+  In VR the head's pitch and roll replace the tumble's (the game's yaw, the roll's included, is kept), so the player looks out level
   from ankle height: any rubble above the collision floor (the traced floor lies 25-35 cm below the feet here: the
   pawn walks on simpler collision than the per-poly surface) or a real head dip puts the eye underground.
 - **The roll is not "the player's view":** its yaw leaves the controller's by more than 2048 (5c, as the landing roll
@@ -1309,6 +1309,13 @@ above a traced floor; logs `logs/modlogs/land2..land8-MOHAVR.log`), on the save'
   hands raised with it; applied whenever the view is the player's or at the pawn. [S]: with 60 the eye stayed at least
   **60.0 cm** above the feet through the landing (twice; the game camera itself went to 17.8 cm, raised up to 42 cm);
   standing 160.8 cm and a crouch 95.9 cm untouched; no clamp logged outside the roll.
+- **Addendum (the research cross-check):** with the head at its origin the eye never reached the *traced* floor (44-45
+  cm above it), so the "into the ground" needed a real head below the origin. With the simulator's head 45 cm below
+  its origin (`sim_pose.py --y 1.25`; a player crouching in the room) through the same botched landing (`eLandingType`
+  1): fix off -- the eye **27.1 cm below the feet, 0.1 cm above the traced floor** (`logs/modlogs/landlow0-*`); fix on
+  (60) -- **60.0 cm above the feet, 63.9 above the traced floor** (`landlow60-*`). A held flare after `Suicide` (pad A
+  2.2 s from 0.6 s before touchdown) gives landing type 5 (no roll): 70.2 / 70.3 cm above the feet either way. A death
+  camera near the pawn is held too (raised up to 92 cm after `Suicide`).
 
 ## 5ao. Manual reload, Step 2 (GOAL A): the inventory and the Garand's en-bloc clip (2026-09-30)
 

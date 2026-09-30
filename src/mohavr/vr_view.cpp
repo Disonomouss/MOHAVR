@@ -668,6 +668,7 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
         float    minEye = 1e9f, minCam = 1e9f, minEyeFeet = 1e9f, minCamFeet = 1e9f;
         double   minEyeAt = 0.0, minCamAt = 0.0, minEyeFeetAt = 0.0;
         long     lines = 0;
+        int      landing = 0;  // the pawn's eLandingType seen (the last non-zero): the kind of parachute landing
     };
     static Land l;
     static long total = 0;
@@ -696,7 +697,7 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
         return;
     }
     if (!l.on) {
-        l = Land{true, q.QuadPart, 0, 1e9f, 1e9f, 1e9f, 1e9f, 0.0, 0.0, 0.0, 0};
+        l = Land{true, q.QuadPart, 0, 1e9f, 1e9f, 1e9f, 1e9f, 0.0, 0.0, 0.0, 0, 0};
         const int be = names::PropertyOffset(pawn, "BaseEyeHeight"), ee = names::PropertyOffset(pawn, "EyeHeight");
         float fz = 0.0f, hh = 0.0f;
         PawnFeet(pawn, fz, hh);
@@ -706,6 +707,11 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
     }
     if (walking && !l.walking) l.walking = q.QuadPart;
     if (!walking) l.walking = 0;
+    {
+        const int lo = names::PropertyOffset(pawn, "eLandingType");
+        const int lt = lo >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + lo) : 0;
+        if (lt != 0) l.landing = lt;
+    }
     const double t = QpcMs(q.QuadPart - l.start) / 1000.0;
     const float top[3] = {eye[0], eye[1], pl[2] + 40.0f}, bottom[3] = {eye[0], eye[1], pl[2] - 800.0f};
     float hit[3];
@@ -732,10 +738,10 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
              hit[2], gapCam, gapEye);
     }
     if (l.walking && QpcMs(q.QuadPart - l.walking) > 8000.0) {
-        MLOG("eyefloor: landing summary -- %.1f s off the ground; on the ground the eye was at least %.1f cm above the feet (t %.2f; "
-             "the game camera %.1f cm); above the traced floor: eye %.1f cm (t %.2f), game camera %.1f cm; Camera.MinEyeHeight %.0f "
-             "cm; %ld lines", QpcMs(l.walking - l.start) / 1000.0, l.minEyeFeet, l.minEyeFeetAt, l.minCamFeet, l.minEye, l.minEyeAt,
-             l.minCam, g_cfg.minEyeHeight, l.lines);
+        MLOG("eyefloor: landing summary -- %.1f s off the ground (eLandingType %d); on the ground the eye was at least %.1f cm above "
+             "the feet (t %.2f; the game camera %.1f cm); above the traced floor: eye %.1f cm (t %.2f), game camera %.1f cm; "
+             "Camera.MinEyeHeight %.0f cm; %ld lines", QpcMs(l.walking - l.start) / 1000.0, l.landing, l.minEyeFeet, l.minEyeFeetAt,
+             l.minCamFeet, l.minEye, l.minEyeAt, l.minCam, g_cfg.minEyeHeight, l.lines);
         l.on = false;
     }
 }

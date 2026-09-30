@@ -139,7 +139,7 @@ Items:
 
   **DONE.** `Debug.EyeFloor` logs it per frame, from leaving the ground to 8 s after landing (ENGINE-NOTES 5an). The
   save's botched landing on the tower roof rolls the game camera to **17.8 cm above the feet** (three runs: 17.8 /
-  17.8 / 17.9 cm; standing 160.7, crouched 95.9). In VR the view keeps the head's orientation, so the eye looked out
+  17.8 / 17.9 cm; standing 160.7, crouched 95.9). In VR the head's pitch and roll replace the tumble's, so the eye looked out
   level from ankle height. The roll's view isn't "the player's" (its yaw is off by more than 2048). Two flares
   (Space, 1 s and 0.3 s before touchdown) still gave the botched landing.
 - [x] **B2 Fix it behind a switch.** Candidates: keep the view a margin above the floor, drop the animation's downward
@@ -150,7 +150,10 @@ Items:
   **DONE.** `[Camera] MinEyeHeight=60`, shipped on (D26): the eye is held at least 60 cm above the feet, raised
   before the hands' mapping and by the same amount for both eyes. [S] the lowest eye through the landing was
   **60.0 cm** (was 17.8), in three runs; standing 160.8 and crouched 95.9 unchanged; a jump (0.7 s in the air)
-  never below 160.2 cm and never held; `tools/harness.ps1 cycle` OK (33 s).
+  never below 160.2 cm and never held; `tools/harness.ps1 cycle` OK (33 s). **Into the ground, measured:** with the
+  head 45 cm below its origin, the botched landing put the eye **27.1 cm below the feet and at the traced ground (0.1
+  cm)** with the fix off, and **60.0 cm above the feet (63.9 above the traced ground)** with it on; a held flare (landing
+  type 5) stays above 70 cm either way (`logs/modlogs/landlow0-*`, `landlow60-*`).
 
 ## Finish
 - [ ] **F1** After the last change: `tools/harness.ps1 cycle` OK, and a final scripted reload of every converted gun.
