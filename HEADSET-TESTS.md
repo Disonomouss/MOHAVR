@@ -1238,6 +1238,47 @@ first). Movement where you look still to judge; the guns not tried in round 30 g
 
 ---
 
+## Round 31: prepared 2026-09-30, the game's reload grips, the hand point, falling magazines
+**Changed:**
+- **The game's own reload hand** (D23): grab a seated magazine and your drawn hand snaps onto it with the grip from the
+  game's reload animation; a magazine you hold sits in your fist that way; grab the handle / slide / bolt to rack and
+  the hand snaps onto it. From the animations of each gun (Colt: the held magazine only -- its grip pushes the magazine
+  up on an open palm, so turn your palm up to insert; C96: the held magazine and the bolt). `[ManualReload] Grips`.
+- **The hand point** (the white dot) can be moved into your hand: menu > Holsters > "Hand point fwd/back, up/down,
+  in/out" (in = toward the palm). Everything your hand does (holsters, foregrip, reload spots) uses it. Also there:
+  "Foregrip ring" size and "Reload rings" size.
+- **Twin magazines turn over** visibly when you flip them (the BAR's pair rolls over, the StG44's slides across).
+- **A dropped magazine falls** (from the gun with B, or from your hand when you let go), tumbling, and disappears a
+  moment after it lands. `[ManualReload] DropFall`.
+[S]: all of it with the G43, MP40, BAR, StG44, Thompson, C96, Colt (ENGINE-NOTES 5am, round 31 follow-ups and grips).
+
+**How to try it:**
+1. Menu > Holsters: move the hand point until the white dot sits in your drawn hand; resize the rings if you like.
+2. With each gun (the Thompson and StG44 too -- not tried in round 30): grab the magazine, pull it, take one from the
+   pouch, insert it, rack.
+3. The BAR's twin magazines: flip one and watch it turn.
+4. Drop a magazine with B, and let go of one in your hand.
+5. Walk while looking around (round 29, still to judge).
+
+**Questions:**
+1. The white dot: could you put it in your hand? Where did it end up (the three numbers)?
+2. The grips on the magazine, the handle / bolt: do they snap on right, per gun?
+3. The magazine in your hand: in the fist now? Lining it up at the well (the magazine is turned as the game's hand holds
+   it): OK, or too fussy? (The Colt: palm up.)
+4. The BAR's flip: looks right?
+5. The falling magazine: right?
+6. The Thompson and StG44 (not tried last round): OK?
+7. Movement where you look (round 29)?
+8. Anything else odd?
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
