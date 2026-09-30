@@ -25,4 +25,8 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]);
 // The local player's pawn (checked both ways, addresses.hpp), or 0. Game thread.
 std::uintptr_t LocalPlayerPawn();
 
+// A world trace with the player's bullets' flags (per-poly collision), ignoring `source`: true and `hit` = the first
+// hit, or false (and `hit` = end) when nothing is in the way. Game thread.
+bool WorldTrace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3]);
+
 }  // namespace mohavr::aim

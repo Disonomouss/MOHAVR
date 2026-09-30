@@ -58,6 +58,8 @@ struct Config {
     bool hideBody       = false;  // [Weapon] HideBody -- hide the first-person body/sleeves (RenderBody exec)
     int  cinemaScreen   = 1;      // [Camera]  CinemaScreen -- flat on the host's screen: 1 UI menus, 2 + cinematic cameras (M5)
     bool debugViewState = false;  // [Debug]   ViewState -- write the game camera to %TEMP%\MOHAVR\view_state.txt (tests)
+    bool debugEyeFloor = false;   // [Debug]   EyeFloor -- log the eye's and the game camera's height above the floor per
+                                  //           frame through falls and landings (GOAL B1)
     bool debugSwapEyes  = false;  // [Debug] SwapEyeOrder -- draw the right eye first (experiments only)
     bool debugSwapHalves = false; // [Debug] SwapHalves -- left eye in the right half (experiments only)
     bool debugTraceScissor = false;  // [Debug] TraceScissor -- log scissor rects set while the viewport is offset
@@ -80,6 +82,8 @@ struct Config {
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
     bool  jumpLift          = false;  // [Camera] JumpLift -- the game's camera lift on a jump (fJumpCameraOffset) in the view
+    float minEyeHeight      = 0.0f;   // [Camera] MinEyeHeight -- cm: the view is kept at least this high above the pawn's
+                                      // feet (0 = off; GOAL B: the parachute landing's roll took it into the ground)
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)
     std::wstring iniPath;         // MOHAVR.ini next to the DLL (the per-gun [ManualReload] lines)
     std::wstring xrRuntimeJson;   // [OpenXR]  RuntimeJson -- if set, XR_RUNTIME_JSON for this process only (D3)

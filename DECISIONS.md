@@ -253,3 +253,13 @@ still (the BAR's is 17 deg off and open-handed, the SMGs' a fist); the rifles ag
 so a session begun with the BAR (or a loadout with no rifle) has it too.
 **Costs:** until a listed rifle has been drawn once, the last long gun stands in; a second file in the player's
 folder.
+
+### D26. The view is held above the feet (the parachute landing) — Decided 2026-09-30 (GOAL B)
+`[Camera] MinEyeHeight=60`: the eye is kept at least 60 cm above the pawn's feet. The parachute's botched landing rolls
+the game's camera to 18 cm above the floor; in VR the head's orientation replaces the roll's tumble, so the player
+looked out level from ankle height, into the ground. Shipped **on** although it changes the view: it removes a fault
+(GOAL.md rule 3 -- CLAUDE.md rule 7 and UNATTENDED-REPORT 5.2 resolved that way for fixes), and it touches nothing
+above 60 cm (a crouch is 96, standing 161).
+**Why:** the player's report (round 35); measured 17.8 cm before, 60.0 cm after (ENGINE-NOTES 5an).
+**Costs:** the landing's dip still plays down to 60 cm (a comfort option to keep the view level through the landing is
+an [H] question, round 36); a death or knock-down camera near the pawn is held at 60 cm too.

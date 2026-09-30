@@ -25,6 +25,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
+    c.debugEyeFloor  = get(L"Debug", L"EyeFloor", c.debugEyeFloor);
     c.debugGameCommands = get(L"Debug", L"GameCommands", c.debugGameCommands);
     c.debugCrashDump = get(L"Debug", L"CrashDump", c.debugCrashDump);
     c.debugCrashDumpTest = get(L"Debug", L"CrashDumpTest", c.debugCrashDumpTest);
@@ -129,6 +130,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.noMotionBlur   = get(L"Camera", L"DisableMotionBlur", c.noMotionBlur);
     c.noDepthOfField = get(L"Camera", L"DisableDepthOfField", c.noDepthOfField);
     c.jumpLift       = get(L"Camera", L"JumpLift", c.jumpLift);
+    c.minEyeHeight   = getf(L"Camera", L"MinEyeHeight", c.minEyeHeight, 0.0f, 150.0f);
     c.xrEnabled      = get(L"OpenXR", L"Enabled", c.xrEnabled);
     wchar_t buf[MAX_PATH] = L"";
     GetPrivateProfileStringW(L"OpenXR", L"RuntimeJson", L"", buf, MAX_PATH, ini.c_str());

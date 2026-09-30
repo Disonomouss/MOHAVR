@@ -1284,6 +1284,32 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
   stand-in), the G43 gave the hold (saved); the BAR, Thompson, StG44 then showed the G43's hand; session 2 loaded it
   during the parachute, the BAR had it at once.
 
+## 5an. The parachute landing: the view went into the ground (GOAL B, 2026-09-30)
+
+The player (round 35): "currently you clip into the ground when landing". Measured with `Debug.EyeFloor` (new: per
+frame from leaving the ground to 8 s after landing, the eye's and the game camera's height above the pawn's feet and
+above a traced floor; logs `logs/modlogs/land2..land8-MOHAVR.log`), on the save's landing on the flak tower roof:
+- **The pawn:** `CylinderComponent.CollisionHeight` 96 standing, 49 crouched; `BaseEyeHeight` = `EyeHeight` 64. The eye
+  stands **160.7 cm** above the feet (Location.Z - CollisionHeight), crouched **95.9 cm** (the crouch: a raw right-stick
+  flick down, `pad_cmd.py --seq "raw=1 ry=-1 dur=0.2"`). Physics: 2 falling (activity 35), 11 the parachute (38
+  descending, 40 flaring), 1 walking; the landing activities 41 (the botched roll, ~2 s), 42 (getting up), 20, 0.
+- **The botched landing** (the save's; a flare -- Space, activity 40 for ~9 frames -- sent 1 s or 0.3 s before
+  touchdown still gave 41) rolls the arms' Cam socket down from 168 cm to **17.8 cm above the feet** within 0.7 s of
+  touchdown (t 14.0 s after leaving the ground; three runs: 17.8 / 17.8 / 17.9 cm), under 50 cm for over a second.
+  In VR the view keeps the head's orientation (the tumble's pitch and yaw are replaced), so the player looks out level
+  from ankle height: any rubble above the collision floor (the traced floor lies 25-35 cm below the feet here: the
+  pawn walks on simpler collision than the per-poly surface) or a real head dip puts the eye underground.
+- **The roll is not "the player's view":** its yaw leaves the controller's by more than 2048 (5c, as the landing roll
+  was already known to), so `g_viewIsPlayers` is false for most of it -- the first probe, gated on that, missed the
+  lowest frames (it saw 46 cm). Anything that must follow the eye through the roll uses `ViewAtPawn` (the camera within
+  3 m of the local pawn).
+- **Fix: `[Camera] MinEyeHeight` (cm, shipped 60, D26):** in OnViewPoint, before the hands' mapping (`g_world`) takes
+  the game camera, the camera is raised so the HEAD's eye (the game camera + the head's height against the origin +
+  HeightOffset) is at least MinEyeHeight above the feet -- the same raise for both eyes (no vertical disparity), the
+  hands raised with it; applied whenever the view is the player's or at the pawn. [S]: with 60 the eye stayed at least
+  **60.0 cm** above the feet through the landing (twice; the game camera itself went to 17.8 cm, raised up to 42 cm);
+  standing 160.8 cm and a crouch 95.9 cm untouched; no clamp logged outside the roll.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

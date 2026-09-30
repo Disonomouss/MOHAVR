@@ -106,17 +106,28 @@ What's known:
 - The eye is the game's view location plus the tracked head, scaled by the world scale.
 
 Items:
-- [ ] **B1 Reproduce and measure.** Log every frame, from 2 s before to 5 s after touchdown:
+- [x] **B1 Reproduce and measure.** Log every frame, from 2 s before to 5 s after touchdown:
   - the eye's height above the ground, from a downward trace from the view;
   - the camera animation's offset;
   - the pawn's eye height and state.
 
   Take screenshots at the lowest point. Vary the landing: flared (Space), not flared, and other head heights through the
   openxr-simulator MCP. Find which term puts the view below the surface.
-- [ ] **B2 Fix it behind a switch.** Candidates: keep the view a margin above the floor, drop the animation's downward
+
+  **DONE.** `Debug.EyeFloor` logs it per frame, from leaving the ground to 8 s after landing (ENGINE-NOTES 5an). The
+  save's botched landing on the tower roof rolls the game camera to **17.8 cm above the feet** (three runs: 17.8 /
+  17.8 / 17.9 cm; standing 160.7, crouched 95.9). In VR the view keeps the head's orientation, so the eye looked out
+  level from ankle height. The roll's view isn't "the player's" (its yaw is off by more than 2048). Two flares
+  (Space, 1 s and 0.3 s before touchdown) still gave the botched landing.
+- [x] **B2 Fix it behind a switch.** Candidates: keep the view a margin above the floor, drop the animation's downward
   translation, or stop the tracked height from stacking on it. Proven when:
   - the eye stays at least 10 cm above the ground through every measured landing;
   - walking, crouching, jumping and the regression cycle are unchanged.
+
+  **DONE.** `[Camera] MinEyeHeight=60`, shipped on (D26): the eye is held at least 60 cm above the feet, raised
+  before the hands' mapping and by the same amount for both eyes. [S] the lowest eye through the landing was
+  **60.0 cm** (was 17.8), in three runs; standing 160.8 and crouched 95.9 unchanged; a jump (0.7 s in the air)
+  never below 160.2 cm and never held; `tools/harness.ps1 cycle` OK (33 s).
 
 ## Finish
 - [ ] **F1** After the last change: `tools/harness.ps1 cycle` OK, and a final scripted reload of every converted gun.

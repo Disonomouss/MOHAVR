@@ -419,6 +419,10 @@ void OnBulletTraceDone(SafetyHookContext& ctx) {
 
 std::uintptr_t LocalPlayerPawn() { return LocalPawn(LocalController()); }
 
+bool WorldTrace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3]) {
+    return Trace(source, start, end, hit);
+}
+
 bool Install(const Config& cfg) {
     g_cfg = cfg;
     if (cfg.aimMode == 0) {

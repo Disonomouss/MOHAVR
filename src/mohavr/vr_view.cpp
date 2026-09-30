@@ -633,6 +633,113 @@ void TrackCameraSway(const float* loc, int camYaw) {
     }
 }
 
+// The view is the local pawn's own eye: within 3 m of it. The landing roll's camera animation turns the view more than
+// 11 degrees off the controller's yaw, so it is not "the player's view" (g_viewIsPlayers) -- but it is still the eye.
+bool ViewAtPawn(std::uintptr_t pawn, const float* loc) {
+    if (!pawn) return false;
+    const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    const float dx = loc[0] - pl[0], dy = loc[1] - pl[1], dz = loc[2] - pl[2];
+    return dx * dx + dy * dy + dz * dz < 300.0f * 300.0f;
+}
+
+// The pawn's feet: its location less its collision cylinder's half height (the floor it stands on). False if unknown.
+bool PawnFeet(std::uintptr_t pawn, float& feetZ, float& halfHeight) {
+    const int co = names::PropertyOffset(pawn, "CylinderComponent");
+    const std::uintptr_t cyl = co >= 0 ? *reinterpret_cast<const std::uintptr_t*>(pawn + co) : 0;
+    const int ho = cyl ? names::PropertyOffset(cyl, "CollisionHeight") : -1;
+    if (ho < 0) return false;
+    halfHeight = *reinterpret_cast<const float*>(cyl + ho);
+    if (!(halfHeight > 1.0f && halfHeight < 200.0f)) return false;
+    feetZ = reinterpret_cast<const float*>(pawn + addr::kActorLocation)[2] - halfHeight;
+    return true;
+}
+
+// Debug.EyeFloor (GOAL B1, "you clip into the ground when landing"): per frame, from the moment the pawn leaves the
+// ground (Physics != PHYS_Walking) until 8 s after it is back, how high the final eye (the game camera + the head) and
+// the game camera alone are above the floor under the eye: a trace down the eye's column from above the pawn's centre
+// (the pawn itself ignored), so an eye already below the surface still measures negative. Also the pawn's physics,
+// activity and height, and one summary line per landing with the lowest gaps.
+void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!pawn || !ViewAtPawn(pawn, cam)) return;
+    struct Land {
+        bool     on = false;
+        LONGLONG start = 0, walking = 0;
+        float    minEye = 1e9f, minCam = 1e9f, minEyeFeet = 1e9f, minCamFeet = 1e9f;
+        double   minEyeAt = 0.0, minCamAt = 0.0, minEyeFeetAt = 0.0;
+        long     lines = 0;
+    };
+    static Land l;
+    static long total = 0;
+    const int po = names::PropertyOffset(pawn, "Physics"), ao = names::PropertyOffset(pawn, "CurrentActivity");
+    if (po < 0) return;
+    const std::uint8_t physics = *reinterpret_cast<const std::uint8_t*>(pawn + po);
+    const std::uint8_t act = ao >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + ao) : 0;
+    const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    const bool walking = physics == 1;  // PHYS_Walking
+    if (!l.on && walking) {
+        // On the ground: every 2 s, how high the eye is above the feet (standing, crouched).
+        static DWORD next = 0;
+        const DWORD nowMs = GetTickCount();
+        if (static_cast<LONG>(nowMs - next) >= 0) {
+            next = nowMs + 2000;
+            float feet = 0.0f, half = 0.0f;
+            if (PawnFeet(pawn, feet, half) && total < 6000) {
+                ++total;
+                const float k = upm > 1.0f ? 100.0f / upm : 1.0f;
+                MLOG("eyefloor: on the ground -- half height %.1f, activity %u: eye %.1f cm above the feet (game camera %.1f)", half,
+                     act, (eye[2] - feet) * k, (cam[2] - feet) * k);
+            }
+        }
+        return;
+    }
+    if (!l.on) {
+        l = Land{true, q.QuadPart, 0, 1e9f, 1e9f, 1e9f, 1e9f, 0.0, 0.0, 0.0, 0};
+        const int be = names::PropertyOffset(pawn, "BaseEyeHeight"), ee = names::PropertyOffset(pawn, "EyeHeight");
+        float fz = 0.0f, hh = 0.0f;
+        PawnFeet(pawn, fz, hh);
+        MLOG("eyefloor: off the ground (physics %u, activity %u, pawn z %.1f, half height %.1f, BaseEyeHeight %.1f, EyeHeight "
+             "%.1f; Camera.MinEyeHeight %.0f cm)", physics, act, pl[2], hh, be >= 0 ? *reinterpret_cast<const float*>(pawn + be) : -1.0f,
+             ee >= 0 ? *reinterpret_cast<const float*>(pawn + ee) : -1.0f, g_cfg.minEyeHeight);
+    }
+    if (walking && !l.walking) l.walking = q.QuadPart;
+    if (!walking) l.walking = 0;
+    const double t = QpcMs(q.QuadPart - l.start) / 1000.0;
+    const float top[3] = {eye[0], eye[1], pl[2] + 40.0f}, bottom[3] = {eye[0], eye[1], pl[2] - 800.0f};
+    float hit[3];
+    const bool found = aim::WorldTrace(pawn, top, bottom, hit);
+    const float k = upm > 1.0f ? 100.0f / upm : 1.0f;  // units -> cm
+    const float gapEye = (eye[2] - hit[2]) * k, gapCam = (cam[2] - hit[2]) * k;
+    if (found) {
+        if (gapEye < l.minEye) { l.minEye = gapEye; l.minEyeAt = t; }
+        if (gapCam < l.minCam) { l.minCam = gapCam; l.minCamAt = t; }
+    }
+    // Above the feet (the floor the pawn stands on; the trace's floor can be a surface under walkable collision).
+    float feet = 0.0f, half = 0.0f;
+    const bool haveFeet = PawnFeet(pawn, feet, half);
+    const float eyeFeet = (eye[2] - feet) * k, camFeet = (cam[2] - feet) * k;
+    if (haveFeet && walking) {  // on the ground: in the air the feet are wherever the fall is
+        if (eyeFeet < l.minEyeFeet) { l.minEyeFeet = eyeFeet; l.minEyeFeetAt = t; }
+        if (camFeet < l.minCamFeet) l.minCamFeet = camFeet;
+    }
+    if (total < 6000) {
+        ++total;
+        ++l.lines;
+        MLOG("eyefloor: t %.3f phys %u act %u pawn z %.1f half %.1f%s | feet: cam %.1f eye %.1f cm | trace floor %s%.1f: cam %.1f "
+             "eye %.1f cm", t, physics, act, pl[2], half, players ? "" : " (camera anim)", camFeet, eyeFeet, found ? "" : "(none) ",
+             hit[2], gapCam, gapEye);
+    }
+    if (l.walking && QpcMs(q.QuadPart - l.walking) > 8000.0) {
+        MLOG("eyefloor: landing summary -- %.1f s off the ground; on the ground the eye was at least %.1f cm above the feet (t %.2f; "
+             "the game camera %.1f cm); above the traced floor: eye %.1f cm (t %.2f), game camera %.1f cm; Camera.MinEyeHeight %.0f "
+             "cm; %ld lines", QpcMs(l.walking - l.start) / 1000.0, l.minEyeFeet, l.minEyeFeetAt, l.minCamFeet, l.minEye, l.minEyeAt,
+             l.minCam, g_cfg.minEyeHeight, l.lines);
+        l.on = false;
+    }
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -695,6 +802,38 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
+    // Camera.MinEyeHeight (GOAL B, "you clip into the ground when landing"): the parachute's botched landing rolls the
+    // arms' Cam socket down to the floor, and in VR the view keeps the head's orientation, so the eye looked out from
+    // inside the ground. Keep the head's eye at least MinEyeHeight above the pawn's feet: the game camera is raised
+    // before the hands' mapping below takes it (the hands stay with the view), by the same amount for both eyes (the
+    // head's height, not each eye's).
+    if (g_cfg.minEyeHeight > 0.0f) {
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        float feet = 0.0f, half = 0.0f;
+        if (pawn && (g_viewIsPlayers || ViewAtPawn(pawn, loc)) && PawnFeet(pawn, feet, half)) {
+            const float live = hdr->unitsPerMeter;
+            const float s = (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter;
+            float headUp = 0.0f;  // the head's height against the origin, in units (as the translation below)
+            if (g_cfg.headPosition && g_haveOrigin) headUp = (head.py - g_oy) * s;
+            const float h = hdr->heightOffset;
+            if (h > -1.0f && h < 1.0f) headUp += h * s;
+            const float minZ = feet + g_cfg.minEyeHeight * s / 100.0f;
+            const float raise = minZ - (loc[2] + headUp);
+            if (raise > 0.0f) {
+                loc[2] += raise;
+                static DWORD lastLog = 0;
+                static int logged = 0;
+                const DWORD now = GetTickCount();
+                if (g_thisEye == 0 && logged < 40 && now - lastLog > 1000) {
+                    ++logged;
+                    lastLog = now;
+                    MLOG("view: the eye held %.0f cm above the feet (raised %.1f cm; Camera.MinEyeHeight)", g_cfg.minEyeHeight,
+                         raise * 100.0f / s);
+                }
+            }
+        }
+    }
+
     const float gameYaw = UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
@@ -753,6 +892,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
+    if (g_cfg.debugEyeFloor && g_thisEye == 0) {
+        const float live = hdr->unitsPerMeter;
+        TrackEyeFloor(loc, gameCam, (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter, g_viewIsPlayers);
+    }
     if (g_thisStereo && g_thisEye == 0) {
         for (int i = 0; i < 3; ++i) {
             g_eye0Loc[i] = loc[i];
