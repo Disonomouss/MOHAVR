@@ -58,14 +58,20 @@ void ManualReload::Init(const std::wstring& ini) {
     pullOut_ = iniFloat(L"PullOut", 4.0f) / 100.0f;
     insertR_ = iniFloat(L"InsertRadius", 5.0f) / 100.0f;
     insertAngle_ = iniFloat(L"InsertAngle", 40.0f);
+    boltGrabR_ = iniFloat(L"BoltGrabR", 5.0f) / 100.0f;
+    rackArm_ = iniFloat(L"RackArm", 0.85f);
+    rackMin_ = iniFloat(L"RackMin", 4.0f) / 100.0f;
+    rackTug_ = iniFloat(L"RackTug", 1.0f) / 100.0f;
     GetPrivateProfileStringW(L"ManualReload", L"Hold", L"0 0 0", b, 64, ini.c_str());
     float h[3] = {0, 0, 0};
     swscanf_s(b, L"%f %f %f", &h[0], &h[1], &h[2]);
     for (int i = 0; i < 3; ++i) hold_[i] = h[i] / 100.0f;
     static const char* kButtons[] = {"none", "upper (B / Y)", "lower (A / X)"};
     MLOG("reload: Weapon.ManualReload=%d (the default; the menu's toggle is the player's); release button %s, pull out %.0f cm, "
-         "insert within %.0f cm and %.0f deg, hold %.0f %.0f %.0f cm",
-         on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertAngle_, h[0], h[1], h[2]);
+         "insert within %.0f cm and %.0f deg, hold %.0f %.0f %.0f cm; the action: grab within %.0f cm, armed at %.0f%% of its "
+         "travel (at least %.0f cm), a tug of %.0f cm when held back",
+         on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertAngle_, h[0], h[1], h[2],
+         boltGrabR_ * 100.0f, rackArm_ * 100.0f, rackMin_ * 100.0f, rackTug_ * 100.0f);
 }
 
 void ManualReload::SetOn(bool on) {
@@ -108,6 +114,7 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
             // Another gun in hand: what the off hand held of the old one is gone; the new one's magazine as the game has it.
             stateKey_ = geo_.key;
             disagree_ = 0;
+            boltHeld_ = false;
             SetMag(gameIn ? kInGun : kOut, "another gun in hand");
         } else if (acksDone && (geo_.caps & 1u)) {
             // Reconcile (3.2): the game's magazine differs from ours for two of its frames with nothing in flight.
@@ -157,7 +164,10 @@ bool ManualReload::Begin(const In& in) {
     active_ = active;
     press_ = kPressNone;
     if (!active_) {
-        // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped.
+        // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped, the action is let go
+        // without a rack.
+        if (boltHeld_) MLOG("reload: the action let go (not driving): no rack");
+        boltHeld_ = false;
         if (mag_ == kGrabbed) SetMag(kInGun, "let go: not driving");
         else if (mag_ == kInHand) {
             Queue(shared::kReloadDrop, in.now);
@@ -183,6 +193,13 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
         if (s < best) {
             best = s;
             which = kPressMag;
+        }
+    }
+    if ((geo_.caps & 2u) && lastGunOk_ && boltGrabR_ > 0.0f) {
+        const float s = Len(Sub(P(hand), P(lastBoltW_))) / boltGrabR_;
+        if (s < best) {
+            best = s;
+            which = kPressBolt;
         }
     }
     press_ = which;
@@ -219,12 +236,15 @@ void ManualReload::Frame(const In& in, Out& out) {
     const V3 gunP = P(in.gun.position), offP = P(in.off.position);
     const V3 grabW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.magGrab)));
     const V3 outW = Rotate(in.gun.orientation, A3(geo_.magOut));
+    const V3 boltW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.boltGrab)));
+    const V3 backW = Rotate(in.gun.orientation, A3(geo_.boltBack));
     lastGrabW_ = X(grabW);
+    lastBoltW_ = X(boltW);
     out.targetOk[0] = true;
     out.target[0] = X(grabW);
     if (geo_.caps & 2u) {
         out.targetOk[1] = true;
-        out.target[1] = X(Add(gunP, Rotate(in.gun.orientation, A3(geo_.boltGrab))));
+        out.target[1] = X(boltW);
     }
     auto heldAt = [&](float pull) {  // the magazine as it sits drawn out by `pull`, in the off hand's frame
         const XrPosef m{in.gun.orientation, X(Add(grabW, Scale(outW, pull)))};
@@ -265,7 +285,48 @@ void ManualReload::Frame(const In& in, Out& out) {
             Pulse(out, o, 0.2f, 60.0f);
         }
     }
+    if (press_ == kPressBolt) {
+        boltHeld_ = true;
+        boltStart_ = X(offP);
+        rack_ = 0.0f;
+        rackArmed_ = false;
+        tug_ = (geo_.state & 8u) != 0;  // held back: a tug and let go (3.3)
+        if (tug_ && rackTug_ <= 0.0f) rackArmed_ = true;
+        MLOG("reload: the action taken %.1f cm from its grip point (%s; travel %.1f cm)", 100.0f * Len(Sub(offP, boltW)),
+             tug_ ? "held back: tug and let go" : "pull it back", geo_.boltTravel * 100.0f);
+        Pulse(out, o, 0.5f, 30.0f);
+    }
     press_ = kPressNone;
+
+    // The action (3.3).
+    if (boltHeld_) {
+        const float pulled = Dot(Sub(offP, P(boltStart_)), backW);
+        rack_ = std::clamp(pulled / std::max(geo_.boltTravel, rackMin_), 0.0f, 1.0f);
+        const bool needed = (geo_.state & 16u) != 0;
+        auto sendRack = [&](const char* how) {
+            Queue(shared::kReloadRack, in.now);
+            MLOG("reload: RACK (%s; %s)", how, needed ? "a rack was needed" : "a press check");
+            if (needed) {
+                Pulse(out, g, 0.8f, 40.0f);
+                Pulse(out, o, 0.8f, 40.0f);
+            } else {
+                Pulse(out, o, 0.3f, 30.0f);
+            }
+        };
+        if (!in.offHeld) {
+            if (rackArmed_) sendRack(tug_ ? "tugged and let go" : "let go");
+            else MLOG("reload: the action let go before it was armed: no rack");
+            boltHeld_ = false;
+            rack_ = 0.0f;
+        } else if (!rackArmed_ && (tug_ ? pulled >= rackTug_ : rack_ >= rackArm_)) {
+            rackArmed_ = true;
+            MLOG("reload: the action armed (%.1f cm back)", 100.0f * pulled);
+            Pulse(out, o, 0.4f, 20.0f);
+        } else if (rackArmed_ && !tug_ && rack_ < 0.3f) {
+            sendRack("brought forward");
+            rackArmed_ = false;
+        }
+    }
 
     if (mag_ == kGrabbed) {
         if (!in.offHeld) {
@@ -308,6 +369,11 @@ void ManualReload::Frame(const In& in, Out& out) {
     } else if (mag_ == kInHand && armed_) {
         out.rings[out.ringCount++] = {X(grabW), insertR_, dist < insertR_ && angle < insertAngle_, dist < 3.0f * insertR_};
     }
+    // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
+    if ((geo_.caps & 2u) && (geo_.state & 16u) && !boltHeld_) {
+        const float d = Len(Sub(offP, boltW));
+        out.rings[out.ringCount++] = {X(boltW), boltGrabR_, d < boltGrabR_, d < 2.0f * boltGrabR_};
+    }
 }
 
 void ManualReload::Send(shared::Header* hdr, double now) {
@@ -332,7 +398,7 @@ void ManualReload::Send(shared::Header* hdr, double now) {
 }
 
 std::uint32_t ManualReload::Flags() const {
-    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (engaged_ ? 16u : 0u);
+    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (boltHeld_ ? 8u : 0u) | (engaged_ ? 16u : 0u);
 }
 
 shared::Pose ManualReload::MagPose() const {

@@ -1080,3 +1080,7 @@ deleted; its result is in `verify/otherlevel.txt`.
   converted gun anyway.
 - **M3, test targets:** `pad_cmd.txt` `hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]` puts a hand at the last
   frame's spot, offset in the head's heading frame.
+- **M4, "held back"** (`reloadState` bit3, the tug) comes from the empty hold only; the game's own animation positions
+  (a shot's recoil moves the G43's bolt back for a moment) never make it a tug.
+- **M4/M5, the given guns:** from the harness save's G43, `GiveWeapon MOHAGameNonNative.MOHAThompson` is reached with 7
+  `NextWeapon`s (BAR, Colt, three grenades, Comp B, then the given guns in order).

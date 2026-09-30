@@ -1130,6 +1130,16 @@ the controller after a one-step 8 cm move, as grabbed, no snap); let go -> DROP 
 while holding one -> DROP, state out; closed -> driving again. The Holsters page shows the pouch ring between the hip
 rings. Seen at Hold 0 0 0: the magazine sits just above the drawn fingers (the aim point is ahead of the palm) -- [H].
 
+**M4, the rack [S] (2026-09-30, `logs/modlogs/reload-m4-*`, `logs/shots/*-m4-*`, `m4-bolt-zoom.png`):** the off hand's
+grip within 5 cm of the action's grip point takes it (`@bolt`); the host publishes reloadFlags bit3 and `rack` (0..1 of
+the travel), and the bake draws the action at z_h + rack x (zBack - z_h). G43 fired dry (bolt locked back at 8.34): a
+1.5 cm tug and let go with nothing fed -> RACK, no change; eject, pouch, insert -> pending ("rack needed"); a tug ->
+clip 0 -> 20, reserve 40 -> 20, the bolt home. A loaded G43 pulled 3 / 6 / 9 / 13 cm: the bolt drawn at 16.66 / 13.62 /
+10.56 / 7.08 (full back), armed at 13.2 cm (85 % of 12.6), let go -> RACK as a press check (no change). The BAR fired
+dry (handle held back at -2.80): a tug -> cocked; insert -> 20 at once. The held magazine stays drawn 45 cm to the left
+of the view's centre with the gun pointed away (the culling question, R10: no culling seen). "Held back" (the tug) is
+the empty hold only: the G43's fire animation briefly moves the bolt back on every shot.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

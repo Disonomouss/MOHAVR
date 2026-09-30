@@ -124,7 +124,8 @@ address-space budget for D3D9On12.
    native; the other guns reachable with GiveWeapon + NextWeapon); **M1 done** (the hook, the ammo rules, shared block v14's
    events: 5am); **M2 done** (the empty-gun visuals: action holds, the magazine hidden when out, the top round); **M3 done**
    (the host's magazine: B/Y drops it, the off hand grabs and pulls it out, the belt pouch gives a new one, it goes in at
-   the well; the menu's Manual reload toggle; the pouch on the Holsters page: 5am). Next M4: the rack. The grenade pickup is parked (the player).
+   the well; the menu's Manual reload toggle; the pouch on the Holsters page: 5am); **M4 done** (the rack: a pull past 85 %
+   and let go, or a tug on an action held back). Next M5: the Thompson, MP40 and C96 (GiveWeapon + 7 NextWeapon). The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

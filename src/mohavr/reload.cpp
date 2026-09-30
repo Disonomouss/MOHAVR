@@ -515,7 +515,7 @@ float SecondZ(const GunLine& l, float z) {
 
 struct TraceState {
     std::string key;
-    int         mag = -1, hold = -1, top = -1;
+    int         mag = -1, hold = -1, top = -1, rack = -1;
     DWORD       next = 0;
 } g_trace;
 
@@ -618,15 +618,19 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         for (int j : r->mag)
             if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
     }
-    // The action: held at its empty position (RELOAD-DESIGN 5.3; the rack comes with M4).
+    // The action: held at its empty position, and drawn back by the host's rack while the off hand holds it
+    // (RELOAD-DESIGN 5.3).
     const bool hold = l->emptyCue && (l->open ? !s.cocked : c == 0);
+    const bool racking = hostState && (rf.view.flags & 8u);
     float zGame = 0.0f, zDrawn = 0.0f, zHeld = 0.0f;
     const int b = !r->bolt.empty() ? r->bolt[0] : -1;
     if (b >= 0 && b < num) {
         const float zs = saved[16 * b + 14], zIdle = l->boltZ[0], zEmpty = l->boltZ[1];
-        const float zd = hold ? (zEmpty < zIdle ? std::min(zs, zEmpty) : std::max(zs, zEmpty)) : zs;
+        const float zh = hold ? (zEmpty < zIdle ? std::min(zs, zEmpty) : std::max(zs, zEmpty)) : zs;
+        const float zd = racking ? zh + std::clamp(rf.view.rack, 0.0f, 1.0f) * (l->boltZ[2] - zh) : zh;
         zGame = zs;
-        zDrawn = zHeld = zd;
+        zHeld = zh;
+        zDrawn = zd;
         if (zd != zs) {
             float m[16];
             std::memcpy(m, saved + 16 * b, sizeof(m));
@@ -671,23 +675,25 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             g_geo.boltGrab = hostPoint(Xform(p, 1.0f, a));
             g_geo.boltBack = Norm(hostDir(Xform(Vec3{0, 0, -1}, 0.0f, a)));
             g_geo.boltTravel = Len(Xform(Vec3{0, 0, l->boltZ[2] - zHeld}, 0.0f, a)) / upm;
-            g_geo.heldBack = std::fabs(l->boltZ[2] - zHeld) < 2.0f;
+            g_geo.heldBack = hold && std::fabs(l->boltZ[2] - zHeld) < 2.0f;  // the empty hold only (not a shot's recoil)
         }
     }
     const DWORD now = GetTickCount();
     if (g_cfg.debugReloadTrace && (key != g_trace.key || magState != g_trace.mag || (hold ? 1 : 0) != g_trace.hold ||
-                                   topShown != g_trace.top || ((magState == 1 || magState == 2) && static_cast<LONG>(now - g_trace.next) >= 0))) {
+                                   topShown != g_trace.top || (racking ? 1 : 0) != g_trace.rack ||
+                                   ((magState == 1 || magState == 2 || racking) && static_cast<LONG>(now - g_trace.next) >= 0))) {
         g_trace.key = key;
         g_trace.mag = magState;
         g_trace.hold = hold ? 1 : 0;
         g_trace.top = topShown;
+        g_trace.rack = racking ? 1 : 0;
         g_trace.next = now + 1000;
         static const char* kMag[] = {"in the gun", "grabbed", "in the off hand", "hidden (out)"};
         char extra[96] = "";
         if (magState == 1) snprintf(extra, sizeof(extra), " (pulled %.1f cm)", pullCm);
         if (magState == 2) snprintf(extra, sizeof(extra), " (its grab point %.1f cm from the off controller)", heldGap);
-        MLOG("reload: trace -- drawn %s: magazine %s%s, action %s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
-             kMag[magState], extra, hold ? "held empty" : "the game's", zGame, zDrawn,
+        MLOG("reload: trace -- drawn %s: magazine %s%s, action %s%s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
+             kMag[magState], extra, hold ? "held empty" : "the game's", racking ? ", racked by the off hand" : "", zGame, zDrawn,
              topShown < 0 ? "none" : topShown ? "shown" : "hidden", hostState ? "drives it" : "not driving");
         if (haveRf)
             MLOG("reload: trace -- geometry (cm, the gun frame: right up back): magazine grab %.1f %.1f %.1f, out %.2f %.2f %.2f, "

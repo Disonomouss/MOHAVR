@@ -11,6 +11,10 @@
 //     while the reserve is empty);
 //   * brought to the gun's magazine well (within InsertRadius cm, its way out within InsertAngle degrees of the well's)
 //     it goes in (INSERT); let go anywhere else it is dropped (DROP).
+// M4, the action (RELOAD-DESIGN 3.3): the off hand's grip at the handle / slide takes it; the drawn action follows the
+// pull back. One not held back is armed at RackArm of its travel (at least RackMin cm) and racks (RACK) when let go or
+// brought forward again; one held back (locked open, or the empty cue of a handle) racks with a tug of RackTug cm and
+// letting go. The game decides what a rack does (feeds a round, cocks an open bolt).
 // The game draws the magazine where the host says (bits 1-2 of reloadFlags, magPull, magPose) and keeps the ammo.
 #pragma once
 #define XR_USE_PLATFORM_WIN32
@@ -55,7 +59,7 @@ public:
         bool       inside, close;
     };
     struct Out {
-        Ring  rings[2]{};  // the magazine's grab spot (in the gun) or the well (a magazine in the hand)
+        Ring  rings[2]{};  // the magazine's grab spot (in the gun) or the well (a magazine in the hand); the action
         int   ringCount = 0;
         float pulseAmp[2]{}, pulseMs[2]{};
         bool  mask[2]{};    // keep that hand's release button from the pad
@@ -80,17 +84,18 @@ public:
     std::uint32_t KeyHash() const { return keyHash_; }
     float         MagPull() const { return mag_ == kGrabbed ? pull_ : 0.0f; }
     shared::Pose  MagPose() const;
-    float         Rack() const { return 0.0f; }
+    float         Rack() const { return boltHeld_ ? rack_ : 0.0f; }
 
 private:
     enum Mag { kInGun = 0, kGrabbed = 1, kInHand = 2, kOut = 3 };
-    enum Press { kPressNone, kPressMag, kPressPouch };
+    enum Press { kPressNone, kPressMag, kPressPouch, kPressBolt };
     void Pulse(Out& out, int hand, float amp, float ms) const;
     void SetMag(Mag m, const char* why);
 
     bool          on_ = false;
     int           releaseButton_ = 1;
     float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
+    float         boltGrabR_ = 0.05f, rackArm_ = 0.85f, rackMin_ = 0.04f, rackTug_ = 0.01f;
     float         hold_[3]{};                                                // metres, the left off hand's frame
     std::uint32_t keyHash_ = 0;
     std::uint32_t lastGeoSeq_ = 0, pawnSeq_ = 0;
@@ -108,6 +113,10 @@ private:
     bool          armed_ = false;    // the held magazine has been away from the well (no insert straight after a pull)
     bool          lastGunOk_ = false;
     XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)
+    XrVector3f    lastBoltW_{};      // likewise the action's
+    bool          boltHeld_ = false, rackArmed_ = false, tug_ = false;  // the off hand on the action; armed; a tug
+    XrVector3f    boltStart_{};
+    float         rack_ = 0.0f;      // 0..1 of the travel pulled
     bool          relHeld_[2]{}, maskLatch_[2]{};
     struct Pending {
         std::uint32_t type, hash;
