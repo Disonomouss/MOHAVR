@@ -30,6 +30,7 @@
 #include "mirror.hpp"
 #include "pad.hpp"
 #include "hands.hpp"
+#include "reload.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
 
@@ -392,11 +393,13 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     XrPosef handPose[2] = {};
     std::uint32_t handBits = 0;
     mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
+    mohavr::host::ManualReload manualReload;  // D21: the manual reload's toggle, engagement and events
     mohavr::host::Hands::Output handsOut;
     mohavr::host::Markers markers;  // the gesture spots' rings
     bool markersOk = false;
     if (handsOk) {
         hands.Init(ExeDir() + L"\\MOHAVR.ini");
+        manualReload.Init(ExeDir() + L"\\MOHAVR.ini");
         if (menuOk) {
             mohavr::host::HolsterSpot defaults[mohavr::host::kHolsters];
             for (int i = 0; i < mohavr::host::kHolsters; ++i) defaults[i] = hands.DefaultSpot(i);
@@ -622,6 +625,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         }
 
         if (controllers) pad.BeginFrame(static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
+        for (std::uint32_t e : pad.TakeTestReload())
+            manualReload.Queue(e, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
 
         // Head pose + eye views at the predicted display time -> the game (seqlock, M3).
         XrPosef menuHead{};
@@ -708,6 +713,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     handsOut = hands.Update(hin);
                     gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
                 }
+                manualReload.Update(g_hdr, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
+                                    handsOk && (handBits & 3u) == 3u);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
                 g_hdr->viewDisplayTime = fs.predictedDisplayTime;
                 g_hdr->head = toPose(headLoc.pose);
@@ -717,6 +724,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
                 g_hdr->viewValid = 1u | (posTracked ? 2u : 0u);
                 g_hdr->handValid = handBits;
+                g_hdr->reloadFlags = manualReload.Flags();
+                g_hdr->reloadKeyHash = manualReload.KeyHash();
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;

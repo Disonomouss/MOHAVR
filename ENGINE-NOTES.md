@@ -1095,6 +1095,15 @@ change. Settled:
 - **The folded native:** `execHasReserveAmmo` is called for the `MOHAGameInfo` at level start (result 0, left alone);
   for the pawn's weapon it's called on every equip.
 
+**M1, the game rules [S] (2026-09-30, `logs/modlogs/reload-m1-*`):** `Weapon.ManualReload=1`, `ManualReload.Hook=1`;
+events through the host's test channel (`pad_cmd.txt` `reload=eject|take|insert|rack|drop` -> shared block v14's ring ->
+`reload::OnDraw`). The G43 fired dry went 20 -> 0 through `WeaponSingleFire`/`Active` only, never `WeaponReload` (the hook
+blocked the game's own reload each time it asked). G43 (closed): eject at 0 -> 0; insert -> pending; rack -> 20, reserve
+-20; eject at 15 -> 1 kept, 14 back; insert -> 20. At the cap (`GiveAmmo rifle 200` -> 120): eject at 16 -> 1 kept, 15
+owed; insert -> 20 from the owed first (reserve 116): no round lost. BAR (open): fired empty -> the bolt forward; eject,
+insert (pending), rack -> 20; eject at 15 -> 0 kept, 15 back; insert (cocked) -> 20. Colt (infinite): eject at 4 -> 1;
+insert -> 7. The host: "engaged" once a converted gun is in hand with both hands tracked.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

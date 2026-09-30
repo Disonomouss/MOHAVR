@@ -389,7 +389,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     crashdump::OnDraw();
     if (arr && arr[1] >= 1 && arr[0]) muzzle::OnDraw(*reinterpret_cast<const std::uintptr_t*>(arr[0]));
     RunHostCommand(arr, hdr);
-    reload::OnDraw();
+    reload::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1070,9 +1070,10 @@ bool Install(const Config& cfg) {
     aim::Install(cfg);        // M7: needs the view hook (PoseToWorld)
     viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
     throwing::Configure(cfg);
-    armsik::Install(cfg);     // M8: the arms reach from the body to the gun
+    const bool armsOk = armsik::Install(cfg);  // M8: the arms reach from the body to the gun
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
-    reload::Install(cfg);     // D21 manual reload (M0: the probe only)
+    // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
+    reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);
     MLOG("throw: Hands.Throw=%d (x%.2f)", cfg.throwByHand, cfg.throwScale);
     return true;
 }

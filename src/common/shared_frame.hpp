@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 13;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times
+inline constexpr std::uint32_t kVersion = 14;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -173,6 +173,38 @@ struct Header {
     // game -> host, per slot, written before publishedFrame: when that frame's view was computed (QPC; one clock for
     // both processes). The host logs how far behind each XR frame the world it shows is (round 25).
     std::int64_t           slotViewQpc[kRing];
+
+    // --- v14: manual reload ([Weapon] ManualReload; src/mohavr/reload.cpp, src/host/reload.cpp; RELOAD-DESIGN.md 4) ---
+    // game -> host, once per Draw (seqlock reloadGeoSeq: odd while the game writes). Geometry in the host's gun frame
+    // (x right, y up, z back, metres), already un-mirrored for a left gun hand.
+    volatile std::uint32_t reloadGeoSeq;
+    std::uint32_t          reloadCaps;     // bit0 converted gun in hand, bit1 action bone(s) found, bit2 hook installed,
+                                           // bit3 alt-fire mode, bit4 the game's block filter passes for this gun now
+    char                   reloadKey[48];  // the attachment class the geometry is for
+    float                  magGrab[3];     // the in-gun magazine's grab point = the insert target
+    float                  magOut[3];      // unit: the way the magazine leaves the well
+    float                  magGrabR;       // metres: its grab radius
+    float                  boltGrab[3];    // the handle / slide grip point at its held position (without the pull)
+    float                  boltBack[3];    // unit: the pull direction
+    float                  boltTravel;     // metres from the held position to full back
+    std::int32_t           ammoClip, ammoMax, ammoReserve;  // ammoReserve = the reserve + the rounds owed (RELOAD-DESIGN 2.2)
+    std::uint32_t          reloadState;    // bit0 magIn, bit1 pending, bit2 ready (closed: clip >= 1; open: cocked), bit3
+                                           // action held back, bit4 rack needed, bit5 open-bolt gun, bit6 infinite ammo
+    volatile std::uint32_t reloadPawnSeq;  // bumped on a new local pawn: the host resets every gun to "in the gun"
+    volatile std::uint32_t reloadEvtAck;   // the last event the game processed (applied or rejected)
+    // host -> game, per XR frame inside the view seqlock (viewSeq), next to gunPose
+    std::uint32_t          reloadFlags;    // bit0 manual reload on (the player's toggle); bits 1-2 the magazine (0 in gun,
+                                           // 1 grabbed, 2 in the off hand, 3 out); bit3 action held; bit4 engaged (the
+                                           // pipeline is alive: the game blocks its own reload only then)
+    std::uint32_t          reloadKeyHash;  // FNV-1a 32 of the attachment class these flags are for
+    float                  magPull;        // metres the grabbed magazine is drawn out along magOut
+    Pose                   magPose;        // the held magazine's grab-point frame in LOCAL (the gun frame's axes)
+    float                  rack;           // 0..1 of boltTravel pulled
+    // host -> game events, ordered: reloadEvt[seq % 8] written, then reloadEvtSeq bumped (the cmdSeq pattern); the host
+    // never writes while reloadEvtSeq - reloadEvtAck >= 8
+    volatile std::uint32_t reloadEvtSeq;
+    std::uint32_t          reloadEvt[8];   // low byte: 1 EJECT, 2 INSERT, 3 RACK, 4 TAKE, 5 DROP; high 24 bits: the low 24
+                                           // bits of the key hash
 };
 #pragma pack(pop)
 
@@ -198,7 +230,64 @@ static_assert(offsetof(Header, weaponKind) == 1192, "shared::Header layout must 
 static_assert(offsetof(Header, freeHand) == 1200, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pace) == 1216, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, slotViewQpc) == 1224, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1248, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadGeoSeq) == 1248, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadKey) == 1256, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, magGrab) == 1304, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, magGrabR) == 1328, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, boltTravel) == 1356, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, ammoClip) == 1360, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadState) == 1372, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadEvtAck) == 1380, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadFlags) == 1384, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, magPose) == 1396, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, rack) == 1424, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadEvtSeq) == 1428, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, reloadEvt) == 1432, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1464, "shared::Header layout must match between x86 and x64");
+
+// Manual reload events (reloadEvt low byte) and the key hash both sides use.
+enum ReloadEvent : std::uint32_t { kReloadEject = 1, kReloadInsert = 2, kReloadRack = 3, kReloadTake = 4, kReloadDrop = 5 };
+inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
+    std::uint32_t h = 2166136261u;
+    for (; s && *s; ++s) h = (h ^ static_cast<std::uint8_t>(*s)) * 16777619u;
+    return h;
+}
+
+// What the game publishes for the host's manual reload (v14).
+struct ReloadGeo {
+    std::uint32_t caps, state;
+    char          key[48];
+    float         magGrab[3], magOut[3], magGrabR, boltGrab[3], boltBack[3], boltTravel;
+    std::int32_t  clip, max, reserve;
+};
+// Seqlock read of it; false while the game is mid-write (try next frame).
+inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
+    const std::uint32_t s1 = h->reloadGeoSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    g.caps = h->reloadCaps;
+    g.state = h->reloadState;
+    for (int i = 0; i < 48; ++i) g.key[i] = h->reloadKey[i];
+    g.key[47] = 0;
+    for (int i = 0; i < 3; ++i) {
+        g.magGrab[i] = h->magGrab[i];
+        g.magOut[i] = h->magOut[i];
+        g.boltGrab[i] = h->boltGrab[i];
+        g.boltBack[i] = h->boltBack[i];
+    }
+    g.magGrabR = h->magGrabR;
+    g.boltTravel = h->boltTravel;
+    g.clip = h->ammoClip;
+    g.max = h->ammoMax;
+    g.reserve = h->ammoReserve;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    seq = s1;
+    return h->reloadGeoSeq == s1;
+}
 
 // The gun fit (v8) as one value. foreFwd/foreUp (cm, the gun's frame from the gun hand's controller: where the other
 // hand holds the foregrip) are the host's only -- they shape gunPose.

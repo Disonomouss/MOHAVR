@@ -375,6 +375,14 @@ void Pad::ReadTests(double now) {
                     testLost_[1] = !strcmp(v, "r") || !strcmp(v, "both");
                     MLOG("pad: test tracking loss: left %s, right %s", testLost_[0] ? "lost" : "tracked",
                          testLost_[1] ? "lost" : "tracked");
+                } else if (!strcmp(tok, "reload")) {
+                    aimLine = true;
+                    static const char* kNames[] = {"", "eject", "insert", "rack", "take", "drop"};
+                    for (std::uint32_t e = 1; e < 6; ++e)
+                        if (!strcmp(v, kNames[e])) {
+                            testReload_.push_back(e);
+                            MLOG("pad: test reload event %s", v);
+                        }
                 } else if (!strcmp(tok, "throwvel")) {
                     aimLine = true;
                     if (sscanf_s(v, "%f,%f,%f", &testThrowVel_[0], &testThrowVel_[1], &testThrowVel_[2]) == 3) {

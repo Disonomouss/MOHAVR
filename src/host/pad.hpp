@@ -69,6 +69,12 @@ public:
         for (int i = 0; i < 3; ++i) v[i] = testThrowVel_[i];
         return true;
     }
+    // Manual reload test events (pad_cmd.txt "reload=eject|take|insert|rack|drop"), in order; taken once.
+    std::vector<std::uint32_t> TakeTestReload() {
+        std::vector<std::uint32_t> out;
+        out.swap(testReload_);
+        return out;
+    }
     void  SetConsumed(bool left, bool right) { consumed_[0] = left; consumed_[1] = right; }
     void  Pulse(XrSession s, int hand) const;
     // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
@@ -117,6 +123,7 @@ private:
     bool        haveRel_[2]{}, heldNow_[2]{};
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
     bool        testThrow_ = false;
+    std::vector<std::uint32_t> testReload_;
     float       testThrowVel_[3]{};
     bool        swapSticks_ = false, leftHanded_ = false;
     bool        moveByHead_ = true, headYawOk_ = false;

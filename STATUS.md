@@ -121,7 +121,8 @@ address-space budget for D3D9On12.
    **Gun fits done** for the 14 loadout weapons and shipped as per-weapon defaults (a shipped [GunFit]; the M18 and
    Panzerschreck keep the global default; mission-only weapons later). **Manual reload** (D21, RELOAD-DESIGN.md): Step 0 research
    done and verified; **M0 done** (the probe, ENGINE-NOTES 5am: offsets, mesh space, scale 1, the hidden parts, the folded
-   native; the other guns reachable with GiveWeapon + NextWeapon). Next M1: the game rules (hook, ammo, events). The grenade pickup is parked (the player).
+   native; the other guns reachable with GiveWeapon + NextWeapon); **M1 done** (the hook, the ammo rules, shared block v14's
+   events: 5am). Next M2: the empty-gun visuals and the magazine in the bake. The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

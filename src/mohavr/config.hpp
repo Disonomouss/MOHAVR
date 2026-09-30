@@ -19,6 +19,9 @@ struct Config {
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the gun's game pose)
     int   muzzleFlash   = 2;      // [Weapon] MuzzleFlash -- the player's muzzle flash: 0 hide, 1 game, 2 at the drawn barrel
     int   brass         = 2;      // [Weapon] Brass -- the player's ejected brass: 0 hide, 1 game, 2 from the drawn gun
+    bool  manualReload  = false;  // [Weapon] ManualReload -- the physical reload (D21; RELOAD-DESIGN.md)
+    bool  reloadHook    = true;   // [ManualReload] Hook -- block the game's own reload of a converted gun (M1 proved it)
+    bool  keepChambered = true;   // [ManualReload] KeepChambered -- a closed bolt keeps a round when its magazine drops
     bool  brassMirror   = true;   // [Weapon] BrassMirror -- with the gun in the left hand, the brass thrown mirrored too
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
@@ -55,6 +58,7 @@ struct Config {
     bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
     bool debugCrashDump = true;      // [Debug] CrashDump -- a crash in d3d9/d3d9on12/ucrtbase writes a dump (round 29)
     bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
+    bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)
     bool debugGameCommands = false;  // [Debug] GameCommands -- run console commands from %TEMP%\MOHAVR\game_cmd.txt (tests)
@@ -71,6 +75,7 @@ struct Config {
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
     bool  jumpLift          = false;  // [Camera] JumpLift -- the game's camera lift on a jump (fJumpCameraOffset) in the view
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)
+    std::wstring iniPath;         // MOHAVR.ini next to the DLL (the per-gun [ManualReload] lines)
     std::wstring xrRuntimeJson;   // [OpenXR]  RuntimeJson -- if set, XR_RUNTIME_JSON for this process only (D3)
 };
 

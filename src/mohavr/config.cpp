@@ -11,6 +11,7 @@ namespace mohavr {
 Config LoadConfig(const std::wstring& dir) {
     const std::wstring ini = dir + L"\\MOHAVR.ini";
     Config c;
+    c.iniPath = ini;
     const bool present = GetFileAttributesW(ini.c_str()) != INVALID_FILE_ATTRIBUTES;
     auto get = [&](const wchar_t* sec, const wchar_t* key, bool def) {
         return GetPrivateProfileIntW(sec, key, def ? 1 : 0, ini.c_str()) != 0;
@@ -28,6 +29,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.debugCrashDump = get(L"Debug", L"CrashDump", c.debugCrashDump);
     c.debugCrashDumpTest = get(L"Debug", L"CrashDumpTest", c.debugCrashDumpTest);
     c.debugReloadProbe = get(L"Debug", L"ReloadProbe", c.debugReloadProbe);
+    c.debugReloadTrace = get(L"Debug", L"ReloadTrace", c.debugReloadTrace);
     c.debugMuzzleFreeze = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"MuzzleFreeze", 0, ini.c_str()));
     c.debugSwapEyes  = get(L"Debug", L"SwapEyeOrder", c.debugSwapEyes);
     c.debugSwapHalves = get(L"Debug", L"SwapHalves", c.debugSwapHalves);
@@ -68,6 +70,9 @@ Config LoadConfig(const std::wstring& dir) {
     }
     c.catchUp        = get(L"Weapon", L"CatchUp", c.catchUp);
     c.brassMirror    = get(L"Weapon", L"BrassMirror", c.brassMirror);
+    c.manualReload   = get(L"Weapon", L"ManualReload", c.manualReload);
+    c.reloadHook     = get(L"ManualReload", L"Hook", c.reloadHook);
+    c.keepChambered  = get(L"ManualReload", L"KeepChambered", c.keepChambered);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
