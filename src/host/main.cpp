@@ -400,9 +400,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     if (handsOk) {
         hands.Init(ExeDir() + L"\\MOHAVR.ini");
         manualReload.Init(ExeDir() + L"\\MOHAVR.ini");
+        hands.SetReload(&manualReload);
         if (menuOk) {
-            mohavr::host::HolsterSpot defaults[mohavr::host::kHolsters];
-            for (int i = 0; i < mohavr::host::kHolsters; ++i) defaults[i] = hands.DefaultSpot(i);
+            mohavr::host::HolsterSpot defaults[mohavr::host::kSpots];
+            for (int i = 0; i < mohavr::host::kSpots; ++i) defaults[i] = hands.DefaultSpot(i);
             menu.LoadHolsters(defaults);
         }
         markersOk = markers.Init(dev, ctx, session, fmt);
@@ -692,6 +693,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // A hand the runtime stops tracking (round 24: after ~10 s without moving, the Quest drops idle
                 // controllers, and the gun fell back to the game's flat-screen placement, seen double) stays put.
                 if (handsOk) handBits |= pad.HoldLost(headLoc.pose, handPose, handBits);
+                // D21: the game's side of the manual reload (its geometry, ammo, state), before the hands use it.
+                const double nowS = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
+                if (menuOk) manualReload.SetOn(menu.ManualReloadOn());
+                manualReload.Poll(g_hdr, nowS, handsOk && (handBits & 3u) == 3u);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -703,18 +708,21 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
                     hin.startLeft = menuOk && menu.StartLeft();
                     if (menuOk)
-                        for (int i = 0; i < mohavr::host::kHolsters; ++i) hands.SetSpot(i, menu.Spot(i));
+                        for (int i = 0; i < mohavr::host::kSpots; ++i) hands.SetSpot(i, menu.Spot(i));
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
                     for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);
                     hin.weaponKind = g_hdr->weaponKind;
                     hin.grenade = hin.weaponKind == 2 || (menuOk && menu.WeaponKey().find("Grenade") != std::string::npos);
                     hin.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                     hin.testThrow = pad.TakeTestThrow(hin.testThrowVel);
+                    const int rb = manualReload.ReleaseButton();
+                    for (int h = 0; h < 2; ++h) hin.release[h] = rb ? pad.FaceButton(session, h, rb == 1) : 0.0f;
+                    hin.hasView = lastMeta.hasView != 0;
+                    hin.pouchShown = menuOk && menu.HolsterPageOpen();
                     handsOut = hands.Update(hin);
                     gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
                 }
-                manualReload.Update(g_hdr, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
-                                    handsOk && (handBits & 3u) == 3u);
+                manualReload.Send(g_hdr, nowS);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
                 g_hdr->viewDisplayTime = fs.predictedDisplayTime;
                 g_hdr->head = toPose(headLoc.pose);
@@ -726,6 +734,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 g_hdr->handValid = handBits;
                 g_hdr->reloadFlags = manualReload.Flags();
                 g_hdr->reloadKeyHash = manualReload.KeyHash();
+                g_hdr->magPull = manualReload.MagPull();
+                g_hdr->magPose = manualReload.MagPose();
+                g_hdr->rack = manualReload.Rack();
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
@@ -744,9 +755,13 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         for (int i = 0; i < 3; ++i) g_hdr->throwVel[i] = handsOut.throwVel[i];
                         InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->throwSeq));
                     }
-                    for (int h = 0; h < 2; ++h)
-                        if (handsOut.pulse[h]) pad.Pulse(session, h);
+                    for (int h = 0; h < 2; ++h) {
+                        if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);
+                        else if (handsOut.pulse[h]) pad.Pulse(session, h);
+                        pad.SetMaskedFace(h, manualReload.ReleaseButton() == 1, handsOut.maskFace[h]);
+                    }
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
+                    pad.SetTestTargets(handsOut.target, handsOut.targetOk);
                     pad.SetLeftHanded(handsOut.gunHand == 0);
                     if (menuOk) pad.SetSwapSticks(menu.SwapSticks());
                     if (menuOk) pad.SetMoveByHead(menu.MoveByHead());

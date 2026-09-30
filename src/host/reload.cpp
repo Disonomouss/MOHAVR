@@ -2,25 +2,100 @@
 
 #include <windows.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+
 #include "../mohavr/log.hpp"
 
 namespace mohavr::host {
 namespace {
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP"};
+const char* kMagName[] = {"in the gun", "grabbed", "in the off hand", "out"};
+
+struct V3 { float x, y, z; };
+V3 Add(V3 a, V3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
+V3 Sub(V3 a, V3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
+V3 Scale(V3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
+float Dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+V3 Cross(V3 a, V3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
+float Len(V3 a) { return std::sqrt(Dot(a, a)); }
+V3 P(const XrVector3f& v) { return {v.x, v.y, v.z}; }
+XrVector3f X(V3 v) { return {v.x, v.y, v.z}; }
+V3 A3(const float (&a)[3]) { return {a[0], a[1], a[2]}; }
+
+XrQuaternionf QMul(const XrQuaternionf& a, const XrQuaternionf& b) {
+    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
 }
+XrQuaternionf QConj(const XrQuaternionf& q) { return {-q.x, -q.y, -q.z, q.w}; }
+V3 Rotate(const XrQuaternionf& q, V3 v) {
+    const V3 u{q.x, q.y, q.z};
+    const V3 c = Cross(u, v), cc = Cross(u, c);
+    return Add(v, Scale(Add(Scale(c, q.w), cc), 2.0f));
+}
+// a x b: b given in a's frame.
+XrPosef Compose(const XrPosef& a, const XrPosef& b) {
+    return {QMul(a.orientation, b.orientation), X(Add(P(a.position), Rotate(a.orientation, P(b.position))))};
+}
+// b in a's frame.
+XrPosef Relative(const XrPosef& a, const XrPosef& b) {
+    const XrQuaternionf ai = QConj(a.orientation);
+    return {QMul(ai, b.orientation), X(Rotate(ai, Sub(P(b.position), P(a.position))))};
+}
+}  // namespace
 
 void ManualReload::Init(const std::wstring& ini) {
     on_ = GetPrivateProfileIntW(L"Weapon", L"ManualReload", 0, ini.c_str()) != 0;
-    MLOG("reload: Weapon.ManualReload=%d", on_ ? 1 : 0);
+    auto iniFloat = [&](const wchar_t* key, float def) {
+        wchar_t b[32] = L"";
+        GetPrivateProfileStringW(L"ManualReload", key, L"", b, 32, ini.c_str());
+        return b[0] ? static_cast<float>(_wtof(b)) : def;
+    };
+    wchar_t b[64] = L"";
+    GetPrivateProfileStringW(L"ManualReload", L"ReleaseButton", L"upper", b, 64, ini.c_str());
+    releaseButton_ = !_wcsicmp(b, L"none") ? 0 : !_wcsicmp(b, L"lower") ? 2 : 1;
+    pullOut_ = iniFloat(L"PullOut", 4.0f) / 100.0f;
+    insertR_ = iniFloat(L"InsertRadius", 5.0f) / 100.0f;
+    insertAngle_ = iniFloat(L"InsertAngle", 40.0f);
+    GetPrivateProfileStringW(L"ManualReload", L"Hold", L"0 0 0", b, 64, ini.c_str());
+    float h[3] = {0, 0, 0};
+    swscanf_s(b, L"%f %f %f", &h[0], &h[1], &h[2]);
+    for (int i = 0; i < 3; ++i) hold_[i] = h[i] / 100.0f;
+    static const char* kButtons[] = {"none", "upper (B / Y)", "lower (A / X)"};
+    MLOG("reload: Weapon.ManualReload=%d (the default; the menu's toggle is the player's); release button %s, pull out %.0f cm, "
+         "insert within %.0f cm and %.0f deg, hold %.0f %.0f %.0f cm",
+         on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertAngle_, h[0], h[1], h[2]);
+}
+
+void ManualReload::SetOn(bool on) {
+    if (on == on_) return;
+    on_ = on;
+    MLOG("reload: manual reload %s (the menu)", on ? "on" : "off");
 }
 
 void ManualReload::Queue(std::uint32_t type, double now) {
     if (type < shared::kReloadEject || type > shared::kReloadDrop) return;
-    pending_.push_back({type, now});
+    pending_.push_back({type, keyHash_, now});
 }
 
-void ManualReload::Update(shared::Header* hdr, double now, bool handsOk) {
+void ManualReload::SetMag(Mag m, const char* why) {
+    if (m == mag_) return;
+    MLOG("reload: magazine %s -> %s (%s)", kMagName[mag_], kMagName[m], why);
+    mag_ = m;
+    if (m != kGrabbed) pull_ = 0.0f;
+}
+
+void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
     if (!hdr) return;
+    // Every event sent has been taken (read before the geometry: a state older than the acknowledgement can't pass).
+    const bool acksDone = pending_.empty() && hdr->reloadEvtSeq == hdr->reloadEvtAck;
+    const std::uint32_t pawnSeq = hdr->reloadPawnSeq;
+    if (pawnSeq != pawnSeq_) {
+        pawnSeq_ = pawnSeq;
+        SetMag(kInGun, "a new pawn: the game starts every gun loaded");
+        disagree_ = 0;
+    }
     std::uint32_t seq = 0;
     shared::ReloadGeo g{};
     if (shared::ReadReloadGeo(hdr, g, seq) && seq != lastGeoSeq_) {
@@ -28,26 +103,215 @@ void ManualReload::Update(shared::Header* hdr, double now, bool handsOk) {
         geoAt_ = now;
         geo_ = g;
         keyHash_ = shared::KeyHash(geo_.key);
+        const bool gameIn = (geo_.state & 1u) != 0;
+        if (stateKey_ != geo_.key) {
+            // Another gun in hand: what the off hand held of the old one is gone; the new one's magazine as the game has it.
+            stateKey_ = geo_.key;
+            disagree_ = 0;
+            SetMag(gameIn ? kInGun : kOut, "another gun in hand");
+        } else if (acksDone && (geo_.caps & 1u)) {
+            // Reconcile (3.2): the game's magazine differs from ours for two of its frames with nothing in flight.
+            const bool hostIn = mag_ == kInGun || mag_ == kGrabbed;
+            if (hostIn != gameIn) {
+                if (++disagree_ >= 2) {
+                    disagree_ = 0;
+                    SetMag(gameIn ? kInGun : kOut, "the game's (reconciled)");
+                }
+            } else {
+                disagree_ = 0;
+            }
+        }
     }
     const bool alive = geoAt_ >= 0.0 && now - geoAt_ < 0.25;
-    const bool engaged = on_ && alive && handsOk && (geo_.caps & 1u);
-    flags_ = (on_ ? 1u : 0u) | (engaged ? 16u : 0u);
-    if (engaged != loggedEngaged_) {
-        loggedEngaged_ = engaged;
-        MLOG("reload: %s (%s)", engaged ? "engaged" : "not engaged",
+    engaged_ = on_ && alive && handsOk && (geo_.caps & 4u) && (geo_.caps & 1u);
+    if (engaged_ != loggedEngaged_) {
+        loggedEngaged_ = engaged_;
+        MLOG("reload: %s (%s)", engaged_ ? "engaged" : "not engaged",
              !on_ ? "switched off" : !alive ? "the game's side is quiet" : !handsOk ? "no hands" :
-             !(geo_.caps & 1u) ? "no converted gun in hand" : "the game's side alive, hands tracked, a converted gun in hand");
+             !(geo_.caps & 4u) ? "no hook in the game" : !(geo_.caps & 1u) ? "no converted gun in hand" :
+             "the game's side alive, hands tracked, a converted gun in hand");
     }
     if (geo_.key != loggedKey_ || geo_.state != loggedState_) {  // not every shot: the game logs the events' ammo
         loggedKey_ = geo_.key;
         loggedState_ = geo_.state;
-        loggedClip_ = geo_.clip;
-        loggedReserve_ = geo_.reserve;
-        MLOG("reload: %s -- clip %d/%d, reserve %d; magazine %s%s%s%s%s", geo_.key[0] ? geo_.key : "(no gun)", geo_.clip,
+        MLOG("reload: %s -- clip %d/%d, reserve %d; magazine %s%s%s%s%s%s", geo_.key[0] ? geo_.key : "(no gun)", geo_.clip,
              geo_.max, geo_.reserve, (geo_.state & 1u) ? "in" : "out", (geo_.state & 2u) ? ", pending" : "",
-             (geo_.state & 4u) ? ", ready" : "", (geo_.state & 16u) ? ", rack needed" : "",
-             (geo_.caps & 1u) ? "" : " (not converted)");
+             (geo_.state & 4u) ? ", ready" : "", (geo_.state & 8u) ? ", action held back" : "",
+             (geo_.state & 16u) ? ", rack needed" : "", (geo_.caps & 1u) ? "" : " (not converted)");
+        if (geo_.caps & 1u)
+            MLOG("reload: %s geometry (cm, the gun frame: right up back) -- magazine grab %.1f %.1f %.1f r %.0f, out %.2f %.2f %.2f; "
+                 "action grab %.1f %.1f %.1f, back %.2f %.2f %.2f, travel %.1f", geo_.key, geo_.magGrab[0] * 100.0f,
+                 geo_.magGrab[1] * 100.0f, geo_.magGrab[2] * 100.0f, geo_.magGrabR * 100.0f, geo_.magOut[0], geo_.magOut[1],
+                 geo_.magOut[2], geo_.boltGrab[0] * 100.0f, geo_.boltGrab[1] * 100.0f, geo_.boltGrab[2] * 100.0f,
+                 geo_.boltBack[0], geo_.boltBack[1], geo_.boltBack[2], geo_.boltTravel * 100.0f);
     }
+}
+
+bool ManualReload::Begin(const In& in) {
+    const bool alive = geoAt_ >= 0.0 && in.now - geoAt_ < 0.25;
+    const char* why = !on_ ? "switched off" : !engaged_ ? "not engaged" : !(geo_.caps & 1u) ? "not a converted gun" :
+                      (geo_.caps & 8u) ? "alternate fire" : !alive ? "the game's side is quiet" : !in.gunOk ? "no gun hand" :
+                      !in.offOk ? "no off hand" : !in.gestures ? "a menu is open" : !in.hasView ? "no head-tracked view" : "";
+    const bool active = !*why;
+    if (active != active_) MLOG("reload: %s%s%s", active ? "drives the gun (" : "stops driving the gun (", active ? geo_.key : why, ")");
+    active_ = active;
+    press_ = kPressNone;
+    if (!active_) {
+        // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped.
+        if (mag_ == kGrabbed) SetMag(kInGun, "let go: not driving");
+        else if (mag_ == kInHand) {
+            Queue(shared::kReloadDrop, in.now);
+            SetMag(kOut, "dropped: not driving");
+        }
+    }
+    return active_;
+}
+
+bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, float pouchR) {
+    if (!active_) return false;
+    float best = 1.0f;
+    Press which = kPressNone;
+    if (mag_ == kOut && pouchR > 0.0f) {
+        const float s = Len(Sub(P(hand), P(pouch))) / pouchR;
+        if (s < best) {
+            best = s;
+            which = kPressPouch;
+        }
+    }
+    if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f) {
+        const float s = Len(Sub(P(hand), P(lastGrabW_))) / geo_.magGrabR;
+        if (s < best) {
+            best = s;
+            which = kPressMag;
+        }
+    }
+    press_ = which;
+    return which != kPressNone;
+}
+
+void ManualReload::Pulse(Out& out, int hand, float amp, float ms) const {
+    out.pulseAmp[hand] = amp;
+    out.pulseMs[hand] = ms;
+}
+
+void ManualReload::Frame(const In& in, Out& out) {
+    const int g = in.gunHand, o = 1 - g;
+    // The release button (hysteresis 0.6 / 0.4), per physical hand; a press begun while driving stays from the pad till
+    // it ends (3.6).
+    bool edge[2] = {false, false};
+    for (int h = 0; h < 2; ++h) {
+        const float v = releaseButton_ ? in.release[h] : 0.0f;
+        if (!relHeld_[h] && v >= 0.6f) {
+            relHeld_[h] = true;
+            edge[h] = true;
+            if (active_ && h == g) maskLatch_[h] = true;
+        } else if (relHeld_[h] && v < 0.4f) {
+            relHeld_[h] = false;
+            maskLatch_[h] = false;
+        }
+        out.mask[h] = releaseButton_ && ((active_ && h == g) || maskLatch_[h]);
+    }
+    lastGunOk_ = active_ && in.gunOk;
+    if (!active_) {
+        press_ = kPressNone;
+        return;
+    }
+    const V3 gunP = P(in.gun.position), offP = P(in.off.position);
+    const V3 grabW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.magGrab)));
+    const V3 outW = Rotate(in.gun.orientation, A3(geo_.magOut));
+    lastGrabW_ = X(grabW);
+    out.targetOk[0] = true;
+    out.target[0] = X(grabW);
+    if (geo_.caps & 2u) {
+        out.targetOk[1] = true;
+        out.target[1] = X(Add(gunP, Rotate(in.gun.orientation, A3(geo_.boltGrab))));
+    }
+    auto heldAt = [&](float pull) {  // the magazine as it sits drawn out by `pull`, in the off hand's frame
+        const XrPosef m{in.gun.orientation, X(Add(grabW, Scale(outW, pull)))};
+        return Relative(in.off, m);
+    };
+
+    if (edge[g]) {
+        if (mag_ == kInGun) {
+            Queue(shared::kReloadEject, in.now);
+            SetMag(kOut, "the release button");
+            Pulse(out, g, 0.6f, 40.0f);
+        } else if (mag_ == kGrabbed) {
+            Queue(shared::kReloadEject, in.now);
+            heldRel_ = heldAt(pull_);
+            armed_ = false;
+            SetMag(kInHand, "the release button, the off hand holding it");
+            Pulse(out, g, 0.6f, 40.0f);
+            Pulse(out, o, 0.6f, 40.0f);
+        }
+    }
+    if (press_ == kPressMag && mag_ == kInGun) {
+        start_ = X(offP);
+        SetMag(kGrabbed, "the off hand's grip at it");
+        MLOG("reload: grabbed %.1f cm from its grab point", 100.0f * Len(Sub(offP, grabW)));
+        Pulse(out, o, 0.5f, 30.0f);
+    } else if (press_ == kPressPouch && mag_ == kOut) {
+        if (geo_.reserve > 0 || (geo_.state & 64u)) {
+            Queue(shared::kReloadTake, in.now);
+            const float a = in.fitAngle * 0.0174533f;
+            heldRel_.orientation = {std::sin(a * 0.5f), 0.0f, 0.0f, std::cos(a * 0.5f)};
+            // Hold is authored for the left off hand; the right one holds it mirrored (3.2).
+            heldRel_.position = {o == 1 ? -hold_[0] : hold_[0], hold_[1], hold_[2]};
+            armed_ = false;
+            SetMag(kInHand, "taken from the pouch");
+            Pulse(out, o, 0.5f, 30.0f);
+        } else {
+            MLOG("reload: the pouch is empty (reserve 0)");
+            Pulse(out, o, 0.2f, 60.0f);
+        }
+    }
+    press_ = kPressNone;
+
+    if (mag_ == kGrabbed) {
+        if (!in.offHeld) {
+            SetMag(kInGun, "let go: it slides back");
+        } else {
+            pull_ = std::clamp(Dot(Sub(offP, P(start_)), outW), 0.0f, pullOut_);
+            if (pull_ >= pullOut_) {
+                Queue(shared::kReloadEject, in.now);
+                heldRel_ = heldAt(pullOut_);
+                armed_ = false;
+                SetMag(kInHand, "pulled out");
+                Pulse(out, o, 0.6f, 40.0f);
+            }
+        }
+    }
+    float dist = 1e9f, angle = 180.0f;
+    if (mag_ == kInHand) {
+        if (!in.offHeld) {
+            Queue(shared::kReloadDrop, in.now);
+            SetMag(kOut, "let go: dropped");
+        } else {
+            magPose_ = Compose(in.off, heldRel_);
+            dist = Len(Sub(P(magPose_.position), grabW));
+            const V3 heldOut = Rotate(magPose_.orientation, A3(geo_.magOut));
+            angle = std::acos(std::clamp(Dot(heldOut, outW), -1.0f, 1.0f)) * 57.2958f;
+            if (!armed_ && dist > insertR_ + 0.02f) armed_ = true;  // away from the well first (a pull ends inside it)
+            if (armed_ && dist < insertR_ && angle < insertAngle_) {
+                Queue(shared::kReloadInsert, in.now);
+                SetMag(kInGun, "inserted");
+                MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
+                Pulse(out, g, 0.9f, 50.0f);
+                Pulse(out, o, 0.9f, 50.0f);
+            }
+        }
+    }
+    // Rings: the magazine's grab spot while in the gun; the well while one is in the hand (lit where it would go in).
+    if (mag_ == kInGun || mag_ == kGrabbed) {
+        const float d = Len(Sub(offP, grabW));
+        out.rings[out.ringCount++] = {X(grabW), geo_.magGrabR, d < geo_.magGrabR, d < 2.0f * geo_.magGrabR};
+    } else if (mag_ == kInHand && armed_) {
+        out.rings[out.ringCount++] = {X(grabW), insertR_, dist < insertR_ && angle < insertAngle_, dist < 3.0f * insertR_};
+    }
+}
+
+void ManualReload::Send(shared::Header* hdr, double now) {
+    if (!hdr) return;
     // Events, in order; never more than the ring holds unread (RELOAD-DESIGN 4).
     while (!pending_.empty()) {
         const Pending p = pending_.front();
@@ -59,12 +323,21 @@ void ManualReload::Update(shared::Header* hdr, double now, bool handsOk) {
             break;
         }
         const std::uint32_t s = hdr->reloadEvtSeq;
-        hdr->reloadEvt[s % 8u] = p.type | ((keyHash_ & 0xFFFFFFu) << 8);
+        hdr->reloadEvt[s % 8u] = p.type | ((p.hash & 0xFFFFFFu) << 8);
         _ReadWriteBarrier();
         InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->reloadEvtSeq));
         MLOG("reload: sent %s for %s", kEventName[p.type], geo_.key[0] ? geo_.key : "(no gun)");
         pending_.pop_front();
     }
+}
+
+std::uint32_t ManualReload::Flags() const {
+    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (engaged_ ? 16u : 0u);
+}
+
+shared::Pose ManualReload::MagPose() const {
+    const XrPosef& p = magPose_;
+    return {p.position.x, p.position.y, p.position.z, p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w};
 }
 
 }  // namespace mohavr::host

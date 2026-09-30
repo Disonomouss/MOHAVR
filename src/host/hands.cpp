@@ -42,8 +42,8 @@ XrQuaternionf FromTo(V3 a, V3 b) {
 }  // namespace
 
 const wchar_t* Hands::SpotName(int i) {
-    static const wchar_t* kNames[kHolsters] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip"};
-    return i >= 0 && i < kHolsters ? kNames[i] : L"";
+    static const wchar_t* kNames[kSpots] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip", L"MagPouch"};
+    return i >= 0 && i < kSpots ? kNames[i] : L"";
 }
 
 void Hands::Init(const std::wstring& ini) {
@@ -53,20 +53,23 @@ void Hands::Init(const std::wstring& ini) {
     zones_[1] = {L"LeftShoulder", "SwitchSecondary"};
     zones_[2] = {L"RightHip", "SwitchPistol"};
     zones_[3] = {L"LeftHip", "SwitchGrenade"};
-    // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r.
-    const HolsterSpot builtIn[kHolsters] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}};
-    for (int i = 0; i < kHolsters; ++i) {
-        Zone& z = zones_[i];
+    // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r. The 5th is
+    // the manual reload's magazine pouch, at the middle of the belt (D21).
+    const HolsterSpot builtIn[kSpots] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}, {0, -60, 14, 12}};
+    for (int i = 0; i < kSpots; ++i) {
         wchar_t v[64] = L"";
-        GetPrivateProfileStringW(L"Holsters", z.key, L"", v, 64, ini.c_str());
-        if (v[0] && !_wcsicmp(v, L"none")) z.command.clear();
-        else if (v[0]) {
-            std::string s;
-            for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
-            z.command = s;
+        if (i < kHolsters) {
+            Zone& z = zones_[i];
+            GetPrivateProfileStringW(L"Holsters", z.key, L"", v, 64, ini.c_str());
+            if (v[0] && !_wcsicmp(v, L"none")) z.command.clear();
+            else if (v[0]) {
+                std::string s;
+                for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
+                z.command = s;
+            }
         }
         HolsterSpot cm = builtIn[i];
-        const std::wstring key = std::wstring(z.key) + L"Spot";
+        const std::wstring key = std::wstring(SpotName(i)) + L"Spot";
         GetPrivateProfileStringW(L"Holsters", key.c_str(), L"", v, 64, ini.c_str());
         if (v[0]) swscanf_s(v, L"%f %f %f %f", &cm.x, &cm.y, &cm.z, &cm.r);
         defaultSpots_[i] = {cm.x / 100.0f, cm.y / 100.0f, cm.z / 100.0f, cm.r / 100.0f};
@@ -99,8 +102,19 @@ Hands::Output Hands::Update(const Input& in) {
         MLOG("hands: gun hand -> %s (the starting hand)", gunHand_ ? "right" : "left");
     }
     const int g = gunHand_, o = 1 - g;
+    // The manual reload drives the gun in hand (D21), or not (then the fixed-spot reload gesture, RELOAD-DESIGN 3.8).
+    ManualReload::In rin;
+    rin.gunOk = (in.valid & (1u << g)) != 0;
+    rin.offOk = (in.valid & (1u << o)) != 0;
+    rin.gestures = in.gestures;
+    rin.hasView = in.hasView;
+    rin.gunHand = g;
+    rin.fitAngle = in.fit.angle;
+    rin.now = in.now;
+    for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
+    const bool reloadActive = reload_ && reload_->Begin(rin);
     // The foregrip is for long guns only, the reload gesture not for grenades (headset round 17).
-    const bool foregripOk = foregrip_ && in.weaponKind == 0, reloadOk = reloadGesture_ && in.weaponKind != 2;
+    const bool foregripOk = foregrip_ && in.weaponKind == 0, reloadOk = reloadGesture_ && in.weaponKind != 2 && !reloadActive;
     if (twoHanded_ && !foregripOk) {
         twoHanded_ = false;
         MLOG("hands: foregrip let go (not a long gun)");
@@ -125,9 +139,11 @@ Hands::Output Hands::Update(const Input& in) {
     const float heading = std::atan2(-fx, -fz);
     const V3 right{std::cos(heading), 0.0f, -std::sin(heading)}, fwd{-std::sin(heading), 0.0f, -std::cos(heading)};
     const V3 head = P(in.head.position);
-    V3 centre[kHolsters];
-    for (int z = 0; z < kHolsters; ++z)
+    V3 centre[kSpots];
+    for (int z = 0; z < kSpots; ++z)
         centre[z] = Add(head, Add(Add(Scale(right, spots_[z].x), V3{0.0f, spots_[z].y, 0.0f}), Scale(fwd, spots_[z].z)));
+    const V3 pouch = centre[kHolsters];
+    const float pouchR = spots_[kHolsters].r;
 
     // The spots, for the rings: each holster, and the off hand's foregrip / magazine spots on the gun.
     auto addSpot = [&](SpotKind kind, V3 c, float r, bool onlyOffHand) {
@@ -147,6 +163,10 @@ Hands::Output Hands::Update(const Input& in) {
             if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
     if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f) addSpot(kForegrip, fore, 0.12f, true);
     if (gunOk && reloadOk) addSpot(kMagazine, mag, 0.10f, true);
+    // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
+    if (in.pouchShown || (reloadActive && reload_->MagazineOut())) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
+    out.targetOk[1] = true;
+    out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
     out.offHand = in.aim[o].position;
 
@@ -177,6 +197,11 @@ Hands::Output Hands::Update(const Input& in) {
         if (!press) continue;
         held_[h] = true;
         if (!in.gestures || !ok) continue;
+        // The manual reload's spots first (the pouch touches the hip spots; RELOAD-DESIGN 3.4).
+        if (h == o && reloadActive && reload_->TakePress({hp.x, hp.y, hp.z}, {pouch.x, pouch.y, pouch.z}, pouchR)) {
+            consumed_[h] = true;
+            continue;
+        }
         if (zone >= 0) {
             out.command = zones_[zone].command;
             consumed_[h] = true;
@@ -216,6 +241,30 @@ Hands::Output Hands::Update(const Input& in) {
         const V3 want = Sub(P(in.aim[o].position), gunPos);
         const V3 have = Rotate(gun.orientation, foreOff);
         if (Len(want) > 0.12f) gun.orientation = Mul(FromTo(have, want), gun.orientation);
+    }
+    // The manual reload, with the gun's final pose.
+    if (reload_) {
+        rin.gun = gun;
+        rin.off = in.aim[o];
+        rin.offHeld = held_[o];
+        ManualReload::Out rout;
+        reload_->Frame(rin, rout);
+        for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5; ++i) {
+            Spot& sp = out.spots[out.spotCount++];
+            sp = {kMagWell, rout.rings[i].pos, rout.rings[i].radius, rout.rings[i].inside, rout.rings[i].close};
+        }
+        for (int h = 0; h < 2; ++h) {
+            if (rout.pulseAmp[h] > 0.0f) {
+                out.pulse[h] = true;
+                out.pulseAmp[h] = rout.pulseAmp[h];
+                out.pulseMs[h] = rout.pulseMs[h];
+            }
+            out.maskFace[h] = rout.mask[h];
+        }
+        out.targetOk[0] = rout.targetOk[0];
+        out.target[0] = rout.target[0];
+        out.targetOk[2] = rout.targetOk[1];
+        out.target[2] = rout.target[1];
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;

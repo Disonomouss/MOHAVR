@@ -29,7 +29,7 @@ private:
     XrSwapchain            swapchain_ = XR_NULL_HANDLE;
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*       tex_ = nullptr;
-    XrCompositionLayerQuad quads_[kHolsters + 3]{};  // the spots and the off-hand dot
+    XrCompositionLayerQuad quads_[kHolsters + 6]{};  // the spots and the off-hand dot
     static constexpr int   kCell = 64;
 };
 

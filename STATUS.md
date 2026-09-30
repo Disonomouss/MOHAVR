@@ -122,8 +122,9 @@ address-space budget for D3D9On12.
    Panzerschreck keep the global default; mission-only weapons later). **Manual reload** (D21, RELOAD-DESIGN.md): Step 0 research
    done and verified; **M0 done** (the probe, ENGINE-NOTES 5am: offsets, mesh space, scale 1, the hidden parts, the folded
    native; the other guns reachable with GiveWeapon + NextWeapon); **M1 done** (the hook, the ammo rules, shared block v14's
-   events: 5am); **M2 done** (the empty-gun visuals: action holds, the magazine hidden when out, the top round).
-   Next M3: the host's magazine (release button, pull-out, pouch, the magazine in the hand, insert). The grenade pickup is parked (the player).
+   events: 5am); **M2 done** (the empty-gun visuals: action holds, the magazine hidden when out, the top round); **M3 done**
+   (the host's magazine: B/Y drops it, the off hand grabs and pulls it out, the belt pouch gives a new one, it goes in at
+   the well; the menu's Manual reload toggle; the pouch on the Holsters page: 5am). Next M4: the rack. The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

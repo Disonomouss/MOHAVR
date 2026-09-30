@@ -1066,3 +1066,17 @@ for the other four guns. Nothing in M1 onwards should be built on the unverified
 
 Housekeeping: `verify/dec2/Nep_Azv_P.xxx` (142 MB, the decompressed cross-check level) is no longer needed and can be
 deleted; its result is in `verify/otherlevel.txt`.
+
+### 10.5 Implementation notes (as built)
+
+- **M3, insert arming:** a magazine that comes away from the gun (pulled past `PullOut`, or the release button while
+  grabbed) ends within `InsertRadius` of the well (4 cm < 5 cm), which §3.2's insert test would take at once. It is
+  armed only once it has been more than `InsertRadius` + 2 cm from the well; a pouch magazine arms on its first frame.
+- **M3, a gun change** adopts the game's magazine for the new gun (in or out); nothing is sent for the old one (its
+  DROP would be rejected as meant for another gun, and its rounds are already in the reserve since EJECT).
+- **M3, the press test** uses the previous frame's grab point (the press is handled before this frame's foregrip turn);
+  the state machine then runs with this frame's final gun pose.
+- **M3, "engaged"** also needs caps bit0 (a converted gun with this Draw's geometry); the game side blocks only for a
+  converted gun anyway.
+- **M3, test targets:** `pad_cmd.txt` `hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]` puts a hand at the last
+  frame's spot, offset in the head's heading frame.

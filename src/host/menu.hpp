@@ -59,9 +59,11 @@ public:
     bool MoveByHead() const { return moveByHead_; }
     bool RedDot() const { return redDot_; }  // the reticle shown (the player's; default the shipped [Aim] Reticle)
     bool Pacing() const { return pacing_; }  // frame pacing (the player's once toggled; default the shipped [Bridge] Pace)
+    // The manual reload (D21; the player's once toggled, default the shipped [Weapon] ManualReload).
+    bool ManualReloadOn() const { return manualReload_; }
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
     // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
-    void LoadHolsters(const HolsterSpot (&defaults)[kHolsters]);
+    void LoadHolsters(const HolsterSpot (&defaults)[kSpots]);
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
     int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
     bool HolsterPageOpen() const { return visible_ && page_ == 2; }
@@ -92,7 +94,7 @@ private:
     std::vector<XrSwapchainImageD3D11KHR> images_;
     ID3D11Texture2D*        tex_ = nullptr;   // B8G8R8A8_UNORM, ImGui draws here
     ID3D11RenderTargetView* rtv_ = nullptr;
-    int                     width_ = 1024, height_ = 990;
+    int                     width_ = 1024, height_ = 1044;
     std::wstring            shippedPath_;  // MOHAVR.ini next to the host: the shipped [GunFit] per weapon
     XrCompositionLayerQuad  layer_{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrPosef                 panelPose_{};
@@ -107,7 +109,7 @@ private:
     int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
-    HolsterSpot             spots_[kHolsters]{}, spotDefaults_[kHolsters]{};  // metres
+    HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the 5th: the magazine pouch)
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;
     std::uint32_t           seenWeaponSeq_ = 0xFFFFFFFFu;
@@ -115,6 +117,7 @@ private:
     shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
+    bool                    manualReload_ = false;
 };
 
 }  // namespace mohavr::host

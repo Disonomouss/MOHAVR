@@ -118,6 +118,12 @@ struct State {
     // tick's bake carries the move and the hand frames along with the body's move since (Weapon.CatchUp).
     std::uintptr_t pawn;
     M4    pawnFrame;
+    // D21 manual reload: the host's flags, pull, held magazine and rack, read with the hands (RELOAD-DESIGN X3), and the
+    // held magazine's grab-point frame mapped like the off hand's (mirrored with it).
+    bool  reloadValid, magValid;
+    shared::ReloadView reload;
+    M4    magFrame;
+    float upm;
 } g_state{};
 
 M4 PawnFrame(std::uintptr_t pawn) {
@@ -422,8 +428,10 @@ void OnPlayerView() {
     const M4 camInv = RigidInverse(cam);
 
     M4 d{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}}, dInv = d;  // ViewModel=1: where the game put it
-    M4 gunFrameNow = d, offFrameNow = d, mirror = d;
-    bool offValidNow = false, twoHandedNow = false, mirroredNow = false;
+    M4 gunFrameNow = d, offFrameNow = d, mirror = d, magFrameNow = d;
+    bool offValidNow = false, twoHandedNow = false, mirroredNow = false, reloadValidNow = false, magValidNow = false;
+    shared::ReloadView reloadNow{};
+    float upmNow = 100.0f;
     if (g_cfg.viewModel != 2) g_line.valid = false;
     if (g_cfg.viewModel == 2) {
         // The host works the gun out from both hands (hands.cpp: the gun hand, the foregrip, the fit's angle and aim
@@ -441,6 +449,7 @@ void OnPlayerView() {
         }
         float pos[3], axes[3][3], upm = 100.0f;
         if (!view::PoseFrameToWorld(gun, pos, axes, upm)) return;
+        upmNow = upm;
         const shared::GunFit fit = CurrentFit(hdr);
         const float (&gf)[3] = axes[0], (&gr)[3] = axes[1], (&gu)[3] = axes[2];
         // The gun hand's controller frame (the host's gun pose: the controller, pitched by the fit's angle).
@@ -486,10 +495,19 @@ void OnPlayerView() {
         std::uint32_t hv = 0;
         const int o = (flags & 4u) ? 1 : 0;  // the gun in the left hand -> the right one is free
         float opos[3], oaxes[3][3], oupm = 100.0f;
-        if (shared::ReadHands(hdr, hand, hv) && (hv & (1u << o)) && view::PoseFrameToWorld(hand[o], opos, oaxes, oupm)) {
+        const bool handsRead = shared::ReadHands(hdr, hand, hv, &reloadNow);
+        if (handsRead && (hv & (1u << o)) && view::PoseFrameToWorld(hand[o], opos, oaxes, oupm)) {
             offFrameNow = Frame(oaxes[0], oaxes[1], oaxes[2], opos);
             if (mirroredNow) offFrameNow = MirrorFrame(offFrameNow, mirror);
             offValidNow = true;
+        }
+        // The magazine in the off hand (reloadFlags bits 1-2 = 2): its frame from the same host frame as that hand.
+        reloadValidNow = handsRead;
+        float mpos[3], maxes[3][3], mupm = 100.0f;
+        if (handsRead && ((reloadNow.flags >> 1) & 3u) == 2u && view::PoseFrameToWorld(reloadNow.magPose, mpos, maxes, mupm)) {
+            magFrameNow = Frame(maxes[0], maxes[1], maxes[2], mpos);
+            if (mirroredNow) magFrameNow = MirrorFrame(magFrameNow, mirror);
+            magValidNow = true;
         }
     }
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
@@ -501,6 +519,11 @@ void OnPlayerView() {
     g_state.twoHanded = twoHandedNow;
     g_state.mirrored = mirroredNow;
     g_state.mirror = mirror;
+    g_state.reloadValid = reloadValidNow;
+    g_state.reload = reloadNow;
+    g_state.magValid = magValidNow;
+    g_state.magFrame = magFrameNow;
+    g_state.upm = upmNow;
     g_state.pawn = pawn;
     g_state.pawnFrame = pawnFrame;
     g_state.valid = true;
@@ -522,6 +545,21 @@ bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHan
     std::memcpy(off, s.offFrame.m, sizeof(off));
     offValid = s.offValid;
     twoHanded = s.twoHanded;
+    return true;
+}
+
+bool ReloadInputs(ReloadFrame& out) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    if (!s.valid || !s.reloadValid || GetTickCount() - s.tick > 250) return false;
+    out.view = s.reload;
+    std::memcpy(out.magFrame, s.magFrame.m, sizeof(out.magFrame));
+    out.magValid = s.magValid;
+    out.mirrored = s.mirrored;
+    out.upm = s.upm;
     return true;
 }
 

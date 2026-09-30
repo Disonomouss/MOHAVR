@@ -372,8 +372,17 @@ inline bool ReadViews(const Header* h, Pose& head, Pose (&eye)[2], Fov (&fov)[2]
     return false;
 }
 
-// Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits.
-inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid) {
+// The host's manual-reload inputs to the game's bake (v14), from the same host frame as the hands.
+struct ReloadView {
+    std::uint32_t flags, keyHash;
+    float         magPull;
+    Pose          magPose;
+    float         rack;
+};
+
+// Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits. `rv` (optional):
+// the manual reload's flags, pull, held magazine and rack in the same pass (RELOAD-DESIGN X3).
+inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, ReloadView* rv = nullptr) {
     for (int t = 0; t < kSeqTries; ++t) {
         const std::uint32_t s1 = h->viewSeq;
         if (s1 & 1u) {
@@ -386,6 +395,13 @@ inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid) {
         valid = h->handValid;
         hand[0] = h->hand[0];
         hand[1] = h->hand[1];
+        if (rv) {
+            rv->flags = h->reloadFlags;
+            rv->keyHash = h->reloadKeyHash;
+            rv->magPull = h->magPull;
+            rv->magPose = h->magPose;
+            rv->rack = h->rack;
+        }
 #if defined(_MSC_VER)
         _ReadWriteBarrier();
 #endif

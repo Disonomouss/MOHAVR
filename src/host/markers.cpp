@@ -86,12 +86,13 @@ int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, 
                     const XrCompositionLayerBaseHeader** out, int max) {
     if (!swapchain_ || !tex_) return 0;
     struct Draw { XrVector3f pos; float size; int cell; };
-    Draw draws[kHolsters + 3];
+    Draw draws[kHolsters + 6];
     int n = 0;
     bool anyNear = false;
     for (int i = 0; i < h.spotCount; ++i) {
         const Hands::Spot& s = h.spots[i];
-        const bool show = mode == kAlways || (showAll && s.kind == Hands::kHolster) || (mode == kNear && s.close);
+        const bool show = mode == kAlways || (showAll && (s.kind == Hands::kHolster || s.kind == Hands::kPouch)) ||
+                          (mode == kNear && s.close);
         if (!show) continue;
         anyNear = anyNear || s.close;
         draws[n++] = {s.pos, 2.0f * s.radius, s.inside ? 1 : 0};

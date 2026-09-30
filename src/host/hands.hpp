@@ -7,7 +7,9 @@
 //   * The aim line: gunPose offset by the fit's aim line (up/right).
 //   * Holsters: a grip squeezed at a body spot (relative to the head's heading) draws that weapon -- right shoulder
 //     long gun 1, left shoulder long gun 2, right hip pistol, left hip grenade ([Holsters] in MOHAVR.ini).
-//   * Reload gesture: the other hand's grip squeezed at the gun's magazine.
+//   * Reload gesture: the other hand's grip squeezed at the gun's magazine (not while the manual reload drives the gun).
+//   * The manual reload (D21, reload.hpp): its spots (the magazine, the belt pouch) come before the holsters and the
+//     foregrip at an off-hand press; the belt pouch is the 5th body spot ([Holsters] MagPouchSpot).
 //   A grip used for any of these is kept from the pad mapping until released (Consumed). A short pulse on the
 //   controller marks a hand entering a holster spot or the foregrip.
 #pragma once
@@ -20,6 +22,7 @@
 #include <string>
 
 #include "../common/shared_frame.hpp"
+#include "reload.hpp"
 
 namespace mohavr::host {
 
@@ -28,6 +31,7 @@ struct HolsterSpot {
     float x, y, z, r;
 };
 constexpr int kHolsters = 4;  // right shoulder, left shoulder, right hip, left hip
+constexpr int kSpots = kHolsters + 1;  // ... and the magazine pouch (the manual reload; it runs no command)
 
 class Hands {
 public:
@@ -49,9 +53,14 @@ public:
         double         now;
         bool           testThrow;
         float          testThrowVel[3];
+        // The manual reload: its release button per physical hand, whether the game draws a head-tracked view, and
+        // whether the pouch's ring shows anyway (the menu's Holsters page).
+        float          release[2];
+        bool           hasView;
+        bool           pouchShown;
     };
     // Where the gesture spots are this frame (LOCAL), for the rings (markers.cpp).
-    enum SpotKind { kHolster, kForegrip, kMagazine };
+    enum SpotKind { kHolster, kForegrip, kMagazine, kPouch, kMagWell };
     struct Spot {
         SpotKind   kind;
         XrVector3f pos;
@@ -60,7 +69,7 @@ public:
         bool       close;    // a hand is within twice its radius
     };
     struct Output {
-        Spot        spots[kHolsters + 2]{};
+        Spot        spots[kHolsters + 5]{};
         int         spotCount = 0;
         bool        offValid = false;
         XrVector3f  offHand{};      // the off hand's aim pose position (its marker)
@@ -70,6 +79,10 @@ public:
         std::string command;        // to run in the game this frame ("" none)
         bool        consumed[2]{};  // grips kept from the pad
         bool        pulse[2]{};     // haptic pulse this frame
+        float       pulseAmp[2]{}, pulseMs[2]{};  // ... of this strength and length (0: the default short one)
+        bool        maskFace[2]{};  // the manual reload's release button kept from the pad (per physical hand)
+        bool        targetOk[3]{};  // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt): the magazine, the pouch, the action
+        XrVector3f  target[3]{};
         bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };
@@ -80,6 +93,8 @@ public:
     const HolsterSpot& DefaultSpot(int i) const { return defaultSpots_[i]; }
     void SetSpot(int i, const HolsterSpot& s) { spots_[i] = s; }
     static const wchar_t* SpotName(int i);
+    // The manual reload (owned by the host's main loop; null = none).
+    void SetReload(ManualReload* r) { reload_ = r; }
 
 private:
     struct Zone {
@@ -87,7 +102,8 @@ private:
         std::string    command;
     };
     Zone        zones_[kHolsters];
-    HolsterSpot spots_[kHolsters]{}, defaultSpots_[kHolsters]{};
+    HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
+    ManualReload* reload_ = nullptr;
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;
     bool  mirrorLeft_ = true;  // the game draws the left hand's gun mirrored ([Weapon] LeftHandMirror): so is the aim line
     float gripWas_[2]{};

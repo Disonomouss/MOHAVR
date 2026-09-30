@@ -374,6 +374,8 @@ struct Resolved {
 };
 std::deque<Resolved> g_resolved;
 
+float Det3(const float* m);
+
 // Row vectors (FMatrix): out = a x b, 4x4 row-major.
 void Mul(const float* a, const float* b, float* out) {
     float r[16];
@@ -382,6 +384,35 @@ void Mul(const float* a, const float* b, float* out) {
             r[i * 4 + j] = a[i * 4] * b[j] + a[i * 4 + 1] * b[4 + j] + a[i * 4 + 2] * b[8 + j] + a[i * 4 + 3] * b[12 + j];
     std::memcpy(out, r, sizeof(r));
 }
+// The inverse of an affine row-vector matrix (a 3x3 with a translation row; the component may carry a scale).
+void AffineInverse(const float* a, float* out) {
+    const float det = a[0] * (a[5] * a[10] - a[6] * a[9]) - a[1] * (a[4] * a[10] - a[6] * a[8]) + a[2] * (a[4] * a[9] - a[5] * a[8]);
+    const float k = std::fabs(det) > 1e-12f ? 1.0f / det : 0.0f;
+    float r[16] = {};
+    r[0] = (a[5] * a[10] - a[6] * a[9]) * k;
+    r[1] = (a[2] * a[9] - a[1] * a[10]) * k;
+    r[2] = (a[1] * a[6] - a[2] * a[5]) * k;
+    r[4] = (a[6] * a[8] - a[4] * a[10]) * k;
+    r[5] = (a[0] * a[10] - a[2] * a[8]) * k;
+    r[6] = (a[2] * a[4] - a[0] * a[6]) * k;
+    r[8] = (a[4] * a[9] - a[5] * a[8]) * k;
+    r[9] = (a[1] * a[8] - a[0] * a[9]) * k;
+    r[10] = (a[0] * a[5] - a[1] * a[4]) * k;
+    for (int j = 0; j < 3; ++j) r[12 + j] = -(a[12] * r[j] + a[13] * r[4 + j] + a[14] * r[8 + j]);
+    r[15] = 1.0f;
+    std::memcpy(out, r, sizeof(r));
+}
+// A point (w = 1) or a direction (w = 0) through a row-vector matrix.
+Vec3 Xform(const Vec3& v, float w, const float* m) {
+    return {v.x * m[0] + v.y * m[4] + v.z * m[8] + w * m[12], v.x * m[1] + v.y * m[5] + v.z * m[9] + w * m[13],
+            v.x * m[2] + v.y * m[6] + v.z * m[10] + w * m[14]};
+}
+float Len(const Vec3& v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
+Vec3 Norm(const Vec3& v) {
+    const float l = Len(v);
+    return l > 1e-6f ? Vec3{v.x / l, v.y / l, v.z / l} : Vec3{0, 0, 0};
+}
+
 // A bone's drawn matrix from a modified game pose: bones[j] = m x kMove.
 void Draw(float* bones, int j, const float* m, const float* kMove) { Mul(m, kMove, bones + 16 * j); }
 // Hidden like the game hides upgrade parts: the 3x3 zeroed, the origin kept (M0: ENGINE-NOTES 5am).
@@ -485,9 +516,30 @@ float SecondZ(const GunLine& l, float z) {
 struct TraceState {
     std::string key;
     int         mag = -1, hold = -1, top = -1;
+    DWORD       next = 0;
 } g_trace;
 
-void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int num, const float* kMove) {
+// RELOAD-DESIGN 5.5: what the host needs, from the last gun bake before a Draw, in the host's gun frame (x right, y up,
+// z back, metres; un-mirrored). Published in OnDraw only after a fresh bake of the gun in hand.
+struct Geo {
+    bool        ok = false;       // sampled for the converted gun in hand
+    std::string key;
+    Vec3        magGrab, magOut, boltGrab, boltBack;
+    float       magGrabR = 0.07f, boltTravel = 0.0f;
+    bool        haveBolt = false, heldBack = false;
+};
+Geo  g_geo;
+bool g_bakeFresh = false;  // a gun bake since the last Draw (the pipeline is alive)
+
+// The value for variant v of a per-variant list (one value = all).
+template <class T>
+T PerVariant(const std::vector<T>& list, int v, T def) {
+    if (list.empty()) return def;
+    return list[v >= 0 && v < static_cast<int>(list.size()) ? v : 0];
+}
+
+void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int num, const float* l2w, const float* a,
+                   const float* kMove, const float* carry) {
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     const std::uintptr_t w = PawnWeapon(pawn);
     if (!w) return;
@@ -502,20 +554,79 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     WState& s = StateFor(w);
     const int* clipP = Field(w, "AmmoCount");
     const int c = clipP ? *clipP : 0;
-    // The magazine: in the gun or out (M3 adds grabbed / in the hand from the host).
-    const int magState = s.magIn ? 0 : 3;
-    if (magState == 3)
+    // The host's inputs of this player view, and the gun's controller frame the bake is drawn from (G = gun x carry).
+    viewmodel::ReloadFrame rf{};
+    float gf[16], of[16];
+    bool ov = false, th = false;
+    const bool haveRf = viewmodel::ReloadInputs(rf) && viewmodel::HandFrames(gf, of, ov, th);
+    float G[16], off[16];
+    if (haveRf) {
+        Mul(gf, carry, G);
+        Mul(of, carry, off);
+    }
+    const float upm = haveRf && rf.upm > 1.0f ? rf.upm : 100.0f;
+    // The magazine (RELOAD-DESIGN 5.2): the host's state when its flags are for this gun and it drives it (engaged),
+    // else the game's (in or out).
+    const bool hostState = haveRf && rf.view.keyHash == shared::KeyHash(key.c_str()) && (rf.view.flags & 1u) && (rf.view.flags & 16u);
+    int magState = hostState ? static_cast<int>((rf.view.flags >> 1) & 3u) : (s.magIn ? 0 : 3);
+    if (magState == 2 && !rf.magValid) magState = 3;
+    // The visible variant (hidden upgrade parts have a zeroed 3x3) and its data.
+    int v = -1;
+    for (size_t k = 0; k < r->mag.size() && v < 0; ++k) {
+        const int j = r->mag[k];
+        if (j >= 0 && j < num && std::fabs(Det3(saved + 16 * j)) > 1e-3f) v = static_cast<int>(k);
+    }
+    const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
+    const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
+    const float magR = PerVariant(l->magR, v, 7.0f);
+    const Vec3 grabW = Xform(grabMesh, 1.0f, a);
+    float pullCm = 0.0f, heldGap = -1.0f;
+    if (magState == 1) {
+        // Grabbed: the group slides out along the magazine's way out (mesh space), by the host's pull.
+        const float scale = Len(Xform(outMesh, 0.0f, a));
+        const float dist = scale > 1e-4f ? rf.view.magPull * upm / scale : 0.0f;
+        pullCm = rf.view.magPull * 100.0f;
+        auto slide = [&](int j) {
+            if (j < 0 || j >= num) return;
+            float m[16];
+            std::memcpy(m, saved + 16 * j, sizeof(m));
+            m[12] += outMesh.x * dist;
+            m[13] += outMesh.y * dist;
+            m[14] += outMesh.z * dist;
+            Draw(bones, j, m, kMove);
+        };
+        for (int j : r->mag) slide(j);
+        slide(r->top);  // the top round sits in the magazine's lips
+    } else if (magState == 2) {
+        // In the off hand: moved rigidly from the in-gun grab frame (G's axes at the grab point) to the held one.
+        float fgrab[16], fgrabInv[16], fheld[16], invL2W[16], m1[16], m2[16], hold[16];
+        std::memcpy(fgrab, G, sizeof(fgrab));
+        fgrab[12] = grabW.x;
+        fgrab[13] = grabW.y;
+        fgrab[14] = grabW.z;
+        AffineInverse(fgrab, fgrabInv);
+        Mul(rf.magFrame, carry, fheld);
+        AffineInverse(l2w, invL2W);
+        Mul(a, fgrabInv, m1);
+        Mul(m1, fheld, m2);
+        Mul(m2, invL2W, hold);
+        for (int j : r->mag)
+            if (j >= 0 && j < num) Mul(saved + 16 * j, hold, bones + 16 * j);
+        const float dx = fheld[12] - off[12], dy = fheld[13] - off[13], dz = fheld[14] - off[14];
+        heldGap = std::sqrt(dx * dx + dy * dy + dz * dz) * 100.0f / upm;
+    } else if (magState == 3) {
         for (int j : r->mag)
             if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
+    }
     // The action: held at its empty position (RELOAD-DESIGN 5.3; the rack comes with M4).
     const bool hold = l->emptyCue && (l->open ? !s.cocked : c == 0);
-    float zGame = 0.0f, zDrawn = 0.0f;
-    if (!r->bolt.empty() && r->bolt[0] >= 0 && r->bolt[0] < num) {
-        const int b = r->bolt[0];
+    float zGame = 0.0f, zDrawn = 0.0f, zHeld = 0.0f;
+    const int b = !r->bolt.empty() ? r->bolt[0] : -1;
+    if (b >= 0 && b < num) {
         const float zs = saved[16 * b + 14], zIdle = l->boltZ[0], zEmpty = l->boltZ[1];
         const float zd = hold ? (zEmpty < zIdle ? std::min(zs, zEmpty) : std::max(zs, zEmpty)) : zs;
         zGame = zs;
-        zDrawn = zd;
+        zDrawn = zHeld = zd;
         if (zd != zs) {
             float m[16];
             std::memcpy(m, saved + 16 * b, sizeof(m));
@@ -529,23 +640,62 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             }
         }
     }
-    // The top round: only while the magazine is in and has rounds (RELOAD-DESIGN 5.4).
+    // The top round: only while the magazine is in and has rounds (RELOAD-DESIGN 5.4); it slides with a grabbed one.
     int topShown = -1;
     if (r->top >= 0 && r->top < num) {
-        const bool shown = magState == 0 && (l->open ? (c >= 1 || s.pending) : (c >= 2 || s.pending));
+        const bool shown = (magState == 0 || magState == 1) && (l->open ? (c >= 1 || s.pending) : (c >= 2 || s.pending));
         if (!shown) Collapse(bones, r->top, saved, kMove);
         topShown = shown ? 1 : 0;
     }
+    // The geometry for the host (RELOAD-DESIGN 5.5): points relative to G on its rows (forward, right, up) -> the host's
+    // (right, up, -forward) in metres; the right component negated in the mirror world (5.6).
+    if (haveRf) {
+        const float mir = rf.mirrored ? -1.0f : 1.0f;
+        auto hostDir = [&](const Vec3& d) {
+            const float f = d.x * G[0] + d.y * G[1] + d.z * G[2], rr = d.x * G[4] + d.y * G[5] + d.z * G[6],
+                        u = d.x * G[8] + d.y * G[9] + d.z * G[10];
+            return Vec3{mir * rr, u, -f};
+        };
+        auto hostPoint = [&](const Vec3& p) {
+            const Vec3 h = hostDir(Vec3{p.x - G[12], p.y - G[13], p.z - G[14]});
+            return Vec3{h.x / upm, h.y / upm, h.z / upm};
+        };
+        g_geo.ok = true;
+        g_geo.key = key;
+        g_geo.magGrab = hostPoint(grabW);
+        g_geo.magOut = Norm(hostDir(Xform(outMesh, 0.0f, a)));
+        g_geo.magGrabR = magR / 100.0f;
+        g_geo.haveBolt = b >= 0 && b < num;
+        if (g_geo.haveBolt) {
+            const Vec3 p{saved[16 * b + 12] + l->boltGrab.x, saved[16 * b + 13] + l->boltGrab.y, zHeld + l->boltGrab.z};
+            g_geo.boltGrab = hostPoint(Xform(p, 1.0f, a));
+            g_geo.boltBack = Norm(hostDir(Xform(Vec3{0, 0, -1}, 0.0f, a)));
+            g_geo.boltTravel = Len(Xform(Vec3{0, 0, l->boltZ[2] - zHeld}, 0.0f, a)) / upm;
+            g_geo.heldBack = std::fabs(l->boltZ[2] - zHeld) < 2.0f;
+        }
+    }
+    const DWORD now = GetTickCount();
     if (g_cfg.debugReloadTrace && (key != g_trace.key || magState != g_trace.mag || (hold ? 1 : 0) != g_trace.hold ||
-                                   topShown != g_trace.top)) {
+                                   topShown != g_trace.top || ((magState == 1 || magState == 2) && static_cast<LONG>(now - g_trace.next) >= 0))) {
         g_trace.key = key;
         g_trace.mag = magState;
         g_trace.hold = hold ? 1 : 0;
         g_trace.top = topShown;
-        MLOG("reload: trace -- drawn %s: magazine %s, action %s (game Z %.2f -> drawn %.2f), top round %s", key.c_str(),
-             magState == 3 ? "hidden (out)" : "in the gun", hold ? "held empty" : "the game's",
-             zGame, zDrawn,
-             topShown < 0 ? "none" : topShown ? "shown" : "hidden");
+        g_trace.next = now + 1000;
+        static const char* kMag[] = {"in the gun", "grabbed", "in the off hand", "hidden (out)"};
+        char extra[96] = "";
+        if (magState == 1) snprintf(extra, sizeof(extra), " (pulled %.1f cm)", pullCm);
+        if (magState == 2) snprintf(extra, sizeof(extra), " (its grab point %.1f cm from the off controller)", heldGap);
+        MLOG("reload: trace -- drawn %s: magazine %s%s, action %s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
+             kMag[magState], extra, hold ? "held empty" : "the game's", zGame, zDrawn,
+             topShown < 0 ? "none" : topShown ? "shown" : "hidden", hostState ? "drives it" : "not driving");
+        if (haveRf)
+            MLOG("reload: trace -- geometry (cm, the gun frame: right up back): magazine grab %.1f %.1f %.1f, out %.2f %.2f %.2f, "
+                 "r %.0f; action grab %.1f %.1f %.1f, back %.2f %.2f %.2f, travel %.1f%s", g_geo.magGrab.x * 100.0f,
+                 g_geo.magGrab.y * 100.0f, g_geo.magGrab.z * 100.0f, g_geo.magOut.x, g_geo.magOut.y, g_geo.magOut.z,
+                 g_geo.magGrabR * 100.0f, g_geo.boltGrab.x * 100.0f, g_geo.boltGrab.y * 100.0f, g_geo.boltGrab.z * 100.0f,
+                 g_geo.boltBack.x, g_geo.boltBack.y, g_geo.boltBack.z, g_geo.boltTravel * 100.0f,
+                 rf.mirrored ? " (mirrored)" : "");
     }
 }
 
@@ -734,9 +884,10 @@ bool Install(const Config& cfg, bool pipelineHooked) {
 }
 
 void OnGunBake(std::uintptr_t comp, const float* saved, float* bones, int num, const float* l2w, const float* a,
-               const float* kMove) {
+               const float* kMove, const float* carry) {
     g_lastGunBake = GetTickCount();
-    if (g_cfg.manualReload) OverrideBones(comp, saved, bones, num, kMove);
+    g_bakeFresh = true;
+    if (g_cfg.manualReload) OverrideBones(comp, saved, bones, num, l2w, a, kMove, carry);
     if (!g_cfg.debugReloadProbe) return;
     ++g_bakesThisDraw;
     const int smo = names::PropertyOffset(comp, "SkeletalMesh");
@@ -818,16 +969,32 @@ void OnDraw(shared::Header* hdr) {
         hdr->reloadEvtAck = g_seen;
     }
     if (s && clipP) s->lastClip = *clipP;
-    if (!hdr) return;
-    // Publish (RELOAD-DESIGN 4; the geometry comes with M2/M3).
+    // Publish (RELOAD-DESIGN 4, 5.5) only after a fresh bake of a gun: the host then counts the game's side as alive.
+    const bool fresh = g_bakeFresh;
+    g_bakeFresh = false;
+    const std::string key = w ? AttachKey(w) : std::string();
+    const bool geoOk = g_geo.ok && g_geo.key == key;
+    g_geo.ok = false;
+    if (!hdr || !fresh) return;
     ++hdr->reloadGeoSeq;
     _ReadWriteBarrier();
     const int* maxP = w ? Field(w, "MaxAmmoCount") : nullptr;
-    const std::string key = w ? AttachKey(w) : std::string();
     std::memset(hdr->reloadKey, 0, sizeof(hdr->reloadKey));
     std::memcpy(hdr->reloadKey, key.c_str(), std::min(key.size(), sizeof(hdr->reloadKey) - 1));
-    hdr->reloadCaps = (line ? 1u : 0u) | (g_blockAllowed ? 4u : 0u) | (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) |
-                      (w && Blocking(w) ? 16u : 0u);
+    // Converted only with this Draw's geometry (a gun mid-switch, or one whose data failed, is not).
+    hdr->reloadCaps = (line && geoOk ? 1u : 0u) | (geoOk && g_geo.haveBolt ? 2u : 0u) | (g_blockAllowed ? 4u : 0u) |
+                      (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u);
+    if (geoOk) {
+        const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
+        float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};
+        for (int i = 0; i < 4; ++i) {
+            dst[i][0] = pts[i]->x;
+            dst[i][1] = pts[i]->y;
+            dst[i][2] = pts[i]->z;
+        }
+        hdr->magGrabR = g_geo.magGrabR;
+        hdr->boltTravel = g_geo.haveBolt ? g_geo.boltTravel : 0.0f;
+    }
     hdr->ammoClip = clipP ? *clipP : 0;
     hdr->ammoMax = maxP ? maxP[0] : 0;
     hdr->ammoReserve = w ? ReserveAvailable(pawn, w) : 0;
@@ -836,8 +1003,8 @@ void OnDraw(shared::Header* hdr) {
         const int c = clipP ? *clipP : 0;
         const bool ready = Ready(*s, *line, c);
         const bool rackNeeded = line->open ? !s->cocked : (c == 0 && s->magIn && s->pending);
-        st = (s->magIn ? 1u : 0u) | (s->pending ? 2u : 0u) | (ready ? 4u : 0u) | (rackNeeded ? 16u : 0u) |
-             (line->open ? 32u : 0u) | (Bit(w, "bInfiniteAmmo") ? 64u : 0u);
+        st = (s->magIn ? 1u : 0u) | (s->pending ? 2u : 0u) | (ready ? 4u : 0u) | (geoOk && g_geo.heldBack ? 8u : 0u) |
+             (rackNeeded ? 16u : 0u) | (line->open ? 32u : 0u) | (Bit(w, "bInfiniteAmmo") ? 64u : 0u);
     }
     hdr->reloadState = st;
     _ReadWriteBarrier();

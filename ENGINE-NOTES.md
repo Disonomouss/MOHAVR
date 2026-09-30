@@ -1115,6 +1115,21 @@ slide back with the barrel showing (2.50 -> -1.85); the G43's magazine gone when
 switch away and back an empty G43 stays at 0 (the equip refill blocked) and still locked back; the rack puts the action
 home.
 
+**M3, the host's magazine [S] (2026-09-30, `logs/modlogs/reload-m3-*`, `reload-m3side-*`, `logs/shots/*-m3-*`,
+`*-m3side-*`, `m3side-pouchring.png`):** the game samples the geometry in the gun bake (G = the gun controller frame x
+the body's carry; the grab point = MagGrab x A, the way out = MagOut x A's 3x3, the action's grab point at its held Z) and
+publishes it in the host's gun frame only after a fresh bake of the gun in hand (reloadGeoSeq). G43 in the gun frame
+(cm, right up back): magazine grab 1.9 -10.4 -15.3, out 0.01 -1.00 -0.04; action grab 0.4 3.2 -10.1, back 0 0 1,
+travel 12.6 (19.70 -> 7.08 u at scale 100). The host's state machine (RELOAD-DESIGN 3.2) drives the drawing through the
+view block (reloadFlags bits 1-2, magPull, magPose, read with the hand frames in one pass): B on the gun hand -> EJECT
+(clip 20 -> 1 kept, reserve +19), and the pad log shows B kept from the game; the grip in the belt pouch (`@pouch`) ->
+TAKE, the magazine drawn in the left hand with its grab point 0.0 cm from the controller (`Hold 0 0 0`); at the well
+(`@mag`) -> INSERT (0.0-0.2 cm, 0 deg; clip 20, reserve -19); the grip at the magazine -> grabbed, the group slides
+2.5 cm with a 2.5 cm pull (seen from the side); pulled past 4 cm it comes away as held (EJECT; its grab point 4.0 cm off
+the controller after a one-step 8 cm move, as grabbed, no snap); let go -> DROP (no ammo change). The MOHAVR menu opened
+while holding one -> DROP, state out; closed -> driving again. The Holsters page shows the pouch ring between the hip
+rings. Seen at Hold 0 0 0: the magazine sits just above the drawn fingers (the aim point is ahead of the palm) -- [H].
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

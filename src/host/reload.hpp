@@ -1,8 +1,24 @@
-// Manual reload (D21, RELOAD-DESIGN.md) -- host side. M1: the player's toggle ([Weapon] ManualReload), "engaged" (the
-// game's side alive, the hands tracked, a converted gun in hand), and the events to the game (shared block v14, an
-// ordered ring). The test channel (pad_cmd.txt "reload=eject|take|insert|rack|drop") queues events; the gestures (M3/M4)
-// will use the same queue.
+// Manual reload (D21, RELOAD-DESIGN.md) -- host side.
+// M1: the player's toggle ([Weapon] ManualReload; the menu), "engaged" (the game's side alive, the hands tracked, the
+// hook in place) and the events to the game (shared block v14, an ordered ring). The test channel (pad_cmd.txt
+// "reload=eject|take|insert|rack|drop") queues events directly.
+// M3, the magazine (RELOAD-DESIGN 3.2), while the manual reload drives the gun in hand ("Active", 3.1):
+//   * the gun hand's release button (B right / Y left, [ManualReload] ReleaseButton) drops it (EJECT); the button is kept
+//     from the pad meanwhile;
+//   * the off hand's grip at the magazine grabs it; pulled out along its way out by PullOut cm it comes away in the hand
+//     (EJECT) as it was held; let go before that, it slides back;
+//   * with the gun's magazine out, the grip in the belt pouch ([Holsters] MagPouchSpot) takes a new one (TAKE; none
+//     while the reserve is empty);
+//   * brought to the gun's magazine well (within InsertRadius cm, its way out within InsertAngle degrees of the well's)
+//     it goes in (INSERT); let go anywhere else it is dropped (DROP).
+// The game draws the magazine where the host says (bits 1-2 of reloadFlags, magPull, magPose) and keeps the ammo.
 #pragma once
+#define XR_USE_PLATFORM_WIN32
+#define XR_USE_GRAPHICS_API_D3D11
+#include <d3d11.h>
+#include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
+
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -13,29 +29,95 @@ namespace mohavr::host {
 
 class ManualReload {
 public:
+    // The shipped ini: [Weapon] ManualReload (the default; the menu's toggle is the player's), [ManualReload] tuning.
     void Init(const std::wstring& ini);
-    // Per XR frame, before the view block is written.
-    void Update(shared::Header* hdr, double now, bool handsOk);
-    // Written inside the view seqlock.
-    std::uint32_t Flags() const { return flags_; }
-    std::uint32_t KeyHash() const { return keyHash_; }
+    void SetOn(bool on);
+    bool On() const { return on_; }
+    // The release button: 0 none, 1 upper (B / Y), 2 lower (A / X).
+    int  ReleaseButton() const { return releaseButton_; }
+    // Start of the XR frame: the game's side (geometry, ammo, state, acknowledgements) and the reconcile (3.2).
+    void Poll(shared::Header* hdr, double now, bool handsOk);
+
+    struct In {
+        bool    gunOk = false, offOk = false;  // the gun hand holds the gun; the off hand is tracked
+        bool    gestures = false;              // no menu open
+        bool    hasView = false;               // the game draws a head-tracked view
+        int     gunHand = 1;                   // 0 left, 1 right
+        XrPosef gun{}, off{};                  // the final gun pose (after the foregrip turn); the off hand's aim pose
+        bool    offHeld = false;               // the off hand's grip held (hands.cpp's hysteresis)
+        float   release[2]{};                  // the release button, per physical hand
+        float   fitAngle = 0.0f;               // the gun fit's angle (degrees): a pouch magazine sits in the hand likewise
+        double  now = 0.0;
+    };
+    struct Ring {
+        XrVector3f pos;
+        float      radius;
+        bool       inside, close;
+    };
+    struct Out {
+        Ring  rings[2]{};  // the magazine's grab spot (in the gun) or the well (a magazine in the hand)
+        int   ringCount = 0;
+        float pulseAmp[2]{}, pulseMs[2]{};
+        bool  mask[2]{};    // keep that hand's release button from the pad
+        bool  targetOk[2]{};
+        XrVector3f target[2]{};  // tests: 0 the magazine's grab point, 1 the action's
+    };
+    // Hands::Update, first: whether the manual reload drives the gun this frame (3.1). Leaving it lets go of what the
+    // off hand holds (a grabbed magazine slides back, one in the hand is dropped).
+    bool Begin(const In& in);
+    bool Active() const { return active_; }
+    bool MagazineOut() const { return mag_ == kOut; }
+    // Hands::Update, at an off-hand grip press, before the holsters and the foregrip: true = a reload spot took it (the
+    // pouch while the magazine is out, the magazine while in; the nearest by distance / radius; 3.4).
+    bool TakePress(const XrVector3f& hand, const XrVector3f& pouch, float pouchR);
+    // Hands::Update, once the gun's pose is final.
+    void Frame(const In& in, Out& out);
+    // After Hands::Update: the queued events to the game (never more than the ring holds unread).
+    void Send(shared::Header* hdr, double now);
     void Queue(std::uint32_t type, double now);
+    // Written inside the view seqlock.
+    std::uint32_t Flags() const;
+    std::uint32_t KeyHash() const { return keyHash_; }
+    float         MagPull() const { return mag_ == kGrabbed ? pull_ : 0.0f; }
+    shared::Pose  MagPose() const;
+    float         Rack() const { return 0.0f; }
 
 private:
+    enum Mag { kInGun = 0, kGrabbed = 1, kInHand = 2, kOut = 3 };
+    enum Press { kPressNone, kPressMag, kPressPouch };
+    void Pulse(Out& out, int hand, float amp, float ms) const;
+    void SetMag(Mag m, const char* why);
+
     bool          on_ = false;
-    std::uint32_t flags_ = 0, keyHash_ = 0;
-    std::uint32_t lastGeoSeq_ = 0;
+    int           releaseButton_ = 1;
+    float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
+    float         hold_[3]{};                                                // metres, the left off hand's frame
+    std::uint32_t keyHash_ = 0;
+    std::uint32_t lastGeoSeq_ = 0, pawnSeq_ = 0;
     double        geoAt_ = -1.0;
     shared::ReloadGeo geo_{};
+    bool          engaged_ = false, active_ = false;
+    std::string   stateKey_;
+    Mag           mag_ = kInGun;
+    int           disagree_ = 0;
+    Press         press_ = kPressNone;
+    XrVector3f    start_{};          // where the grab began
+    float         pull_ = 0.0f;
+    XrPosef       heldRel_{};        // the held magazine's grab-point frame in the off hand's
+    XrPosef       magPose_{};
+    bool          armed_ = false;    // the held magazine has been away from the well (no insert straight after a pull)
+    bool          lastGunOk_ = false;
+    XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)
+    bool          relHeld_[2]{}, maskLatch_[2]{};
     struct Pending {
-        std::uint32_t type;
+        std::uint32_t type, hash;
         double        at;
     };
     std::deque<Pending> pending_;
     std::string   loggedKey_;
     std::uint32_t loggedState_ = 0xFFFFFFFFu;
-    std::int32_t  loggedClip_ = -1, loggedReserve_ = -1;
     bool          loggedEngaged_ = false;
+    std::string   whyInactive_;
 };
 
 }  // namespace mohavr::host

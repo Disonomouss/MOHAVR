@@ -8,6 +8,8 @@
 #pragma once
 #include <cstdint>
 
+#include "../common/shared_frame.hpp"
+
 namespace mohavr {
 struct Config;
 }
@@ -38,6 +40,18 @@ bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHan
 // The reflection the first-person parts are drawn through right now (world, row-major: drawn = baked x r), when they
 // are (Weapon.LeftHandMirror, the gun in the left hand).
 bool DrawMirror(float (&r)[16]);
+
+// D21 manual reload: the host's reload inputs of the same player view as HandFrames (read with the hands in one pass),
+// the held magazine's grab-point frame in the world (rows forward, right, up, origin; in the mirror world when mirrored,
+// like the off frame; valid while the host has it in the off hand), and the world scale then.
+struct ReloadFrame {
+    shared::ReloadView view;
+    float              magFrame[16];
+    bool               magValid;
+    bool               mirrored;
+    float              upm;
+};
+bool ReloadInputs(ReloadFrame& out);
 
 // How the player's body (the pawn: location and yaw) moved since the player view CurrentMove and HandFrames come from
 // (world, row-major: a point carried by the body then -> now = p * w). The next tick's bake is one move behind the eyes

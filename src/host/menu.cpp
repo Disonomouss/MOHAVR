@@ -17,7 +17,7 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -29,7 +29,7 @@ enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, 
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
-const char* kHolsterLabels[kHolsters] = {"right shoulder", "left shoulder", "right hip", "left hip"};
+const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
 std::wstring UserIniPath() {
@@ -162,14 +162,18 @@ void Menu::ApplySavedSettings() {
     GetPrivateProfileStringW(L"Controls", L"MoveDirection", _wcsicmp(buf, L"body") ? L"head" : L"body", buf, 32, iniPath_.c_str());
     moveByHead_ = _wcsicmp(buf, L"body") != 0;
     MLOG("menu: move direction %s", moveByHead_ ? "head" : "body");
+    // Manual reload (D21): likewise the shipped [Weapon] ManualReload until the player toggles it.
+    const int defReload = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ManualReload", 0, shipped.c_str()));
+    manualReload_ = GetPrivateProfileIntW(L"Weapon", L"ManualReload", defReload, iniPath_.c_str()) != 0;
+    MLOG("menu: manual reload %s", manualReload_ ? "on" : "off");
     MLOG("menu: sticks %s, gun hand %s (at start), red dot %s, frame pacing %s", swapSticks_ ? "swapped (right moves)" : "normal",
          startLeft_ ? "left" : "right", redDot_ ? "on" : "off", pacing_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
 
-void Menu::LoadHolsters(const HolsterSpot (&defaults)[kHolsters]) {
-    for (int i = 0; i < kHolsters; ++i) {
+void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots]) {
+    for (int i = 0; i < kSpots; ++i) {
         spotDefaults_[i] = spots_[i] = defaults[i];
         const std::wstring key = std::wstring(Hands::SpotName(i)) + L"Spot";
         wchar_t b[64] = L"";
@@ -424,7 +428,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             HolsterSpot& s = spots_[holsterSel_];
             bool moved = true;
             switch (selected_) {
-                case hWhich: holsterSel_ = (holsterSel_ + (in.right ? 1 : kHolsters - 1)) % kHolsters; moved = false; break;
+                case hWhich: holsterSel_ = (holsterSel_ + (in.right ? 1 : kSpots - 1)) % kSpots; moved = false; break;
                 case hRight: s.x = std::fmax(-0.8f, std::fmin(0.8f, s.x + dir * 0.01f)); break;
                 case hUp: s.y = std::fmax(-1.2f, std::fmin(0.4f, s.y + dir * 0.01f)); break;
                 case hForward: s.z = std::fmax(-0.6f, std::fmin(0.6f, s.z + dir * 0.01f)); break;
@@ -493,6 +497,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Bridge", L"Pace", pacing_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: frame pacing -> %s", pacing_ ? "on (one game frame per headset frame)" : "off (the game runs uncapped)");
+        } else if (selected_ == kReload) {
+            manualReload_ = !manualReload_;
+            if (!iniPath_.empty())
+                WritePrivateProfileStringW(L"Weapon", L"ManualReload", manualReload_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: manual reload -> %s", manualReload_ ? "on" : "off (the game's own reload)");
         }
     }
     if (in.select) {
@@ -571,6 +580,8 @@ void Menu::Render() {
     ImGui::PushFont(nullptr, 28.0f);
     ImGui::TextDisabled("   on = one game frame per headset frame");
     ImGui::PopFont();
+    snprintf(label, sizeof(label), "Manual reload    <  %s  >", manualReload_ ? "on" : "off");
+    ImGui::Selectable(label, selected_ == kReload);
     snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
     ImGui::Selectable(label, selected_ == kGunFit);
     snprintf(label, sizeof(label), "Holsters  (rings: %ls)", kRingModes[ringsMode_]);
@@ -653,7 +664,7 @@ void Menu::RenderHolsterPage() {
     ImGui::Separator();
     const HolsterSpot& s = spots_[holsterSel_];
     char label[128];
-    snprintf(label, sizeof(label), "Holster               <  %s  >", kHolsterLabels[holsterSel_]);
+    snprintf(label, sizeof(label), "Spot                  <  %s  >", kHolsterLabels[holsterSel_]);
     ImGui::Selectable(label, selected_ == hWhich);
     snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", s.x * 100.0f);
     ImGui::Selectable(label, selected_ == hRight);
@@ -665,7 +676,7 @@ void Menu::RenderHolsterPage() {
     ImGui::Selectable(label, selected_ == hSize);
     snprintf(label, sizeof(label), "Rings                 <  %ls  >", kRingModes[ringsMode_]);
     ImGui::Selectable(label, selected_ == hRings);
-    ImGui::Selectable("Reset this holster", selected_ == hReset);
+    ImGui::Selectable("Reset this spot", selected_ == hReset);
     ImGui::Selectable("Back", selected_ == hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);

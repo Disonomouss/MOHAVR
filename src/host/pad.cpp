@@ -248,6 +248,15 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     // Grips a hand gesture used (holster, foregrip, reload) don't also press their mapped button.
     if (consumed_[0]) r.src[kLGrip] = 0.0f;
     if (consumed_[1]) r.src[kRGrip] = 0.0f;
+    // Nor does the manual reload's release button while it drives the gun (D21).
+    for (int h = 0; h < 2; ++h) {
+        const Src m = maskedFace_[h];
+        if (m == kNone) continue;
+        const bool down = r.src[m] > 0.5f;
+        if (down && !maskedDown_[h]) MLOG("pad: %ls kept from the game (the manual reload's release button)", kSrcNames[m]);
+        maskedDown_[h] = down;
+        r.src[m] = 0.0f;
+    }
     // Player options: right stick moves, left turns (the flicks go with the turning stick); left-handed: the gun
     // hand's trigger fires and its grip uses, as the right ones do by default.
     if (swapSticks_) {
@@ -395,7 +404,20 @@ void Pad::ReadTests(double now) {
                     aimLine = true;
                     char which = 0;
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
-                    if (sscanf_s(v, "%c,%f,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll) >= 4) {
+                    if (v[0] && v[1] == ',' && v[2] == '@') {
+                        // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
+                        static const char* kTargets[] = {"mag", "pouch", "bolt"};
+                        const char* name = v + 3;
+                        const size_t len = strcspn(name, ",");
+                        for (int i = 0; i < 3; ++i)
+                            if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
+                        if (name[len] == ',')
+                            sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
+                        const int h = (v[0] == 'l' || v[0] == 'L') ? 0 : 1;
+                        testPose_[h] = tp;
+                        MLOG("pad: test %s hand at @%.*s %+.2f %+.2f %+.2f m, yaw %.1f pitch %.1f%s", h ? "right" : "left",
+                             static_cast<int>(len), name, tp.x, tp.y, tp.z, tp.yaw, tp.pitch, tp.target < 0 ? " (unknown spot)" : "");
+                    } else if (sscanf_s(v, "%c,%f,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll) >= 4) {
                         const int h = (which == 'l' || which == 'L') ? 0 : 1;
                         testPose_[h] = tp;
                         MLOG("pad: test %s hand at %.2f %.2f %.2f m, yaw %.1f pitch %.1f", h ? "right" : "left", tp.x, tp.y,
@@ -547,8 +569,12 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
         const float heading = std::atan2(-fx, -fz);  // R_y(heading) * (0,0,-1) = (fx, 0, fz)
         const float sh = std::sin(heading), ch = std::cos(heading);
         // right = (cos, 0, -sin), forward = (-sin, 0, -cos)
-        out[h].position = {head.position.x + tp.x * ch - tp.z * sh, head.position.y + tp.y,
-                           head.position.z - tp.x * sh - tp.z * ch};
+        XrVector3f base = head.position;
+        if (tp.target >= 0) {
+            if (!testTargetOk_[tp.target]) continue;  // not known yet: the hand as tracked
+            base = testTarget_[tp.target];
+        }
+        out[h].position = {base.x + tp.x * ch - tp.z * sh, base.y + tp.y, base.z - tp.x * sh - tp.z * ch};
         const float yaw = heading - tp.yaw * 0.0174533f;  // positive test yaw = to the right
         const float pitch = tp.pitch * 0.0174533f;        // positive = up
         const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cx = std::cos(pitch * 0.5f),
@@ -608,6 +634,27 @@ float Pad::TriggerValue(XrSession s, int hand) const {
     gi.action = src_[src];
     XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
     return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+}
+
+float Pad::FaceButton(XrSession s, int hand, bool upper) const {
+    const Src src = FaceSrc(hand, upper);
+    if (testActive_ && test_.raw) return test_.rawIn.src[src];
+    if (!src_[src]) return 0.0f;
+    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+    gi.action = src_[src];
+    XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
+    return XR_SUCCEEDED(xrGetActionStateBoolean(s, &gi, &b)) && b.isActive && b.currentState ? 1.0f : 0.0f;
+}
+
+void Pad::Pulse(XrSession s, int hand, float amplitude, float ms) const {
+    if (!haptic_[hand]) return;
+    XrHapticActionInfo hi{XR_TYPE_HAPTIC_ACTION_INFO};
+    hi.action = haptic_[hand];
+    XrHapticVibration v{XR_TYPE_HAPTIC_VIBRATION};
+    v.duration = static_cast<XrDuration>(ms * 1e6f);
+    v.frequency = XR_FREQUENCY_UNSPECIFIED;
+    v.amplitude = amplitude;
+    xrApplyHapticFeedback(s, &hi, reinterpret_cast<const XrHapticBaseHeader*>(&v));
 }
 
 void Pad::Pulse(XrSession s, int hand) const {

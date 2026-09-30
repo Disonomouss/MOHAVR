@@ -51,7 +51,8 @@ public:
     // Both aim poses in `space` at `t`; the result's bit 0/1 = left/right valid. Test poses from pad_cmd.txt
     // replace a hand: "aim=yaw,pitch" (degrees) = the right hand 20 cm right, 30 cm below and 30 cm ahead of `head`,
     // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch[,roll]" = that hand at x right, y up, z ahead
-    // (metres, heading frame); "aim=off" = both real again.
+    // (metres, heading frame); "hand=l|r,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]" = that hand at a manual-reload
+    // spot (SetTestTargets), offset in the heading frame; "aim=off" = both real again.
     std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
     // Hands.HoldLost: a hand that lost tracking keeps its last pose relative to the head's position and heading (not its
     // pitch: a held gun doesn't swing when you look up or down) until it's tracked again. Returns the held bits (OR them
@@ -77,6 +78,18 @@ public:
     }
     void  SetConsumed(bool left, bool right) { consumed_[0] = left; consumed_[1] = right; }
     void  Pulse(XrSession s, int hand) const;
+    void  Pulse(XrSession s, int hand, float amplitude, float ms) const;
+    // The manual reload's release button (D21): a physical hand's face button, upper = B (right) / Y (left), else A / X
+    // (a raw test state's while one plays); kept from the mapping while masked. Set before Update.
+    float FaceButton(XrSession s, int hand, bool upper) const;
+    void  SetMaskedFace(int hand, bool upper, bool on) { maskedFace_[hand] = on ? FaceSrc(hand, upper) : kNone; }
+    // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
+    void  SetTestTargets(const XrVector3f (&p)[3], const bool (&ok)[3]) {
+        for (int i = 0; i < 3; ++i) {
+            testTarget_[i] = p[i];
+            testTargetOk_[i] = ok[i];
+        }
+    }
     // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
     void  SetSwapSticks(bool on) { swapSticks_ = on; }
     void  SetLeftHanded(bool on) { leftHanded_ = on; }
@@ -92,6 +105,7 @@ private:
     enum Src { kNone, kA, kB, kX, kY, kLGrip, kRGrip, kLTrig, kRTrig, kLThumb, kRThumb, kMenu, kRFlickDown, kRFlickUp,
                kSrcCount };
     enum Target { tA, tB, tX, tY, tLB, tRB, tLS, tRS, tStart, tBack, tUp, tDown, tLeft, tRight, tLT, tRT, tCount };
+    static Src FaceSrc(int hand, bool upper) { return hand ? (upper ? kB : kA) : (upper ? kY : kX); }
     static constexpr int kMaxSources = 4;  // per Xbox control ("A=b,rgrip")
     // What the controllers did this frame, before the mapping.
     struct Raw {
@@ -115,8 +129,12 @@ private:
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
     XrAction    haptic_[2]{};          // left, right vibration
-    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
+    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
+    XrVector3f  testTarget_[3]{};      // "@mag", "@pouch", "@bolt" (LOCAL)
+    bool        testTargetOk_[3]{};
+    Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
+    bool        maskedDown_[2]{};
     bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking
     bool        holdLost_ = true;      // [Hands] HoldLost
     XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading

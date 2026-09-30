@@ -62,11 +62,14 @@ HEADSET-TESTS.md.
   stick navigates and adjusts; the trigger or A selects. The first item is World Scale, live to the
   game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
   (`[GunFit]` in the player's ini, keyed by the weapon's class name, e.g. `Attachment_Stg44`). The Holsters page moves
-  and sizes the holster spots (`[Holsters] <Name>Spot` in the player's ini) and sets the rings (`[Hands] Rings`).
+  and sizes the holster spots and the manual reload's magazine pouch (`[Holsters] <Name>Spot`, `MagPouchSpot` in the
+  player's ini) and sets the rings (`[Hands] Rings`). "Manual reload" toggles D21's reload (`[Weapon] ManualReload`).
 - **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`. `tools/userdata.ps1`
   backs it up and restores it with the MOHA user folder (a test that creates it has it removed).
 - Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`
   (one command per call, about 0.3 s apart).
+- Manual reload tests: `pad_cmd.py --seq "hand=l,@mag|@pouch|@bolt[,dx,dy,dz,yaw,pitch,roll]"` puts the off hand at a
+  reload spot (a hand line applies at once; raw grip states queue), `reload=eject|take|insert|rack|drop` sends an event.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
