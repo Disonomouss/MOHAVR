@@ -135,9 +135,15 @@ MAX_DIST = 13.0
 # mirrors a bone's local frame by negating ALL its axes (every right knuckle's offset from its hand is the left one's
 # negated, in x, y and z): so the hand is H_left = D.H.S with D = -I on the axis rows and S = the mesh X mirror, and a
 # finger keeps its rotation in the hand's frame with its offset negated. (The first try, D = diag(1,-1,1) with the
-# fingers D.F.D, bent every finger the wrong way.) key, arms seq, gun AnimSet, gun seq, psk, [(kind, part bone, frame)]
+# fingers D.F.D, bent every finger the wrong way.) key, arms seq, gun AnimSet, gun seq, psk, [(kind, part bone, frame)],
+# the arms' AnimSet (the launchers' are in VM_AnimSet_Bazooka).
 MIRRORED = [
-    ('Attachment_M1Garand', 'm1garand_reload', 'Garand_AnimSet', 'm1garand_gun_reload', 'US_Garand_Rigged', [('hold', 'clip', 21)]),
+    ('Attachment_M1Garand', 'm1garand_reload', 'Garand_AnimSet', 'm1garand_gun_reload', 'US_Garand_Rigged', [('hold', 'clip', 21)],
+     'VM_AnimSet_NoBazooka'),
+    # GOAL A5: the rocket beside its tail as the right hand pushes it in (f33) -- the same frame for "mag" (sliding in)
+    # and "hold", so the hand doesn't jump at the mouth (work/research/goal/launchers.md 4.4).
+    ('Attachment_Panzerschreck', 'panzerschreck_reload', 'DE_Panzerschreck_Anim_Set', 'panzerschreck_gun_reload',
+     'DE_Panzerschreck_Rigged', [('mag', 'Projectile', 33), ('hold', 'Projectile', 33)], 'VM_AnimSet_Bazooka'),
 ]
 MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
@@ -205,7 +211,11 @@ def main(root):
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
             log.append('%s %s: %.2f s, %.1f units' % (key, kind, f / a['rate'], d))
-    for key, aseq, gset, gseq, psk, grips in MIRRORED:
+    armsBy = {'VM_AnimSet_NoBazooka': arms}
+    for key, aseq, gset, gseq, psk, grips, aset in MIRRORED:
+        if aset not in armsBy:
+            armsBy[aset] = read_psa(os.path.join(root, 'psa', 'MOHAGame', 'AnimSet', aset + '.psa'))
+        arms = armsBy[aset]
         a = arms['seqs'][aseq]
         gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
         sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))

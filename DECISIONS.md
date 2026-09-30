@@ -274,3 +274,11 @@ shot). The grenade launcher (level 2) keeps the game's reload.
 **Why:** GOAL.md A1 (the player's goal), the research (`work/research/goal/garand.md`), and the real rifle where the game
 has no opinion; each is a switch ([H] round 36: the latch, KeepChambered, the seat closing vs the rod, the pop speed).
 **Costs:** a seat into a gun with a round chambered (latch off) is not modelled.
+
+### D28. Long rounds slide in (the Panzerschreck) — Decided 2026-09-30 (GOAL A5)
+A rocket from the pouch goes nose first into the Panzerschreck's rear mouth and slides home as the off hand pushes it
+(`Insert=slide`), instead of Step 1's snap at the well -- the rocket is 66 cm long and sits 19 cm inside the tube, so a
+snap would need the hand inside the tube. Letting go part-way loads it (it slides home). Shared block v17 carries the
+length and depth.
+**Why:** GOAL A5; the research (`work/research/goal/launchers.md`); the game's own animation pushes the rocket in the same way.
+**Costs:** [H]: how far the player must push (the whole 85 cm, or less), and the launcher's 12.8 deg yaw in the hand.

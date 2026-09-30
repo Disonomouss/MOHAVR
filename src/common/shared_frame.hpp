@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 16;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments
+inline constexpr std::uint32_t kVersion = 17;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -224,6 +224,11 @@ struct Header {
     char                   gripKey[48];    // 1500
     float                  gripAdj[3][6];  // 1548
     std::uint32_t          gripFlags;      // 1620 bit0: the magazine in the hand is held with the grab grip (round 35)
+    // v17 (GOAL A5, the Panzerschreck's rocket): a slide insert (with reloadGeoSeq). A long magazine's front meets the
+    // well's mouth, then it slides in along the way out: magLen = from its grab point to its front, magSeat = how far
+    // inside the mouth the seated grab point sits (metres, host gun frame; magLen 0 = the snap insert at the well).
+    float                  magLen;         // 1624
+    float                  magSeat;        // 1628
 };
 #pragma pack(pop)
 
@@ -265,7 +270,8 @@ static_assert(offsetof(Header, reloadEvt) == 1432, "shared::Header layout must m
 static_assert(offsetof(Header, magHeld) == 1464, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, gripSeq) == 1496, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, gripAdj) == 1548, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1624, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, magLen) == 1624, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1632, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -284,6 +290,7 @@ struct ReloadGeo {
     float         magGrab[3], magOut[3], magGrabR, boltGrab[3], boltBack[3], boltTravel;
     std::int32_t  clip, max, reserve;
     Pose          magHeld;
+    float         magLen, magSeat;  // v17: the slide insert (0 = snap)
 };
 // Seqlock read of it; false while the game is mid-write (try next frame).
 inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
@@ -308,6 +315,8 @@ inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
     g.max = h->ammoMax;
     g.reserve = h->ammoReserve;
     g.magHeld = h->magHeld;
+    g.magLen = h->magLen;
+    g.magSeat = h->magSeat;
 #if defined(_MSC_VER)
     _ReadWriteBarrier();
 #endif

@@ -98,6 +98,12 @@ Items, in D21's order:
   animation).
 - [ ] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
   loaded only when empty.
+
+  **The Panzerschreck: DONE** (`logs/modlogs/reload-panzer1-*`; ENGINE-NOTES 5ap): the shot -- "fired its last round";
+  a pouch rocket, its nose to the rear mouth, slides in as the hand pushes ("slid home (84.6 cm in)"): `INSERT
+  Attachment_Panzerschreck: clip 0 -> 1, reserve 9 -> 8`; again `clip 0 -> 1, reserve 8 -> 7`; with the manual reload off
+  the game reloads (`clip rose 0 -> 1`). **The M18: to do** (the breech: handle, swing, the spent case), after A2's
+  turning parts.
 - [ ] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
   - **The mounted MG42** (A0): a belt reload every 100 rounds, infinite belts, at a nest (not `GiveWeapon`-able in the
     test level). A manual version would be lid up, a belt, lid down, cock.

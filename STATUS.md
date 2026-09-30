@@ -141,7 +141,8 @@ address-space budget for D3D9On12.
    landing. **Landing done** (B1-B2): the botched landing's roll took the eye to 17.8 cm above the feet, into the
    ground in VR; `[Camera] MinEyeHeight=60` holds it at 60 cm (D26, ENGINE-NOTES 5an). **A0 inventory done** (13 guns +
    the mounted MG42); **A1 the Garand done** (the en-bloc clip: the game's flight, the mod's ping, a seat that closes,
-   the latch; D27, ENGINE-NOTES 5ao). The grenade pickup is parked (the player).
+   the latch; D27, ENGINE-NOTES 5ao). **A5 the Panzerschreck done** (a rocket slides in at the rear: D28, 5ap); the M18
+   next with the bolt actions' turning parts. The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

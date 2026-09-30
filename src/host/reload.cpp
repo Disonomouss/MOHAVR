@@ -91,7 +91,10 @@ void ManualReload::SetMag(Mag m, const char* why) {
     MLOG("reload: magazine %s -> %s (%s)", kMagName[mag_], kMagName[m], why);
     mag_ = m;
     if (m == kInHand) flipped_ = false;  // held as it came
-    if (m != kGrabbed) pull_ = 0.0f;
+    if (m != kGrabbed) {
+        pull_ = 0.0f;
+        entering_ = false;
+    }
 }
 
 void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
@@ -120,7 +123,7 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
             SetMag(gameIn ? kInGun : kOut, "another gun in hand");
         } else if (acksDone && (geo_.caps & 1u)) {
             // Reconcile (3.2): the game's magazine differs from ours for two of its frames with nothing in flight.
-            const bool hostIn = mag_ == kInGun || mag_ == kGrabbed;
+            const bool hostIn = mag_ == kInGun || (mag_ == kGrabbed && !entering_);  // (sliding in: still out)
             if (hostIn != gameIn) {
                 if (++disagree_ >= 2) {
                     disagree_ = 0;
@@ -177,8 +180,8 @@ bool ManualReload::Begin(const In& in) {
         // without a rack.
         if (boltHeld_) MLOG("reload: the action let go (not driving): no rack");
         boltHeld_ = false;
-        if (mag_ == kGrabbed) SetMag(kInGun, "let go: not driving");
-        else if (mag_ == kInHand) {
+        if (mag_ == kGrabbed && !entering_) SetMag(kInGun, "let go: not driving");
+        else if (mag_ == kInHand || mag_ == kGrabbed) {
             Queue(shared::kReloadDrop, in.now);
             SetMag(kOut, "dropped: not driving");
         }
@@ -265,14 +268,23 @@ void ManualReload::Frame(const In& in, Out& out) {
     out.target[0] = X(magRingW);
     out.targetOk[2] = true;
     out.target[2] = X(grabW);
-    if (mag_ == kInHand) {  // the aim point that puts the held magazine's grab point at the well
-        out.target[2] = X(Sub(Sub(grabW, Sub(P(in.off.position), P(in.offAim.position))), Rotate(in.off.orientation, P(heldRel_.position))));
+    // Insert=slide (v17): the held magazine's front goes to the well's mouth first -- its grab point MagLen behind it.
+    const V3 mouthW = Add(grabW, Scale(outW, geo_.magSeat));
+    const V3 insertAt = geo_.magLen > 0.0f ? Add(mouthW, Scale(outW, geo_.magLen)) : grabW;
+    if (mag_ == kGrabbed && entering_) {  // sliding in: the aim point that pushes it home
+        out.target[2] = X(Sub(Add(P(start_), Scale(outW, geo_.magSeat)), Sub(P(in.off.position), P(in.offAim.position))));
+        out.alignOk = true;
+        out.align = {in.offAim.orientation, out.target[2]};
+    }
+    if (mag_ == kInHand) {  // the aim point that puts the held magazine's grab point at the well (for the slide insert:
+                            // where the grab point is when its front is at the mouth)
+        out.target[2] = X(Sub(Sub(insertAt, Sub(P(in.off.position), P(in.offAim.position))), Rotate(in.off.orientation, P(heldRel_.position))));
         // ... and, for "align", the aim pose that also turns it as seated (the held frame = the gun's axes): the hand point
         // offset (off - offAim, fixed in the hand) and the grip turned with it.
         const XrQuaternionf qa = QMul(in.gun.orientation, QConj(heldRel_.orientation));
         const V3 hp = Rotate(QConj(in.off.orientation), Sub(P(in.off.position), P(in.offAim.position)));
         out.alignOk = true;
-        out.align = {qa, X(Sub(Sub(grabW, Rotate(qa, hp)), Rotate(qa, P(heldRel_.position))))};
+        out.align = {qa, X(Sub(Sub(insertAt, Rotate(qa, hp)), Rotate(qa, P(heldRel_.position))))};
     }
     if (geo_.caps & 2u) {
         out.targetOk[1] = true;
@@ -362,7 +374,27 @@ void ManualReload::Frame(const In& in, Out& out) {
         }
     }
 
-    if (mag_ == kGrabbed) {
+    if (mag_ == kGrabbed && entering_) {
+        // Insert=slide: the front is in the mouth; the off hand pushes it along the way in until it is home.
+        const float full = geo_.magSeat + geo_.magLen;
+        if (!in.offHeld) {
+            Queue(shared::kReloadInsert, in.now);
+            SetMag(kInGun, "let go in the mouth: it slides home");
+            Pulse(out, g, 0.9f, 50.0f);
+        } else {
+            pull_ = std::clamp(Dot(Sub(offP, P(start_)), outW), 0.0f, full + 0.05f);
+            if (pull_ <= geo_.magSeat + 0.01f) {
+                Queue(shared::kReloadInsert, in.now);
+                SetMag(kInGun, "pushed home");
+                MLOG("reload: slid home (%.1f cm in)", 100.0f * full);
+                Pulse(out, g, 0.9f, 50.0f);
+                Pulse(out, o, 0.9f, 50.0f);
+            } else if (pull_ > full + 0.02f) {
+                armed_ = false;
+                SetMag(kInHand, "drawn back out of the mouth");
+            }
+        }
+    } else if (mag_ == kGrabbed) {
         if (!in.offHeld) {
             SetMag(kInGun, "let go: it slides back");
         } else {
@@ -441,8 +473,10 @@ void ManualReload::Frame(const In& in, Out& out) {
             }
             snapHeld_ = false;
             magPose_ = Compose(in.off, heldRel_);
-            dist = Len(Sub(P(magPose_.position), grabW));
             const V3 heldOut = Rotate(magPose_.orientation, A3(geo_.magOut));
+            // Insert=slide: the held magazine's front (MagLen ahead of its grab point) against the mouth.
+            dist = geo_.magLen > 0.0f ? Len(Sub(Sub(P(magPose_.position), Scale(heldOut, geo_.magLen)), mouthW))
+                                      : Len(Sub(P(magPose_.position), grabW));
             angle = std::acos(std::clamp(Dot(heldOut, outW), -1.0f, 1.0f)) * 57.2958f;
             if (!armed_ && dist > insertR_ + 0.02f) armed_ = true;  // away from the well first (a pull ends inside it)
             if (armed_ && dist < insertR_ && angle >= insertAngle_ && in.now - nearMissAt_ > 1.0) {
@@ -450,7 +484,15 @@ void ManualReload::Frame(const In& in, Out& out) {
                 MLOG("reload: at the well (%.1f cm) but turned %.0f deg from its way (InsertAngle %.0f)", 100.0f * dist, angle,
                      insertAngle_);
             }
-            if (active_ && armed_ && dist < insertR_ && angle < insertAngle_) {
+            if (active_ && armed_ && dist < insertR_ && angle < insertAngle_ && geo_.magLen > 0.0f) {
+                // Insert=slide: into the mouth -- now it slides along the way in as the hand pushes (grabbed, entering).
+                SetMag(kGrabbed, "its front in the mouth: sliding in");
+                entering_ = true;
+                pull_ = geo_.magSeat + geo_.magLen;
+                start_ = X(Sub(offP, Scale(outW, pull_)));
+                MLOG("reload: into the mouth %.1f cm from it, %.0f deg off its way", 100.0f * dist, angle);
+                Pulse(out, o, 0.5f, 30.0f);
+            } else if (active_ && armed_ && dist < insertR_ && angle < insertAngle_) {
                 Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
                 SetMag(kInGun, "inserted");
                 MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
@@ -460,11 +502,12 @@ void ManualReload::Frame(const In& in, Out& out) {
         }
     }
     // Rings: the magazine's grab spot while in the gun; the well while one is in the hand (lit where it would go in).
-    if ((mag_ == kInGun && !(geo_.caps & 512u)) || mag_ == kGrabbed || in.showSpots) {
+    if ((mag_ == kInGun && !(geo_.caps & 512u)) || (mag_ == kGrabbed && !entering_) || in.showSpots) {
         const float d = Len(Sub(offP, magRingW));
         out.rings[out.ringCount++] = {X(magRingW), magRingR, d < magRingR, d < 2.0f * magRingR || in.showSpots};
-    } else if (mag_ == kInHand && armed_) {
-        out.rings[out.ringCount++] = {X(grabW), insertR_, dist < insertR_ && angle < insertAngle_, dist < 3.0f * insertR_};
+    } else if (mag_ == kInHand && armed_) {  // the well -- or the mouth, for the slide insert
+        out.rings[out.ringCount++] = {X(geo_.magLen > 0.0f ? mouthW : grabW), insertR_, dist < insertR_ && angle < insertAngle_,
+                                      dist < 3.0f * insertR_};
     }
     // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
     if ((geo_.caps & 2u) && (((geo_.state & 16u) && !boltHeld_) || in.showSpots)) {

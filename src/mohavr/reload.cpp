@@ -75,6 +75,11 @@ struct GunLine {
                                                     // (the Garand: 0 -- a kept round would make the game throw a
                                                     // second empty clip at its shot)
     float                    ejectSpeed = 0.4f;     // EjectSpeed: m/s an ejected magazine leaves along its way out
+    // GOAL A5 (the Panzerschreck's rocket): Insert=slide -- the held magazine's front meets the well's mouth, then it
+    // slides in along its way out; MagLen = from the grab point to the front, MagSeat = the seated grab point's depth
+    // inside the mouth (mesh units along MagOut).
+    bool                     slideInsert = false;
+    float                    magLen = 0.0f, magSeat = 0.0f;
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -186,6 +191,9 @@ void ParseLines(const std::wstring& ini) {
         g.keepChambered = kc.empty() ? -1 : atoi(kc.c_str());
         const std::string es = Token(line, "EjectSpeed");
         if (!es.empty()) g.ejectSpeed = static_cast<float>(atof(es.c_str()));
+        g.slideInsert = Token(line, "Insert") == "slide";
+        g.magLen = static_cast<float>(atof(Token(line, "MagLen").c_str()));
+        g.magSeat = static_cast<float>(atof(Token(line, "MagSeat").c_str()));
         g_lines.push_back(g);
     }
     wchar_t take[128] = L"";
@@ -932,6 +940,7 @@ struct Geo {
     bool        haveBolt = false, heldBack = false;
     bool        haveHeld = false;      // round 31: where a held magazine sits in the drawn hand (the hold grip)
     float       heldPos[3] = {}, heldQuat[4] = {0, 0, 0, 1};
+    float       magLen = 0.0f, magSeat = 0.0f;  // v17: the slide insert, metres (0 = snap)
 };
 Geo  g_geo;
 bool g_bakeFresh = false;  // a gun bake since the last Draw (the pipeline is alive)
@@ -1329,6 +1338,9 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         g_geo.magGrab = hostPoint(grabW);
         g_geo.magOut = Norm(hostDir(Xform(outMesh, 0.0f, a)));
         g_geo.magGrabR = magR / 100.0f;
+        // v17 (Insert=slide): the magazine's length and seat depth along its way out, in metres at the gun's scale.
+        g_geo.magLen = l->slideInsert ? Len(Xform(Vec3{outMesh.x * l->magLen, outMesh.y * l->magLen, outMesh.z * l->magLen}, 0.0f, a)) / upm : 0.0f;
+        g_geo.magSeat = l->slideInsert ? Len(Xform(Vec3{outMesh.x * l->magSeat, outMesh.y * l->magSeat, outMesh.z * l->magSeat}, 0.0f, a)) / upm : 0.0f;
         g_geo.haveBolt = b >= 0 && b < num;
         if (g_geo.haveBolt) {
             const Vec3 p{saved[16 * b + 12] + l->boltGrab.x, saved[16 * b + 13] + l->boltGrab.y, zHeld + l->boltGrab.z};
@@ -1676,8 +1688,9 @@ void OnDraw(shared::Header* hdr) {
                 const int v = VariantOf(line->key);
                 const std::vector<std::string>& so = line->sndOut;
                 if (!so.empty()) PlayCue(pawn, w, so[v < static_cast<int>(so.size()) ? v : 0], "the clip pings out");
-                MLOG("reload: %s fired its last round -- the game threw the clip out (magazine out, the action locked back)",
-                     line->key.c_str());
+                MLOG("reload: %s fired its last round -- %s", line->key.c_str(),
+                     so.empty() || so[0].empty() ? "it is gone (magazine out)"
+                                                : "the game threw the clip out (magazine out, the action locked back)");
             }
         }
     }
@@ -1745,6 +1758,8 @@ void OnDraw(shared::Header* hdr) {
             dst[i][2] = pts[i]->z;
         }
         hdr->magGrabR = g_geo.magGrabR;
+        hdr->magLen = g_geo.magLen;
+        hdr->magSeat = g_geo.magSeat;
         hdr->boltTravel = g_geo.haveBolt ? g_geo.boltTravel : 0.0f;
         if (g_geo.haveHeld)
             hdr->magHeld = {g_geo.heldPos[0], g_geo.heldPos[1], g_geo.heldPos[2], g_geo.heldQuat[0], g_geo.heldQuat[1],

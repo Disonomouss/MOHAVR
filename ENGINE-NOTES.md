@@ -1343,6 +1343,25 @@ Research: `work/research/goal/` (`inventory.md`, `garand.md`, `architecture.md`;
   the Step 1 guns' eject / pouch / insert unchanged (all 7, 0.0 cm / 0 deg with the aligned hand, the owed carry at the
   cap intact).
 
+## 5ap. Manual reload, Step 2: the Panzerschreck's rocket (GOAL A5, 2026-09-30)
+
+Research: `work/research/goal/launchers.md`. `Attachment_Panzerschreck` (`DE_Panzerschreck_Rigged`, 5 bones; one round,
+`MOHARocketAmmoClass` shared with the M18; the save's reserve 9). The rocket is the bone `Projectile` (bind turned 180 deg
+about Y; idle (0.37,-20.31,-66.90); its tail 1.78 behind the origin, so seated at Z -68.68, 18.87 inside the tube's rear
+mouth at Z -87.55; 65.75 long). The game never hides it (the fire animation leaves it drawn 10.9 back).
+- **The line:** `EjectOnEmpty` (the rocket goes with the shot; no ping, no fall), `Feed=insert` (a seated rocket loads
+  the tube), `NoGrab`, `Latch=0`, and the new **`Insert=slide MagLen=65.75 MagSeat=18.87`**: the held rocket's nose meets
+  the mouth (the insert test on the front, not the grab point), then it is "grabbed, entering" -- it slides along the bore
+  with the hand (the Step 1 pull drawn in reverse, `magPull` = the tail's distance out) and loads when the tail reaches
+  the mouth; let go part-way, it slides home; drawn back past the nose, it is in the hand again. The host's reconcile
+  counts an entering rocket as out. Shared block **v17**: `magLen`, `magSeat` (metres, with `reloadGeoSeq`).
+- **Grips:** the game's reload loads the rocket with the RIGHT hand (the arms' `VM_AnimSet_Bazooka`); the baker's
+  mirrored entries take an arms set per gun: f33 (beside the tail) for both "mag" (sliding) and "hold".
+- **Held in VR:** the idle pose carries the launcher 40 cm right and yawed 12.8 deg; the player fitted it in round 35 (the
+  Gun fit page, grip 16 40 -21); a yaw term in the fit is an open [H] item.
+- [S] (`reload-panzer1-*`): fired, a pouch rocket into the mouth (0.0 cm, 0 deg with the aligned test hand), pushed home
+  (84.6 cm): `clip 0 -> 1, reserve 9 -> 8`; again 8 -> 7; the switch off -> the game's `WeaponReload` (`clip rose 0 -> 1`).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

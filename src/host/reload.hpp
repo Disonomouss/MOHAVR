@@ -136,6 +136,7 @@ private:
     XrPosef       magPose_{};
     bool          armed_ = false;    // the held magazine has been away from the well (no insert straight after a pull)
     bool          snapHeld_ = false; // round 31: put a held magazine straight into the grip (a pouch one), else ease
+    bool          entering_ = false; // GOAL A5 (Insert=slide, the Panzerschreck's rocket): "grabbed" = sliding IN at the mouth
     double        lastNow_ = 0.0, nearMissAt_ = 0.0;
     bool          lastGunOk_ = false;
     XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)
