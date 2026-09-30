@@ -1448,9 +1448,13 @@ held like its grab, inserted; with the option off, its own held grip again.
 3. Do your BAR hold adjustments need redoing?
 4. Anything else odd?
 
-**Answers:** (the player's words)
+**Answers:** (the player's words, 2026-09-30) -- **passed**
+1. It's good.
+2. It's good; I will adjust every gun after all gun functionality is complete.
+3. They are good.
 
-**Log received:** (after `tools\deploy.ps1 undeploy`)
+**Log received:** `logs/modlogs/headset-r35-*` (the hold taken from the G43 and saved; `MOHAVR.freehand.bin` is now in
+the player's folder).
 
 **Deployed for this round:** the shipped defaults.
 
