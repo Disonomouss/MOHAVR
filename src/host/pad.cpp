@@ -408,10 +408,10 @@ void Pad::ReadTests(double now) {
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
                     if (v[0] && v[1] == ',' && v[2] == '@') {
                         // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
-                        static const char* kTargets[] = {"mag", "pouch", "bolt"};
+                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin"};
                         const char* name = v + 3;
                         const size_t len = strcspn(name, ",");
-                        for (int i = 0; i < 3; ++i)
+                        for (int i = 0; i < 4; ++i)
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);

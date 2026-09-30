@@ -1204,6 +1204,27 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
 - **The harness save now starts with the M1 Garand and the MP40** (the player's round-30 session): tests reach the G43
   and BAR with `GiveWeapon` and NextWeapon until the trace names them.
 
+**The reload grips [S] (round 31, 2026-09-30; `tools/reload_grips.py` -> `src/mohavr/reload_grips.inc`,
+`logs/modlogs/reload-sockets-*`, `reload-grips*-*`, `logs/shots/*-grips*-*`, `grips-zoom.png`):**
+- **Measured:** every gun mesh's frame is exactly the arms' `RightProp` frame (identity, all 13 first-person parts but
+  Comp B), and `LeftHand` and `RightProp` are both children of `HipsOffset`; the fingers are Hand -> X1 -> X2 -> X3.
+  So the left hand in gun-mesh space at any frame of an arms animation is LeftHand's local key x inv(RightProp's).
+- **The bake (offline):** the arms' reload sequences (VM_AnimSet_NoBazooka) and the guns' (their AnimSets), read from the
+  umodel exports (PSA keys to the engine: t (x, -y, z), q (x, -y, z, w), the root's w negated). Per gun, the frame where
+  the left hand is closest to the part gives "mag" (the magazine still seated), "hold" (the magazine out) and "bolt"
+  (near the rack sound): the hand in the part's bone frame, and the 15 fingers in the hand's. 17 of 21 grips (hand bone
+  1.7-12.9 units from the part); left out: the Colt's magazine and slide and the C96's seated magazine (the animation's
+  left hand never touches them).
+- **The runtime:** the gun bake puts the grip on the drawn part (grabbed magazine, held magazine, racked action) and
+  the arms' IK takes it as the free hand's target, with the grip's fingers. A held magazine's place in the hand
+  (the hold grip applied to the free hand's own frame, `armsik::FreeHandRel`) goes to the host (shared block v15
+  `magHeld`, caps bit6), which puts a pouch magazine there at once and eases a pulled one there (~0.1 s), so the insert
+  test uses what is drawn. G43 held magazine: 1.6 cm left, 5.8 down, 5.9 back of the aim point.
+- **Seen:** the hand wrapped round the G43's and MP40's seated magazines, the magazines in the fist (G43, MP40, BAR,
+  StG44, Thompson, C96), the hand on the G43's receiver at the bolt. With the test hand turned like the gun hand, the
+  held magazines meet the well turned 16-68 deg (inserted at InsertAngle 75); the Colt's 101 deg (its grip pushes the
+  magazine up on an open palm: palm up in the headset). `pad_cmd` `@magin` = the aim point that seats a held magazine.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

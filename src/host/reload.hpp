@@ -51,7 +51,8 @@ public:
         bool    gestures = false;              // no menu open
         bool    hasView = false;               // the game draws a head-tracked view
         int     gunHand = 1;                   // 0 left, 1 right
-        XrPosef gun{}, off{};                  // the final gun pose (after the foregrip turn); the off hand's aim pose
+        XrPosef gun{}, off{};                  // the final gun pose (after the foregrip turn); the off hand (its hand point)
+        XrPosef offAim{};                      // the off hand's aim pose as tracked (the game's frame for magHeld)
         bool    offHeld = false;               // the off hand's grip held (hands.cpp's hysteresis)
         float   release[2]{};                  // the release button, per physical hand
         float   fitAngle = 0.0f;               // the gun fit's angle (degrees): a pouch magazine sits in the hand likewise
@@ -69,8 +70,9 @@ public:
         float pulseAmp[2]{}, pulseMs[2]{};
         bool  mask[2]{};    // keep that hand's release button from the pad
         bool  maskTrigger[2]{};  // keep that hand's trigger from the pad (the flip of a held taped pair)
-        bool  targetOk[2]{};
-        XrVector3f target[2]{};  // tests: 0 the magazine's grab point, 1 the action's
+        bool  targetOk[3]{};
+        XrVector3f target[3]{};  // tests: 0 the magazine's grab point, 1 the action's, 2 where the off hand's aim point
+                                 // puts a held magazine's grab point at the well
     };
     // Hands::Update, first: whether the manual reload drives the gun this frame (3.1). Leaving it lets go of what the
     // off hand holds (a grabbed magazine slides back, one in the hand is dropped).
@@ -118,6 +120,8 @@ private:
     XrPosef       heldRel_{};        // the held magazine's grab-point frame in the off hand's
     XrPosef       magPose_{};
     bool          armed_ = false;    // the held magazine has been away from the well (no insert straight after a pull)
+    bool          snapHeld_ = false; // round 31: put a held magazine straight into the grip (a pouch one), else ease
+    double        lastNow_ = 0.0, nearMissAt_ = 0.0;
     bool          lastGunOk_ = false;
     XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)
     XrVector3f    lastBoltW_{};      // likewise the action's

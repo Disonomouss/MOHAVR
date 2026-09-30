@@ -224,3 +224,13 @@ maximum (no +1). As built: a magazine that comes away from the gun must first le
 before it can go back in; "held back" (a tug racks it) is the empty hold only.
 **Why:** RELOAD-DESIGN's verified choices; the player's D21 answers where they gave one.
 **Costs:** the reload is silent until M7 (sounds); twin magazines come after M7.
+
+### D23. The reload grips come from the game's own reload animations — Decided 2026-09-30 (round 31)
+The player asked for the game's reload hand poses on the magazine, slide and bolt ("a much more polished feel for the
+hand to snap on"). The off hand's drawn pose while it grabs the seated magazine, holds one, or racks is the arms' reload
+animation's at the frame where its left hand is on that part (baked by `tools/reload_grips.py`): the drawn hand snaps
+onto the part with the animation's fingers, and a held magazine sits in the hand as the animation holds it.
+**Why:** the player's request; the animations are the game's own art, so the grips match the guns exactly.
+**Costs:** baked data from the animations (regenerate if the guns change); where the animation's left hand never
+touches a part (the Colt's slide and magazine grab, the C96's grab) the hand stays with the controller; a held
+magazine is turned the way the animation holds it, so the player lines it up by turning the wrist.

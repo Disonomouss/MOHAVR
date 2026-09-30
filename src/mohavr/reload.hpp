@@ -6,6 +6,7 @@
 // weapon's ammo fields and the reserve, and the hook's calls.
 #pragma once
 #include <cstdint>
+#include <string>
 
 namespace mohavr {
 struct Config;
@@ -21,6 +22,11 @@ namespace mohavr::reload {
 bool Install(const Config& cfg, bool pipelineHooked);
 // Game thread, once per Draw (vr_view Hook_Draw).
 void OnDraw(shared::Header* hdr);
+// The last first-person gun update's LocalToWorld (the game's) and its attachment class (for the arms' bake).
+bool LastGun(float (&l2w)[16], std::string& key);
+// Round 31: the off hand's reload grip this frame (from the game's reload animations): where the support hand goes
+// (world, row-major) and its 15 fingers' frames in the hand's (4x3 each, in `names` order); false = no grip now.
+bool GripNow(float (&target)[16], const float*& fingers, const char* const*& names);
 // Game thread, every first-person gun update, right after the bake (arms_ik OnMeshUpdate): `saved` = the game's own
 // pose (num row-major 4x4 matrices, component space), `bones` = the drawn ones (saved x kMove; overridden here for the
 // magazine, the action and the top round), `l2w` = the component's LocalToWorld, `a` = L2W x D, kMove = a x inv(L2W),

@@ -255,6 +255,7 @@ Hands::Output Hands::Update(const Input& in) {
     if (reload_) {
         rin.gun = gun;
         rin.off = {in.aim[o].orientation, {pt[o].x, pt[o].y, pt[o].z}};
+        rin.offAim = in.aim[o];
         rin.offHeld = held_[o];
         ManualReload::Out rout;
         reload_->Frame(rin, rout);
@@ -275,6 +276,8 @@ Hands::Output Hands::Update(const Input& in) {
         out.target[0] = rout.target[0];
         out.targetOk[2] = rout.targetOk[1];
         out.target[2] = rout.target[1];
+        out.targetOk[3] = rout.targetOk[2];
+        out.target[3] = rout.target[2];
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;

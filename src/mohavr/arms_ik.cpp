@@ -4,6 +4,7 @@
 
 #include <safetyhook.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -257,6 +258,27 @@ std::vector<M4> g_longGunPose;
 
 // The arms: body, shoulders and the two-bone solves on top of the baked move (bones already = saved * A * L2W^-1).
 // `carry`: the body's move since the view the head and the hand frames come from (Weapon.CatchUp; else identity).
+// Round 31: the free hand's last frame in its controller's, and the reload grip's fingers (reload.cpp's table).
+M4                 g_freeRel{};
+DWORD              g_freeRelTick = 0;
+const float*       g_gripFingers = nullptr;
+const char* const* g_gripNames = nullptr;
+int FingerIndex(const char* name) {
+    struct Entry { std::uintptr_t mesh; std::string name; int index; };
+    static std::vector<Entry> cache;
+    for (const Entry& e : cache)
+        if (e.mesh == g_rig.mesh && e.name == name) return e.index;
+    int idx = -1;
+    const std::uintptr_t data = names::ReadPointer(g_rig.mesh + addr::kSkelMeshRefSkeleton);
+    const int num = static_cast<int>(names::ReadPointer(g_rig.mesh + addr::kSkelMeshRefSkeleton + 4));
+    for (int i = 0; i < num && data; ++i)
+        if (names::NameAt(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride) == name) idx = i;
+    // Only a finger of the support hand's group (never another bone by a stray name).
+    if (std::find(g_rig.side[1].handGroup.begin(), g_rig.side[1].handGroup.end(), idx) == g_rig.side[1].handGroup.end()) idx = -1;
+    cache.push_back({g_rig.mesh, name, idx});
+    return idx;
+}
+
 void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4& A, const M4& invL2W, const M4& carry) {
     // The shoulders: anchored to the tracked head (Weapon.ShoulderWidth apart, ShoulderDrop below the eyes,
     // ShoulderBack behind, turned with the body) -- the game's rig has them at eye height behind the eye. The torso moves
@@ -292,6 +314,7 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     M4 supportDrawn{};  // saved support-side bone -> world
     const shared::Header* hdrK = bridge::SharedHeader();
     const bool longPose = freeHand && g_cfg.freeArmPose && hdrK && hdrK->weaponKind != 0 && g_longGunPose.size() == saved.size();
+    bool gripOn = false;
     const std::vector<M4>& side1Pose = longPose ? g_longGunPose : saved;
     if (freeHand) {
         M4 gunCtrl, offCtrl;
@@ -331,7 +354,15 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
                                 AxisAngle(w, V3{1, 0, 0}, hdr->freeHand[2] * k));
             relM = Mul(Mul(relM, turn), Translate(V3{hdr->freeHand[3] * upm / 100.0f, 0.0f, 0.0f}));
         }
-        const M4 target = Mul(relM, offCtrl);
+        g_freeRel = relM;
+        g_freeRelTick = GetTickCount();
+        M4 target = Mul(relM, offCtrl);
+        // Round 31: the manual reload's grip (the game's reload animation's hand on the magazine / handle) takes over.
+        float gt[16];
+        if (reload::GripNow(gt, g_gripFingers, g_gripNames)) {
+            std::memcpy(target.m, gt, sizeof(target.m));
+            gripOn = true;
+        }
         supportDrawn = Mul(AffineInverse(side1Pose[g_rig.side[1].hand]), target);
         static int logged = 0;
         if (logged < 2) {
@@ -356,6 +387,16 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         if (moveHand) {
             const M4 kHand = Mul(ah, invL2W);
             for (int i : s.handGroup) bones[i] = Mul(S[i], kHand);
+            if (gripOn) {  // the grip's fingers, in the hand's frame (the hand itself is at the target already)
+                const M4 handW = Mul(S[s.hand], ah);
+                for (int k = 0; k < 15; ++k) {
+                    const int idx = FingerIndex(g_gripNames[k]);
+                    if (idx < 0) continue;
+                    const float* f = g_gripFingers + 12 * k;
+                    const M4 fm{{{f[0], f[1], f[2], 0}, {f[3], f[4], f[5], 0}, {f[6], f[7], f[8], 0}, {f[9], f[10], f[11], 1}}};
+                    bones[idx] = Mul(Mul(fm, handW), invL2W);
+                }
+            }
         }
         const V3 wrist = Origin(Mul(S[s.hand], ah));
         const V3 elbowOld = Origin(Mul(S[s.fore], ah));
@@ -601,6 +642,35 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
             TrackSprint(pawn, Mul(Mul(sv->bones[g_rig.side[0].hand], A), AffineInverse(Mul(gunCtrl, W))));
         }
         SolveArms(bones, sv->bones, l2w, A, invL2W, carry);
+        // Debug.ReloadTrace (round 31 research): the gun mesh's frame in the arms' RightProp frame (the RightGun socket and
+        // the mesh's own offset), once per gun, and the arms' parents of the grip bones, once.
+        if (g_cfg.debugReloadTrace) {
+            static std::vector<std::string> seen;
+            float gl[16];
+            std::string key;
+            const std::uintptr_t data = names::ReadPointer(g_rig.mesh + addr::kSkelMeshRefSkeleton);
+            auto nameOf = [&](int i) { return names::NameAt(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride); };
+            int prop = -1;
+            for (int i = 0; i < num && data; ++i)
+                if (nameOf(i) == "RightProp") prop = i;
+            if (prop >= 0 && reload::LastGun(gl, key) && std::find(seen.begin(), seen.end(), key) == seen.end()) {
+                seen.push_back(key);
+                M4 g;
+                std::memcpy(g.m, gl, sizeof(g.m));
+                const M4 S = Mul(g, AffineInverse(Mul(sv->bones[prop], l2w)));
+                MLOG("armik: trace -- %s's mesh in RightProp's frame: X %.4f %.4f %.4f  Y %.4f %.4f %.4f  Z %.4f %.4f %.4f  T %.3f %.3f %.3f",
+                     key.c_str(), S.m[0][0], S.m[0][1], S.m[0][2], S.m[1][0], S.m[1][1], S.m[1][2], S.m[2][0], S.m[2][1],
+                     S.m[2][2], S.m[3][0], S.m[3][1], S.m[3][2]);
+                if (seen.size() == 1)
+                    for (int i = 0; i < num; ++i) {
+                        const std::string nm = nameOf(i);
+                        if (nm.rfind("LeftHand", 0) == 0 || nm == "RightProp" || nm == "HipsOffset" || nm == "Root") {
+                            const int par = *reinterpret_cast<const int*>(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride + 56);
+                            MLOG("armik: trace --   bone %d %s, parent %d %s", i, nm.c_str(), par, par >= 0 && par < num ? nameOf(par).c_str() : "?");
+                        }
+                    }
+            }
+        }
     }
     MarkBaked(comp);
     static int logged = 0;
@@ -633,6 +703,12 @@ bool BakedMove(std::uintptr_t comp, float (&d)[16]) {
         return true;
     }
     return false;
+}
+
+bool FreeHandRel(float (&rel)[16]) {
+    if (!g_freeRelTick || GetTickCount() - g_freeRelTick > 250) return false;
+    std::memcpy(rel, g_freeRel.m, sizeof(rel));
+    return true;
 }
 
 bool IsBaked(std::uintptr_t comp) {

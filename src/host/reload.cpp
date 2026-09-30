@@ -152,6 +152,9 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
                  geo_.magGrab[1] * 100.0f, geo_.magGrab[2] * 100.0f, geo_.magGrabR * 100.0f, geo_.magOut[0], geo_.magOut[1],
                  geo_.magOut[2], geo_.boltGrab[0] * 100.0f, geo_.boltGrab[1] * 100.0f, geo_.boltGrab[2] * 100.0f,
                  geo_.boltBack[0], geo_.boltBack[1], geo_.boltBack[2], geo_.boltTravel * 100.0f);
+        if (geo_.caps & 64u)
+            MLOG("reload: %s -- a held magazine sits at %.1f %.1f %.1f cm from the aim point (the reload grip)", geo_.key,
+                 geo_.magHeld.px * 100.0f, geo_.magHeld.py * 100.0f, geo_.magHeld.pz * 100.0f);
     }
 }
 
@@ -243,6 +246,10 @@ void ManualReload::Frame(const In& in, Out& out) {
     lastBoltW_ = X(boltW);
     out.targetOk[0] = true;
     out.target[0] = X(grabW);
+    out.targetOk[2] = true;
+    out.target[2] = X(grabW);
+    if (mag_ == kInHand)  // the aim point that puts the held magazine's grab point at the well
+        out.target[2] = X(Sub(Sub(grabW, Sub(P(in.off.position), P(in.offAim.position))), Rotate(in.off.orientation, P(heldRel_.position))));
     if (geo_.caps & 2u) {
         out.targetOk[1] = true;
         out.target[1] = X(boltW);
@@ -279,6 +286,7 @@ void ManualReload::Frame(const In& in, Out& out) {
             // Hold is authored for the left off hand; the right one holds it mirrored (3.2).
             heldRel_.position = {o == 1 ? -hold_[0] : hold_[0], hold_[1], hold_[2]};
             armed_ = false;
+            snapHeld_ = true;
             SetMag(kInHand, "taken from the pouch");
             Pulse(out, o, 0.5f, 30.0f);
         } else {
@@ -360,16 +368,43 @@ void ManualReload::Frame(const In& in, Out& out) {
     }
     out.maskTrigger[o] = twin || trigLatch_;
     float dist = 1e9f, angle = 180.0f;
+    const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
+    lastNow_ = in.now;
     if (mag_ == kInHand) {
         if (!in.offHeld) {
             Queue(shared::kReloadDrop, in.now);
             SetMag(kOut, "let go: dropped");
         } else {
+            // Round 31: the game's reload grip says where the magazine sits in the drawn hand (magHeld, in the aim
+            // frame); a pouch magazine goes straight there, a pulled one eases over ~0.1 s.
+            if (geo_.caps & 64u) {
+                const shared::Pose& h = geo_.magHeld;
+                const XrPosef heldAim{{h.qx, h.qy, h.qz, h.qw}, {h.px, h.py, h.pz}};
+                const XrPosef want = Relative(in.off, Compose(in.offAim, heldAim));
+                if (snapHeld_) {
+                    heldRel_ = want;
+                } else {
+                    const float k = 1.0f - std::exp(-dt / 0.05f);
+                    const V3 p = Add(P(heldRel_.position), Scale(Sub(P(want.position), P(heldRel_.position)), k));
+                    XrQuaternionf a = heldRel_.orientation, b = want.orientation;
+                    if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0.0f) b = {-b.x, -b.y, -b.z, -b.w};
+                    XrQuaternionf q{a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, a.w + (b.w - a.w) * k};
+                    const float n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+                    if (n > 1e-6f) q = {q.x / n, q.y / n, q.z / n, q.w / n};
+                    heldRel_ = {q, X(p)};
+                }
+            }
+            snapHeld_ = false;
             magPose_ = Compose(in.off, heldRel_);
             dist = Len(Sub(P(magPose_.position), grabW));
             const V3 heldOut = Rotate(magPose_.orientation, A3(geo_.magOut));
             angle = std::acos(std::clamp(Dot(heldOut, outW), -1.0f, 1.0f)) * 57.2958f;
             if (!armed_ && dist > insertR_ + 0.02f) armed_ = true;  // away from the well first (a pull ends inside it)
+            if (armed_ && dist < insertR_ && angle >= insertAngle_ && in.now - nearMissAt_ > 1.0) {
+                nearMissAt_ = in.now;
+                MLOG("reload: at the well (%.1f cm) but turned %.0f deg from its way (InsertAngle %.0f)", 100.0f * dist, angle,
+                     insertAngle_);
+            }
             if (armed_ && dist < insertR_ && angle < insertAngle_) {
                 Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
                 SetMag(kInGun, "inserted");

@@ -1091,3 +1091,6 @@ deleted; its result is in `verify/otherlevel.txt`.
 - **Twin magazines, as built:** a used half with rounds left can go back in (flip back and insert); the player's
   "once before a new pair" is then a habit, not a rule ([H]: should the mod forbid it?). The MP40's upgrade-0 pair is
   not handled (no B pose measured).
+- **Round 31, the grips:** a held magazine's pose comes from the game's reload animation (the hold grip), not `Hold`
+  (which stays for guns without a hold grip). With the grip the magazine is turned in the hand as the animation holds
+  it, so lining it up at the well is up to the player's wrist ([H]; the host logs near misses: "at the well but turned").

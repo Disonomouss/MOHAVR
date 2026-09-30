@@ -23,5 +23,8 @@ bool Install(const Config& cfg);
 bool IsBaked(std::uintptr_t component);
 // Game thread: the move this part was last baked with (world, row-major: drawn = the game's pose x d), if within 250 ms.
 bool BakedMove(std::uintptr_t component, float (&d)[16]);
+// Game thread (round 31): the free support hand's frame in its controller's frame (world axes; the mirror world's when
+// mirrored), as the last arms bake placed it -- the drawn hand = this x the controller frame.
+bool FreeHandRel(float (&rel)[16]);
 
 }  // namespace mohavr::armsik

@@ -16,6 +16,7 @@
 #include "../common/shared_frame.hpp"
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "arms_ik.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -24,6 +25,8 @@
 
 namespace mohavr::reload {
 namespace {
+
+#include "reload_grips.inc"
 
 Config           g_cfg;
 SafetyHookInline g_hook;
@@ -770,6 +773,53 @@ void PairMove(const GunLine& l, int from, float to, float* out) {
     Mul(inv, mt, out);
 }
 
+// Round 31, the reload grips (reload_grips.inc): a 4x3 row-major frame as a 4x4.
+void Mat12(const float* m, float* out) {
+    const float r[16] = {m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, m[9], m[10], m[11], 1};
+    std::memcpy(out, r, sizeof(r));
+}
+const GripData* FindGrip(const std::string& key, const char* kind) {
+    for (const GripData& g : kGrips)
+        if (key == g.gun && !std::strcmp(kind, g.kind)) return &g;
+    return nullptr;
+}
+struct GripState {
+    float           target[16];
+    const GripData* grip = nullptr;
+    DWORD           tick = 0;
+} g_gripNow;
+// A rotation (columns: the frame's x, y, z axes) as a quaternion (x, y, z, w).
+void MatQuat(const float (&c)[3][3], float (&q)[4]) {
+    // c[col][row]: m(row, col)
+    auto m = [&](int r, int k) { return c[k][r]; };
+    const float tr = m(0, 0) + m(1, 1) + m(2, 2);
+    if (tr > 0.0f) {
+        const float s = std::sqrt(tr + 1.0f) * 2.0f;
+        q[3] = 0.25f * s;
+        q[0] = (m(2, 1) - m(1, 2)) / s;
+        q[1] = (m(0, 2) - m(2, 0)) / s;
+        q[2] = (m(1, 0) - m(0, 1)) / s;
+    } else if (m(0, 0) > m(1, 1) && m(0, 0) > m(2, 2)) {
+        const float s = std::sqrt(1.0f + m(0, 0) - m(1, 1) - m(2, 2)) * 2.0f;
+        q[3] = (m(2, 1) - m(1, 2)) / s;
+        q[0] = 0.25f * s;
+        q[1] = (m(0, 1) + m(1, 0)) / s;
+        q[2] = (m(0, 2) + m(2, 0)) / s;
+    } else if (m(1, 1) > m(2, 2)) {
+        const float s = std::sqrt(1.0f + m(1, 1) - m(0, 0) - m(2, 2)) * 2.0f;
+        q[3] = (m(0, 2) - m(2, 0)) / s;
+        q[0] = (m(0, 1) + m(1, 0)) / s;
+        q[1] = 0.25f * s;
+        q[2] = (m(1, 2) + m(2, 1)) / s;
+    } else {
+        const float s = std::sqrt(1.0f + m(2, 2) - m(0, 0) - m(1, 1)) * 2.0f;
+        q[3] = (m(1, 0) - m(0, 1)) / s;
+        q[0] = (m(0, 2) + m(2, 0)) / s;
+        q[1] = (m(1, 2) + m(2, 1)) / s;
+        q[2] = 0.25f * s;
+    }
+}
+
 // Round 31: a dropped magazine falls (from the well, or from the hand with its speed), tumbling a little, lands at the
 // feet's height, rests a moment and is gone. World frames (the mirror world while mirrored, like everything baked).
 struct Fall {
@@ -817,6 +867,8 @@ struct Geo {
     Vec3        magGrab, magOut, boltGrab, boltBack;
     float       magGrabR = 0.07f, boltTravel = 0.0f;
     bool        haveBolt = false, heldBack = false;
+    bool        haveHeld = false;      // round 31: where a held magazine sits in the drawn hand (the hold grip)
+    float       heldPos[3] = {}, heldQuat[4] = {0, 0, 0, 1};
 };
 Geo  g_geo;
 bool g_bakeFresh = false;  // a gun bake since the last Draw (the pipeline is alive)
@@ -1084,6 +1136,56 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         const bool shown = (magState == 0 || magState == 1) && (l->open ? (c >= 1 || s.pending) : (c >= 2 || s.pending));
         if (!shown) Collapse(bones, r->top, saved, kMove);
         topShown = shown ? 1 : 0;
+    }
+    // Round 31, the reload grips: the off hand takes the game's own grip -- on the magazine while grabbed, on the one it
+    // holds, on the handle while racking -- the part's drawn frame x the grip (the hand in the part's frame).
+    g_gripNow.grip = nullptr;
+    if (g_cfg.reloadGrips && haveRf) {
+        const char* kind = magState == 1 ? "mag" : magState == 2 ? "hold" : racking ? "bolt" : nullptr;
+        const GripData* gd = kind ? FindGrip(key, kind) : nullptr;
+        const int part = !gd ? -1 : racking && magState != 1 && magState != 2 ? b : (v >= 0 ? r->mag[v] : -1);
+        if (gd && part >= 0 && part < num) {
+            float partW[16], hand[16];
+            Mul(bones + 16 * part, l2w, partW);
+            Mat12(gd->hand, hand);
+            Mul(hand, partW, g_gripNow.target);
+            g_gripNow.grip = gd;
+            g_gripNow.tick = nowTick;
+        }
+    }
+    // Where a held magazine sits in the drawn hand (the hold grip): the free hand's frame (arms_ik) x inv(grip) = the
+    // magazine bone, carried to its grab-point frame (as seated: the in-gun grab frame on the in-gun bone); published
+    // to the host in the off controller's aim frame (un-mirrored), which then holds the magazine there.
+    g_geo.haveHeld = false;
+    if (g_cfg.reloadGrips && haveRf && v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
+        const GripData* gd = FindGrip(key, "hold");
+        float relM[16];
+        if (gd && armsik::FreeHandRel(relM)) {
+            float handT[16], grip[16], gripInv[16], boneW[16], rest[16], restInv[16], grabInBone[16], fheldW[16], offInv[16], rel[16];
+            Mul(relM, off, handT);
+            Mat12(gd->hand, grip);
+            AffineInverse(grip, gripInv);
+            Mul(gripInv, handT, boneW);
+            posed(r->mag[v], rest);
+            Mul(rest, a, rest);
+            AffineInverse(rest, restInv);
+            Mul(fgrab, restInv, grabInBone);
+            Mul(grabInBone, boneW, fheldW);
+            AffineInverse(off, offInv);
+            Mul(fheldW, offInv, rel);
+            if (rf.mirrored) {  // the real controller's: y (right) flipped on both sides
+                for (int i = 0; i < 4; ++i)
+                    for (int k = 0; k < 4; ++k)
+                        if ((i == 1) != (k == 1)) rel[i * 4 + k] = -rel[i * 4 + k];
+            }
+            // Host convention (x right, y up, z back; metres): the held frame's axes in the off frame's.
+            const float cols[3][3] = {{rel[5], rel[6], -rel[4]}, {rel[9], rel[10], -rel[8]}, {-rel[1], -rel[2], rel[0]}};
+            MatQuat(cols, g_geo.heldQuat);
+            g_geo.heldPos[0] = rel[13] / upm;
+            g_geo.heldPos[1] = rel[14] / upm;
+            g_geo.heldPos[2] = -rel[12] / upm;
+            g_geo.haveHeld = true;
+        }
     }
     // The geometry for the host (RELOAD-DESIGN 5.5): points relative to G on its rows (forward, right, up) -> the host's
     // (right, up, -forward) in metres; the right component negated in the mirror world (5.6).
@@ -1358,9 +1460,29 @@ bool Install(const Config& cfg, bool pipelineHooked) {
     return true;
 }
 
+float       g_gunL2W[16];
+std::string g_gunKey;
+
+bool GripNow(float (&target)[16], const float*& fingers, const char* const*& names) {
+    if (!g_gripNow.grip || GetTickCount() - g_gripNow.tick > 100) return false;
+    std::memcpy(target, g_gripNow.target, sizeof(target));
+    fingers = &g_gripNow.grip->fingers[0][0];
+    names = kGripFingers;
+    return true;
+}
+
+bool LastGun(float (&l2w)[16], std::string& key) {
+    if (g_gunKey.empty() || GetTickCount() - g_lastGunBake > 250) return false;
+    std::memcpy(l2w, g_gunL2W, sizeof(l2w));
+    key = g_gunKey;
+    return true;
+}
+
 void OnGunBake(std::uintptr_t comp, const float* saved, float* bones, int num, const float* l2w, const float* a,
                const float* kMove, const float* carry) {
     g_lastGunBake = GetTickCount();
+    std::memcpy(g_gunL2W, l2w, sizeof(g_gunL2W));
+    g_gunKey = names::ClassName(names::Outer(comp));
     g_bakeFresh = true;
     if (g_cfg.manualReload) OverrideBones(comp, saved, bones, num, l2w, a, kMove, carry);
     if (!g_cfg.debugReloadProbe) return;
@@ -1463,7 +1585,7 @@ void OnDraw(shared::Header* hdr) {
     // Converted only with this Draw's geometry (a gun mid-switch, or one whose data failed, is not).
     hdr->reloadCaps = (line && geoOk ? 1u : 0u) | (geoOk && g_geo.haveBolt ? 2u : 0u) | (g_blockAllowed ? 4u : 0u) |
                       (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u) |
-                      (geoOk && line && TapedNow(key) ? 32u : 0u);
+                      (geoOk && line && TapedNow(key) ? 32u : 0u) | (geoOk && g_geo.haveHeld ? 64u : 0u);
     if (geoOk) {
         const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
         float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};
@@ -1474,6 +1596,9 @@ void OnDraw(shared::Header* hdr) {
         }
         hdr->magGrabR = g_geo.magGrabR;
         hdr->boltTravel = g_geo.haveBolt ? g_geo.boltTravel : 0.0f;
+        if (g_geo.haveHeld)
+            hdr->magHeld = {g_geo.heldPos[0], g_geo.heldPos[1], g_geo.heldPos[2], g_geo.heldQuat[0], g_geo.heldQuat[1],
+                            g_geo.heldQuat[2], g_geo.heldQuat[3]};
     }
     hdr->ammoClip = clipP ? *clipP : 0;
     hdr->ammoMax = maxP ? maxP[0] : 0;

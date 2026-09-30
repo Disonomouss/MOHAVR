@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 14;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload
+inline constexpr std::uint32_t kVersion = 15;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -180,7 +180,8 @@ struct Header {
     volatile std::uint32_t reloadGeoSeq;
     std::uint32_t          reloadCaps;     // bit0 converted gun in hand, bit1 action bone(s) found, bit2 hook installed,
                                            // bit3 alt-fire mode, bit4 the game's block filter passes for this gun now,
-                                           // bit5 a taped (twin) magazine pair: the off hand's trigger flips it
+                                           // bit5 a taped (twin) magazine pair: the off hand's trigger flips it,
+                                           // bit6 magHeld valid (the reload grips)
     char                   reloadKey[48];  // the attachment class the geometry is for
     float                  magGrab[3];     // the in-gun magazine's grab point = the insert target
     float                  magOut[3];      // unit: the way the magazine leaves the well
@@ -207,6 +208,11 @@ struct Header {
     volatile std::uint32_t reloadEvtSeq;
     std::uint32_t          reloadEvt[8];   // low byte: 1 EJECT, 2 INSERT, 3 RACK, 4 TAKE, 5 DROP; high 24 bits: the low 24
                                            // bits of the key hash
+    // --- v15 (round 31): where a held magazine sits in the drawn hand (the reload animation's grip), for the host's
+    // insert test and drawing -- the magazine's grab-point frame in the off hand's aim frame (host convention, metres;
+    // un-mirrored). Written with the geometry (reloadGeoSeq); valid when reloadCaps bit6.
+    Pose                   magHeld;        // 1464
+    std::uint32_t          pad15;          // 1492
 };
 #pragma pack(pop)
 
@@ -245,7 +251,8 @@ static_assert(offsetof(Header, magPose) == 1396, "shared::Header layout must mat
 static_assert(offsetof(Header, rack) == 1424, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, reloadEvtSeq) == 1428, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, reloadEvt) == 1432, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1464, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, magHeld) == 1464, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 1496, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -263,6 +270,7 @@ struct ReloadGeo {
     char          key[48];
     float         magGrab[3], magOut[3], magGrabR, boltGrab[3], boltBack[3], boltTravel;
     std::int32_t  clip, max, reserve;
+    Pose          magHeld;
 };
 // Seqlock read of it; false while the game is mid-write (try next frame).
 inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
@@ -286,6 +294,7 @@ inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
     g.clip = h->ammoClip;
     g.max = h->ammoMax;
     g.reserve = h->ammoReserve;
+    g.magHeld = h->magHeld;
 #if defined(_MSC_VER)
     _ReadWriteBarrier();
 #endif
