@@ -226,6 +226,21 @@ inline constexpr std::uint8_t   kExecActivateSystemBytes[] = {
     0x41, 0x75, 0x12, 0x83, 0xC1, 0x01, 0x6A, 0x00, 0x89, 0x48, 0x1C, 0x8B, 0x48, 0x18, 0x50, 0xFF,
     0x15, 0xC4, 0x35, 0x6B, 0x11, 0x8B, 0xC6, 0xE8, 0x74, 0x7B, 0xE7, 0xFF, 0x5E, 0xC2, 0x08, 0x00};
 
+// --- manual reload (D21, RELOAD-DESIGN.md 2.5) ---
+// UEALAWeapon::execHasReserveAmmo (native table entry 0x11612330 -> "intAEALAWeaponexecHasReserveAmmo" 0x11569F88):
+// thiscall, ECX = the weapon, [esp+4] FFrame&, [esp+8] Result, RET 8; after P_FINISH it calls the virtual at vtable
+// +0x324 and stores the UBOOL into *Result. Every script path that reloads by itself tests it. FOLDED by the linker with
+// AMOHAGameInfo::execInitialLoadCompleteKismetActionPresent (entry 0x11612438 -> 0x115695F0, the same function): a hook
+// here also runs with ECX = the GameInfo at level start / respawn -- compare `this` with the pawn's weapon by pointer
+// before anything else, and never change the result for any other object. 59 bytes (verified against the unpacked exe
+// 2026-09-30, and both table entries).
+inline constexpr std::uintptr_t kExecHasReserveAmmo = 0x10E45CC0;
+inline constexpr std::uint8_t   kExecHasReserveAmmoBytes[] = {
+    0x8B, 0x44, 0x24, 0x04, 0x83, 0x40, 0x1C, 0x01, 0x56, 0x8B, 0xF1, 0x8B, 0x48, 0x1C, 0x80, 0x39,
+    0x41, 0x75, 0x12, 0x83, 0xC1, 0x01, 0x6A, 0x00, 0x89, 0x48, 0x1C, 0x8B, 0x48, 0x18, 0x50, 0xFF,
+    0x15, 0xC4, 0x35, 0x6B, 0x11, 0x8B, 0x06, 0x8B, 0x90, 0x24, 0x03, 0x00, 0x00, 0x8B, 0xCE, 0xFF,
+    0xD2, 0x8B, 0x4C, 0x24, 0x0C, 0x89, 0x01, 0x5E, 0xC2, 0x08, 0x00};
+
 // --- M8 arm IK (ENGINE-NOTES 5x) ---
 // UMOHASkeletalMeshComponent::UpdateTransform (fastcall, ECX = component; slot in the arms' vtable 0x11587D38):
 // bLockTranslation, then USkeletalMeshComponent::UpdateTransform 0x10CFAC10, which ends with
@@ -288,6 +303,7 @@ inline constexpr Signature kSignatures[] = {
     {"proxy determinant read (decal A)",   kProxyDetReaderDecalA, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
     {"proxy determinant read (decal B)",   kProxyDetReaderDecalB, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
     {"particle execActivateSystem",        kExecActivateSystem, kExecActivateSystemBytes, sizeof(kExecActivateSystemBytes)},
+    {"weapon execHasReserveAmmo",          kExecHasReserveAmmo, kExecHasReserveAmmoBytes, sizeof(kExecHasReserveAmmoBytes)},
 };
 
 }  // namespace mohavr::addr

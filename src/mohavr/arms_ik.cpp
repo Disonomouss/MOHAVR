@@ -16,6 +16,7 @@
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
+#include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
 #include "vr_view.hpp"
@@ -587,6 +588,7 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
     for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
+    if (!arms) reload::OnGunBake(comp, &sv->bones[0].m[0][0], num, &l2w.m[0][0], &A.m[0][0]);
     if (arms && g_rig.ok && static_cast<int>(sv->bones.size()) == num) {
         // Where the drawn gun hand sits in its controller's frame (the per-move log), the controller where the eyes see it.
         float gf[16], of[16];

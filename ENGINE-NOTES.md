@@ -1069,6 +1069,32 @@ before the game sees it, so forward is where you look; not in the menu layout. [
 (rendered yaw 16388 -> 8196), stick forward 2.5 s: `body` walked along the heading (90 deg Unreal), `head` 50 deg left of
 it (40 deg; a slope climbed 163 units on the way) -- `logs/modlogs/r29-move-*`.
 
+## 5am. Manual reload, M0: the probe's measurements (2026-09-30; RELOAD-DESIGN.md)
+
+`Debug.ReloadProbe=1` (reload.cpp; logs `logs/modlogs/reload-m0-MOHAVR.log`, `reload-m0b-MOHAVR.log`), no behaviour
+change. Settled:
+- **The harness save's loadout** is now G43 + BAR + Colt (plus grenades, Comp B), in Var_Flk, every gun at upgrade
+  level 2. `GiveWeapon MOHAGameNonNative.MOHAThompson` (`MOHA_MP40`, `MOHAG43`, `MOHAMauser`) adds the gun to the inventory
+  but MOHA's `SwitchWeapon` only walks the loadout slots; the engine's **`NextWeapon`** reaches them, and they come fully
+  upgraded from the profile's weapon experience (Thompson 50-round drum, MP40 64). `UpgradeWeapon` is not needed.
+- **Offsets:** reflection equals the static ones -- `AmmoCount[3]` +0x2D4, `MaxAmmoCount[3]` +0x2E0 (the second element is
+  the alt mode's: G43 1, BAR 20, Thompson 30, MP40 32), `bAlternateFireMode` 0x400 / `bInfiniteAmmo` 0x1 of +0x2EC,
+  `AmmoClass[3]` +0x2FC; `MOHAInventoryManager.AmmoStorage` +0x228 (stride 12), `NumAmmoClasses` +0x2A0 (10 classes). The
+  exact and the subclass (native) reserve matches pick the same entry for the Rifle, AutoRifle, Pistol and SMG classes.
+  **The Colt has `bInfiniteAmmo` set** (the pistol's reserve never runs out).
+- **Bone space and scale:** the game's pose (SpaceBases) is in mesh space (the StG44-style values of the design hold: G43
+  `Bolt` (0, -9.16, 19.70), BAR `Bolt` (2.00, -6.60, 12.30) and `magazine` (-0.02, 0.73, 20.84) in taped state A, Colt
+  `gunSlide` (0, -7.00, 2.50), Thompson `Bolt` (0, -11, -3.5), MP40 `Bolt` Z 17.31 and `chamber_slide` 25.73 at idle);
+  the gun component's L2W and L2W x D have unit rows (scale 1).
+- **RefSkeleton:** `FMeshBone` position at +28 (matches the pose for static bones; G43 `bullet` parked at Z -37.5, MP40
+  `Bolt` Z 18.575 in the bind pose), ParentIndex at +56.
+- **Hidden upgrade parts:** the 3x3 is zeroed and the translation kept (|det| 0: Thompson `upgrade_03_hide_magazine`,
+  MP40 `magazine` / `upgrade_01_tapedMagazine`, G43 `altFire_grenade`); the visible variants are as the design lists
+  (Thompson drum, MP40 64-round, BAR and G43 both magazine bones).
+- **Bakes per Draw:** 2 standing, 6.7 on average (up to 10) while moving.
+- **The folded native:** `execHasReserveAmmo` is called for the `MOHAGameInfo` at level start (result 0, left alone);
+  for the pawn's weapon it's called on every equip.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
