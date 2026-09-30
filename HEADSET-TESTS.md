@@ -1406,6 +1406,48 @@ the test hand unturned, both times); the G43's grab like held.
 2. Grab like held: which guns, does it look better?
 3. Anything else odd?
 
+**Answers:** (the player's words, 2026-09-30)
+1. Fixed.
+2. That is the reverse of what I meant. The pose after you have taken the magazine out should look like the pose when
+   it is being inserted.
+Also (after the answers): the off hand's wrist is twisted when the BAR is equipped.
+
+**Log received:** `logs/modlogs/headset-r34-*` (the BAR and the G43 swapped back and forth; the free hand's grip was
+taken from the BAR as soon as it was drawn).
+
+**Follow-up (round 35):** below.
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 35: prepared 2026-09-30, "hold like grab", the BAR's off hand
+**Changed:**
+- **Hold like grab** (Weapons > Reload grip, per gun; round 34's "Grab like held" had it the wrong way round): a
+  magazine in your hand -- pulled out, or from the pouch -- is held the way the grab holds it (the grab's grip and its
+  adjustments), so it looks the same coming out as going in. Your round-34 G43 setting carries over as this. The Colt
+  and the C96 have no grab grip in their animations; they keep the held grip.
+- **The off hand with the BAR:** the free off hand (and the hand holding a magazine) took its hold from whichever long
+  gun you had last held still: the BAR's is 17 degrees off the rifles' and open-handed, the Thompson's and MP40's a
+  fist. Now it comes from the rifles only (G43, Garand, K98, Springfield, shotgun: their holds agree within 2 degrees),
+  and every weapon uses it. It is kept between sessions, so a session begun with the BAR has it from the start, once
+  one of those rifles has been drawn with this version. `[Weapon] FreeHandFrom`, `FreeHandSave`.
+- Because of that, a magazine held with the BAR (or the Thompson, MP40, StG44) sits in a hand turned like the rifles'
+  hand: the BAR hold adjustments you made were set against the BAR's own hand, so they may need a touch.
+[S]: every gun measured (the list above); after the G43, the BAR, the Thompson and the StG44 showed the G43's relaxed
+hand; a second session had it from the saved hold before any rifle was drawn; the G43's pulled and pouch magazines
+held like its grab, inserted; with the option off, its own held grip again.
+
+**How to try it:**
+1. Draw the G43 (or any rifle) once, then the BAR, the Thompson: the off hand, free and holding a magazine.
+2. Weapons > Reload grip > "Hold like grab" on the guns whose held magazine should look like the grab.
+
+**Questions:**
+1. The BAR's off hand: still twisted (free, and holding a magazine)?
+2. Hold like grab: the right way round now? Which guns?
+3. Do your BAR hold adjustments need redoing?
+4. Anything else odd?
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

@@ -1182,11 +1182,14 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         m[14] = hz + d[0];  // forward = +Z
         std::memcpy(out, m, sizeof(m));
     };
+    // Round 35: "hold like grab" (the player's, per gun) -- the magazine in the hand (pulled out, or from the pouch) held
+    // with the grab grip and its adjustments, so it looks the same coming out as going in (round 34 had it the other way
+    // round). Guns whose reload animation has no grab grip (the Colt, the C96) keep the hold.
+    const GripData* grabGd = FindGrip(key, "mag");
+    const bool holdLikeGrab = (gripFlags & 1u) && grabGd;
     if (g_cfg.reloadGrips && haveRf) {
-        // Round 34: "grab like held" (the player's, per gun) -- the seated magazine taken with the held grip.
-        const bool likeHeld = magState == 1 && (gripFlags & 1u);
-        const char* kind = magState == 1 ? (likeHeld ? "hold" : "mag") : magState == 2 ? "hold" : racking ? "bolt" : nullptr;
-        const int which = magState == 1 ? (likeHeld ? 1 : 0) : magState == 2 ? 1 : 2;
+        const char* kind = magState == 1 ? "mag" : magState == 2 ? (holdLikeGrab ? "mag" : "hold") : racking ? "bolt" : nullptr;
+        const int which = magState == 1 ? 0 : magState == 2 ? (holdLikeGrab ? 0 : 1) : 2;
         const GripData* gd = kind ? FindGrip(key, kind) : nullptr;
         const int part = !gd ? -1 : racking && magState != 1 && magState != 2 ? b : (v >= 0 ? r->mag[v] : -1);
         if (gd && part >= 0 && part < num) {
@@ -1218,12 +1221,12 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     // to the host in the off controller's aim frame (un-mirrored), which then holds the magazine there.
     g_geo.haveHeld = false;
     if (g_cfg.reloadGrips && haveRf && v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
-        const GripData* gd = FindGrip(key, "hold");
+        const GripData* gd = holdLikeGrab ? grabGd : FindGrip(key, "hold");
         float relM[16];
         if (gd && armsik::FreeHandRel(relM)) {
             float handT[16], grip[16], gripInv[16], boneW[16], rest[16], restInv[16], grabInBone[16], fheldW[16], offInv[16], rel[16];
             Mul(relM, off, handT);
-            gripOf(gd, 1, grip);
+            gripOf(gd, holdLikeGrab ? 0 : 1, grip);
             AffineInverse(grip, gripInv);
             Mul(gripInv, handT, boneW);
             Mul(saved + 16 * r->mag[v], preCanon, rest);  // the canonical pair (half A in the well)

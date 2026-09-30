@@ -221,7 +221,7 @@ struct Header {
     volatile std::uint32_t gripSeq;        // 1496
     char                   gripKey[48];    // 1500
     float                  gripAdj[3][6];  // 1548
-    std::uint32_t          gripFlags;      // 1620 bit0: the magazine is grabbed with the held grip (round 34)
+    std::uint32_t          gripFlags;      // 1620 bit0: the magazine in the hand is held with the grab grip (round 35)
 };
 #pragma pack(pop)
 

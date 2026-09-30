@@ -242,3 +242,14 @@ magazine is grabbed only with the off hand's trigger held (`GrabTrigger`), the C
 locked-back slide once a magazine is in (`TriggerRack`).
 **Why:** the player's requests (round 31 answers).
 **Costs:** no zoom on the pad (it can be mapped back in `[Controls]`).
+
+### D25. The free hand's hold comes from the rifles and is kept between sessions — Decided 2026-09-30 (round 35)
+The free off hand (and the hand holding a magazine) is drawn with one hold for every weapon: the gun hand's grip of a
+rifle (`[Weapon] FreeHandFrom`: G43, Garand, K98, Springfield, M12), mirrored onto the other controller, with that
+rifle's arm pose. The mod keeps it between sessions in `%LOCALAPPDATA%\MOHAVR\MOHAVR.freehand.bin` (derived data, not a
+setting; the test backup covers it like the player's ini).
+**Why:** the player: "off hand wrist twisted when BAR is equipped" -- the hold had followed the last long gun held
+still (the BAR's is 17 deg off and open-handed, the SMGs' a fist); the rifles agree within 2 deg. Kept between sessions
+so a session begun with the BAR (or a loadout with no rifle) has it too.
+**Costs:** until a listed rifle has been drawn once, the last long gun stands in; a second file in the player's
+folder.

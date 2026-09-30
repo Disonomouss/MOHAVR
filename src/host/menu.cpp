@@ -34,7 +34,7 @@ int TabCount(int t) {
     return n;
 }
 // The Reload grip page (round 32): which grip, the hand moved on the part and turned at the wrist, per weapon.
-enum GripItem { gWhich, gLikeHeld, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
+enum GripItem { gWhich, gHoldLikeGrab, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
 const char* kGripNames[3] = {"magazine grab", "held magazine", "handle / bolt"};
 const wchar_t* kGripKinds[3] = {L"mag", L"hold", L"bolt"};
 // The Reload spots page (round 33): the magazine's and the handle's grab rings, moved and sized, per weapon.
@@ -356,8 +356,12 @@ void Menu::SaveFit() {
 
 void Menu::LoadGrips() {
     const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
-    gripLikeHeld_ = !weaponKey_.empty() && !iniPath_.empty() &&
-                    GetPrivateProfileIntW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), 0, iniPath_.c_str()) != 0;
+    // Round 35: <weapon>.holdLikeGrab; round 34's <weapon>.likeHeld (set by a player who meant this) counts until changed.
+    gripHoldLikeGrab_ = false;
+    if (!weaponKey_.empty() && !iniPath_.empty()) {
+        const int old = GetPrivateProfileIntW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), 0, iniPath_.c_str());
+        gripHoldLikeGrab_ = GetPrivateProfileIntW(L"ReloadGrip", (wkey + L".holdLikeGrab").c_str(), old, iniPath_.c_str()) != 0;
+    }
     for (int g = 0; g < 3; ++g) {
         for (float& v : gripAdj_[g]) v = 0.0f;
         if (weaponKey_.empty() || iniPath_.empty()) continue;
@@ -407,7 +411,7 @@ void Menu::PublishGrips() {
     hdr_->gripKey[n] = 0;
     for (int g = 0; g < 3; ++g)
         for (int k = 0; k < 6; ++k) hdr_->gripAdj[g][k] = gripAdj_[g][k];
-    hdr_->gripFlags = gripLikeHeld_ ? 1u : 0u;
+    hdr_->gripFlags = gripHoldLikeGrab_ ? 1u : 0u;
     InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->gripSeq));  // even: done
 }
 
@@ -557,12 +561,14 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         if (in.up) selected_ = (selected_ + gCount - 1) % gCount;
         if (in.down) selected_ = (selected_ + 1) % gCount;
         if ((in.left || in.right) && selected_ == gWhich) gripSel_ = (gripSel_ + (in.right ? 1 : 2)) % 3;
-        if ((in.left || in.right) && selected_ == gLikeHeld && !weaponKey_.empty()) {
-            gripLikeHeld_ = !gripLikeHeld_;
+        if ((in.left || in.right) && selected_ == gHoldLikeGrab && !weaponKey_.empty()) {
+            gripHoldLikeGrab_ = !gripHoldLikeGrab_;
             const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
-            WritePrivateProfileStringW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), gripLikeHeld_ ? L"1" : nullptr, iniPath_.c_str());
+            WritePrivateProfileStringW(L"ReloadGrip", (wkey + L".holdLikeGrab").c_str(), gripHoldLikeGrab_ ? L"1" : nullptr,
+                                       iniPath_.c_str());
+            WritePrivateProfileStringW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), nullptr, iniPath_.c_str());  // round 34's
             PublishGrips();
-            MLOG("menu: %s magazine grab %s", weaponKey_.c_str(), gripLikeHeld_ ? "like the held magazine" : "its own grip");
+            MLOG("menu: %s magazine in the hand %s", weaponKey_.c_str(), gripHoldLikeGrab_ ? "held like the grab" : "its own grip");
         }
         if ((in.left || in.right) && selected_ >= gFwd && selected_ <= gRoll && !weaponKey_.empty()) {
             const float dir = in.right ? 1.0f : -1.0f;
@@ -1021,11 +1027,11 @@ void Menu::RenderGripPage() {
     snprintf(label, sizeof(label), "Grip                  <  %s  >", kGripNames[gripSel_]);
     ImGui::Selectable(label, selected_ == gWhich);
     if (!on) ImGui::BeginDisabled();
-    snprintf(label, sizeof(label), "Grab like held        <  %s  >", gripLikeHeld_ ? "yes" : "no");
-    ImGui::Selectable(label, selected_ == gLikeHeld);
-    if (gripSel_ == 0 && gripLikeHeld_) {
+    snprintf(label, sizeof(label), "Hold like grab        <  %s  >", gripHoldLikeGrab_ ? "yes" : "no");
+    ImGui::Selectable(label, selected_ == gHoldLikeGrab);
+    if (gripSel_ == 1 && gripHoldLikeGrab_) {
         ImGui::PushFont(nullptr, 28.0f);
-        ImGui::TextDisabled("   the magazine grab uses the held magazine's grip (adjust that one)");
+        ImGui::TextDisabled("   the magazine in your hand takes the grab's grip (adjust that one)");
         ImGui::PopFont();
     }
     snprintf(label, sizeof(label), "Forward / back        <  %+.1f  >", a[0]);

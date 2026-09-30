@@ -132,8 +132,9 @@ address-space budget for D3D9On12.
    answered** (all good; asked for: the hand point, ring sizes, a visible flip, a falling magazine -- done, 5am -- and the
    reload animations' hand poses on the magazine, slide and bolt -- done: the reload grips, D23, 5am). Round 31 answered; **round 32 deployed** (grips adjustable per gun, the menu in tabs,
    the BAR flip in the hand, the Thompson drum grab, the MP40 trigger grab, the Colt trigger release, LT unmapped: D24).
-   Round 32 answered (movement where you look: good); round 33 answered (grips adjusted, the drum fixed); **round 34
-   deployed** (the grips against the canonical twin pair: no twist after a flip; "grab like held" per gun). The grenade pickup is parked (the player).
+   Round 32 answered (movement where you look: good); round 33 answered (grips adjusted, the drum fixed); round 34
+   answered (the twist after a flip fixed; "grab like held" was the wrong way round); **round 35 deployed** ("hold like
+   grab" per gun; the free hand's hold from the rifles for every weapon, kept between sessions: the BAR's wrist, D25). The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

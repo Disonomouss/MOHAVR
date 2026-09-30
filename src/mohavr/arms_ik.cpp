@@ -255,6 +255,70 @@ void MarkBaked(std::uintptr_t comp) {
 // The arms' pose (bone -> component) from a long gun held still, taken with the free hand's grip: the free arm starts
 // from it with a pistol or a grenade (round 20: the pistol's own left-arm pose, far from the hand, twisted and jittered).
 std::vector<M4> g_longGunPose;
+// Round 35: the free hand's hold (its grip and that pose) from the guns in [Weapon] FreeHandFrom only -- the rifles, whose
+// grips agree within 2 degrees; the BAR's is 17 off with its support hand open, the SMGs' 19 off and a fist, the Comp B's
+// 61 (the player: "off hand wrist twisted when BAR is equipped"). Once there is one, every weapon's free arm starts from
+// its pose (long guns too), and it is kept between sessions (Weapon.FreeHandSave).
+bool g_freeFromList = false;
+
+bool FreeHandListed(const char* key) {
+    const std::string& list = g_cfg.freeHandFrom;
+    const size_t n = strnlen(key, 48);
+    if (list.empty() || n == 0) return false;
+    for (size_t p = list.find(key, 0, n); p != std::string::npos; p = list.find(key, p + n, n)) {
+        const bool head = p == 0 || list[p - 1] == ' ' || list[p - 1] == ',';
+        const bool tail = p + n == list.size() || list[p + n] == ' ' || list[p + n] == ',';
+        if (head && tail) return true;
+    }
+    return false;
+}
+
+std::wstring FreeHandFile() {
+    wchar_t base[MAX_PATH] = L"";
+    const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return {};
+    return std::wstring(base) + L"\\MOHAVR\\MOHAVR.freehand.bin";
+}
+
+constexpr std::uint32_t kFreeHandMagic = 0x3148464Du;  // "MFH1"
+struct FreeHandHeader {
+    std::uint32_t magic, version, bones;
+    char          key[48];
+    float         rel[16];
+};
+
+bool LoadFreeHand(std::size_t bones, M4& rel, std::vector<M4>& pose, char (&key)[48]) {
+    const std::wstring path = FreeHandFile();
+    FILE* f = nullptr;
+    if (path.empty() || _wfopen_s(&f, path.c_str(), L"rb") != 0 || !f) return false;
+    FreeHandHeader h{};
+    std::vector<M4> p(bones);
+    const bool ok = std::fread(&h, sizeof(h), 1, f) == 1 && h.magic == kFreeHandMagic && h.version == 1 && h.bones == bones &&
+                    std::fread(p.data(), sizeof(M4), bones, f) == bones;
+    std::fclose(f);
+    h.key[47] = 0;
+    if (!ok || !FreeHandListed(h.key)) return false;
+    std::memcpy(rel.m, h.rel, sizeof(h.rel));
+    pose = std::move(p);
+    std::memcpy(key, h.key, sizeof(key));
+    return true;
+}
+
+void SaveFreeHand(const char* key, const M4& rel, const std::vector<M4>& pose) {
+    const std::wstring path = FreeHandFile();
+    if (path.empty()) return;
+    CreateDirectoryW(path.substr(0, path.find_last_of(L'\\')).c_str(), nullptr);
+    const std::wstring tmp = path + L".tmp";
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, tmp.c_str(), L"wb") != 0 || !f) return;
+    FreeHandHeader h{kFreeHandMagic, 1, static_cast<std::uint32_t>(pose.size()), {}, {}};
+    strncpy_s(h.key, key, _TRUNCATE);
+    std::memcpy(h.rel, rel.m, sizeof(h.rel));
+    const bool ok = std::fwrite(&h, sizeof(h), 1, f) == 1 && std::fwrite(pose.data(), sizeof(M4), pose.size(), f) == pose.size();
+    std::fclose(f);
+    if (ok && MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) MLOG("armik: free hand hold saved (from %.47s)", key);
+    else DeleteFileW(tmp.c_str());
+}
 
 // The arms: body, shoulders and the two-bone solves on top of the baked move (bones already = saved * A * L2W^-1).
 // `carry`: the body's move since the view the head and the hand frames come from (Weapon.CatchUp; else identity).
@@ -313,7 +377,18 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     const bool freeHand = g_cfg.freeOffHand && framesOk && offValid && !twoHanded;
     M4 supportDrawn{};  // saved support-side bone -> world
     const shared::Header* hdrK = bridge::SharedHeader();
-    const bool longPose = freeHand && g_cfg.freeArmPose && hdrK && hdrK->weaponKind != 0 && g_longGunPose.size() == saved.size();
+    // How long the weapon has been in hand: its hold is taken only once it has settled (round 35: a still moment of the
+    // StG44's draw was taken, the free hand 82 degrees off).
+    static char heldKey[48] = "";
+    static DWORD heldSince = 0;
+    if (hdrK && std::strncmp(heldKey, hdrK->weaponKey, sizeof(heldKey)) != 0) {
+        std::memcpy(heldKey, hdrK->weaponKey, sizeof(heldKey));
+        heldKey[47] = 0;
+        heldSince = GetTickCount();
+    }
+    const bool settled = GetTickCount() - heldSince > 2500;
+    const bool longPose = freeHand && g_cfg.freeArmPose && hdrK && (hdrK->weaponKind != 0 || g_freeFromList) &&
+                          g_longGunPose.size() == saved.size();
     bool gripOn = false;
     const std::vector<M4>& side1Pose = longPose ? g_longGunPose : saved;
     if (freeHand) {
@@ -329,16 +404,64 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         static bool haveLongGunRel = false;
         static V3 lastOrigin{};
         static int steady = 0;
+        static char fromKey[48] = "";
         const shared::Header* hdr = bridge::SharedHeader();
+        // The hold kept from an earlier session (Weapon.FreeHandSave), until a listed gun gives this session's.
+        static bool triedFile = false;
+        if (!triedFile && g_cfg.freeHandSave && !g_cfg.freeHandFrom.empty()) {
+            triedFile = true;
+            if (LoadFreeHand(saved.size(), longGunRel, g_longGunPose, fromKey)) {
+                haveLongGunRel = true;
+                g_freeFromList = true;
+                MLOG("armik: free hand hold from the last session (%.47s)", fromKey);
+            }
+        }
         M4 rel = Mul(Mul(saved[g_rig.side[0].hand], A), AffineInverse(gunCtrl));
         const bool longGun = hdr && hdr->weaponKind == 0 && std::strncmp(hdr->weaponKey, "Attachment_", 11) == 0;
+        const bool listed = longGun && FreeHandListed(hdr->weaponKey);
         const V3 o = Origin(rel);
         steady = longGun && Len(Sub(o, lastOrigin)) < 0.2f * upm / 100.0f ? steady + 1 : 0;
         lastOrigin = o;
-        if (steady >= 30) {
-            if (!haveLongGunRel) MLOG("armik: free hand grip taken from %.47s (held still 30 frames)", hdr->weaponKey);
+        // A listed gun's hold replaces any; another long gun's only stands in until there is one (the old way when the
+        // list is empty).
+        if (steady >= 30 && settled && (listed || !g_freeFromList)) {
+            if (!haveLongGunRel || std::strncmp(fromKey, hdr->weaponKey, sizeof(fromKey)) != 0) {
+                // Per gun: how far its grip (and so the free hand's) turns from the last gun's (round 35: the BAR's wrist).
+                float turnDeg = 0.0f;
+                if (haveLongGunRel) {
+                    float tr = 0.0f;
+                    for (int i = 0; i < 3; ++i) {
+                        const V3 a = Unit(Row(rel, i)), b = Unit(Row(longGunRel, i));
+                        tr += Dot(a, b);
+                    }
+                    turnDeg = std::acos(std::fmax(-1.0f, std::fmin(1.0f, 0.5f * (tr - 1.0f)))) * 57.29578f;
+                }
+                const V3 o2 = Origin(rel), x = Unit(Row(rel, 0)), y = Unit(Row(rel, 1)), z = Unit(Row(rel, 2));
+                MLOG("armik: free hand grip taken from %.47s (held still 30 frames; turned %.0f deg from %.47s's; at %.1f %.1f %.1f; "
+                     "rows %.3f %.3f %.3f / %.3f %.3f %.3f / %.3f %.3f %.3f)",
+                     hdr->weaponKey, turnDeg, haveLongGunRel ? fromKey : "none", o2.x, o2.y, o2.z, x.x, x.y, x.z, y.x, y.y, y.z,
+                     z.x, z.y, z.z);
+                strncpy_s(fromKey, hdr->weaponKey, _TRUNCATE);
+            }
+            // Saved once per session, and again when it moves (a new gun fit): 3 degrees or 1 cm, at most every 10 s.
+            static bool savedOnce = false;
+            static M4 savedRel{};
+            static DWORD savedTick = 0;
+            if (listed && g_cfg.freeHandSave) {
+                float tr = 0.0f;
+                for (int i = 0; i < 3; ++i) tr += Dot(Unit(Row(rel, i)), Unit(Row(savedRel, i)));
+                const float turn = std::acos(std::fmax(-1.0f, std::fmin(1.0f, 0.5f * (tr - 1.0f)))) * 57.29578f;
+                const bool moved = turn > 3.0f || Len(Sub(Origin(rel), Origin(savedRel))) > upm / 100.0f;
+                if (!savedOnce || (moved && GetTickCount() - savedTick > 10000)) {
+                    SaveFreeHand(hdr->weaponKey, rel, saved);
+                    savedOnce = true;
+                    savedRel = rel;
+                    savedTick = GetTickCount();
+                }
+            }
             longGunRel = rel;
             haveLongGunRel = true;
+            g_freeFromList = g_freeFromList || listed;
             g_longGunPose = saved;
         }
         if (haveLongGunRel) rel = longGunRel;

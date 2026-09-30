@@ -1266,6 +1266,24 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
   grabbed with the hold grip and its adjustments.
 - The grip adjustments of another weapon (mid-switch) no longer apply: a read for another key or mid-write gives none.
 
+**Round 35 [S] (2026-09-30, `logs/modlogs/reload-r35*`, `logs/shots/*-r35*`):**
+- **Hold like grab** (`gripFlags` bit0 now means this; `[ReloadGrip] <weapon>.holdLikeGrab`, round 34's `.likeHeld` read
+  as it until the item is changed): InHand's GripNow and `magHeld` take the "mag" grip with adj[0]; no mag grip (Colt,
+  C96) -> the hold. Seen: the G43's pulled and pouch magazines held as grabbed, inserted (62 deg with the test hand
+  unturned; 57 with its own hold).
+- **The free hand's hold per gun** (the gun hand's grip in its controller frame, mirrored, and the arm pose the free
+  arm starts from), measured with the player's gun fits: G43, Garand, K98, Springfield, M12 within 2 deg of each other;
+  Thompson and MP40 19 deg off (a fist); BAR 17 deg (open, palm up: "the wrist twisted"); Comp B 61 deg (it is a
+  "long gun" to the viewmodel); a still moment of the StG44's draw was taken once (82 deg, 20 units away). Before round
+  35 the hold followed the last long gun held still, and a long gun's free arm started from its own live pose.
+- Now: taken only from `[Weapon] FreeHandFrom` guns, 2.5 s after the weapon came into hand; other long guns stand in
+  until one is held; with a listed hold every weapon's free arm starts from its pose (FreeArmPose for long guns too).
+  Kept in `%LOCALAPPDATA%\MOHAVR\MOHAVR.freehand.bin` (magic MFH1 v1, bone count, key, rel, the pose: 4604 bytes; saved
+  once per session and when it moves 3 deg / 1 cm), loaded at the first free-hand frame if the bone count and the list
+  still match. `tools/userdata.ps1` backs it up with the player's ini. Seen: session 1 began with the BAR (its own
+  stand-in), the G43 gave the hold (saved); the BAR, Thompson, StG44 then showed the G43's hand; session 2 loaded it
+  during the parachute, the BAR had it at once.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -67,8 +67,9 @@ HEADSET-TESTS.md.
   and sizes the holster spots and the manual reload's magazine pouch (`[Holsters] <Name>Spot`, `MagPouchSpot` in the
   player's ini), the rings (`[Hands] Rings`), the hand point (the white dot: `[Hands] HandPoint`) and the foregrip / reload
   ring sizes. "Manual reload" toggles D21's reload (`[Weapon] ManualReload`).
-- **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`. `tools/userdata.ps1`
-  backs it up and restores it with the MOHA user folder (a test that creates it has it removed).
+- **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`, beside the free hand's hold the mod
+  keeps (`MOHAVR.freehand.bin`, D25). `tools/userdata.ps1` backs both up and restores them with the MOHA user folder
+  (a test that creates one has it removed).
 - Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`
   (one command per call, about 0.3 s apart).
 - Manual reload tests: `pad_cmd.py --seq "hand=l,@mag|@pouch|@bolt[,dx,dy,dz,yaw,pitch,roll]"` puts the off hand at a

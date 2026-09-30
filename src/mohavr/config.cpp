@@ -95,6 +95,13 @@ Config LoadConfig(const std::wstring& dir) {
     c.armIK          = get(L"Weapon", L"ArmIK", c.armIK);
     c.freeOffHand    = get(L"Weapon", L"FreeOffHand", c.freeOffHand);
     c.freeArmPose    = get(L"Weapon", L"FreeArmPose", c.freeArmPose);
+    {
+        wchar_t v[512] = L"";
+        GetPrivateProfileStringW(L"Weapon", L"FreeHandFrom", L"", v, 512, ini.c_str());
+        c.freeHandFrom.clear();
+        for (const wchar_t* q = v; *q; ++q) c.freeHandFrom += static_cast<char>(*q < 128 ? *q : '?');
+    }
+    c.freeHandSave   = get(L"Weapon", L"FreeHandSave", c.freeHandSave);
     c.elbowHinge     = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ElbowHinge", c.elbowHinge, ini.c_str()));
     c.shoulderWidth  = getf(L"Weapon", L"ShoulderWidth", c.shoulderWidth, 10.0f, 80.0f);
     c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);
