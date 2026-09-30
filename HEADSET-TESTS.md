@@ -1137,6 +1137,36 @@ rotated away by the second launch; its host log is `-MOHAVR-host.prev.log`. Stil
 M12 shotgun, M18 recoilless rifle, Panzerschreck (and the sniper K98 / G43 and MG42 if carried). Upgrades don't change a
 gun's model, so one fit per gun covers them (ENGINE-NOTES 5ak).
 
+**Gun-fit session 2 (11:01-11:16):** crashed again the same way as the pause menu opened (the game's message box:
+"Rendering thread exception", memcpy in d3d9on12; logs `logs/modlogs/20260930-111904-crash2-*`, dump
+`logs/dumps/MOHA.exe.21448.dmp`). The player: "headset direction movement is needed."
+
+---
+
+## Round 29: prepared 2026-09-30, movement where you look, and a crash recorder
+**Changed:**
+- **Movement follows your head:** push the stick forward and you walk where you're looking
+  (`[Controls] MoveDirection=head`); the menu's "Move direction" switches back to the body's heading. [S]: the head
+  turned 45 deg left, forward walked 45-50 deg left (`logs/modlogs/r29-move-*`).
+- **Crash recorder:** if the pause-menu crash happens again, the mod saves a detailed crash file and logs where it
+  happened (`Debug.CrashDump`); nothing else changes. [S]: a test crash was recorded and the game carried on.
+
+**How to try it:** Claude has deployed. Launch as usual, carry on with the gun fits.
+1. Walk while looking around: forward goes where you look?
+2. Menu > Move direction: try both.
+3. If it crashes again: just say so -- Claude collects the crash file.
+
+**Questions:**
+1. Movement where you look: right? Comfortable? (yes / describe)
+2. Any crash? (when, what you were doing)
+3. Anything else odd? (describe)
+
+**Answers:** (the player's words)
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
 ---
 
 ## Template

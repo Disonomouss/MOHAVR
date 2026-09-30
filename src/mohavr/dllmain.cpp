@@ -9,6 +9,7 @@
 
 #include "build_check.hpp"
 #include "config.hpp"
+#include "crash_dump.hpp"
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
 #include "render_res.hpp"
@@ -49,6 +50,7 @@ void Init(HMODULE self) {
         MLOG("STAND DOWN: MOHA.exe is not the pinned build -- no hooks installed, game runs unmodded");
         return;
     }
+    mohavr::crashdump::Install(cfg);
     if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
     mohavr::render::InstallResolution(cfg);
     if (cfg.controllers && cfg.bridgeHost) mohavr::xinput::Install();

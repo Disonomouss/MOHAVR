@@ -183,3 +183,10 @@ throw would reverse the forward one; only a reflection mirrors every gun's brass
 **Costs:** each casing mesh is drawn mirrored too; at 10x it renders as a solid mirror image, but where the mesh
 particles' cull mode comes from wasn't found (the time box) -- if casings ever look hollow, `BrassMirror=0` restores
 round 27's behaviour.
+
+### D20. Movement follows the head by default — Decided 2026-09-30 (round 29)
+`[Controls] MoveDirection=head`: the move stick's forward is where the player looks; `body` (the game's own) stays in
+the menu.
+**Why:** the player asked for it; the aim already comes from the controller and turning from the right stick, so the
+body's heading only decided where "forward" walks.
+**Costs:** looking around while walking steers the walk (the usual trade of head-directed locomotion).

@@ -74,6 +74,11 @@ public:
     // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
     void  SetSwapSticks(bool on) { swapSticks_ = on; }
     void  SetLeftHanded(bool on) { leftHanded_ = on; }
+    // [Controls] MoveDirection (round 29): head = the move stick's forward is where the head faces (its yaw from the body,
+    // radians, left positive; set per XR frame), body = the game's own (the body's heading).
+    void  SetMoveByHead(bool on) { moveByHead_ = on; }
+    bool  MoveByHead() const { return moveByHead_; }
+    void  SetHeadYaw(float yaw) { headYaw_ = yaw; headYawOk_ = true; }
 
 private:
     // Controller inputs. kMenu is the tap of the menu button (main.cpp owns it); kRFlickDown/Up are short
@@ -114,6 +119,8 @@ private:
     bool        testThrow_ = false;
     float       testThrowVel_[3]{};
     bool        swapSticks_ = false, leftHanded_ = false;
+    bool        moveByHead_ = true, headYawOk_ = false;
+    float       headYaw_ = 0.0f;
     Src         map_[tCount][kMaxSources]{};
     Src         mapMenu_[tCount][kMaxSources]{};  // while a game menu is open ([ControlsMenu]: A selects, B backs out)
     bool        menuLayout_ = false;

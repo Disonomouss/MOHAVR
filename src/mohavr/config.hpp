@@ -53,6 +53,8 @@ struct Config {
     bool debugSwapHalves = false; // [Debug] SwapHalves -- left eye in the right half (experiments only)
     bool debugTraceScissor = false;  // [Debug] TraceScissor -- log scissor rects set while the viewport is offset
     bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
+    bool debugCrashDump = true;      // [Debug] CrashDump -- a crash in d3d9/d3d9on12/ucrtbase writes a dump (round 29)
+    bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)
     bool debugGameCommands = false;  // [Debug] GameCommands -- run console commands from %TEMP%\MOHAVR\game_cmd.txt (tests)
     int  bridgeMirror   = 1;      // [Bridge]  Mirror -- the host's desktop mirror: 0 off, 1 over the game window, 2 own window

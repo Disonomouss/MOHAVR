@@ -17,7 +17,7 @@ namespace {
 
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
-enum Item { kWorldScale, kHeight, kTurn, kSticks, kGunHand, kRedDot, kPacing, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
+enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kGunFit, kHolsterPage, kFreeHandPage, kRecenter, kResetScale, kClose, kItemCount };
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -156,6 +156,11 @@ void Menu::ApplySavedSettings() {
     const int defPace = static_cast<int>(GetPrivateProfileIntW(L"Bridge", L"Pace", 0, shipped.c_str()));
     pacing_ = GetPrivateProfileIntW(L"Bridge", L"Pace", defPace, iniPath_.c_str()) != 0;
     if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
+    // Move direction (round 29): likewise the shipped [Controls] MoveDirection until the player toggles it.
+    GetPrivateProfileStringW(L"Controls", L"MoveDirection", L"head", buf, 32, shipped.c_str());
+    GetPrivateProfileStringW(L"Controls", L"MoveDirection", _wcsicmp(buf, L"body") ? L"head" : L"body", buf, 32, iniPath_.c_str());
+    moveByHead_ = _wcsicmp(buf, L"body") != 0;
+    MLOG("menu: move direction %s", moveByHead_ ? "head" : "body");
     MLOG("menu: sticks %s, gun hand %s (at start), red dot %s, frame pacing %s", swapSticks_ ? "swapped (right moves)" : "normal",
          startLeft_ ? "left" : "right", redDot_ ? "on" : "off", pacing_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
@@ -453,6 +458,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             swapSticks_ = !swapSticks_;
             Save();
             MLOG("menu: sticks -> %s", swapSticks_ ? "swapped (right moves, left turns)" : "normal (left moves, right turns)");
+        } else if (selected_ == kMove) {
+            moveByHead_ = !moveByHead_;
+            if (!iniPath_.empty())
+                WritePrivateProfileStringW(L"Controls", L"MoveDirection", moveByHead_ ? L"head" : L"body", iniPath_.c_str());
+            MLOG("menu: move direction -> %s", moveByHead_ ? "head (forward is where you look)" : "body (the game's own)");
         } else if (selected_ == kGunHand) {
             startLeft_ = !startLeft_;
             Save();
@@ -533,6 +543,8 @@ void Menu::Render() {
     ImGui::Selectable(label, selected_ == kTurn);
     snprintf(label, sizeof(label), "Sticks           <  %s  >", swapSticks_ ? "move right, turn left" : "move left, turn right");
     ImGui::Selectable(label, selected_ == kSticks);
+    snprintf(label, sizeof(label), "Move direction   <  %s  >", moveByHead_ ? "where you look" : "body");
+    ImGui::Selectable(label, selected_ == kMove);
     snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
     ImGui::Selectable(label, selected_ == kGunHand);
     snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");

@@ -25,6 +25,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
     c.debugGameCommands = get(L"Debug", L"GameCommands", c.debugGameCommands);
+    c.debugCrashDump = get(L"Debug", L"CrashDump", c.debugCrashDump);
+    c.debugCrashDumpTest = get(L"Debug", L"CrashDumpTest", c.debugCrashDumpTest);
     c.debugMuzzleFreeze = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"MuzzleFreeze", 0, ini.c_str()));
     c.debugSwapEyes  = get(L"Debug", L"SwapEyeOrder", c.debugSwapEyes);
     c.debugSwapHalves = get(L"Debug", L"SwapHalves", c.debugSwapHalves);

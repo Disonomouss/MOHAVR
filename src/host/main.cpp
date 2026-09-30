@@ -644,6 +644,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (headOk) {
                 menuHead = headLoc.pose;
                 menuHeadOk = true;
+                // The head's yaw in LOCAL (whose forward is the body's heading): the twist about +Y, left positive.
+                const auto& q = headLoc.pose.orientation;
+                pad.SetHeadYaw(2.0f * std::atan2(q.y, q.w));
             }
             if (headOk && viewsOk) {
                 auto toPose = [](const XrPosef& p) {
@@ -737,6 +740,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
                     pad.SetLeftHanded(handsOut.gunHand == 0);
                     if (menuOk) pad.SetSwapSticks(menu.SwapSticks());
+                    if (menuOk) pad.SetMoveByHead(menu.MoveByHead());
                 }
                 {
                     static std::uint32_t seenBits = 0xFFFFFFFFu;

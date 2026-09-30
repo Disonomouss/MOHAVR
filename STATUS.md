@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-09-30 (round 28 deployed; the "Next" list is current, the history below it is kept)_
+_Last updated: 2026-09-30 (round 29 deployed; the "Next" list is current, the history below it is kept)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
@@ -116,7 +116,9 @@ address-space budget for D3D9On12.
    red-dot reticle (ENGINE-NOTES §5s): `Aim.Mode` 1 head / 2–3 controller, through the player's
    `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6–10 passed (window lock,
    decals, A/B in menus).
-2. **Gun fits, in progress (the player, before anything else):** fitted StG44, BAR, Colt, Mk II frag, Thompson,
+2. **HEADSET-TESTS round 29** (deployed): movement where you look (`Controls.MoveDirection=head`, D20, ENGINE-NOTES
+   5al) and the crash recorder (`Debug.CrashDump`) for the pause-menu crash (twice in the gun-fit sessions, 5ak).
+   **Gun fits, in progress (the player, before anything else):** fitted StG44, BAR, Colt, Mk II frag, Thompson,
    Garand, C96, Gammon, stick grenade; left: Springfield, K98, G43, MP40, M12 shotgun, M18, Panzerschreck. Then they ship
    as defaults. The grenade pickup is parked (the player); a full manual reload is next after the fits (upgrades only
    show/hide parts of one mesh, ENGINE-NOTES 5ak -- the extended magazines matter there).
@@ -168,8 +170,8 @@ address-space budget for D3D9On12.
   312 MB)** at the landing, but the 30-min soak went down to **205 MB free (largest block 102 MB)** after the
   player walked into the town (streaming; it plateaued). Eye render targets in M3/M4 still come out of this. Re-measure after every addition
   with `tools/measure-variant.ps1`.
-- **One game crash (2026-09-30, the pause menu):** inside D3D9On12's copy for a DrawIndexedPrimitive (a vertex range
-  larger than its buffer), no mod code on the stack, not reproduced (ENGINE-NOTES 5ak). Watch for a second one.
+- **The pause-menu crash (twice on 2026-09-30):** inside D3D9On12's copy for a DrawIndexedPrimitive (a vertex range
+  larger than its buffer), no mod code on the stack, not reproduced in the simulator (ENGINE-NOTES 5ak). Debug.CrashDump records the next.
 - **The host crashes on shutdown** after every Virtual Desktop session (after its clean exit; harmless so far).
 - **A rare startup hang:** twice in many simulator launches (2026-09-25; 2026-09-30 00:36) the game sat on a black
   screen: it ran (120 fps; a pawn and HUD within 3 s) and CalcSceneView ran (mono views), but the viewport Draw never

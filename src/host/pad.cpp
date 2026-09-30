@@ -117,6 +117,11 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
     rightStick_ = stick(L"RightStick", L"right");
     rightY_ = GetPrivateProfileIntW(L"Controls", L"RightStickY", 0, ini.c_str()) != 0;
     sprintToggle_ = GetPrivateProfileIntW(L"Controls", L"SprintToggle", 1, ini.c_str()) != 0;
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Controls", L"MoveDirection", L"head", v, 16, ini.c_str());
+        moveByHead_ = _wcsicmp(v, L"body") != 0;
+    }
 
     XrActionSetCreateInfo asci{XR_TYPE_ACTION_SET_CREATE_INFO};
     strcpy_s(asci.actionSetName, "mohavr_play");
@@ -169,8 +174,8 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
         }
         if (first) m += "none";
     }
-    MLOG("pad: gameplay actions ready -- %s LeftStick=%d RightStick=%d RightStickY=%d SprintToggle=%d", m.c_str(),
-         leftStick_, rightStick_, rightY_, sprintToggle_);
+    MLOG("pad: gameplay actions ready -- %s LeftStick=%d RightStick=%d RightStickY=%d SprintToggle=%d MoveDirection=%s",
+         m.c_str(), leftStick_, rightStick_, rightY_, sprintToggle_, moveByHead_ ? "head" : "body");
     return true;
 }
 
@@ -291,8 +296,17 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     p.rightTrigger = Trigger(value(tRT));
     const float sx[2] = {r.lx, r.rx}, sy[2] = {r.ly, r.ry};
     if (leftStick_ >= 0) {
-        p.thumbLX = Axis(sx[leftStick_]);
-        p.thumbLY = Axis(sy[leftStick_]);
+        float x = sx[leftStick_], y = sy[leftStick_];
+        // MoveDirection=head: the game moves along the body's heading, the view adds the head's yaw -- so the stick,
+        // meant in the head's frame, turns by that yaw into the body's (x right, y forward; left turns are positive).
+        if (moveByHead_ && headYawOk_ && !menuLayout) {
+            const float c = std::cos(headYaw_), s = std::sin(headYaw_);
+            const float bx = x * c - y * s, by = x * s + y * c;
+            x = bx;
+            y = by;
+        }
+        p.thumbLX = Axis(x);
+        p.thumbLY = Axis(y);
     }
     if (rightStick_ >= 0) {
         p.thumbRX = Axis(sx[rightStick_]);

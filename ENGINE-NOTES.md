@@ -1046,10 +1046,28 @@ possible, hide otherwise." Research agent (read-only), then probes.
   element's whole vertex range from a buffer that was smaller or already freed. No mod code on the stack. The minidump
   holds no heap, so the mesh isn't known (`logs/dumps/MOHA.exe.31496.dmp`; `%LOCALAPPDATA%\CrashDumps` keeps the
   latest). Not reproduced: 40 pause/resume cycles in gameplay in the simulator (`pausestress`, 20 into the flat menu view).
+  **A second one at 11:16:35**, the same stack (the game's own message box: "Rendering thread exception", memcpy under
+  d3d9on12 under 0x10902638 / 0x10A9A18C / 0x10AB6A64) and the same moment: the first frames after the pause menu
+  opened (`cinema: ON`), both times after 4-5 pauses and many weapon switches in a gun-fit session (the Thompson, then
+  the M12 shotgun in hand; the right hand, the mirrored brass not in use). The casing meshes (`GCm_Wpn_emptyShells`,
+  4-6 KB) are too small to be the 3156-vertex mesh; 48-byte vertices suggest a skinned first-person part.
+  **Debug.CrashDump=1** (crash_dump.cpp, default on): a vectored handler, for an access violation inside
+  d3d9/d3d9on12/d3d12/ucrtbase, logs a stack scan and writes once `%TEMP%\MOHAVR\crash-<pid>.dmp` with the memory the
+  stack points at (the mesh element, its buffers), then leaves the crash to the game. [S] `Debug.CrashDumpTest=1`: a
+  caught read at 0x10 in ucrtbase's memcpy at the first Draw -- logged, a 19 MB dump written, the game carried on.
 - **The host crashes on shutdown** after its clean "exit 0" (0xC0000409 fail-fast, module unknown, the same offset every
   time): at the end of every Virtual Desktop session since 2026-09-25, never with the simulator -- in the VD runtime's
   teardown, after the host's work is done. Harmless so far; a clean fix would skip the runtime's teardown
   (TerminateProcess after flushing the log).
+
+## 5al. Head-directed movement (2026-09-30, round 29)
+
+The game moves along the body's heading (the controller yaw the right stick turns); the view adds the head's yaw on
+top. `[Controls] MoveDirection=head` (default; the menu's "Move direction" toggles it, the player's choice kept in their
+ini): the host turns the move stick by the head's yaw in LOCAL (the twist about +Y, 2 atan2(qy, qw), left positive)
+before the game sees it, so forward is where you look; not in the menu layout. [S] the simulator's head 45 deg left
+(rendered yaw 16388 -> 8196), stick forward 2.5 s: `body` walked along the heading (90 deg Unreal), `head` 50 deg left of
+it (40 deg; a slope climbed 163 units on the way) -- `logs/modlogs/r29-move-*`.
 
 ## 6. Content and UnrealScript
 

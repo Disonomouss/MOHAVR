@@ -17,6 +17,7 @@
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
+#include "crash_dump.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -384,6 +385,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
     RunTestCommands(arr);
+    crashdump::OnDraw();
     if (arr && arr[1] >= 1 && arr[0]) muzzle::OnDraw(*reinterpret_cast<const std::uintptr_t*>(arr[0]));
     RunHostCommand(arr, hdr);
     const bool uiMenu = UiMenuOpen();
