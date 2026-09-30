@@ -201,3 +201,13 @@ chamber open) while its magazine is empty.
 **Why:** the player's requests (round 29 follow-up). Guns without data keep today's gesture reload (the off hand at the
 magazine sends the game's own Reload).
 **Costs:** per-gun data (bones, travel, grab points) and per-gun testing; later guns need their own mechanics.
+**Refined after Step 0's research (the player, same day):** "empty" follows each gun's own mechanism -- the G43, Colt and
+C96 lock back; the open-bolt Thompson and MP40 show the bolt **forward** when empty (their loaded look is bolt back); the
+StG44 and BAR, which have no empty pose in the art, show the **charging handle held back** as the empty cue. A closed-bolt
+gun (StG44, G43, Colt, C96) **keeps one round chambered** when a magazine with rounds is dropped. The drop button is
+**B on the right gun hand, Y on the left**, taken from the pad only while a converted gun is drawn. The pouch gives a
+magazine **only once the gun's magazine is out**. The magazine-out, magazine-in and rack **sounds** are played by the mod.
+**Twin (taped) magazines** (the StG44's and BAR's upgrade, and the MP40 at its first level): the pair is pulled out with
+the off hand, **flipped with the off hand's trigger** while held (the BAR's pair turns over, the StG44's side-by-side pair
+slides across, as in the game's own taped states A/B), and the other half inserted -- once, before a new pair comes from
+the pouch; each half keeps its own round count, and the half in the gun decides the gun's taped state.
