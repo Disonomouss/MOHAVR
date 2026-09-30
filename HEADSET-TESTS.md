@@ -1120,7 +1120,9 @@ gun in your left hand, then in your right.
 3. Do the casings look normal (solid brass, not hollow or see-through)? (yes / describe)
 4. Anything else odd? (describe)
 
-**Answers:** (the player's words)
+**Answers:** (the player's words) "Brass is all good on both hands." (1-3 yes)
+
+**Verdict:** the left hand's brass (Weapon.BrassMirror) **passed**; the brass and flash are done.
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 
