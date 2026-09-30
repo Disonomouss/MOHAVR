@@ -1460,6 +1460,59 @@ the player's folder).
 
 ---
 
+## Round 36: prepared 2026-10-01, every gun reloaded by hand, and the parachute landing
+**Changed:** (GOAL.md, your /goal of 2026-09-30; every behaviour has its switch)
+- **The parachute landing** (`[Camera] MinEyeHeight=60`, on): the botched landing's roll put your eye at your ankles,
+  and into the ground in VR; the view is now held at least 60 cm above your feet. Walking, crouching and jumps are
+  unchanged.
+- **The M1 Garand** (`[ManualReload] Attachment_M1Garand`): the last shot pings and throws the empty clip; a clip from
+  the belt pouch, pushed down into the top of the receiver, loads it and the action slams shut by itself. B (Y left-handed)
+  is the clip latch: it throws out a part-used clip, its rounds back to your reserve.
+- **The K98 and Springfield**: after every shot the trigger does nothing until you work the bolt with your other hand --
+  grab the knob, lift it, pull it back (the case flies), push it forward, turn it down. Fired empty, the bolt stays open;
+  a stripper clip from the pouch, pushed into the open action, loads it (the bolt closing pushes the clip out). (Below
+  their first upgrade they load single rounds: your save has every upgrade, so you won't see that.)
+- **The M12 shotgun**: the foregrip is the pump. After every shot, slide your front hand back along the gun about 10 cm
+  (the shell flies) and forward again -- the trigger waits for it. Load shells one at a time from the pouch into the
+  loading port under the receiver (the gun holds 8); an empty gun needs one pump after loading. Your drawn front hand
+  moves with the pump.
+- **The Panzerschreck**: a rocket from the pouch goes in nose first at the back of the tube, and slides home as you push.
+- **The M18 recoilless**: after the shot, grab the handle's knob at the breech, turn it up and swing the breech open (the
+  spent case falls out); a round from the pouch goes in nose first and slides home as you push; swing the breech shut and
+  turn the knob down. The trigger waits for it.
+- **The C96 below its 20-round magazine** (a clip-loaded fixed magazine): your save has every upgrade, so you won't see
+  it; tested in the simulator only.
+- **The mounted MG42 keeps the game's own belt reload** (infinite belts; the mod doesn't handle mounted guns in VR yet).
+- **The rifle grenade** (alt fire) keeps the game's own reload.
+- The Step 1 guns (Thompson, MP40, StG44, BAR, G43, Colt, C96) are as in round 35.
+[S]: every gun's full cycle, its counts and cues (GOAL.md A1-A5, ENGINE-NOTES 5an-5at); the landing's lowest eye 17.8
+-> 60.0 cm.
+
+**How to try it:** Claude has deployed the shipped defaults. The new guns come from the mission briefing's loadout
+(Garand, K98, Springfield, M12) and from pickups (the Panzerschreck and the M18 in Der Flakturm; the M18 also in Neptune).
+1. Jump into a mission: the landing, including a botched one (no flare).
+2. The Garand: fire it empty, a clip from the pouch; later B with a part-used clip.
+3. The K98 and Springfield: the bolt after each shot; fire empty; a stripper clip.
+4. The M12: pump with your front hand; fire empty; load a few shells, pump, fire; top up a part-empty gun.
+5. The Panzerschreck and the M18, if you find them: fire, reload.
+
+**Questions:**
+1. The landing: still any moment in the ground? Does the 60 cm floor feel odd anywhere (crawling, stairs)?
+2. The Garand: the clip into the top, the auto-close, B as the latch: right?
+3. The bolt: the knob's place, the lift and the pull (thresholds), the held-open bolt: right? Would you rather work it
+   with the gun hand?
+4. The M12's pump through the foregrip: natural? The stroke (armed at about 10 cm): too long? Shells one per pouch trip:
+   acceptable, or a faster way? The port easy to hit?
+5. The launchers: loading at the back comfortable? The M18's knob (up and over, then the swing): right?
+6. The trigger waiting for the bolt / pump: always as you expect? Any shot that didn't fire when it should?
+7. The held clips, shells and rounds (the game's loading grips, mirrored to your hand): do they look right?
+8. Sounds: every step heard?
+9. Anything else odd?
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

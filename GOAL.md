@@ -140,7 +140,10 @@ Items, in D21's order:
   (1 -> 0); switched off, the game reloads (`clip rose 0 -> 1`). 10 rockets, 2 fired, 1 + 7 left. Seen from the hinge
   side (`logs/shots/*final1d-m18-*`): closed, the block on the tube's end with its handle up; open, the block swung out
   on its arm and the chamber bare; the round pushed in by the left hand.
-- [ ] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
+- [x] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
+
+  **DONE / BLOCKED as below.** The rifle grenade keeps the game's own reload (the GOAL's default; a fire mode, not a gun):
+  `logs/modlogs/reload-final1a-*`: the G43 at level 2, LB (alt fire), the grenade fired: `Attachment_G43 is in state WeaponReload` (in alt mode the gun isn't converted: the game's own reload runs), then `AlternateFireModeOut`. The MG42: BLOCKED (D33). The lower levels: DONE.
   - **The mounted MG42** (A0): a belt reload every 100 rounds, infinite belts, at a nest (not `GiveWeapon`-able in the
     test level). A manual version would be lid up, a belt, lid down, cock.
 
@@ -205,7 +208,15 @@ Items:
   type 5) stays above 70 cm either way (`logs/modlogs/landlow0-*`, `landlow60-*`).
 
 ## Finish
-- [ ] **F1** After the last change: `tools/harness.ps1 cycle` OK, and a final scripted reload of every converted gun.
-- [ ] **F2** HEADSET-TESTS round 36: what changed, how to try it, and [H] questions per gun and for the landing.
-- [ ] **F3** STATUS updated, everything committed, and the game not running. Then run `tools/deploy.ps1 undeploy`,
+- [x] **F1** After the last change: `tools/harness.ps1 cycle` OK, and a final scripted reload of every converted gun.
+
+  **DONE:** `tools/harness.ps1 cycle`: **cycle OK in 33s** (2026-10-01 01:15, after the last code change; the player's data restored, verified identical). The final pass, one scripted reload of every converted gun: `logs/modlogs/reload-final1a-*` (Thompson `EJECT 46 -> 0, reserve 350 -> 396`, `INSERT 0 -> 50, 396 -> 346`; MP40 `INSERT 0 -> 64, 407 -> 343`; StG44 `1 -> 30, 208 -> 179`; BAR `0 -> 20, 195 -> 175`; G43 `1 -> 20, 137 -> 118`; Colt `1 -> 7`; the C96 at level 2 `1 -> 20`; the Garand fired empty, `INSERT 0 -> 8, 118 -> 110; the action closed on its own`), `-final1b-*` (the K98 fired empty with four bolt cycles, `INSERT 0 -> 5, 120 -> 115; a stripper clip`; the Springfield `0 -> 5, 115 -> 110`; the M12 `PUMP BACK ...; the case ejected`, `INSERT 7 -> 8, 80 -> 79`; the Panzerschreck `0 -> 1, 13 -> 12`; the M18 `INSERT 0 -> 1, 18 -> 17`, shut and locked), `-final1c-*` (the C96 at level -1: `INSERT 0 -> 0 ... pending`, `RACK 0 -> 10`; the M18's cycle and its next shot), `-final1d-*` (the M18's breech seen swung open).
+- [x] **F2** HEADSET-TESTS round 36: what changed, how to try it, and [H] questions per gun and for the landing.
+
+  **DONE:** HEADSET-TESTS.md round 36 (every gun's reload, where to find the guns, 9 questions).
+- [x] **F3** STATUS updated, everything committed, and the game not running. Then run `tools/deploy.ps1 undeploy`,
   then `& .\tools\deploy.ps1 deploy` with no `-Set` (the shipped defaults, for the player), and say so in STATUS.
+
+  **DONE:** the game not running; `tools/deploy.ps1 undeploy` (`Binaries matches its baseline`), then `deploy` with no
+  `-Set`: `dinput8.dll present (MOHAVR), deployed 2026-10-01T01:15:28, ini overrides:` (none) -- the shipped defaults,
+  for the player; STATUS says so. Everything committed.

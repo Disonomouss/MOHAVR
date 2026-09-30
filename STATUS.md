@@ -1,6 +1,7 @@
 # Status
 
-_Last updated: 2026-09-30 (round 29 deployed; the "Next" list is current, the history below it is kept)_
+_Last updated: 2026-10-01 (GOAL.md done: every reachable gun reloads by hand, the landing fixed; HEADSET-TESTS round 36
+prepared; **the shipped defaults are deployed** for the player -- `tools/deploy.ps1 deploy`, no `-Set`)_
 
 ## Where things stand
 **Update, end of 2026-09-25:** M0, M1 and M2 are done. The game's image reaches the headset through
