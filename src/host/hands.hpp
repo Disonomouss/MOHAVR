@@ -58,6 +58,7 @@ public:
         float          release[2];
         bool           hasView;
         bool           pouchShown;
+        bool           reloadSpotsShown;  // the menu's Reload spots page: the grab rings show
     };
     // Where the gesture spots are this frame (LOCAL), for the rings (markers.cpp).
     enum SpotKind { kHolster, kForegrip, kMagazine, kPouch, kMagWell };

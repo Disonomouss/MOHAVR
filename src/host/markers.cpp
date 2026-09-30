@@ -91,7 +91,7 @@ int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, 
     bool anyNear = false;
     for (int i = 0; i < h.spotCount; ++i) {
         const Hands::Spot& s = h.spots[i];
-        const bool show = mode == kAlways || (showAll && (s.kind == Hands::kHolster || s.kind == Hands::kPouch)) ||
+        const bool show = mode == kAlways || (showAll && (s.kind == Hands::kHolster || s.kind == Hands::kPouch || s.kind == Hands::kMagWell)) ||
                           (mode == kNear && s.close);
         if (!show) continue;
         anyNear = anyNear || s.close;

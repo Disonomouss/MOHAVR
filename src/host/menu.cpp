@@ -18,14 +18,14 @@ namespace {
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
-            kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kItemCount };
+            kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
 const int kTabItems[kTabCount][12] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kGripPage, kClose, -1},
+    {kGunFit, kReload, kGripPage, kSpotPage, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 int TabCount(int t) {
@@ -37,6 +37,10 @@ int TabCount(int t) {
 enum GripItem { gWhich, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
 const char* kGripNames[3] = {"magazine grab", "held magazine", "handle / bolt"};
 const wchar_t* kGripKinds[3] = {L"mag", L"hold", L"bolt"};
+// The Reload spots page (round 33): the magazine's and the handle's grab rings, moved and sized, per weapon.
+enum SpotItem { pWhich, pFwd, pUp, pRight, pSize, pReset, pBack, pCount };
+const char* kSpotNames[2] = {"magazine", "handle / bolt"};
+const wchar_t* kSpotKinds[2] = {L"mag", L"bolt"};
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
 // foreFwd foreUp (older entries have the first six).
@@ -302,6 +306,7 @@ void Menu::SyncWeapon() {
     PublishFit();
     LoadGrips();
     PublishGrips();
+    LoadSpots();
 }
 
 // [GunFit] <weapon> = gx gy gz angle rayUp rayRight foreFwd foreUp (6 values: saved before the foregrip existed).
@@ -369,6 +374,27 @@ void Menu::SaveGrip(int which) {
     wchar_t b[128];
     swprintf_s(b, L"%.1f %.1f %.1f %.0f %.0f %.0f", a[0], a[1], a[2], a[3], a[4], a[5]);
     WritePrivateProfileStringW(L"ReloadGrip", (wkey + L"." + kGripKinds[which]).c_str(), b, iniPath_.c_str());
+}
+
+void Menu::LoadSpots() {
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    for (int k = 0; k < 2; ++k) {
+        spotAdj_[k][0] = spotAdj_[k][1] = spotAdj_[k][2] = 0.0f;
+        spotAdj_[k][3] = 100.0f;
+        if (weaponKey_.empty() || iniPath_.empty()) continue;
+        wchar_t b[96] = L"";
+        GetPrivateProfileStringW(L"ReloadSpot", (wkey + L"." + kSpotKinds[k]).c_str(), L"", b, 96, iniPath_.c_str());
+        if (b[0]) swscanf_s(b, L"%f %f %f %f", &spotAdj_[k][0], &spotAdj_[k][1], &spotAdj_[k][2], &spotAdj_[k][3]);
+    }
+}
+
+void Menu::SaveSpot(int which) {
+    if (weaponKey_.empty() || iniPath_.empty()) return;
+    const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    const float* a = spotAdj_[which];
+    wchar_t b[96];
+    swprintf_s(b, L"%.0f %.0f %.0f %.0f", a[0], a[1], a[2], a[3]);
+    WritePrivateProfileStringW(L"ReloadSpot", (wkey + L"." + kSpotKinds[which]).c_str(), b, iniPath_.c_str());
 }
 
 void Menu::PublishGrips() {
@@ -447,10 +473,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
     const bool backFromPage = visible_ && ((page_ == 1 && (in.back || (in.select && selected_ == fBack))) ||
                                            (page_ == 2 && (in.back || (in.select && selected_ == hBack))) ||
                                            (page_ == 3 && (in.back || (in.select && selected_ == eqBack))) ||
-                                           (page_ == 4 && (in.back || (in.select && selected_ == gBack))));
+                                           (page_ == 4 && (in.back || (in.select && selected_ == gBack))) ||
+                                           (page_ == 5 && (in.back || (in.select && selected_ == pBack))));
     if (backFromPage) {
         // Back on the item that opened it, in its tab.
-        const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : kGripPage;
+        const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : page_ == 4 ? kGripPage : kSpotPage;
         for (int t = 0; t < kTabCount; ++t)
             for (int i = 0; i < TabCount(t); ++i)
                 if (kTabItems[t][i] == opener) {
@@ -494,6 +521,30 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
             WritePrivateProfileStringW(L"GunFit", wkey.c_str(), nullptr, iniPath_.c_str());
             MLOG("menu: %s fit reset to the defaults", weaponKey_.c_str());
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
+    if (page_ == 5) {
+        if (in.up) selected_ = (selected_ + pCount - 1) % pCount;
+        if (in.down) selected_ = (selected_ + 1) % pCount;
+        if ((in.left || in.right) && selected_ == pWhich) spotSel_ = 1 - spotSel_;
+        if ((in.left || in.right) && selected_ >= pFwd && selected_ <= pSize && !weaponKey_.empty()) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            float& v = spotAdj_[spotSel_][selected_ - pFwd];
+            v = selected_ == pSize ? std::fmax(40.0f, std::fmin(250.0f, v + dir * 10.0f)) : std::fmax(-20.0f, std::fmin(20.0f, v + dir));
+            SaveSpot(spotSel_);
+            const float* a = spotAdj_[spotSel_];
+            MLOG("menu: %s %s ring -> %.0f %.0f %.0f cm (forward, up, right), %.0f%%", weaponKey_.c_str(), kSpotNames[spotSel_],
+                 a[0], a[1], a[2], a[3]);
+        }
+        if (in.select && selected_ == pReset && !weaponKey_.empty()) {
+            spotAdj_[spotSel_][0] = spotAdj_[spotSel_][1] = spotAdj_[spotSel_][2] = 0.0f;
+            spotAdj_[spotSel_][3] = 100.0f;
+            const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+            WritePrivateProfileStringW(L"ReloadSpot", (wkey + L"." + kSpotKinds[spotSel_]).c_str(), nullptr, iniPath_.c_str());
+            MLOG("menu: %s %s ring reset", weaponKey_.c_str(), kSpotNames[spotSel_]);
         }
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -668,6 +719,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 4;
             selected_ = 0;
             MLOG("menu: reload grip page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+        } else if (item == kSpotPage) {
+            page_ = 5;
+            selected_ = 0;
+            MLOG("menu: reload spots page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
         } else if (item == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
@@ -701,6 +756,8 @@ void Menu::Render() {
         RenderFreeHandPage();
     } else if (page_ == 4) {
         RenderGripPage();
+    } else if (page_ == 5) {
+        RenderSpotPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     // The tab row: the current tab lit; framed while the row itself is selected (left / right switch).
@@ -782,6 +839,11 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Reload grip  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
                 ImGui::Selectable(label, sel);
                 note("where your hand sits on the magazine / handle");
+                break;
+            case kSpotPage:
+                snprintf(label, sizeof(label), "Reload spots  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+                ImGui::Selectable(label, sel);
+                note("where you grab the magazine / handle: move and size the rings");
                 break;
             case kHolsterPage:
                 snprintf(label, sizeof(label), "Holsters and pouch  (rings: %ls)", kRingModes[ringsMode_]);
@@ -904,6 +966,36 @@ void Menu::RenderHolsterPage() {
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
     ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
+    ImGui::PopFont();
+}
+
+// Round 33: where the hand grabs the magazine / handle -- the grab rings moved along the gun and sized.
+void Menu::RenderSpotPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Reload spots");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  %s", weaponKey_.empty() ? "(no gun in hand)" : weaponKey_.c_str());
+    ImGui::Separator();
+    const bool on = !weaponKey_.empty();
+    const float* a = spotAdj_[spotSel_];
+    char label[128];
+    snprintf(label, sizeof(label), "Ring                  <  %s  >", kSpotNames[spotSel_]);
+    ImGui::Selectable(label, selected_ == pWhich);
+    if (!on) ImGui::BeginDisabled();
+    snprintf(label, sizeof(label), "Forward / back        <  %+.0f  >", a[0]);
+    ImGui::Selectable(label, selected_ == pFwd);
+    snprintf(label, sizeof(label), "Up / down             <  %+.0f  >", a[1]);
+    ImGui::Selectable(label, selected_ == pUp);
+    snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", a[2]);
+    ImGui::Selectable(label, selected_ == pRight);
+    snprintf(label, sizeof(label), "Size                  <  %.0f%%  >", a[3]);
+    ImGui::Selectable(label, selected_ == pSize);
+    ImGui::Selectable("Reset this ring", selected_ == pReset);
+    if (!on) ImGui::EndDisabled();
+    ImGui::Selectable("Back", selected_ == pBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Moves where you grab (cm along the gun); both rings show.");
+    ImGui::TextDisabled("The magazine still goes in at the well. Saved for this gun.   B: back");
     ImGui::PopFont();
 }
 

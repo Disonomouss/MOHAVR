@@ -1243,6 +1243,18 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
 - **The menu in tabs** (General / Weapons / Hands; the tab row is item -1). `[Controls] LT=none` (the player: the left
   trigger no longer zooms). `[Hands] HandPoint=-6 -4 3` (the player's) is the shipped default.
 
+**Round 33 [S] (2026-09-30, `logs/modlogs/reload-r33-*`, `logs/shots/r33-*`):**
+- **The menu hold:** when only a menu stops the manual reload (gestures off), a grabbed or held magazine and a held
+  handle stay (`menuHold_`): the host keeps publishing the pull / the held pose (the game keeps drawing the grip); no
+  new press, release button, flip, trigger rack or insert until the menu closes; letting go still drops. Seen: a pouch
+  magazine held through the Reload grip page (+2 cm applied live), inserted after the menu closed.
+- **Reload spots** (the menu, per gun, `[ReloadSpot] <weapon>.<mag|bolt> = forward up right size%` in the player's ini):
+  the grab rings moved in the gun's frame and sized, host-side only (the press test and the rings); the magazine well
+  (the insert target, the held magazine's grab point) is unchanged. Both rings show while the page is open (markers'
+  show-all takes the reload rings). Seen: the G43's magazine ring 5 cm down, grabbed 0.0 cm from its new centre.
+- **The old reload gesture is off** (`[Hands] ReloadGesture=0`, the player): no fixed-spot ring; unconverted guns reload
+  through the game (B = Xbox A).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

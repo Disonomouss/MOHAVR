@@ -67,6 +67,15 @@ public:
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
     int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
     bool HolsterPageOpen() const { return visible_ && page_ == 2; }
+    bool ReloadSpotsPageOpen() const { return visible_ && page_ == 5; }
+    // The grab ring `which` (0 the magazine, 1 the handle) for the host: right, up, back (m, the gun's frame), size factor.
+    void SpotAdjust(int which, float (&out)[4]) const {
+        const float* a = spotAdj_[which];
+        out[0] = a[2] / 100.0f;   // stored forward, up, right (cm), size (%)
+        out[1] = a[1] / 100.0f;
+        out[2] = -a[0] / 100.0f;  // back = -forward
+        out[3] = a[3] / 100.0f;
+    }
     // Round 31 (the player's, the Holsters page): the hand point (m: forward, up, in), the foregrip ring's radius (m),
     // the reload rings' scale.
     const float (&HandPoint() const)[3] { return handPoint_; }
@@ -86,6 +95,11 @@ private:
     void LoadGrips();
     void SaveGrip(int which);
     void PublishGrips();
+    // Round 33, the Reload spots page: the weapon in hand's grab rings moved (cm, the gun's frame) and sized (%),
+    // [ReloadSpot] <weapon>.<mag|bolt> = forward up right size.
+    void RenderSpotPage();
+    void LoadSpots();
+    void SaveSpot(int which);
     void PublishFreeHand(bool save);
     void SetUnitsPerMeter(float v, bool save);
     void SetHeightOffset(float v, bool save);
@@ -121,6 +135,8 @@ private:
     int                     tab_ = 0;                 // the main page's tab (round 32)
     int                     gripSel_ = 0;             // the Reload grip page's grip
     float                   gripAdj_[3][6]{};         // the weapon in hand's grips (cm, degrees)
+    int                     spotSel_ = 0;             // the Reload spots page's ring
+    float                   spotAdj_[2][4] = {{0, 0, 0, 100}, {0, 0, 0, 100}};  // forward, up, right (cm), size (%)
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
     HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the 5th: the magazine pouch)

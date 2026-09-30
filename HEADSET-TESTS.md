@@ -1328,6 +1328,49 @@ trigger + grip: grabbed), the Colt's trigger release (clip 0 -> 7).
 6. Movement where you look (round 29)?
 7. Anything else odd?
 
+**Answers:** (the player's words, 2026-09-30)
+1. Yes.
+2. No: as soon as I enter the menu, the off hand drops the magazine.
+3. Not quite: it visibly flips now, but there are other issues I will bring up later.
+4. The hand lines up now but I still grab the foregrip. The MP40 grip and the Colt trigger are good.
+5. Yes.
+6. It's good. (Movement where you look: judged, round 29 closed.)
+Also: remove the old reload system, its rings are still there. I need to be able to move the rings for the new reload
+system.
+
+**Follow-up (round 33):** below.
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 33: prepared 2026-09-30, the grips adjustable in the menu at last, movable reload rings, the old gesture gone
+**Changed:**
+- **The menu keeps what your off hand holds:** open it with a magazine in your hand (or while holding the seated
+  magazine or the handle) and it stays there -- so Weapons > Reload grip shows the grip as you adjust it. Nothing new
+  starts while the menu is open; letting go still drops it.
+- **Reload spots** (Weapons tab): per gun, move the magazine's and the handle's grab rings (forward, up, right, cm) and
+  size them; both rings show while the page is open. Only where you grab moves -- the magazine still goes in at the
+  well. For the Thompson: put the drum's ring where your hand goes, clear of the foregrip.
+- **The old reload gesture is gone** (and its ring): guns without the manual reload (Garand, K98, Springfield,
+  shotgun, launchers) reload with the game's own (B). `[Hands] ReloadGesture=0`.
+[S]: a pouch magazine stayed in the hand with the menu open on Reload grip (+2 cm applied), then went in after the
+menu closed; the G43's magazine ring moved 5 cm down and grabbed there (0.0 cm from its centre); no old gesture.
+
+**How to try it:**
+1. Hold a magazine, open the menu, Weapons > Reload grip: adjust the grips that looked wrong (per gun).
+2. Weapons > Reload spots: move the Thompson's drum ring (and any other) to where you grab.
+3. An unconverted gun (Garand, K98...): no old ring; B reloads.
+
+**Questions:**
+1. Reload grip: which guns did you adjust, and do they sit right now?
+2. Reload spots: the Thompson drum vs the foregrip now?
+3. Anything missing from the old gesture?
+4. The BAR's other issues (from round 32)?
+5. Anything else odd?
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

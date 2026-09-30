@@ -112,6 +112,7 @@ Hands::Output Hands::Update(const Input& in) {
     rin.fitAngle = in.fit.angle;
     rin.offTrigger = in.trigger[o];
     rin.gunTrigger = in.trigger[g];
+    rin.showSpots = in.reloadSpotsShown;
     rin.now = in.now;
     for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
     if (reload_) reload_->SetRingScale(ringScale_);

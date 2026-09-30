@@ -41,6 +41,15 @@ public:
     bool On() const { return on_; }
     // Round 31: the grab rings' scale (the magazine's and the action's; the player's, the menu).
     void SetRingScale(float s) { ringScale_ = s > 0.2f ? s : 0.2f; }
+    // Round 33: the weapon in hand's grab rings moved and sized (the menu's Reload spots page): per ring (0 the magazine,
+    // 1 the handle) right, up, back (metres, the gun's frame) and a size factor. Only where the hand grabs moves: the
+    // magazine well (the insert) stays.
+    void SetSpotAdjust(const float (&mag)[4], const float (&bolt)[4]) {
+        for (int i = 0; i < 4; ++i) {
+            spotAdj_[0][i] = mag[i];
+            spotAdj_[1][i] = bolt[i];
+        }
+    }
     // The release button: 0 none, 1 upper (B / Y), 2 lower (A / X).
     int  ReleaseButton() const { return releaseButton_; }
     // Start of the XR frame: the game's side (geometry, ammo, state, acknowledgements) and the reconcile (3.2).
@@ -58,6 +67,7 @@ public:
         float   fitAngle = 0.0f;               // the gun fit's angle (degrees): a pouch magazine sits in the hand likewise
         float   offTrigger = 0.0f;             // the off hand's trigger: flips a held taped pair (MP40: arms the grab)
         float   gunTrigger = 0.0f;             // the gun hand's trigger: releases a locked-back action (Colt)
+        bool    showSpots = false;             // the menu's Reload spots page is open: both grab rings show
         double  now = 0.0;
     };
     struct Ring {
@@ -106,6 +116,8 @@ private:
     float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
     float         boltGrabR_ = 0.05f, rackArm_ = 0.85f, rackMin_ = 0.04f, rackTug_ = 0.01f;
     float         ringScale_ = 1.0f;
+    float         spotAdj_[2][4] = {{0, 0, 0, 1}, {0, 0, 0, 1}};
+    bool          menuHold_ = false;   // round 33: a menu is open -- what the off hand holds stays in it (no new actions)
     float         hold_[3]{};                                                // metres, the left off hand's frame
     std::uint32_t keyHash_ = 0;
     std::uint32_t lastGeoSeq_ = 0, pawnSeq_ = 0;

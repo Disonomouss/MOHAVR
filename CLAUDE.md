@@ -61,7 +61,7 @@ HEADSET-TESTS.md.
 - `src/host/menu.cpp`: Dear ImGui into its own quad layer. Left Touch menu button toggles; the left
   stick navigates and adjusts; the trigger or A selects. The main page is in tabs (General / Weapons / Hands; up past
   the first item reaches the tab row, where left / right switch); Weapons has the Reload grip page (per gun
-  `[ReloadGrip]`, published as shared block v16). The first item is World Scale, live to the
+  `[ReloadGrip]`, published as shared block v16) and the Reload spots page (per gun `[ReloadSpot]`, host-only). The first item is World Scale, live to the
   game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
   (`[GunFit]` in the player's ini, keyed by the weapon's class name, e.g. `Attachment_Stg44`). The Holsters page moves
   and sizes the holster spots and the manual reload's magazine pouch (`[Holsters] <Name>Spot`, `MagPouchSpot` in the

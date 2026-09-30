@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "../mohavr/log.hpp"
 
@@ -168,7 +169,10 @@ bool ManualReload::Begin(const In& in) {
     active_ = active;
     press_ = kPressNone;
     offTrigger_ = in.offTrigger;
-    if (!active_) {
+    // Round 33 (the player: "as soon as I enter the menu, the off hand drops the magazine"): with only a menu in the way,
+    // what the off hand holds stays in it -- so the Reload grip page shows the grip -- and nothing new starts.
+    menuHold_ = !active_ && !std::strcmp(why, "a menu is open") && (mag_ == kGrabbed || mag_ == kInHand || boltHeld_);
+    if (!active_ && !menuHold_) {
         // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped, the action is let go
         // without a rack.
         if (boltHeld_) MLOG("reload: the action let go (not driving): no rack");
@@ -196,14 +200,14 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
     // Round 32 (GrabTrigger, the MP40): the magazine only with the off hand's trigger held, so the grip takes the foregrip.
     const bool magArmed = !(geo_.caps & 128u) || offTrigger_ >= 0.5f;
     if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f && magArmed) {
-        const float s = Len(Sub(P(hand), P(lastGrabW_))) / (geo_.magGrabR * ringScale_);
+        const float s = Len(Sub(P(hand), P(lastGrabW_))) / (geo_.magGrabR * ringScale_ * spotAdj_[0][3]);
         if (s < best) {
             best = s;
             which = kPressMag;
         }
     }
     if ((geo_.caps & 2u) && lastGunOk_ && boltGrabR_ > 0.0f) {
-        const float s = Len(Sub(P(hand), P(lastBoltW_))) / (boltGrabR_ * ringScale_);
+        const float s = Len(Sub(P(hand), P(lastBoltW_))) / (boltGrabR_ * ringScale_ * spotAdj_[1][3]);
         if (s < best) {
             best = s;
             which = kPressBolt;
@@ -236,19 +240,28 @@ void ManualReload::Frame(const In& in, Out& out) {
         out.mask[h] = releaseButton_ && ((active_ && h == g) || maskLatch_[h]);
     }
     lastGunOk_ = active_ && in.gunOk;
-    if (!active_) {
+    const V3 gunP = P(in.gun.position), offP = P(in.off.position);
+    const V3 grabW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.magGrab)));  // the well (the insert)
+    const V3 outW = Rotate(in.gun.orientation, A3(geo_.magOut));
+    // Where the hand grabs (round 33: the player's rings moved on the gun), and how big.
+    const V3 magRingW = Add(grabW, Rotate(in.gun.orientation, V3{spotAdj_[0][0], spotAdj_[0][1], spotAdj_[0][2]}));
+    const V3 boltW = Add(Add(gunP, Rotate(in.gun.orientation, A3(geo_.boltGrab))),
+                         Rotate(in.gun.orientation, V3{spotAdj_[1][0], spotAdj_[1][1], spotAdj_[1][2]}));
+    const float magRingR = geo_.magGrabR * ringScale_ * spotAdj_[0][3], boltRingR = boltGrabR_ * ringScale_ * spotAdj_[1][3];
+    const V3 backW = Rotate(in.gun.orientation, A3(geo_.boltBack));
+    if (!active_ && !menuHold_) {
         press_ = kPressNone;
+        // The menu's Reload spots page: both grab rings, to move them.
+        if (in.showSpots && in.gunOk && (geo_.caps & 1u)) {
+            out.rings[out.ringCount++] = {X(magRingW), magRingR, false, true};
+            if (geo_.caps & 2u) out.rings[out.ringCount++] = {X(boltW), boltRingR, false, true};
+        }
         return;
     }
-    const V3 gunP = P(in.gun.position), offP = P(in.off.position);
-    const V3 grabW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.magGrab)));
-    const V3 outW = Rotate(in.gun.orientation, A3(geo_.magOut));
-    const V3 boltW = Add(gunP, Rotate(in.gun.orientation, A3(geo_.boltGrab)));
-    const V3 backW = Rotate(in.gun.orientation, A3(geo_.boltBack));
-    lastGrabW_ = X(grabW);
+    lastGrabW_ = X(magRingW);
     lastBoltW_ = X(boltW);
     out.targetOk[0] = true;
-    out.target[0] = X(grabW);
+    out.target[0] = X(magRingW);
     out.targetOk[2] = true;
     out.target[2] = X(grabW);
     if (mag_ == kInHand)  // the aim point that puts the held magazine's grab point at the well
@@ -262,7 +275,7 @@ void ManualReload::Frame(const In& in, Out& out) {
         return Relative(in.off, m);
     };
 
-    if (edge[g]) {
+    if (edge[g] && active_) {
         if (mag_ == kInGun) {
             Queue(shared::kReloadEject, in.now);
             SetMag(kOut, "the release button");
@@ -279,7 +292,7 @@ void ManualReload::Frame(const In& in, Out& out) {
     if (press_ == kPressMag && mag_ == kInGun) {
         start_ = X(offP);
         SetMag(kGrabbed, "the off hand's grip at it");
-        MLOG("reload: grabbed %.1f cm from its grab point", 100.0f * Len(Sub(offP, grabW)));
+        MLOG("reload: grabbed %.1f cm from its grab ring's centre", 100.0f * Len(Sub(offP, magRingW)));
         Pulse(out, o, 0.5f, 30.0f);
     } else if (press_ == kPressPouch && mag_ == kOut) {
         if (geo_.reserve > 0 || (geo_.state & 64u)) {
@@ -359,7 +372,7 @@ void ManualReload::Frame(const In& in, Out& out) {
     const bool twin = (geo_.caps & 32u) != 0 && mag_ == kInHand;
     if (!trigHeld_ && in.offTrigger >= 0.6f) {
         trigHeld_ = true;
-        if (twin) {
+        if (twin && active_) {
             trigLatch_ = true;
             flipped_ = !flipped_;
             MLOG("reload: the taped pair flipped (%s half toward the well)", flipped_ ? "the other" : "the same");
@@ -372,14 +385,14 @@ void ManualReload::Frame(const In& in, Out& out) {
     // GrabTrigger (the MP40): the off hand's trigger is the grab's, not the game's aim, near the magazine and while it is
     // in the hand.
     const bool grabTrig = (geo_.caps & 128u) &&
-                          ((mag_ == kInGun && Len(Sub(offP, grabW)) < 2.0f * geo_.magGrabR * ringScale_) || mag_ == kGrabbed ||
+                          ((mag_ == kInGun && Len(Sub(offP, magRingW)) < 2.0f * magRingR) || mag_ == kGrabbed ||
                            mag_ == kInHand);
     out.maskTrigger[o] = twin || trigLatch_ || grabTrig;
     // TriggerRack (the Colt): with a magazine in a locked-back action, the gun hand's trigger releases it (a RACK); that
     // press is kept from the game.
     if (!gunTrigHeld_ && in.gunTrigger >= 0.6f) {
         gunTrigHeld_ = true;
-        if ((geo_.caps & 256u) && (geo_.state & 8u) && (geo_.state & 16u) && !boltHeld_) {
+        if (active_ && (geo_.caps & 256u) && (geo_.state & 8u) && (geo_.state & 16u) && !boltHeld_) {
             gunTrigLatch_ = true;
             Queue(shared::kReloadRack, in.now);
             MLOG("reload: RACK (the trigger released the action)");
@@ -428,7 +441,7 @@ void ManualReload::Frame(const In& in, Out& out) {
                 MLOG("reload: at the well (%.1f cm) but turned %.0f deg from its way (InsertAngle %.0f)", 100.0f * dist, angle,
                      insertAngle_);
             }
-            if (armed_ && dist < insertR_ && angle < insertAngle_) {
+            if (active_ && armed_ && dist < insertR_ && angle < insertAngle_) {
                 Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
                 SetMag(kInGun, "inserted");
                 MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
@@ -438,15 +451,15 @@ void ManualReload::Frame(const In& in, Out& out) {
         }
     }
     // Rings: the magazine's grab spot while in the gun; the well while one is in the hand (lit where it would go in).
-    if (mag_ == kInGun || mag_ == kGrabbed) {
-        const float d = Len(Sub(offP, grabW)), r = geo_.magGrabR * ringScale_;
-        out.rings[out.ringCount++] = {X(grabW), r, d < r, d < 2.0f * r};
+    if (mag_ == kInGun || mag_ == kGrabbed || in.showSpots) {
+        const float d = Len(Sub(offP, magRingW));
+        out.rings[out.ringCount++] = {X(magRingW), magRingR, d < magRingR, d < 2.0f * magRingR || in.showSpots};
     } else if (mag_ == kInHand && armed_) {
         out.rings[out.ringCount++] = {X(grabW), insertR_, dist < insertR_ && angle < insertAngle_, dist < 3.0f * insertR_};
     }
     // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
-    if ((geo_.caps & 2u) && (geo_.state & 16u) && !boltHeld_) {
-        const float d = Len(Sub(offP, boltW)), r = boltGrabR_ * ringScale_;
+    if ((geo_.caps & 2u) && (((geo_.state & 16u) && !boltHeld_) || in.showSpots)) {
+        const float d = Len(Sub(offP, boltW)), r = boltRingR;
         out.rings[out.ringCount++] = {X(boltW), r, d < r, d < 2.0f * r};
     }
 }
