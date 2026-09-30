@@ -64,6 +64,17 @@ struct GunLine {
     float                    tapedRot = 0.0f;   // B is turned this far about Z from A (degrees)
     bool                     grabTrigger = false;  // round 32: the magazine is grabbed only with the off hand's trigger held
     bool                     triggerRack = false;  // round 32: the gun hand's trigger releases a locked-back action
+    // GOAL A1 (the Garand's en-bloc clip):
+    bool                     ejectOnEmpty = false;  // EjectOnEmpty=1: the game throws the empty clip at the last shot (its own
+                                                    // ping and projectile): the magazine is out, and no copy falls
+    bool                     feedOnInsert = false;  // Feed=insert: an empty gun loads and closes as the clip goes in (no rack)
+    bool                     noGrab = false;        // NoGrab=1: the seated magazine can't be pulled out by hand
+    bool                     latch = true;          // Latch=0: the release button does nothing on this gun
+    std::vector<std::string> sndClose;              // SndClose: the action closing on its own (Feed=insert), per variant
+    int                      keepChambered = -1;    // KeepChambered=0|1: per gun, over [ManualReload] KeepChambered
+                                                    // (the Garand: 0 -- a kept round would make the game throw a
+                                                    // second empty clip at its shot)
+    float                    ejectSpeed = 0.4f;     // EjectSpeed: m/s an ejected magazine leaves along its way out
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -116,12 +127,20 @@ std::string Narrow(const wchar_t* w) {
 }
 
 void ParseLines(const std::wstring& ini) {
+    // GOAL rule 3: [ManualReload] Off = the guns (attachment keys, comma-separated) that keep the game's own reload.
+    wchar_t offW[1024] = L"";
+    GetPrivateProfileStringW(L"ManualReload", L"Off", L"", offW, 1024, ini.c_str());
+    const std::vector<std::string> off = Split(Narrow(offW), ',');
     std::vector<wchar_t> keys(8192);
     const DWORD n = GetPrivateProfileStringW(L"ManualReload", nullptr, L"", keys.data(), static_cast<DWORD>(keys.size()), ini.c_str());
     std::vector<std::pair<std::string, std::string>> refs;
     for (const wchar_t* k = keys.data(); k < keys.data() + n && *k; k += wcslen(k) + 1) {
         const std::string key = Narrow(k);
         if (key.rfind("Attachment_", 0) != 0) continue;
+        if (std::find(off.begin(), off.end(), key) != off.end()) {
+            MLOG("reload: %s is off ([ManualReload] Off) -- the game's own reload", key.c_str());
+            continue;
+        }
         wchar_t v[1024] = L"";
         GetPrivateProfileStringW(L"ManualReload", k, L"", v, 1024, ini.c_str());
         const std::string line = Narrow(v);
@@ -158,6 +177,15 @@ void ParseLines(const std::wstring& ini) {
         g.tapedRot = tr.empty() ? 0.0f : static_cast<float>(atof(tr.c_str()));
         g.grabTrigger = Token(line, "GrabTrigger") == "1";
         g.triggerRack = Token(line, "TriggerRack") == "1";
+        g.ejectOnEmpty = Token(line, "EjectOnEmpty") == "1";
+        g.feedOnInsert = Token(line, "Feed") == "insert";
+        g.noGrab = Token(line, "NoGrab") == "1";
+        g.latch = Token(line, "Latch") != "0";
+        g.sndClose = Split(Token(line, "SndClose"), ';');
+        const std::string kc = Token(line, "KeepChambered");
+        g.keepChambered = kc.empty() ? -1 : atoi(kc.c_str());
+        const std::string es = Token(line, "EjectSpeed");
+        if (!es.empty()) g.ejectSpeed = static_cast<float>(atof(es.c_str()));
         g_lines.push_back(g);
     }
     wchar_t take[128] = L"";
@@ -188,6 +216,8 @@ struct WState {
     // while out of the gun (-1 = in the gun, or full).
     int            half = -1;
     int            halfCount[2] = {-1, -1};
+    bool           gameEjected = false;  // EjectOnEmpty: the game threw the clip out (its own projectile; ours doesn't fall)
+    bool           emptyPending = false; // EjectOnEmpty: the last shot is out; the clip goes when the firing state ends
 };
 std::vector<WState> g_ws;
 struct Owed {
@@ -504,6 +534,16 @@ void PlayCue(std::uintptr_t pawn, std::uintptr_t w, const std::string& want, con
 
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)"};
 
+// A cue played a moment later (GOAL A1: the Garand's op-rod slams home ~0.35 s after the clip goes in).
+struct DelayedCue {
+    bool           on = false;
+    std::uintptr_t w = 0;
+    std::string    name;
+    const char*    what = "";
+    DWORD          due = 0;
+};
+DelayedCue g_delayedCue;
+
 void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, std::uint32_t type) {
     int* clipP = Field(w, "AmmoCount");
     const int* maxP = Field(w, "MaxAmmoCount");
@@ -511,13 +551,15 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     const int c0 = *clipP, m = maxP[0];
     const int r0 = ReserveAvailable(pawn, w);
     const bool wasIn = s.magIn;
+    bool closes = false;  // Feed=insert: the action closed on its own
     const bool taped = TapedNow(l.key);
     if (taped && s.half < 0) s.half = TapedMode(w);
     int& c = *clipP;
     switch (type) {
     case shared::kReloadEject: {
         if (!s.magIn) break;
-        const int keep = (!l.open && g_cfg.keepChambered) ? std::min(c, 1) : 0;
+        const bool keepOne = l.keepChambered >= 0 ? l.keepChambered != 0 : g_cfg.keepChambered;
+        const int keep = (!l.open && keepOne) ? std::min(c, 1) : 0;
         const int k = c;
         c = keep;
         ToReserve(pawn, w, k - keep);
@@ -547,14 +589,17 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
             s.half = h;
             if (int* f = TapedModeField(w)) *reinterpret_cast<std::uint8_t*>(f) = static_cast<std::uint8_t>(h);
         }
-        if (Ready(s, l, c)) {
+        // GOAL A1 (Feed=insert, the Garand): the clip loads an empty gun at once and the action closes on its own.
+        if (Ready(s, l, c) || l.feedOnInsert) {
             c += FromReserve(pawn, w, std::min(rounds, std::max(m - c, 0)));
             s.pending = false;
+            closes = l.feedOnInsert && c0 == 0 && c > 0;
         } else {
             s.pending = rounds > 0 && (Bit(w, "bInfiniteAmmo") || ReserveAvailable(pawn, w) > 0);
             s.pendingRounds = rounds;
         }
         s.heldRounds = 0;
+        s.gameEjected = false;
         break;
     }
     case shared::kReloadRack:
@@ -582,15 +627,17 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     auto pick = [&](const std::vector<std::string>& list) { return list.empty() ? std::string() : list[v < static_cast<int>(list.size()) ? v : 0]; };
     if (type == shared::kReloadEject && wasIn) PlayCue(pawn, w, pick(l.sndOut), "magazine out");
     else if ((type == shared::kReloadInsert || type == shared::kReloadInsertOther) && !wasIn) PlayCue(pawn, w, pick(l.sndIn), "magazine in");
-    else if (type == shared::kReloadRack) PlayCue(pawn, w, pick(l.sndRack), "rack");
+    else if (type == shared::kReloadRack && !(l.ejectOnEmpty && !l.open && c == 0)) PlayCue(pawn, w, pick(l.sndRack), "rack");
     else if (type == shared::kReloadTake && !wasIn) PlayCue(pawn, w, g_sndTake, "from the pouch");
+    if (closes && !pick(l.sndClose).empty()) g_delayedCue = {true, w, pick(l.sndClose), "the action closes", GetTickCount() + 350};
     char twin[80] = "";
     if (taped)
         snprintf(twin, sizeof(twin), "; taped: half %c in the gun%s, half A %d, B %d", s.half ? 'B' : 'A', s.magIn ? "" : " (out)",
                  s.halfCount[0], s.halfCount[1]);
-    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s%s", type < 7 ? kEventName[type] : "?",
+    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s%s%s", type < 7 ? kEventName[type] : "?",
          l.key.c_str(), c0, c, r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.magIn ? "in" : "out",
-         s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "", twin);
+         s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "", twin,
+         closes ? "; the action closed on its own" : "");
 }
 
 // RELOAD-DESIGN 2.5: whether the game's own reload is blocked for `self` right now.
@@ -702,7 +749,18 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
         const std::uintptr_t b = data + i * addr::kMeshBoneStride;
         const int parent = *reinterpret_cast<const int*>(b + 56);
         const std::string pn = parent >= 0 && parent < refNum ? names::NameAt(data + parent * addr::kMeshBoneStride) : "";
-        if (pn != "Root" && pn != "RootOffset") {
+        // The listed position is the bone's local one, so the parent must be a root -- or a bone at the origin directly
+        // under one (GOAL A1: the Garand's parts hang off `stock`, which sits at 0,0,0 under RootOffset).
+        bool rootLike = pn == "Root" || pn == "RootOffset";
+        if (!rootLike && parent >= 0 && parent < refNum) {
+            const std::uintptr_t pb = data + parent * addr::kMeshBoneStride;
+            const int grand = *reinterpret_cast<const int*>(pb + 56);
+            const std::string gn = grand >= 0 && grand < refNum ? names::NameAt(data + grand * addr::kMeshBoneStride) : "";
+            const float* pp = reinterpret_cast<const float*>(pb + 28);
+            rootLike = (gn == "Root" || gn == "RootOffset") && std::fabs(pp[0]) < 0.05f && std::fabs(pp[1]) < 0.05f &&
+                       std::fabs(pp[2]) < 0.05f;
+        }
+        if (!rootLike) {
             why = l.ref[k].name + "'s parent is " + pn;
             break;
         }
@@ -993,7 +1051,9 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         g_fall = Fall{};
         g_fall.key = key;
     }
-    if (haveRf && magState == 3 && (g_fall.lastMag == 0 || g_fall.lastMag == 2) && g_fall.have && g_cfg.dropFall) {
+    // (EjectOnEmpty: the clip the game threw at the last shot flies as its own projectile -- ours doesn't fall too.)
+    if (haveRf && magState == 3 && (g_fall.lastMag == 0 || g_fall.lastMag == 2) && g_fall.have && g_cfg.dropFall &&
+        !(g_fall.lastMag == 0 && s.gameEjected)) {
         // Dropped just now: fall from where it was drawn, with its speed (and a push out of the well when ejected).
         g_fall.on = true;
         g_fall.start = nowTick;
@@ -1006,9 +1066,10 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             for (float& x : g_fall.v0) x *= 5.0f * upm / sp;
         if (g_fall.lastMag == 0) {
             const Vec3 o = Norm(Xform(outMesh, 0.0f, a));
-            g_fall.v0[0] += o.x * 0.4f * upm;
-            g_fall.v0[1] += o.y * 0.4f * upm;
-            g_fall.v0[2] += o.z * 0.4f * upm;
+            const float push = l->ejectSpeed * upm;  // EjectSpeed (the Garand's clip pops up out of the receiver)
+            g_fall.v0[0] += o.x * push;
+            g_fall.v0[1] += o.y * push;
+            g_fall.v0[2] += o.z * push;
         }
         g_fall.upm = upm;
         // The floor: the pawn's feet (its location less the collision cylinder's half height).
@@ -1597,8 +1658,32 @@ void OnDraw(shared::Header* hdr) {
             } else if (c == 0 && line->open && s->cocked) {
                 s->cocked = false;  // the last shot: an open bolt closes on the empty chamber
                 MLOG("reload: %s fired empty -- the bolt is forward (rack after a new magazine)", line->key.c_str());
+            } else if (c == 0 && line->ejectOnEmpty && s->magIn) {
+                // GOAL A1 (the Garand): the last shot. The game throws the empty clip when its firing state ends (0.15 s
+                // later, WeaponSingleFire.EndState -> EjectClip); the clip goes then (below).
+                s->emptyPending = true;
             }
         }
+        // (A new state for an EjectOnEmpty gun that is already empty -- after a load or a pick-up -- has no clip.)
+        if (s->lastClip < 0 && c == 0 && line->ejectOnEmpty) s->magIn = false;
+        if (s->emptyPending && StateName(w) != "WeaponSingleFire") {
+            s->emptyPending = false;
+            if (s->magIn && c == 0) {
+                s->magIn = false;
+                s->pending = false;
+                s->gameEjected = true;
+                // The ping is the blocked reload animation's first cue (the attachment has none): the mod plays it.
+                const int v = VariantOf(line->key);
+                const std::vector<std::string>& so = line->sndOut;
+                if (!so.empty()) PlayCue(pawn, w, so[v < static_cast<int>(so.size()) ? v : 0], "the clip pings out");
+                MLOG("reload: %s fired its last round -- the game threw the clip out (magazine out, the action locked back)",
+                     line->key.c_str());
+            }
+        }
+    }
+    if (g_delayedCue.on && static_cast<LONG>(GetTickCount() - g_delayedCue.due) >= 0) {
+        g_delayedCue.on = false;
+        if (w == g_delayedCue.w) PlayCue(pawn, w, g_delayedCue.name, g_delayedCue.what);
     }
     if (g_cfg.debugReloadTrace && w) {
         const std::string st = StateName(w);
@@ -1649,7 +1734,8 @@ void OnDraw(shared::Header* hdr) {
     hdr->reloadCaps = (line && geoOk ? 1u : 0u) | (geoOk && g_geo.haveBolt ? 2u : 0u) | (g_blockAllowed ? 4u : 0u) |
                       (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u) |
                       (geoOk && line && TapedNow(key) ? 32u : 0u) | (geoOk && g_geo.haveHeld ? 64u : 0u) |
-                      (geoOk && line && line->grabTrigger ? 128u : 0u) | (geoOk && line && line->triggerRack ? 256u : 0u);
+                      (geoOk && line && line->grabTrigger ? 128u : 0u) | (geoOk && line && line->triggerRack ? 256u : 0u) |
+                      (geoOk && line && line->noGrab ? 512u : 0u) | (geoOk && line && !line->latch ? 1024u : 0u);
     if (geoOk) {
         const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
         float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};

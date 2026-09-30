@@ -86,11 +86,13 @@ public:
     // Likewise a physical hand's trigger (the manual reload's flip of a held twin magazine).
     void  SetMaskedTrigger(int hand, bool on) { maskedTrig_[hand] = on; }
     // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
-    void  SetTestTargets(const XrVector3f (&p)[4], const bool (&ok)[4]) {
+    void  SetTestTargets(const XrVector3f (&p)[4], const bool (&ok)[4], const XrPosef& align, bool alignOk) {
         for (int i = 0; i < 4; ++i) {
             testTarget_[i] = p[i];
             testTargetOk_[i] = ok[i];
         }
+        testAlign_ = align;
+        testAlignOk_ = alignOk;
     }
     // Player options (the menu): right stick moves / left turns; left-handed (the triggers and grips swap sides).
     void  SetSwapSticks(bool on) { swapSticks_ = on; }
@@ -131,10 +133,12 @@ private:
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
     XrAction    haptic_[2]{};          // left, right vibration
-    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
+    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
     XrVector3f  testTarget_[4]{};      // "@mag", "@pouch", "@bolt", "@magin" (LOCAL)
     bool        testTargetOk_[4]{};
+    XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
+    bool        testAlignOk_ = false;
     Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
     bool        maskedDown_[2]{};
     bool        maskedTrig_[2]{};

@@ -183,7 +183,9 @@ struct Header {
                                            // bit5 a taped (twin) magazine pair: the off hand's trigger flips it,
                                            // bit6 magHeld valid (the reload grips), bit7 the magazine is grabbed
                                            // only with the off hand's trigger held (GrabTrigger), bit8 the gun hand's
-                                           // trigger releases a locked-back action (TriggerRack)
+                                           // trigger releases a locked-back action (TriggerRack), bit9 the seated
+                                           // magazine can't be grabbed (NoGrab: the Garand's clip), bit10 the release
+                                           // button does nothing on this gun (Latch=0)
     char                   reloadKey[48];  // the attachment class the geometry is for
     float                  magGrab[3];     // the in-gun magazine's grab point = the insert target
     float                  magOut[3];      // unit: the way the magazine leaves the well

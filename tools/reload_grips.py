@@ -130,6 +130,18 @@ GUNS = [
 ]
 MAX_DIST = 13.0
 
+# GOAL A1: guns whose reload animation works the part with the RIGHT hand (the Garand's clip; work/research/goal/garand.md
+# section 4): the grip is taken at an explicit frame from the right hand and mirrored into a left one. The arms rig
+# mirrors a bone's local frame by negating ALL its axes (every right knuckle's offset from its hand is the left one's
+# negated, in x, y and z): so the hand is H_left = D.H.S with D = -I on the axis rows and S = the mesh X mirror, and a
+# finger keeps its rotation in the hand's frame with its offset negated. (The first try, D = diag(1,-1,1) with the
+# fingers D.F.D, bent every finger the wrong way.) key, arms seq, gun AnimSet, gun seq, psk, [(kind, part bone, frame)]
+MIRRORED = [
+    ('Attachment_M1Garand', 'm1garand_reload', 'Garand_AnimSet', 'm1garand_gun_reload', 'US_Garand_Rigged', [('hold', 'clip', 21)]),
+]
+MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
+MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
 
 def rows(m):
     return ', '.join('%.5ff' % v for v in (m[0][:3] + m[1][:3] + m[2][:3] + m[3][:3]))
@@ -193,6 +205,28 @@ def main(root):
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
             log.append('%s %s: %.2f s, %.1f units' % (key, kind, f / a['rate'], d))
+    for key, aseq, gset, gseq, psk, grips in MIRRORED:
+        a = arms['seqs'][aseq]
+        gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
+        sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))
+        g = gp['seqs'][gseq]
+        for kind, bone, f in grips:
+            part = gun_cs(gp, sk, g, bone, f)
+            right = mmul(key_local(arms, a, 'RightHand', f), inv(key_local(arms, a, 'RightProp', f)))
+            d = math.dist(right[3][:3], part[3][:3])
+            hand = mmul(mmul(MIRROR_D, mmul(right, inv(part))), MIRROR_S)
+            fingers = []
+            for fn in FINGERS:
+                rn = 'Right' + fn[len('Left'):]
+                m = key_local(arms, a, rn, f)
+                k = int(rn[-1])
+                for lower in range(k - 1, 0, -1):
+                    m = mmul(m, key_local(arms, a, rn[:-1] + str(lower), f))
+                fingers.append([m[0], m[1], m[2], [-m[3][0], -m[3][1], -m[3][2], 1]])
+            out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, f / a['rate'], d))
+            out.append('     {%s},' % rows(hand))
+            out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
+            log.append('%s %s: %.2f s, the right hand mirrored (%.1f units from the part)' % (key, kind, f / a['rate'], d))
     out.append('};')
     print('\n'.join(out))
     sys.stderr.write('\n'.join(log) + '\n')

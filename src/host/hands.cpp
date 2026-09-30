@@ -283,6 +283,8 @@ Hands::Output Hands::Update(const Input& in) {
         for (int i = 0; i < 3; ++i) out.target[i] = {out.target[i].x - hpOff.x, out.target[i].y - hpOff.y, out.target[i].z - hpOff.z};
         out.targetOk[3] = rout.targetOk[2];
         out.target[3] = rout.target[2];
+        out.alignOk = rout.alignOk;
+        out.align = rout.align;
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;

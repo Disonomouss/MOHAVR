@@ -85,6 +85,8 @@ public:
         bool        maskTrigger[2]{};  // ... and a trigger (the flip of a held taped pair)
         bool        targetOk[4]{};  // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin): the magazine, the pouch, the
         XrVector3f  target[4]{};    // action, and the aim point that seats a held magazine
+        bool        alignOk = false;  // tests: @magin with "align": the aim pose that seats the held magazine, turned too
+        XrPosef     align{};
         bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };

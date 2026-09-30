@@ -61,9 +61,16 @@ gun gets the same things:
 - a pouch for new ammo.
 
 Items, in D21's order:
-- [ ] **A0 Inventory.** From the scripts and `upgrades.txt`, confirm every gun the player can reach: loadouts,
+- [x] **A0 Inventory.** From the scripts and `upgrades.txt`, confirm every gun the player can reach: loadouts,
   pick-ups, mission-only launchers, and upgrade levels that change the reload. Add any that are missing here.
-- [ ] **A1 M1 Garand, en-bloc clip.**
+
+  **DONE** (`work/research/goal/inventory.md`): 13 guns with a reload are reachable, exactly `MOHAWeaponIncludeClass`
+  less its grenades. Step 1 converts 7; the rest are A1-A5. Found beyond the list: the **mounted MG42** (47 nests in 6
+  missions; a 100-round belt, infinite belts, the game's reload after every 100 rounds), and the Step 1 guns' lower
+  upgrade levels (never proven). Not reachable: the K98 and G43 snipers, the portable and vehicle MG42s, the tank guns,
+  the cut Carbine/.30 cal/FG42. The Hellbox has no reload. The player's save has every gun at level 2, so the K98 and
+  Springfield load by stripper clip and the C96 has its 20-round magazine; levels -1/0 need a test-only level override.
+- [x] **A1 M1 Garand, en-bloc clip.**
   - The game's last shot pings and throws the empty clip. Keep that.
   - The op-rod locks back: `Bolt` Z 13.87 → 1.00, with `bolt_sheath` following.
   - A clip from the pouch is pushed down (+Y) into the top of the receiver. The `clip` bone's idle position is
@@ -71,6 +78,12 @@ Items, in D21's order:
   - Seating the clip closes the bolt on its own (no rack) and loads min(8, reserve).
   - The game allows a reload only at 0 rounds. Default: B (the clip latch) ejects a partial clip and its rounds go back
     to the reserve, behind a switch.
+
+  **DONE** (`logs/modlogs/reload-garand3-*`, `-garand5-*`; ENGINE-NOTES 5ao): the last shot -- the mod's ping, the
+  game throws the clip (from the gun in the hand); pouch clip seated: `INSERT Attachment_M1Garand: clip 0 -> 8, reserve
+  27 -> 19; the action closed on its own`; three shots and the latch: `EJECT ...: clip 5 -> 0, reserve 19 -> 24`; a new
+  clip `clip 0 -> 8, reserve 24 -> 16`; fired empty; with the manual reload off the game reloads (`clip rose 0 -> 8
+  without the mod`). 35 rounds, 19 fired, 16 left. The clip in the hand is the game's right-hand grip mirrored.
 - [ ] **A2 K98 and Springfield, bolt actions.**
   - After each shot the player works the bolt by hand: up, back, forward, down.
   - The trigger is blocked until that's done.
@@ -86,6 +99,10 @@ Items, in D21's order:
 - [ ] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
   loaded only when empty.
 - [ ] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
+  - **The mounted MG42** (A0): a belt reload every 100 rounds, infinite belts, at a nest (not `GiveWeapon`-able in the
+    test level). A manual version would be lid up, a belt, lid down, cock.
+  - **The Step 1 guns at their lower levels** (Thompson stick, MP40 single/taped, StG44 and BAR single, G43 10-round):
+    one scripted pass with the level forced down.
 
 **Done for a gun** means a scripted simulator run shows all of these:
 - the full cycle: empty → open/out → new ammo in → action worked → it fires;

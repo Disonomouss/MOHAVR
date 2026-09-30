@@ -199,7 +199,8 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
     }
     // Round 32 (GrabTrigger, the MP40): the magazine only with the off hand's trigger held, so the grip takes the foregrip.
     const bool magArmed = !(geo_.caps & 128u) || offTrigger_ >= 0.5f;
-    if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f && magArmed) {
+    // GOAL A1 (NoGrab, the Garand's clip): a seated clip isn't pulled out by hand.
+    if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f && magArmed && !(geo_.caps & 512u)) {
         const float s = Len(Sub(P(hand), P(lastGrabW_))) / (geo_.magGrabR * ringScale_ * spotAdj_[0][3]);
         if (s < best) {
             best = s;
@@ -264,8 +265,15 @@ void ManualReload::Frame(const In& in, Out& out) {
     out.target[0] = X(magRingW);
     out.targetOk[2] = true;
     out.target[2] = X(grabW);
-    if (mag_ == kInHand)  // the aim point that puts the held magazine's grab point at the well
+    if (mag_ == kInHand) {  // the aim point that puts the held magazine's grab point at the well
         out.target[2] = X(Sub(Sub(grabW, Sub(P(in.off.position), P(in.offAim.position))), Rotate(in.off.orientation, P(heldRel_.position))));
+        // ... and, for "align", the aim pose that also turns it as seated (the held frame = the gun's axes): the hand point
+        // offset (off - offAim, fixed in the hand) and the grip turned with it.
+        const XrQuaternionf qa = QMul(in.gun.orientation, QConj(heldRel_.orientation));
+        const V3 hp = Rotate(QConj(in.off.orientation), Sub(P(in.off.position), P(in.offAim.position)));
+        out.alignOk = true;
+        out.align = {qa, X(Sub(Sub(grabW, Rotate(qa, hp)), Rotate(qa, P(heldRel_.position))))};
+    }
     if (geo_.caps & 2u) {
         out.targetOk[1] = true;
         out.target[1] = X(boltW);
@@ -275,7 +283,8 @@ void ManualReload::Frame(const In& in, Out& out) {
         return Relative(in.off, m);
     };
 
-    if (edge[g] && active_) {
+    // (Latch=0: the release button does nothing on this gun; it stays masked from the pad while driving.)
+    if (edge[g] && active_ && !(geo_.caps & 1024u)) {
         if (mag_ == kInGun) {
             Queue(shared::kReloadEject, in.now);
             SetMag(kOut, "the release button");
@@ -451,7 +460,7 @@ void ManualReload::Frame(const In& in, Out& out) {
         }
     }
     // Rings: the magazine's grab spot while in the gun; the well while one is in the hand (lit where it would go in).
-    if (mag_ == kInGun || mag_ == kGrabbed || in.showSpots) {
+    if ((mag_ == kInGun && !(geo_.caps & 512u)) || mag_ == kGrabbed || in.showSpots) {
         const float d = Len(Sub(offP, magRingW));
         out.rings[out.ringCount++] = {X(magRingW), magRingR, d < magRingR, d < 2.0f * magRingR || in.showSpots};
     } else if (mag_ == kInHand && armed_) {

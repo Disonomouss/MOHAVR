@@ -10,6 +10,7 @@ Commands: toggle up down left right select back. The host reads and deletes
 the menu opens on World scale.
 """
 import os
+import time
 import sys
 import tempfile
 from pathlib import Path
@@ -25,6 +26,10 @@ def main(cmds):
     d = Path(tempfile.gettempdir()) / "MOHAVR"
     d.mkdir(exist_ok=True)
     tmp = d / "host_cmd.txt.tmp"
+    for _ in range(200):  # the host takes the file once a frame: don't replace an unread command (see pad_cmd.py)
+        if not (d / "host_cmd.txt").exists():
+            break
+        time.sleep(0.01)
     tmp.write_text("\n".join(cmds) + "\n")
     os.replace(tmp, d / "host_cmd.txt")
     print("sent:", " ".join(cmds))

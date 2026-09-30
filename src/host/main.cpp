@@ -773,7 +773,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         pad.SetMaskedTrigger(h, handsOut.maskTrigger[h]);
                     }
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
-                    pad.SetTestTargets(handsOut.target, handsOut.targetOk);
+                    pad.SetTestTargets(handsOut.target, handsOut.targetOk, handsOut.align, handsOut.alignOk);
                     pad.SetLeftHanded(handsOut.gunHand == 0);
                     if (menuOk) pad.SetSwapSticks(menu.SwapSticks());
                     if (menuOk) pad.SetMoveByHead(menu.MoveByHead());

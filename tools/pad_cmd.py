@@ -18,6 +18,7 @@ mapping (press: a b x y lgrip rgrip lthumb rthumb menu). Sticks -1..1 (y up = +)
 import argparse
 import os
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -47,6 +48,12 @@ def main():
         lines = [" ".join(parts)]
     d = Path(tempfile.gettempdir()) / "MOHAVR"
     d.mkdir(exist_ok=True)
+    # The host reads and deletes the file once a frame: wait (up to 2 s) until the last command was taken, or this one
+    # would replace it unread (GOAL A1: a lost "hand=l,@pouch" line broke a test).
+    for _ in range(200):
+        if not (d / "pad_cmd.txt").exists():
+            break
+        time.sleep(0.01)
     tmp = d / "pad_cmd.txt.tmp"
     tmp.write_text("\n".join(lines) + "\n")
     os.replace(tmp, d / "pad_cmd.txt")

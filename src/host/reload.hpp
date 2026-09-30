@@ -84,6 +84,8 @@ public:
         bool  targetOk[3]{};
         XrVector3f target[3]{};  // tests: 0 the magazine's grab point, 1 the action's, 2 where the off hand's aim point
                                  // puts a held magazine's grab point at the well
+        bool    alignOk = false;  // tests ("hand=l,@magin,dx,dy,dz,align"): the off hand's aim pose that seats the held
+        XrPosef align{};          // magazine exactly -- turned as well, whatever grip holds it (GOAL: the new guns' grips)
     };
     // Hands::Update, first: whether the manual reload drives the gun this frame (3.1). Leaving it lets go of what the
     // off hand holds (a grabbed magazine slides back, one in the hand is dropped).

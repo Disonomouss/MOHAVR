@@ -1310,6 +1310,39 @@ above a traced floor; logs `logs/modlogs/land2..land8-MOHAVR.log`), on the save'
   **60.0 cm** above the feet through the landing (twice; the game camera itself went to 17.8 cm, raised up to 42 cm);
   standing 160.8 cm and a crouch 95.9 cm untouched; no clamp logged outside the roll.
 
+## 5ao. Manual reload, Step 2 (GOAL A): the inventory and the Garand's en-bloc clip (2026-09-30)
+
+Research: `work/research/goal/` (`inventory.md`, `garand.md`, `architecture.md`; local, gitignored).
+- **Inventory (A0):** 13 reachable guns with a reload (`MOHAWeaponIncludeClass` less the grenades); Step 1 has 7; the
+  mounted MG42 (belt, infinite, the game's reload every 100 rounds) is reachable too. `GiveWeapon` gives the player's
+  upgrade level per weapon type (`EALAWeapon.AttachWeaponTo`): the save's level 2 everywhere.
+- **The Garand line** (`Attachment_M1Garand`, `US_Garand_Rigged`): `clip` and `Bolt` hang off `stock` (the identity at the
+  origin under RootOffset) -- the `.Ref` parent check now accepts such a parent. Bones: `clip` seated at (0,-5.68,9.00),
+  the rounds' top (-0.1,-8.1,13.3) = the grab point, out = up (mesh -Y); the op-rod `Bolt` Z 13.87 idle, **2.29 locked
+  back** (1.00 is only the recoil extreme); its child `bolt_sheath` (the bolt) = 0.7164 x Bolt Z + 0.2836 (exact to
+  0.006 u): `Bolt2Z=10.22,1.93,1.00`. The knob (-2.51,-0.04,0.35) from the rod's bone.
+- **The game's side:** the last shot's `WeaponSingleFire.EndState` (0.15 s after the shot) throws the empty clip
+  (`EjectClip`, a `MOHAShellProjectile`) even with the reload blocked; it flies from the gun **in the hand** (the
+  viewmodel's proxy transform moves the socket; checked with the gun held far off). The **ping is not the game's**: the
+  attachment has no `OutOfAmmoPingSound`; it is the blocked reload animation's first cue -- the mod plays it.
+- **New tokens:** `EjectOnEmpty=1` (at the last shot, once the firing state ends: magazine out, the mod's ping, no falling
+  copy), `Feed=insert` (a clip seated in an empty gun loads min(8, R+owed) and the op-rod closes; `SndClose` 0.35 s after
+  `SndIn`), `NoGrab=1` (caps bit9: no grab of a seated clip), `Latch=0|1` (caps bit10 when 0: the release button does
+  nothing), per-gun `KeepChambered` (the Garand 0: a kept round would make the game throw a second clip at its shot),
+  `EjectSpeed` (m/s out of the well; the Garand's clip pops up at 1.5). `[ManualReload] Off=` lists guns that keep the
+  game's reload. A new state for an empty EjectOnEmpty gun starts with no clip.
+- **Grips from the right hand:** the Garand's reload works the clip with the RIGHT hand. `tools/reload_grips.py`'s
+  `MIRRORED` entries take the right hand at a set frame (the Garand f21, the thumb on the rounds) and mirror it. The arms
+  rig mirrors a bone's local frame by negating **all** its axes (every right knuckle offset = the left one negated), so
+  H_left = (-I on the axis rows) . H . (mesh X mirror), and each finger keeps its rotation in the hand with its offset
+  negated. (A first try, negating only the local Y as the free hand's mirror does, bent every finger backwards.)
+- **Tests:** `pad_cmd.py` / `menu_cmd.py` wait until the host took the last command (a lost `hand=l,@pouch` broke a run);
+  `hand=l,@magin,dx,dy,dz,align` turns the test hand too, so the held magazine sits exactly as seated whatever the grip
+  (the Garand's grip presented the clip 138 deg off to the fixed test hand).
+- [S] (`logs/modlogs/reload-garand3-*`, `-garand5-*`; `reg1`): the cycle in GOAL.md A1; 35 rounds, 19 fired, 16 left;
+  the Step 1 guns' eject / pouch / insert unchanged (all 7, 0.0 cm / 0 deg with the aligned hand, the owed carry at the
+  cap intact).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -263,3 +263,14 @@ above 60 cm (a crouch is 96, standing 161).
 **Why:** the player's report (round 35); measured 17.8 cm before, 60.0 cm after (ENGINE-NOTES 5an).
 **Costs:** the landing's dip still plays down to 60 cm (a comfort option to keep the view level through the landing is
 an [H] question, round 36); a death or knock-down camera near the pawn is held at 60 cm too.
+
+### D27. The Garand's manual reload: the game's clip flight, a closing seat, a latch that empties it — Decided 2026-09-30 (GOAL A1)
+The Garand (`[ManualReload] Attachment_M1Garand`, on): the last shot keeps the game's own flying clip (the mod adds the
+ping the blocked animation had), a clip seated from the pouch loads the gun and the op-rod closes on its own (a real
+Garand's release, not the game's animation where the hand rides the rod), a seated clip can't be pulled out, and the
+release button is the clip latch: it pops a part-used clip up out of the receiver with **all** its rounds back to the
+reserve (per-gun `KeepChambered=0`: a round kept in the chamber would make the game throw a second empty clip at its
+shot). The grenade launcher (level 2) keeps the game's reload.
+**Why:** GOAL.md A1 (the player's goal), the research (`work/research/goal/garand.md`), and the real rifle where the game
+has no opinion; each is a switch ([H] round 36: the latch, KeepChambered, the seat closing vs the rod, the pop speed).
+**Costs:** a seat into a gun with a round chambered (latch off) is not modelled.

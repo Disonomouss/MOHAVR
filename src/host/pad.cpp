@@ -415,6 +415,8 @@ void Pad::ReadTests(double now) {
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
+                        // "...,align" (only @magin): the hand turned so the held magazine sits as seated (any grip).
+                        tp.align = tp.target == 3 && strstr(name, ",align") != nullptr;
                         const int h = (v[0] == 'l' || v[0] == 'L') ? 0 : 1;
                         testPose_[h] = tp;
                         MLOG("pad: test %s hand at @%.*s %+.2f %+.2f %+.2f m, yaw %.1f pitch %.1f%s", h ? "right" : "left",
@@ -575,6 +577,13 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
         if (tp.target >= 0) {
             if (!testTargetOk_[tp.target]) continue;  // not known yet: the hand as tracked
             base = testTarget_[tp.target];
+        }
+        if (tp.align && testAlignOk_) {  // @magin,align: the pose that seats the held magazine, offset in the heading frame
+            const XrVector3f& a = testAlign_.position;
+            out[h].position = {a.x + tp.x * ch - tp.z * sh, a.y + tp.y, a.z - tp.x * sh - tp.z * ch};
+            out[h].orientation = testAlign_.orientation;
+            valid |= 1u << h;
+            continue;
         }
         out[h].position = {base.x + tp.x * ch - tp.z * sh, base.y + tp.y, base.z - tp.x * sh - tp.z * ch};
         const float yaw = heading - tp.yaw * 0.0174533f;  // positive test yaw = to the right
