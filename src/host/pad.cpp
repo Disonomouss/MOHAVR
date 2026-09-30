@@ -353,8 +353,13 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
 // the mapping, so [Controls], the flicks and the sprint toggle can be tested.
 void Pad::ReadTests(double now) {
     if (GetFileAttributesW(testPath_.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+    // Take the file first (a rename), then read and delete the taken copy: a command written while the host reads can't
+    // be deleted unread, and a file caught mid-replace is left for the next frame (GOAL A2: a lost "@boltback" line --
+    // the open failed during the writer's replace, and the delete then took the new command).
+    const std::wstring taken = testPath_ + L".taken";
+    if (!MoveFileExW(testPath_.c_str(), taken.c_str(), MOVEFILE_REPLACE_EXISTING)) return;
     FILE* f = nullptr;
-    if (_wfopen_s(&f, testPath_.c_str(), L"r") == 0 && f) {
+    if (_wfopen_s(&f, taken.c_str(), L"r") == 0 && f) {
         char line[256];
         while (fgets(line, sizeof(line), f)) {
             Test t;
@@ -388,9 +393,11 @@ void Pad::ReadTests(double now) {
                          testLost_[1] ? "lost" : "tracked");
                 } else if (!strcmp(tok, "reload")) {
                     aimLine = true;
-                    static const char* kNames[] = {"", "eject", "insert", "rack", "take", "drop"};
-                    for (std::uint32_t e = 1; e < 6; ++e)
-                        if (!strcmp(v, kNames[e])) {
+                    // (GOAL A2: 7-10 the bolt's steps; 6, the taped pair's other half, has no name here)
+                    static const char* kNames[] = {"", "eject", "insert", "rack", "take", "drop", "", "boltup", "boltback",
+                                                   "boltfwd", "boltdown"};
+                    for (std::uint32_t e = 1; e < 11; ++e)
+                        if (kNames[e][0] && !strcmp(v, kNames[e])) {
                             testReload_.push_back(e);
                             MLOG("pad: test reload event %s", v);
                         }
@@ -408,10 +415,10 @@ void Pad::ReadTests(double now) {
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
                     if (v[0] && v[1] == ',' && v[2] == '@') {
                         // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
-                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin"};
+                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback"};
                         const char* name = v + 3;
                         const size_t len = strcspn(name, ",");
-                        for (int i = 0; i < 4; ++i)
+                        for (int i = 0; i < 6; ++i)
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
@@ -472,7 +479,7 @@ void Pad::ReadTests(double now) {
         }
         fclose(f);
     }
-    DeleteFileW(testPath_.c_str());
+    DeleteFileW(taken.c_str());
     MLOG("pad: %zu test state(s) queued", tests_.size());
     (void)now;
 }

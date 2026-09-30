@@ -599,9 +599,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
             }
         }
-        if (GetFileAttributesW(cmdPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        // (Taken by a rename first, then read: a command written meanwhile is never deleted unread -- see Pad::ReadTests.)
+        const std::wstring cmdTaken = cmdPath + L".taken";
+        if (GetFileAttributesW(cmdPath.c_str()) != INVALID_FILE_ATTRIBUTES &&
+            MoveFileExW(cmdPath.c_str(), cmdTaken.c_str(), MOVEFILE_REPLACE_EXISTING)) {
             FILE* cf = nullptr;
-            if (_wfopen_s(&cf, cmdPath.c_str(), L"r") == 0 && cf) {
+            if (_wfopen_s(&cf, cmdTaken.c_str(), L"r") == 0 && cf) {
                 char line[64];
                 while (fgets(line, sizeof(line), cf)) {
                     const std::string c(line, strcspn(line, "\r\n "));
@@ -609,7 +612,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
                 fclose(cf);
             }
-            DeleteFileW(cmdPath.c_str());
+            DeleteFileW(cmdTaken.c_str());
         }
         // One command per frame, like one button press each ("down down" moves two rows).
         if (!testCmds.empty()) {

@@ -84,13 +84,22 @@ Items, in D21's order:
   27 -> 19; the action closed on its own`; three shots and the latch: `EJECT ...: clip 5 -> 0, reserve 19 -> 24`; a new
   clip `clip 0 -> 8, reserve 24 -> 16`; fired empty; with the manual reload off the game reloads (`clip rose 0 -> 8
   without the mod`). 35 rounds, 19 fired, 16 left. The clip in the hand is the game's right-hand grip mirrored.
-- [ ] **A2 K98 and Springfield, bolt actions.**
+- [x] **A2 K98 and Springfield, bolt actions.**
   - After each shot the player works the bolt by hand: up, back, forward, down.
   - The trigger is blocked until that's done.
   - The game's own rechamber is turned off (`WeaponRechamberAnim='None'` per instance), and the attachment's
     `Rechamber()` ejects the case.
   - Loading with the bolt open: a stripper clip pushed down, and/or single rounds, whichever the game's animations show.
   - Also check the scope and upgrade variants.
+
+  **DONE** (`logs/modlogs/reload-k98a-*`, `-spr2-*`, `-k98r2-*`, `-sprr2-*`; ENGINE-NOTES 5aq): per shot the game's own
+  rechamber is off (`WeaponRechamberAnim -> None`) and the trigger held (`FiringStatesArray[0] -> None`); the off hand
+  works the knob: `BOLT UP`, `BOLT BACK ...; the case ejected` (the game's `EjectRechamberedShell`), `BOLT FORWARD`, `BOLT
+  DOWN`, the trigger back. Emptied, the bolt stays open (HoldOpen). **Clip (level 2):** `INSERT Attachment_K98: clip 0 ->
+  5, reserve 27 -> 22; a stripper clip`, the bolt closed pushes the clip out, it fires (5 -> 4); the same on the
+  Springfield. **Rounds (level -1, forced):** five pouch trips, `INSERT ...: clip 0 -> 1 ... 4 -> 5, reserve 27 -> 22; a
+  round`, on both. Switched off, the game's own `WeaponRechamber` returns. 32 rounds, 7 fired, 25 left (each run). The
+  scope variant changes nothing (the Springfield's scope never meets the knob).
 - [ ] **A3 M12 shotgun.**
   - The pump is worked by hand after each shot, with the trigger blocked until then.
   - Shells go in one at a time from the pouch into the loading port, up to the tube's maximum.

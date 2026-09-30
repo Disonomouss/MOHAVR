@@ -81,9 +81,9 @@ public:
         float pulseAmp[2]{}, pulseMs[2]{};
         bool  mask[2]{};    // keep that hand's release button from the pad
         bool  maskTrigger[2]{};  // keep that hand's trigger from the pad (the flip of a held taped pair)
-        bool  targetOk[3]{};
-        XrVector3f target[3]{};  // tests: 0 the magazine's grab point, 1 the action's, 2 where the off hand's aim point
-                                 // puts a held magazine's grab point at the well
+        bool  targetOk[5]{};
+        XrVector3f target[5]{};  // tests: 0 the magazine's grab point, 1 the action's, 2 where the off hand's aim point
+                                 // puts a held magazine's grab point at the well, 3 / 4 a bolt's knob lifted / drawn back
         bool    alignOk = false;  // tests ("hand=l,@magin,dx,dy,dz,align"): the off hand's aim pose that seats the held
         XrPosef align{};          // magazine exactly -- turned as well, whatever grip holds it (GOAL: the new guns' grips)
     };
@@ -105,7 +105,7 @@ public:
     std::uint32_t KeyHash() const { return keyHash_; }
     float         MagPull() const { return mag_ == kGrabbed ? pull_ : 0.0f; }
     shared::Pose  MagPose() const;
-    float         Rack() const { return boltHeld_ ? rack_ : 0.0f; }
+    float         Rack() const { return (geo_.caps & 4096u) ? actS_ * 0.5f : (boltHeld_ ? rack_ : 0.0f); }
 
 private:
     enum Mag { kInGun = 0, kGrabbed = 1, kInHand = 2, kOut = 3 };
@@ -137,6 +137,14 @@ private:
     bool          armed_ = false;    // the held magazine has been away from the well (no insert straight after a pull)
     bool          snapHeld_ = false; // round 31: put a held magazine straight into the grip (a pouch one), else ease
     bool          entering_ = false; // GOAL A5 (Insert=slide, the Panzerschreck's rocket): "grabbed" = sliding IN at the mouth
+    // GOAL A2 (a two-stage action: a bolt): where the knob is on its path (s 0 closed, 1 lifted, 2 drawn back), the step
+    // the host last sent (0 closed, 1 lifted, 2 open, 3 forward), whether the off hand holds it, where knob and hand were
+    // at the grab.
+    float         actS_ = 0.0f;
+    int           actStage_ = 0;
+    bool          actHeld_ = false;
+    XrVector3f    actKnobAtGrab_{}, actHandAtGrab_{};
+    bool          acksDone_ = true;  // (Poll) every event sent has been taken
     double        lastNow_ = 0.0, nearMissAt_ = 0.0;
     bool          lastGunOk_ = false;
     XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)

@@ -11,7 +11,8 @@
 
 namespace mohavr::host {
 namespace {
-const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)"};
+const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)", "BOLT UP", "BOLT BACK",
+                            "BOLT FORWARD", "BOLT DOWN"};
 const char* kMagName[] = {"in the gun", "grabbed", "in the off hand", "out"};
 
 struct V3 { float x, y, z; };
@@ -82,7 +83,7 @@ void ManualReload::SetOn(bool on) {
 }
 
 void ManualReload::Queue(std::uint32_t type, double now) {
-    if (type < shared::kReloadEject || type > shared::kReloadInsertOther) return;
+    if (type < shared::kReloadEject || type > shared::kReloadBoltDown) return;
     pending_.push_back({type, keyHash_, now});
 }
 
@@ -101,6 +102,7 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
     if (!hdr) return;
     // Every event sent has been taken (read before the geometry: a state older than the acknowledgement can't pass).
     const bool acksDone = pending_.empty() && hdr->reloadEvtSeq == hdr->reloadEvtAck;
+    acksDone_ = acksDone;
     const std::uint32_t pawnSeq = hdr->reloadPawnSeq;
     if (pawnSeq != pawnSeq_) {
         pawnSeq_ = pawnSeq;
@@ -180,6 +182,7 @@ bool ManualReload::Begin(const In& in) {
         // without a rack.
         if (boltHeld_) MLOG("reload: the action let go (not driving): no rack");
         boltHeld_ = false;
+        actHeld_ = false;
         if (mag_ == kGrabbed && !entering_) SetMag(kInGun, "let go: not driving");
         else if (mag_ == kInHand || mag_ == kGrabbed) {
             Queue(shared::kReloadDrop, in.now);
@@ -193,7 +196,9 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
     if (!active_) return false;
     float best = 1.0f;
     Press which = kPressNone;
-    if (mag_ == kOut && pouchR > 0.0f) {
+    // (GOAL A2: a bolt action loads a clip or a round only through its open action, with room.)
+    const bool twoStage = (geo_.caps & 4096u) != 0;
+    if (mag_ == kOut && pouchR > 0.0f && (!twoStage || ((geo_.state & 256u) && (geo_.state & 512u)))) {
         const float s = Len(Sub(P(hand), P(pouch))) / pouchR;
         if (s < best) {
             best = s;
@@ -210,7 +215,7 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
             which = kPressMag;
         }
     }
-    if ((geo_.caps & 2u) && lastGunOk_ && boltGrabR_ > 0.0f) {
+    if (((geo_.caps & 2u) || twoStage) && lastGunOk_ && boltGrabR_ > 0.0f) {
         const float s = Len(Sub(P(hand), P(lastBoltW_))) / (boltGrabR_ * ringScale_ * spotAdj_[1][3]);
         if (s < best) {
             best = s;
@@ -290,6 +295,42 @@ void ManualReload::Frame(const In& in, Out& out) {
         out.targetOk[1] = true;
         out.target[1] = X(boltW);
     }
+    // GOAL A2 (a two-stage action): the knob's path from the game (host gun frame), as world points; the knob where it
+    // is now is the press candidate, and the test targets are it, lifted, and drawn back.
+    const bool twoStage = (geo_.caps & 4096u) && geo_.actPathN >= 2;
+    const int pathN = static_cast<int>(geo_.actPathN);
+    auto actAt = [&](int i) { return Add(gunP, Rotate(in.gun.orientation, A3(geo_.actPath[i]))); };
+    auto actPoint = [&](float sv) {
+        int i = 0;
+        while (i + 2 < pathN && geo_.actPathS[i + 1] < sv) ++i;
+        const float s0 = geo_.actPathS[i], s1 = geo_.actPathS[i + 1];
+        const float t = s1 > s0 ? std::clamp((sv - s0) / (s1 - s0), 0.0f, 1.0f) : 0.0f;
+        const V3 a0 = actAt(i), a1 = actAt(i + 1);
+        return Add(a0, Scale(Sub(a1, a0), t));
+    };
+    auto actProject = [&](V3 p) {  // the path's s nearest to p
+        float best = 1e9f, bs = 0.0f;
+        for (int i = 0; i + 1 < pathN; ++i) {
+            const V3 a0 = actAt(i), a1 = actAt(i + 1), d = Sub(a1, a0);
+            const float dd = Dot(d, d);
+            const float t = dd > 1e-9f ? std::clamp(Dot(Sub(p, a0), d) / dd, 0.0f, 1.0f) : 0.0f;
+            const float dist = Len(Sub(p, Add(a0, Scale(d, t))));
+            if (dist < best) {
+                best = dist;
+                bs = geo_.actPathS[i] + t * (geo_.actPathS[i + 1] - geo_.actPathS[i]);
+            }
+        }
+        return bs;
+    };
+    if (twoStage) {
+        lastBoltW_ = X(actPoint(actS_));  // the press candidate: the knob where it is now
+        out.targetOk[1] = true;
+        out.target[1] = X(actPoint(0.0f));  // the tests' @bolt: the knob closed (a fixed spot, so a held knob can be driven)
+        out.targetOk[3] = true;
+        out.target[3] = X(actPoint(1.0f));
+        out.targetOk[4] = true;
+        out.target[4] = X(actPoint(2.0f));
+    }
     auto heldAt = [&](float pull) {  // the magazine as it sits drawn out by `pull`, in the off hand's frame
         const XrPosef m{in.gun.orientation, X(Add(grabW, Scale(outW, pull)))};
         return Relative(in.off, m);
@@ -331,7 +372,13 @@ void ManualReload::Frame(const In& in, Out& out) {
             Pulse(out, o, 0.2f, 60.0f);
         }
     }
-    if (press_ == kPressBolt) {
+    if (press_ == kPressBolt && twoStage) {
+        actHeld_ = true;
+        actKnobAtGrab_ = X(actPoint(actS_));
+        actHandAtGrab_ = X(offP);
+        MLOG("reload: the bolt taken %.1f cm from its knob (s %.2f)", 100.0f * Len(Sub(offP, P(actKnobAtGrab_))), actS_);
+        Pulse(out, o, 0.5f, 30.0f);
+    } else if (press_ == kPressBolt) {
         boltHeld_ = true;
         boltStart_ = X(offP);
         rack_ = 0.0f;
@@ -343,6 +390,49 @@ void ManualReload::Frame(const In& in, Out& out) {
         Pulse(out, o, 0.5f, 30.0f);
     }
     press_ = kPressNone;
+
+    // GOAL A2: the two-stage action -- the knob follows the off hand along its path (up, then back); each step is sent as
+    // it is passed, in order (up at s 0.9, back at 1.85, forward at 1.1, down at 0.1). An emptied bolt is held open by
+    // the follower (the game's state): it can't be pushed forward. Let go, it rests where the game has it.
+    if (twoStage) {
+        const bool heldOpen = (geo_.state & 1024u) != 0;
+        if (actHeld_) {
+            if (!in.offHeld) {
+                actHeld_ = false;
+                MLOG("reload: the bolt let go (s %.2f)", actS_);
+            } else {
+                float sv = actProject(Add(P(actKnobAtGrab_), Sub(offP, P(actHandAtGrab_))));
+                if (heldOpen && actStage_ == 2) sv = std::max(sv, 1.85f);
+                actS_ = sv;
+                if (actStage_ == 0 && actS_ >= 0.9f) {
+                    Queue(shared::kReloadBoltUp, in.now);
+                    actStage_ = 1;
+                    Pulse(out, o, 0.3f, 20.0f);
+                }
+                if (actStage_ == 1 && actS_ >= 1.85f) {
+                    Queue(shared::kReloadBoltBack, in.now);
+                    actStage_ = 2;
+                    Pulse(out, o, 0.6f, 30.0f);
+                }
+                if (actStage_ == 2 && actS_ <= 1.1f) {
+                    Queue(shared::kReloadBoltForward, in.now);
+                    actStage_ = 3;
+                    Pulse(out, o, 0.4f, 20.0f);
+                }
+                if ((actStage_ == 3 || actStage_ == 1) && actS_ <= 0.1f) {
+                    Queue(shared::kReloadBoltDown, in.now);
+                    actStage_ = 0;
+                    Pulse(out, o, 0.8f, 40.0f);
+                    Pulse(out, g, 0.4f, 30.0f);
+                }
+            }
+        }
+        if (!actHeld_ && acksDone_) {  // at rest: where the game has it (after it has taken what was sent)
+            const int gs = (geo_.state & 256u) ? 2 : (geo_.state & 16384u) ? 1 : (geo_.state & 32768u) ? 3 : 0;
+            actStage_ = gs;
+            actS_ = gs == 2 ? 2.0f : gs == 0 ? 0.0f : 1.0f;
+        }
+    }
 
     // The action (3.3).
     if (boltHeld_) {
@@ -444,6 +534,7 @@ void ManualReload::Frame(const In& in, Out& out) {
         gunTrigLatch_ = false;
     }
     if (gunTrigLatch_) out.maskTrigger[g] = true;
+    if (twoStage && (geo_.state & 2048u)) out.maskTrigger[g] = true;  // GOAL A2: work the bolt before the next shot
     float dist = 1e9f, angle = 180.0f;
     const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
     lastNow_ = in.now;
@@ -494,7 +585,8 @@ void ManualReload::Frame(const In& in, Out& out) {
                 Pulse(out, o, 0.5f, 30.0f);
             } else if (active_ && armed_ && dist < insertR_ && angle < insertAngle_) {
                 Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
-                SetMag(kInGun, "inserted");
+                // (GOAL A2: through a bolt's open action the clip strips / the round goes in: the hand is empty again.)
+                SetMag(twoStage ? kOut : kInGun, twoStage ? "loaded through the open action" : "inserted");
                 MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
                 Pulse(out, g, 0.9f, 50.0f);
                 Pulse(out, o, 0.9f, 50.0f);
@@ -508,6 +600,12 @@ void ManualReload::Frame(const In& in, Out& out) {
     } else if (mag_ == kInHand && armed_) {  // the well -- or the mouth, for the slide insert
         out.rings[out.ringCount++] = {X(geo_.magLen > 0.0f ? mouthW : grabW), insertR_, dist < insertR_ && angle < insertAngle_,
                                       dist < 3.0f * insertR_};
+    }
+    // GOAL A2: the knob's ring while the bolt must be worked (a spent case, or not closed).
+    if (twoStage && !actHeld_ && ((geo_.state & 2048u) || actStage_ != 0)) {
+        const V3 kw = actPoint(actS_);
+        const float d = Len(Sub(offP, kw));
+        out.rings[out.ringCount++] = {X(kw), boltRingR, d < boltRingR, d < 2.0f * boltRingR};
     }
     // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
     if ((geo_.caps & 2u) && (((geo_.state & 16u) && !boltHeld_) || in.showSpots)) {
@@ -538,7 +636,8 @@ void ManualReload::Send(shared::Header* hdr, double now) {
 }
 
 std::uint32_t ManualReload::Flags() const {
-    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (boltHeld_ ? 8u : 0u) | (engaged_ ? 16u : 0u) |
+    const bool posed = boltHeld_ || ((geo_.caps & 4096u) && (actHeld_ || actS_ > 0.001f));  // (A2: the host poses the bolt)
+    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (posed ? 8u : 0u) | (engaged_ ? 16u : 0u) |
            (mag_ == kInHand && flipped_ ? 32u : 0u);
 }
 

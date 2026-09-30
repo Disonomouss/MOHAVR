@@ -1369,6 +1369,41 @@ mouth at Z -87.55; 65.75 long). The game never hides it (the fire animation leav
 - [S] (`reload-panzer1-*`): fired, a pouch rocket into the mouth (0.0 cm, 0 deg with the aligned test hand), pushed home
   (84.6 cm): `clip 0 -> 1, reserve 9 -> 8`; again 8 -> 7; the switch off -> the game's `WeaponReload` (`clip rose 0 -> 1`).
 
+## 5aq. Manual reload, Step 2: the bolt actions (GOAL A2, 2026-10-01)
+
+Research: `work/research/goal/boltaction.md` (bones, tracks, rules), `crosscheck.md` (the allocation). `Attachment_K98`
+(`DE_K98_Rigged`: the bolt bones `upgrade_01_polished_bolt` / `_hide_nasty_bolt` under `Slide`; the knob 7 u from the bore,
+lift 93.3 deg, draw 10.06), `Attachment_Springfield` (`US_1903sniper_Rigged`: one bone turns 60 deg and draws 13.05). Both
+hold 5, the rifle pool.
+- **The game's rechamber off, per weapon, while driven:** `WeaponRechamberAnim` (FName, reflected at 0x558) written
+  {0,0} = None -> after a shot `RefireCheckTimer` goes `WeaponSingleFire -> Active`, no `WeaponRechamber` (no animation,
+  no lock-out). Put back when not driven (the switch off, not engaged): the next shot rechambers as the game does.
+- **The trigger gate:** `FiringStatesArray[0]` (TArray<FName> at 0x248, per instance) = None while a spent case is in or
+  the bolt isn't closed: `SendToFiringState` returns at once (no shot, no click); the host also masks the gun hand's
+  trigger (reloadState bit 11). Put back at BOLT DOWN on a live round.
+- **The case:** at BOLT BACK with a spent case, the attachment's `EjectRechamberedShell` through ProcessEvent (the final
+  call to `SmallArmsAttachment.EjectShell`: the case particles, which muzzle.cpp already moves to the drawn gun).
+- **The bolt drawn** (`OverrideBones`): s 0..1 turns each BoltTurn bone about mesh +Z at its own origin (its axis rows
+  turned; a hidden variant's zero 3x3 stays hidden), 1..2 draws them and `BoltSlide` back along -Z. The host sends s
+  through `rack` (= s/2) with flags bit3. **The knob's path** (shared block **v18** `actPath[9][3]`, `actPathS`,
+  `actPathN`): the knob turned in quarters then drawn back, from the first turning bone that SHOWS (at level -1 the
+  Springfield's polished bolt is hidden: its knob was nowhere, and the host's projection flipped up / down).
+- **The host** projects the off hand (knob at the grab + the hand's move) onto the path: events up at s 0.9, back at
+  1.85, forward at 1.1, down at 0.1, in order; an emptied bolt (reloadState bit 10) can't come forward. At rest it takes
+  the game's step (bits 8 open, 14 lifted, 15 forward). Events 7-10 (`BOLT UP/BACK/FORWARD/DOWN`), caps bit 12.
+- **Loading** through the open action: the "magazine" is `Mag=clip;round` -- the visible variant is the game's own choice
+  (the stripper clip shows from upgrade 1). Parked by the game, the item is drawn seated at `MagRest` in the hand; a
+  clip strips min(5, room) at the insert and stays in the guides (`ClipIn`) until BOLT FORWARD pushes it out; a round
+  adds 1. The pouch offers one only with the bolt open and room; after an insert the hand is empty.
+- **Found on the way (Step 1):** a line without `MinUpgrade` refused every gun below level 0 (an un-upgraded gun is at
+  -1): a new player's Thompson, MP40... kept the game's reload until their first upgrade. The default is now -1.
+- **Tests:** `mohavr upgradelevel <type> <level>` (game_cmd.txt, Debug.GameCommands) sets the pawn's
+  `WeaponUpgradeManager.iUpgradeLevel[type]` before a `GiveWeapon` (K98 8, Springfield 4, C96 19); targets `@boltup`,
+  `@boltback` (`@bolt` = the knob closed); `reload=boltup|boltback|boltfwd|boltdown`. The three test-file readers now take
+  the file by a rename before reading it: a failed open followed by the delete had thrown away a new command.
+- [S]: `reload-k98a-*`, `-spr2-*` (level 2, clip), `-k98r2-*`, `-sprr2-*` (level -1, rounds): the full cycle, the held-open
+  bolt, the loads, the switch off; the Step 1 regression (`reg2`) unchanged.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

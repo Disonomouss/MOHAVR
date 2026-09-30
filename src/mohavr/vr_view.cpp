@@ -348,18 +348,47 @@ void RunTestCommands(const std::uintptr_t* players) {
         const DWORD n = GetTempPathW(MAX_PATH, tmp);
         path = std::wstring(tmp, n) + L"MOHAVR\\game_cmd.txt";
     }
+    // Taken by a rename first, then read and deleted: a command written meanwhile is never deleted unread (GOAL A2).
+    const std::wstring taken = path + L".taken";
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES ||
+        !MoveFileExW(path.c_str(), taken.c_str(), MOVEFILE_REPLACE_EXISTING))
+        return;
     FILE* f = nullptr;
-    if (_wfopen_s(&f, path.c_str(), L"r, ccs=UTF-8") != 0 || !f) return;
+    if (_wfopen_s(&f, taken.c_str(), L"r, ccs=UTF-8") != 0 || !f) {
+        DeleteFileW(taken.c_str());
+        return;
+    }
     wchar_t line[256];
     const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
     while (fgetws(line, 256, f)) {
         line[wcscspn(line, L"\r\n")] = 0;
         if (!line[0]) continue;
+        // GOAL A2/A4 (tests only): "mohavr upgradelevel <type> <level>" -- the pawn's WeaponUpgradeManager level for a
+        // weapon type, which a gun given afterwards (not held yet) takes (EALAWeapon.AttachWeaponTo): the save has every
+        // upgrade, so the lower levels (single rounds, the C96's stripper clip) need it. Nothing is saved: the harness
+        // restores Saved\ after the run.
+        int wtype = 0, level = 0;
+        if (swscanf_s(line, L"mohavr upgradelevel %d %d", &wtype, &level) == 2) {
+            const std::uintptr_t pawn = aim::LocalPlayerPawn();
+            const int mo = pawn ? names::PropertyOffset(pawn, "WeaponUpgradeManager") : -1;
+            const std::uintptr_t mgr = mo >= 0 ? names::ReadPointer(pawn + mo) : 0;
+            const int lo = mgr ? names::PropertyOffset(mgr, "iUpgradeLevel") : -1;
+            const std::uintptr_t data = lo >= 0 ? names::ReadPointer(mgr + lo) : 0;
+            const int count = lo >= 0 ? *reinterpret_cast<const int*>(mgr + lo + 4) : 0;
+            if (data && wtype >= 0 && wtype < count) {
+                int* slot = reinterpret_cast<int*>(data + 4 * wtype);
+                MLOG("test: weapon type %d's upgrade level %d -> %d", wtype, *slot, level);
+                *slot = level;
+            } else {
+                MLOG("test: no upgrade level for weapon type %d (manager %p, %d entries)", wtype, reinterpret_cast<void*>(mgr), count);
+            }
+            continue;
+        }
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
     fclose(f);
-    DeleteFileW(path.c_str());
+    DeleteFileW(taken.c_str());
 }
 
 // M8: a console command from the host (holsters, the reload gesture), once per cmdSeq, on the game thread.

@@ -283,6 +283,11 @@ Hands::Output Hands::Update(const Input& in) {
         for (int i = 0; i < 3; ++i) out.target[i] = {out.target[i].x - hpOff.x, out.target[i].y - hpOff.y, out.target[i].z - hpOff.z};
         out.targetOk[3] = rout.targetOk[2];
         out.target[3] = rout.target[2];
+        for (int i = 0; i < 2; ++i) {  // GOAL A2: the bolt's knob lifted / drawn back (spots: moved by the hand point too)
+            out.targetOk[4 + i] = rout.targetOk[3 + i];
+            const XrVector3f& t = rout.target[3 + i];
+            out.target[4 + i] = {t.x - hpOff.x, t.y - hpOff.y, t.z - hpOff.z};
+        }
         out.alignOk = rout.alignOk;
         out.align = rout.align;
     }

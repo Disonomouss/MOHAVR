@@ -75,6 +75,8 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - Manual reload tests: `pad_cmd.py --seq "hand=l,@mag|@pouch|@bolt[,dx,dy,dz,yaw,pitch,roll]"` puts the off hand at a
   reload spot (a hand line applies at once; raw grip states queue), `reload=eject|take|insert|rack|drop` sends an event. `hand=l,@magin,dx,dy,dz,align` also turns the hand so the held
   magazine sits exactly as seated (any grip). The writers wait until the host has taken the previous command.
+  Bolt actions: `@boltup`, `@boltback` (and `@bolt` = the knob closed), `reload=boltup|boltback|boltfwd|boltdown`; the
+  game command `mohavr upgradelevel <type> <level>` (before `GiveWeapon`) gives a lower upgrade level.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

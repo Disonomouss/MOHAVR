@@ -282,3 +282,15 @@ snap would need the hand inside the tube. Letting go part-way loads it (it slide
 length and depth.
 **Why:** GOAL A5; the research (`work/research/goal/launchers.md`); the game's own animation pushes the rocket in the same way.
 **Costs:** [H]: how far the player must push (the whole 85 cm, or less), and the launcher's 12.8 deg yaw in the hand.
+
+### D29. Bolt actions are worked by the off hand after every shot — Decided 2026-10-01 (GOAL A2)
+The K98 and Springfield: after each shot the trigger does nothing until the off hand has worked the bolt (up, back --
+the case flies -- forward, down); the game's own rechamber is off for the gun while the manual reload drives it. An
+emptied bolt stays open until a round is loaded (`HoldOpen=1`). With the bolt open, a stripper clip (from upgrade 1)
+strips as it is seated and is pushed out as the bolt closes; below upgrade 1, single rounds, one per pouch trip. No game
+grip exists for the off hand on the knob (the game's animations use the right hand), so the drawn hand stays with the
+controller there.
+**Why:** GOAL A2 (the player's goal); the off hand reloads everywhere else (Step 1); the real rifles and the game's
+rechamber animation work the same four motions.
+**Costs:** [H] -- reaching across to the knob (the gun-hand option is not built), the path's thresholds, the clip
+stripping on seating (not a thumb push), no hand grip on the knob, the round / clip held at the aim point.
