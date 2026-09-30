@@ -10,7 +10,7 @@
 
 namespace mohavr::host {
 namespace {
-const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP"};
+const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)"};
 const char* kMagName[] = {"in the gun", "grabbed", "in the off hand", "out"};
 
 struct V3 { float x, y, z; };
@@ -81,7 +81,7 @@ void ManualReload::SetOn(bool on) {
 }
 
 void ManualReload::Queue(std::uint32_t type, double now) {
-    if (type < shared::kReloadEject || type > shared::kReloadDrop) return;
+    if (type < shared::kReloadEject || type > shared::kReloadInsertOther) return;
     pending_.push_back({type, keyHash_, now});
 }
 
@@ -89,6 +89,7 @@ void ManualReload::SetMag(Mag m, const char* why) {
     if (m == mag_) return;
     MLOG("reload: magazine %s -> %s (%s)", kMagName[mag_], kMagName[m], why);
     mag_ = m;
+    if (m == kInHand) flipped_ = false;  // held as it came
     if (m != kGrabbed) pull_ = 0.0f;
 }
 
@@ -342,6 +343,22 @@ void ManualReload::Frame(const In& in, Out& out) {
             }
         }
     }
+    // Twin magazines: the off hand's trigger flips a held taped pair (edge, hysteresis 0.6 / 0.4); the trigger is kept from
+    // the pad while a pair is held and until a press begun then ends.
+    const bool twin = (geo_.caps & 32u) != 0 && mag_ == kInHand;
+    if (!trigHeld_ && in.offTrigger >= 0.6f) {
+        trigHeld_ = true;
+        if (twin) {
+            trigLatch_ = true;
+            flipped_ = !flipped_;
+            MLOG("reload: the taped pair flipped (%s half toward the well)", flipped_ ? "the other" : "the same");
+            Pulse(out, o, 0.4f, 25.0f);
+        }
+    } else if (trigHeld_ && in.offTrigger < 0.4f) {
+        trigHeld_ = false;
+        trigLatch_ = false;
+    }
+    out.maskTrigger[o] = twin || trigLatch_;
     float dist = 1e9f, angle = 180.0f;
     if (mag_ == kInHand) {
         if (!in.offHeld) {
@@ -354,7 +371,7 @@ void ManualReload::Frame(const In& in, Out& out) {
             angle = std::acos(std::clamp(Dot(heldOut, outW), -1.0f, 1.0f)) * 57.2958f;
             if (!armed_ && dist > insertR_ + 0.02f) armed_ = true;  // away from the well first (a pull ends inside it)
             if (armed_ && dist < insertR_ && angle < insertAngle_) {
-                Queue(shared::kReloadInsert, in.now);
+                Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
                 SetMag(kInGun, "inserted");
                 MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
                 Pulse(out, g, 0.9f, 50.0f);
@@ -398,7 +415,8 @@ void ManualReload::Send(shared::Header* hdr, double now) {
 }
 
 std::uint32_t ManualReload::Flags() const {
-    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (boltHeld_ ? 8u : 0u) | (engaged_ ? 16u : 0u);
+    return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (boltHeld_ ? 8u : 0u) | (engaged_ ? 16u : 0u) |
+           (mag_ == kInHand && flipped_ ? 32u : 0u);
 }
 
 shared::Pose ManualReload::MagPose() const {

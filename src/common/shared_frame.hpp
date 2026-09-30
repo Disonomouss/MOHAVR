@@ -179,7 +179,8 @@ struct Header {
     // (x right, y up, z back, metres), already un-mirrored for a left gun hand.
     volatile std::uint32_t reloadGeoSeq;
     std::uint32_t          reloadCaps;     // bit0 converted gun in hand, bit1 action bone(s) found, bit2 hook installed,
-                                           // bit3 alt-fire mode, bit4 the game's block filter passes for this gun now
+                                           // bit3 alt-fire mode, bit4 the game's block filter passes for this gun now,
+                                           // bit5 a taped (twin) magazine pair: the off hand's trigger flips it
     char                   reloadKey[48];  // the attachment class the geometry is for
     float                  magGrab[3];     // the in-gun magazine's grab point = the insert target
     float                  magOut[3];      // unit: the way the magazine leaves the well
@@ -195,7 +196,8 @@ struct Header {
     // host -> game, per XR frame inside the view seqlock (viewSeq), next to gunPose
     std::uint32_t          reloadFlags;    // bit0 manual reload on (the player's toggle); bits 1-2 the magazine (0 in gun,
                                            // 1 grabbed, 2 in the off hand, 3 out); bit3 action held; bit4 engaged (the
-                                           // pipeline is alive: the game blocks its own reload only then)
+                                           // pipeline is alive: the game blocks its own reload only then); bit5 the held
+                                           // taped pair flipped (its other half toward the well)
     std::uint32_t          reloadKeyHash;  // FNV-1a 32 of the attachment class these flags are for
     float                  magPull;        // metres the grabbed magazine is drawn out along magOut
     Pose                   magPose;        // the held magazine's grab-point frame in LOCAL (the gun frame's axes)
@@ -246,7 +248,9 @@ static_assert(offsetof(Header, reloadEvt) == 1432, "shared::Header layout must m
 static_assert(sizeof(Header) == 1464, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
-enum ReloadEvent : std::uint32_t { kReloadEject = 1, kReloadInsert = 2, kReloadRack = 3, kReloadTake = 4, kReloadDrop = 5 };
+// kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
+enum ReloadEvent : std::uint32_t { kReloadEject = 1, kReloadInsert = 2, kReloadRack = 3, kReloadTake = 4, kReloadDrop = 5,
+                                   kReloadInsertOther = 6 };
 inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
     std::uint32_t h = 2166136261u;
     for (; s && *s; ++s) h = (h ^ static_cast<std::uint8_t>(*s)) * 16777619u;

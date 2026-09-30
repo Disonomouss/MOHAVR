@@ -110,6 +110,7 @@ Hands::Output Hands::Update(const Input& in) {
     rin.hasView = in.hasView;
     rin.gunHand = g;
     rin.fitAngle = in.fit.angle;
+    rin.offTrigger = in.trigger[o];
     rin.now = in.now;
     for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
     const bool reloadActive = reload_ && reload_->Begin(rin);
@@ -260,6 +261,7 @@ Hands::Output Hands::Update(const Input& in) {
                 out.pulseMs[h] = rout.pulseMs[h];
             }
             out.maskFace[h] = rout.mask[h];
+            out.maskTrigger[h] = rout.maskTrigger[h];
         }
         out.targetOk[0] = rout.targetOk[0];
         out.target[0] = rout.target[0];

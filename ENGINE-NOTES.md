@@ -1176,6 +1176,20 @@ AudioComponent of WorldInfo with that SoundCue and a wave instance, 0.01-0.03 s 
 loopback recording of the PC's audio could not separate the cues from the level's battle ambience (a silent DROP
 scored as high), so audibility and level are [H].
 
+**Twin (taped) magazines [S] (2026-09-30, `logs/modlogs/reload-taped-*`, `reload-twin-*`, `logs/shots/*-twin-*`,
+`twin-zoom.png`):** in the game the pair is visual only: `TapedMagMode` (a byte enum on MOHABar / MOHAStg44 / MOHA_MP40,
+reflection; MOHAStg44 +0x6E8) flips A <-> B in `WeaponReload.EndState` at upgrade >= 2 (BAR) / 1 (StG44), and in B the
+idle and fire animations pose the pair so its other half is in the well. Measured from the game's own reloads (Hook=0):
+**BAR** A = identity at (-0.02, 0.73, 20.84), B = turned 180 deg about Z at (2.58, 8.92, 21.34); **StG44** A (0, 2.50,
+17.68), B (-3.64, 2.50, 17.68); both magazine bones of the pair move together. The mod: taped when the pair's second bone
+shows (`Taped=`, `TapedA/B`, `TapedRot` per gun); the half in the gun and each half's rounds per weapon; the off hand's
+trigger flips a held pair (the host's flags bit5, the trigger kept from the pad); inserted flipped, the host sends
+INSERT_OTHER (event 6) and the game puts that half's own rounds in and writes `TapedMagMode`; the bake draws the pair in
+the half's pose (the mesh-space move between the two rests) until the game's own animations show it. BAR fired to 15:
+pulled out (A keeps 15), flipped, the other half in -> 20; pulled out, flipped back, the first half in -> 15. StG44 26:
+out (1 kept, A 25), flipped -> 30; out, flipped back -> 26. The reserve ends where it started (no round lost). The MP40's
+pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reloads as one magazine.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

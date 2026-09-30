@@ -759,6 +759,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);
                         else if (handsOut.pulse[h]) pad.Pulse(session, h);
                         pad.SetMaskedFace(h, manualReload.ReleaseButton() == 1, handsOut.maskFace[h]);
+                        pad.SetMaskedTrigger(h, handsOut.maskTrigger[h]);
                     }
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
                     pad.SetTestTargets(handsOut.target, handsOut.targetOk);

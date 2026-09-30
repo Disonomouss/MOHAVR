@@ -257,6 +257,8 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
         maskedDown_[h] = down;
         r.src[m] = 0.0f;
     }
+    if (maskedTrig_[0]) r.src[kLTrig] = 0.0f;  // physical hands, before the left-handed swap below
+    if (maskedTrig_[1]) r.src[kRTrig] = 0.0f;
     // Player options: right stick moves, left turns (the flicks go with the turning stick); left-handed: the gun
     // hand's trigger fires and its grip uses, as the right ones do by default.
     if (swapSticks_) {

@@ -83,6 +83,8 @@ public:
     // (a raw test state's while one plays); kept from the mapping while masked. Set before Update.
     float FaceButton(XrSession s, int hand, bool upper) const;
     void  SetMaskedFace(int hand, bool upper, bool on) { maskedFace_[hand] = on ? FaceSrc(hand, upper) : kNone; }
+    // Likewise a physical hand's trigger (the manual reload's flip of a held twin magazine).
+    void  SetMaskedTrigger(int hand, bool on) { maskedTrig_[hand] = on; }
     // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
     void  SetTestTargets(const XrVector3f (&p)[3], const bool (&ok)[3]) {
         for (int i = 0; i < 3; ++i) {
@@ -135,6 +137,7 @@ private:
     bool        testTargetOk_[3]{};
     Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
     bool        maskedDown_[2]{};
+    bool        maskedTrig_[2]{};
     bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking
     bool        holdLost_ = true;      // [Hands] HoldLost
     XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading

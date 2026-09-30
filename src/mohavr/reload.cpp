@@ -55,6 +55,9 @@ struct GunLine {
     int                      refBones = 0;      // the RefSkeleton check (the .Ref line)
     std::vector<RefBone>     ref;
     std::vector<std::string> sndOut, sndIn, sndRack;  // the arms' reload cues ("group.name"), per variant (M7)
+    std::string              taped;             // twin magazines: the second magazine's bone (taped when it shows)
+    Vec3                     tapedA, tapedB;    // the pair's bone at rest in taped state A and B (mesh space)
+    float                    tapedRot = 0.0f;   // B is turned this far about Z from A (degrees)
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -142,6 +145,11 @@ void ParseLines(const std::wstring& ini) {
         g.sndOut = Split(Token(line, "SndOut"), ';');
         g.sndIn = Split(Token(line, "SndIn"), ';');
         g.sndRack = Split(Token(line, "SndRack"), ';');
+        g.taped = Token(line, "Taped");
+        g.tapedA = ParseVec(Token(line, "TapedA"));
+        g.tapedB = ParseVec(Token(line, "TapedB"));
+        const std::string tr = Token(line, "TapedRot");
+        g.tapedRot = tr.empty() ? 0.0f : static_cast<float>(atof(tr.c_str()));
         g_lines.push_back(g);
     }
     wchar_t take[128] = L"";
@@ -167,6 +175,11 @@ struct WState {
     bool           magIn = true, pending = false, cocked = true;
     int            lastClip = -1;    // the clip at the end of the last Draw
     int            heldRounds = 0;   // the magazine in the hand (visual only)
+    int            pendingRounds = 0;  // what a rack feeds (a taped half's own count)
+    // Twin magazines: the half in the gun (0 = taped state A, 1 = B; -1 = the game's TapedMagMode), and each half's rounds
+    // while out of the gun (-1 = in the gun, or full).
+    int            half = -1;
+    int            halfCount[2] = {-1, -1};
 };
 std::vector<WState> g_ws;
 struct Owed {
@@ -308,6 +321,7 @@ bool             g_soundsOff = false;  // a fault in ProcessEvent: no more sound
 struct KeyVariant {
     std::string key;
     int         v;
+    bool        taped;  // the taped pair shows (twin magazines)
 };
 std::vector<KeyVariant> g_variant;     // each gun's visible magazine variant (from the bake)
 
@@ -319,6 +333,19 @@ int VariantOf(const std::string& key) {
     for (const KeyVariant& k : g_variant)
         if (k.key == key) return k.v;
     return 0;
+}
+bool TapedNow(const std::string& key) {
+    for (const KeyVariant& k : g_variant)
+        if (k.key == key) return k.taped;
+    return false;
+}
+int* TapedModeField(std::uintptr_t w) {
+    const int o = names::PropertyOffset(w, "TapedMagMode");
+    return o >= 0 ? reinterpret_cast<int*>(w + o) : nullptr;  // a byte enum: read and write the low byte
+}
+int TapedMode(std::uintptr_t w) {
+    const int* f = TapedModeField(w);
+    return f ? (*reinterpret_cast<const std::uint8_t*>(f) & 1) : 0;
 }
 
 // Every SoundCue the arms' AnimSets name in an AnimNotify_Sound (FPArms.AnimSets[].Sequences[].Notifies[].Notify).
@@ -467,7 +494,7 @@ void PlayCue(std::uintptr_t pawn, std::uintptr_t w, const std::string& want, con
     }
 }
 
-const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP"};
+const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)"};
 
 void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, std::uint32_t type) {
     int* clipP = Field(w, "AmmoCount");
@@ -476,6 +503,8 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     const int c0 = *clipP, m = maxP[0];
     const int r0 = ReserveAvailable(pawn, w);
     const bool wasIn = s.magIn;
+    const bool taped = TapedNow(l.key);
+    if (taped && s.half < 0) s.half = TapedMode(w);
     int& c = *clipP;
     switch (type) {
     case shared::kReloadEject: {
@@ -487,33 +516,49 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         s.magIn = false;
         s.pending = false;
         s.heldRounds = k - keep;
+        if (taped) {  // the half that was in keeps its rounds; the other one is full unless it was used
+            s.halfCount[s.half] = k - keep;
+            if (s.halfCount[1 - s.half] < 0) s.halfCount[1 - s.half] = m;
+        }
         break;
     }
     case shared::kReloadTake:
         if (s.magIn) break;
         s.heldRounds = Bit(w, "bInfiniteAmmo") ? m : std::min(m, ReserveAvailable(pawn, w));
+        if (taped) s.halfCount[0] = s.halfCount[1] = m;  // a new pair
         break;
     case shared::kReloadInsert:
+    case shared::kReloadInsertOther: {
         if (s.magIn) break;
         s.magIn = true;
+        int rounds = m;
+        if (taped) {
+            const int h = type == shared::kReloadInsertOther ? 1 - s.half : s.half;
+            if (s.halfCount[h] >= 0) rounds = s.halfCount[h];
+            s.halfCount[h] = -1;
+            s.half = h;
+            if (int* f = TapedModeField(w)) *reinterpret_cast<std::uint8_t*>(f) = static_cast<std::uint8_t>(h);
+        }
         if (Ready(s, l, c)) {
-            c += FromReserve(pawn, w, std::max(m - c, 0));
+            c += FromReserve(pawn, w, std::min(rounds, std::max(m - c, 0)));
             s.pending = false;
         } else {
-            s.pending = Bit(w, "bInfiniteAmmo") || ReserveAvailable(pawn, w) > 0;
+            s.pending = rounds > 0 && (Bit(w, "bInfiniteAmmo") || ReserveAvailable(pawn, w) > 0);
+            s.pendingRounds = rounds;
         }
         s.heldRounds = 0;
         break;
+    }
     case shared::kReloadRack:
         if (!l.open) {
             if (c == 0 && s.magIn && s.pending) {
-                c = FromReserve(pawn, w, m);
+                c = FromReserve(pawn, w, std::min(s.pendingRounds, m));
                 s.pending = false;
             }
         } else if (!s.cocked) {
             s.cocked = true;
             if (s.magIn && s.pending) {
-                c = FromReserve(pawn, w, m);
+                c = FromReserve(pawn, w, std::min(s.pendingRounds, m));
                 s.pending = false;
             }
         }
@@ -528,12 +573,16 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     const int v = VariantOf(l.key);
     auto pick = [&](const std::vector<std::string>& list) { return list.empty() ? std::string() : list[v < static_cast<int>(list.size()) ? v : 0]; };
     if (type == shared::kReloadEject && wasIn) PlayCue(pawn, w, pick(l.sndOut), "magazine out");
-    else if (type == shared::kReloadInsert && !wasIn) PlayCue(pawn, w, pick(l.sndIn), "magazine in");
+    else if ((type == shared::kReloadInsert || type == shared::kReloadInsertOther) && !wasIn) PlayCue(pawn, w, pick(l.sndIn), "magazine in");
     else if (type == shared::kReloadRack) PlayCue(pawn, w, pick(l.sndRack), "rack");
     else if (type == shared::kReloadTake && !wasIn) PlayCue(pawn, w, g_sndTake, "from the pouch");
-    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s", type < 6 ? kEventName[type] : "?",
+    char twin[80] = "";
+    if (taped)
+        snprintf(twin, sizeof(twin), "; taped: half %c in the gun%s, half A %d, B %d", s.half ? 'B' : 'A', s.magIn ? "" : " (out)",
+                 s.halfCount[0], s.halfCount[1]);
+    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s%s", type < 7 ? kEventName[type] : "?",
          l.key.c_str(), c0, c, r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.magIn ? "in" : "out",
-         s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "");
+         s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "", twin);
 }
 
 // RELOAD-DESIGN 2.5: whether the game's own reload is blocked for `self` right now.
@@ -558,6 +607,7 @@ struct Resolved {
     bool             ok = false;
     std::vector<int> mag, bolt;
     int              top = -1;
+    int              taped = -1;  // the second magazine of a taped pair
 };
 std::deque<Resolved> g_resolved;
 
@@ -666,6 +716,7 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
         if (i < 0 && why.empty()) why = "no action bone " + b;
         r.bolt.push_back(i);
     }
+    if (!l.taped.empty()) r.taped = find(l.taped);  // missing: no twin handling (not a failure)
     if (!l.topRound.empty()) {
         r.top = find(l.topRound);
         if (r.top < 0 && why.empty()) why = "no top-round bone " + l.topRound;
@@ -682,6 +733,22 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
     (void)comp;
     g_resolved.push_back(r);
     return &g_resolved.back();
+}
+
+// Twin magazines: the pair's bone at rest in taped state 0 (A) or 1 (B), and the mesh-space move from one state to the
+// other (inv(M_from) x M_to).
+void PairPose(const GunLine& l, int state, float* m) {
+    const float a = (state ? l.tapedRot : 0.0f) * 0.0174533f, ca = std::cos(a), sa = std::sin(a);
+    const Vec3& t = state ? l.tapedB : l.tapedA;
+    const float r[16] = {ca, sa, 0, 0, -sa, ca, 0, 0, 0, 0, 1, 0, t.x, t.y, t.z, 1};
+    std::memcpy(m, r, sizeof(r));
+}
+void PairMove(const GunLine& l, int from, int to, float* out) {
+    float mf[16], mt[16], inv[16];
+    PairPose(l, from, mf);
+    PairPose(l, to, mt);
+    AffineInverse(mf, inv);
+    Mul(inv, mt, out);
 }
 
 // The MP40's chamber slide follows its bolt, piecewise-linear through the three (bolt, slide) pairs of the line.
@@ -702,7 +769,7 @@ float SecondZ(const GunLine& l, float z) {
 
 struct TraceState {
     std::string key;
-    int         mag = -1, hold = -1, top = -1, rack = -1;
+    int         mag = -1, hold = -1, top = -1, rack = -1, half = -1;
     DWORD       next = 0;
 } g_trace;
 
@@ -763,20 +830,51 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         const int j = r->mag[k];
         if (j >= 0 && j < num && std::fabs(Det3(saved + 16 * j)) > 1e-3f) v = static_cast<int>(k);
     }
+    // Twin magazines: taped when the pair's second magazine shows; the game's pose now (A or B, the nearer rest point),
+    // the half in the gun (ours), and the one toward the well in the hand (flipped by the host).
+    const bool taped = !l->taped.empty() && r->taped >= 0 && r->taped < num && std::fabs(Det3(saved + 16 * r->taped)) > 1e-3f;
     {
         bool found = false;
         for (KeyVariant& k : g_variant)
             if (k.key == key) {
                 k.v = v < 0 ? 0 : v;
+                k.taped = taped;
                 found = true;
             }
-        if (!found) g_variant.push_back({key, v < 0 ? 0 : v});
+        if (!found) g_variant.push_back({key, v < 0 ? 0 : v, taped});
     }
+    float pre[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    bool havePre = false;
+    int poseNow = 0, halfDrawn = 0;
+    if (taped && v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
+        const float* m = saved + 16 * r->mag[v];
+        auto d2 = [&](const Vec3& p) { return (m[12] - p.x) * (m[12] - p.x) + (m[13] - p.y) * (m[13] - p.y) + (m[14] - p.z) * (m[14] - p.z); };
+        poseNow = d2(l->tapedB) < d2(l->tapedA) ? 1 : 0;
+        if (s.half < 0) s.half = TapedMode(w);
+        halfDrawn = s.half;
+        if (magState == 2 && (rf.view.flags & 32u)) halfDrawn = 1 - s.half;
+        if (halfDrawn != poseNow) {
+            PairMove(*l, poseNow, halfDrawn, pre);
+            havePre = true;
+        }
+    }
+    auto posed = [&](int j, float* out) {  // the game's pose of bone j, with the pair moved to the half drawn
+        if (havePre) Mul(saved + 16 * j, pre, out);
+        else std::memcpy(out, saved + 16 * j, 16 * sizeof(float));
+    };
     const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
     const float magR = PerVariant(l->magR, v, 7.0f);
     const Vec3 grabW = Xform(grabMesh, 1.0f, a);
     float pullCm = 0.0f, heldGap = -1.0f, heldTurn = -1.0f;
+    if (magState == 0 && havePre) {
+        for (int j : r->mag)
+            if (j >= 0 && j < num) {
+                float m[16];
+                posed(j, m);
+                Draw(bones, j, m, kMove);
+            }
+    }
     if (magState == 1) {
         // Grabbed: the group slides out along the magazine's way out (mesh space), by the host's pull.
         const float scale = Len(Xform(outMesh, 0.0f, a));
@@ -785,7 +883,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         auto slide = [&](int j) {
             if (j < 0 || j >= num) return;
             float m[16];
-            std::memcpy(m, saved + 16 * j, sizeof(m));
+            posed(j, m);
             m[12] += outMesh.x * dist;
             m[13] += outMesh.y * dist;
             m[14] += outMesh.z * dist;
@@ -807,7 +905,11 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         Mul(m1, fheld, m2);
         Mul(m2, invL2W, hold);
         for (int j : r->mag)
-            if (j >= 0 && j < num) Mul(saved + 16 * j, hold, bones + 16 * j);
+            if (j >= 0 && j < num) {
+                float m[16];
+                posed(j, m);
+                Mul(m, hold, bones + 16 * j);
+            }
         const float dx = fheld[12] - off[12], dy = fheld[13] - off[13], dz = fheld[14] - off[14];
         heldGap = std::sqrt(dx * dx + dy * dy + dz * dz) * 100.0f / upm;
         // How far the held frame is turned from the seated one (0 when the off hand points like the gun hand).
@@ -880,14 +982,32 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         }
     }
     const DWORD now = GetTickCount();
+    // Debug.ReloadTrace: the taped pair's pose 1.5 s after the game's TapedMagMode changes (its idle by then).
+    static std::string tapedKey;
+    static int tapedMode = -1;
+    static DWORD tapedLogAt = 0;
+    if (g_cfg.debugReloadTrace) {
+        const int to = names::PropertyOffset(w, "TapedMagMode");
+        const int mode = to >= 0 ? *reinterpret_cast<const std::uint8_t*>(w + to) : -1;
+        if (key != tapedKey || mode != tapedMode) {
+            tapedKey = key;
+            tapedMode = mode;
+            tapedLogAt = now + 1500;
+        }
+        if (tapedLogAt && static_cast<LONG>(now - tapedLogAt) >= 0) {
+            tapedLogAt = 0;
+            g_trace.key.clear();  // log the bones below now
+        }
+    }
     if (g_cfg.debugReloadTrace && (key != g_trace.key || magState != g_trace.mag || (hold ? 1 : 0) != g_trace.hold ||
-                                   topShown != g_trace.top || (racking ? 1 : 0) != g_trace.rack ||
+                                   topShown != g_trace.top || (racking ? 1 : 0) != g_trace.rack || halfDrawn != g_trace.half ||
                                    ((magState == 1 || magState == 2 || racking) && static_cast<LONG>(now - g_trace.next) >= 0))) {
         g_trace.key = key;
         g_trace.mag = magState;
         g_trace.hold = hold ? 1 : 0;
         g_trace.top = topShown;
         g_trace.rack = racking ? 1 : 0;
+        g_trace.half = halfDrawn;
         g_trace.next = now + 1000;
         static const char* kMag[] = {"in the gun", "grabbed", "in the off hand", "hidden (out)"};
         char extra[96] = "";
@@ -895,13 +1015,23 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (magState == 2)
             snprintf(extra, sizeof(extra), " (its grab point %.1f cm from the off controller, turned %.0f deg from seated)",
                      heldGap, heldTurn);
+        if (taped)
+            MLOG("reload: trace -- taped pair: the game's pose %c, half %c in the gun, half %c drawn%s", poseNow ? 'B' : 'A',
+                 s.half ? 'B' : 'A', halfDrawn ? 'B' : 'A', havePre ? " (moved)" : "");
         MLOG("reload: trace -- drawn %s: magazine %s%s, action %s%s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
              kMag[magState], extra, hold ? "held empty" : "the game's", racking ? ", racked by the off hand" : "", zGame, zDrawn,
              topShown < 0 ? "none" : topShown ? "shown" : "hidden", hostState ? "drives it" : "not driving");
-        if (v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
-            const float* m = saved + 16 * r->mag[v];
-            MLOG("reload: trace -- the visible magazine %s (variant %d): axes %.2f %.2f %.2f / %.2f %.2f %.2f / %.2f %.2f %.2f, at %.2f %.2f %.2f",
-                 l->mag[v].c_str(), v, m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10], m[12], m[13], m[14]);
+        for (size_t k = 0; k < r->mag.size(); ++k) {
+            const int j = r->mag[k];
+            if (j < 0 || j >= num) continue;
+            const float* m = saved + 16 * j;
+            MLOG("reload: trace -- magazine bone %s%s: axes %.2f %.2f %.2f / %.2f %.2f %.2f / %.2f %.2f %.2f, at %.2f %.2f %.2f",
+                 l->mag[k].c_str(), static_cast<int>(k) == v ? " (visible)" : "", m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9],
+                 m[10], m[12], m[13], m[14]);
+        }
+        {
+            const int to = names::PropertyOffset(w, "TapedMagMode");
+            if (to >= 0) MLOG("reload: trace -- TapedMagMode %d", *reinterpret_cast<const std::uint8_t*>(w + to));
         }
         if (haveRf)
             MLOG("reload: trace -- geometry (cm, the gun frame: right up back): magazine grab %.1f %.1f %.1f, out %.2f %.2f %.2f, "
@@ -1145,6 +1275,8 @@ void OnDraw(shared::Header* hdr) {
                 s->magIn = true;
                 s->pending = false;
                 s->cocked = true;
+                s->half = -1;  // the game's own reload flipped its taped state (TapedMagMode)
+                s->halfCount[0] = s->halfCount[1] = -1;
                 MLOG("reload: %s's clip rose %d -> %d without the mod -- magazine in, ready", line->key.c_str(), s->lastClip, c);
             } else if (c == 0 && line->open && s->cocked) {
                 s->cocked = false;  // the last shot: an open bolt closes on the empty chamber
@@ -1176,7 +1308,7 @@ void OnDraw(shared::Header* hdr) {
             ++g_seen;
             const std::uint32_t type = e & 0xFFu;
             if (!s || !line || (e >> 8) != myHash) {
-                MLOG("reload: %s rejected -- %s", type < 6 ? kEventName[type] : "?",
+                MLOG("reload: %s rejected -- %s", type < 7 ? kEventName[type] : "?",
                      !line ? "no converted gun in hand" : "it was meant for another gun");
                 continue;
             }
@@ -1199,7 +1331,8 @@ void OnDraw(shared::Header* hdr) {
     std::memcpy(hdr->reloadKey, key.c_str(), std::min(key.size(), sizeof(hdr->reloadKey) - 1));
     // Converted only with this Draw's geometry (a gun mid-switch, or one whose data failed, is not).
     hdr->reloadCaps = (line && geoOk ? 1u : 0u) | (geoOk && g_geo.haveBolt ? 2u : 0u) | (g_blockAllowed ? 4u : 0u) |
-                      (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u);
+                      (w && Bit(w, "bAlternateFireMode") ? 8u : 0u) | (w && Blocking(w) ? 16u : 0u) |
+                      (geoOk && line && TapedNow(key) ? 32u : 0u);
     if (geoOk) {
         const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
         float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};

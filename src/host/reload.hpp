@@ -15,6 +15,8 @@
 // pull back. One not held back is armed at RackArm of its travel (at least RackMin cm) and racks (RACK) when let go or
 // brought forward again; one held back (locked open, or the empty cue of a handle) racks with a tug of RackTug cm and
 // letting go. The game decides what a rack does (feeds a round, cocks an open bolt).
+// Twin (taped) magazines (D21): a pair in the off hand is flipped with that hand's trigger (kept from the pad meanwhile);
+// inserted flipped, its other half goes in (INSERT_OTHER), each half keeping its own rounds (the game's count).
 // The game draws the magazine where the host says (bits 1-2 of reloadFlags, magPull, magPose) and keeps the ammo.
 #pragma once
 #define XR_USE_PLATFORM_WIN32
@@ -51,6 +53,7 @@ public:
         bool    offHeld = false;               // the off hand's grip held (hands.cpp's hysteresis)
         float   release[2]{};                  // the release button, per physical hand
         float   fitAngle = 0.0f;               // the gun fit's angle (degrees): a pouch magazine sits in the hand likewise
+        float   offTrigger = 0.0f;             // the off hand's trigger: flips a held taped pair
         double  now = 0.0;
     };
     struct Ring {
@@ -63,6 +66,7 @@ public:
         int   ringCount = 0;
         float pulseAmp[2]{}, pulseMs[2]{};
         bool  mask[2]{};    // keep that hand's release button from the pad
+        bool  maskTrigger[2]{};  // keep that hand's trigger from the pad (the flip of a held taped pair)
         bool  targetOk[2]{};
         XrVector3f target[2]{};  // tests: 0 the magazine's grab point, 1 the action's
     };
@@ -118,6 +122,8 @@ private:
     XrVector3f    boltStart_{};
     float         rack_ = 0.0f;      // 0..1 of the travel pulled
     bool          relHeld_[2]{}, maskLatch_[2]{};
+    bool          flipped_ = false;                // the held taped pair turned: its other half toward the well
+    bool          trigHeld_ = false, trigLatch_ = false;
     struct Pending {
         std::uint32_t type, hash;
         double        at;

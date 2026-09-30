@@ -1088,3 +1088,6 @@ deleted; its result is in `verify/otherlevel.txt`.
   (native) or `WeaponPlaySound` (its `bNoRepToOwner=true` goes through the owner-replication path MOHA never uses). The
   cues come from the arms' AnimSets by reflection (no object search). Per gun `SndOut`, `SndIn`, `SndRack` (per
   variant); `[ManualReload] SndTake` for the pouch; nothing for DROP.
+- **Twin magazines, as built:** a used half with rounds left can go back in (flip back and insert); the player's
+  "once before a new pair" is then a habit, not a rule ([H]: should the mod forbid it?). The MP40's upgrade-0 pair is
+  not handled (no B pose measured).
