@@ -1104,6 +1104,17 @@ owed; insert -> 20 from the owed first (reserve 116): no round lost. BAR (open):
 insert (pending), rack -> 20; eject at 15 -> 0 kept, 15 back; insert (cocked) -> 20. Colt (infinite): eject at 4 -> 1;
 insert -> 7. The host: "engaged" once a converted gun is in hand with both hands tracked.
 
+**M2, the visuals in the bake [S] (2026-09-30, `logs/modlogs/reload-m2-*`, `logs/shots/*-m2-side-*`, `*-m2-bar-*`):**
+`reload::OnGunBake` (after the arms_ik bake, gun only) overrides the drawn matrices of the listed bones: the magazine
+group collapsed (3x3 zeroed, as the game hides upgrade parts) while the magazine is out; the action bone's mesh-space Z
+held at its empty position (closed: clip 0; open: not cocked); the top round collapsed unless the magazine is in with
+rounds. The game's pose is put back after the render copy, so sockets, the flash and the brass never see it. The per-gun
+RefSkeleton check (bone count, names, root parents, positions within 0.05 u) passed for the G43, BAR and Colt. Seen: the
+G43 bolt locked back (19.70 -> 8.34), the BAR's charging handle at the back of its slot (12.30 -> -2.80), the Colt's
+slide back with the barrel showing (2.50 -> -1.85); the G43's magazine gone when dropped and back on insert; after a
+switch away and back an empty G43 stays at 0 (the equip refill blocked) and still locked back; the rack puts the action
+home.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -30,10 +31,29 @@ bool             g_hooked = false;        // execHasReserveAmmo hooked (count-on
 bool             g_blockAllowed = false;  // Weapon.ManualReload + [ManualReload] Hook + the pipeline's hooks installed
 
 // --- the per-gun lines ([ManualReload] Attachment_<Gun>=Action=open|closed MinUpgrade=N Mag=... ; RELOAD-DESIGN 1.3) ---
+struct Vec3 {
+    float x = 0, y = 0, z = 0;
+};
+struct RefBone {
+    std::string name;
+    Vec3        pos;
+};
 struct GunLine {
-    std::string key;
-    bool        open = false;
-    int         minUpgrade = 0;
+    std::string              key;
+    bool                     open = false;
+    int                      minUpgrade = 0;
+    bool                     emptyCue = true;   // Empty=none: no hold (RELOAD-DESIGN 0.4)
+    std::vector<std::string> mag;               // the magazine bones (variants move together)
+    std::vector<Vec3>        magOut, magGrab;   // per variant (one value = all)
+    std::vector<float>       magR;              // cm
+    std::vector<std::string> bolt;              // the action bone, then a second one moved with it (MP40 chamber_slide)
+    float                    boltZ[3] = {};     // idle, empty, full back
+    float                    bolt2Z[3] = {};    // the second bone's Z at those three
+    bool                     haveBolt2Z = false;
+    Vec3                     boltGrab;
+    std::string              topRound;
+    int                      refBones = 0;      // the RefSkeleton check (the .Ref line)
+    std::vector<RefBone>     ref;
 };
 std::vector<GunLine> g_lines;
 
@@ -56,23 +76,80 @@ std::string Token(const std::string& line, const char* name) {
     return {};
 }
 
+std::vector<std::string> Split(const std::string& v, char sep) {
+    std::vector<std::string> out;
+    size_t p = 0;
+    while (p <= v.size()) {
+        const size_t e = v.find(sep, p);
+        out.push_back(v.substr(p, e == std::string::npos ? std::string::npos : e - p));
+        if (e == std::string::npos) break;
+        p = e + 1;
+    }
+    return out;
+}
+Vec3 ParseVec(const std::string& v) {
+    Vec3 r;
+    sscanf_s(v.c_str(), "%f,%f,%f", &r.x, &r.y, &r.z);
+    return r;
+}
+std::vector<Vec3> ParseVecs(const std::string& v) {
+    std::vector<Vec3> out;
+    if (v.empty()) return out;
+    for (const std::string& t : Split(v, ';')) out.push_back(ParseVec(t));
+    return out;
+}
+std::string Narrow(const wchar_t* w) {
+    std::string s;
+    for (; *w; ++w) s += static_cast<char>(*w);  // the ini's keys and values are ASCII
+    return s;
+}
+
 void ParseLines(const std::wstring& ini) {
     std::vector<wchar_t> keys(8192);
     const DWORD n = GetPrivateProfileStringW(L"ManualReload", nullptr, L"", keys.data(), static_cast<DWORD>(keys.size()), ini.c_str());
+    std::vector<std::pair<std::string, std::string>> refs;
     for (const wchar_t* k = keys.data(); k < keys.data() + n && *k; k += wcslen(k) + 1) {
-        const std::wstring wk(k);
-        if (wk.rfind(L"Attachment_", 0) != 0 || wk.find(L'.') != std::wstring::npos) continue;
+        const std::string key = Narrow(k);
+        if (key.rfind("Attachment_", 0) != 0) continue;
         wchar_t v[1024] = L"";
         GetPrivateProfileStringW(L"ManualReload", k, L"", v, 1024, ini.c_str());
-        std::string line;
-        for (const wchar_t* c = v; *c; ++c) line += static_cast<char>(*c);
+        const std::string line = Narrow(v);
+        const size_t dot = key.find('.');
+        if (dot != std::string::npos) {
+            if (key.substr(dot) == ".Ref") refs.push_back({key.substr(0, dot), line});
+            continue;
+        }
         GunLine g;
-        for (wchar_t ch : wk) g.key += static_cast<char>(ch);  // the class names are ASCII
+        g.key = key;
         g.open = Token(line, "Action") == "open";
         const std::string mu = Token(line, "MinUpgrade");
         g.minUpgrade = mu.empty() ? 0 : atoi(mu.c_str());
+        g.emptyCue = Token(line, "Empty") != "none";
+        for (const std::string& b : Split(Token(line, "Mag"), ';'))
+            if (!b.empty()) g.mag.push_back(b);
+        g.magOut = ParseVecs(Token(line, "MagOut"));
+        g.magGrab = ParseVecs(Token(line, "MagGrab"));
+        for (const std::string& r : Split(Token(line, "MagR"), ';'))
+            if (!r.empty()) g.magR.push_back(static_cast<float>(atof(r.c_str())));
+        for (const std::string& b : Split(Token(line, "Bolt"), ','))
+            if (!b.empty()) g.bolt.push_back(b);
+        sscanf_s(Token(line, "BoltZ").c_str(), "%f,%f,%f", &g.boltZ[0], &g.boltZ[1], &g.boltZ[2]);
+        g.haveBolt2Z = sscanf_s(Token(line, "Bolt2Z").c_str(), "%f,%f,%f", &g.bolt2Z[0], &g.bolt2Z[1], &g.bolt2Z[2]) == 3;
+        g.boltGrab = ParseVec(Token(line, "BoltGrab"));
+        g.topRound = Token(line, "TopRound");
         g_lines.push_back(g);
     }
+    for (const auto& r : refs)
+        for (GunLine& g : g_lines) {
+            if (g.key != r.first) continue;
+            for (const std::string& t : Split(r.second, ' ')) {
+                const size_t eq = t.find('=');
+                if (eq == std::string::npos) continue;
+                const std::string name = t.substr(0, eq), val = t.substr(eq + 1);
+                if (name == "Bones") g.refBones = atoi(val.c_str());
+                else g.ref.push_back({name, ParseVec(val)});
+            }
+        }
 }
 
 // --- the game-side model (RELOAD-DESIGN 2.1) ---
@@ -124,10 +201,14 @@ std::uintptr_t AmmoClassOf(std::uintptr_t w) {
     return o >= 0 ? names::ReadPointer(w + o) : 0;
 }
 
-// The converted line for this weapon now, or null (no line, below MinUpgrade, alt mode).
+std::vector<std::string> g_failedKeys;  // guns whose RefSkeleton check failed: the game's own reload
+
+// The converted line for this weapon now, or null (no line, below MinUpgrade, alt mode, the check failed).
 const GunLine* Converted(std::uintptr_t w) {
     const GunLine* l = LineFor(AttachKey(w));
     if (!l) return nullptr;
+    for (const std::string& k : g_failedKeys)
+        if (k == l->key) return nullptr;
     const int* up = Field(w, "CurrentUpgradeLevel");
     if (up && *up < l->minUpgrade) return nullptr;
     if (Bit(w, "bAlternateFireMode")) return nullptr;
@@ -280,6 +361,192 @@ bool Blocking(std::uintptr_t self) {
     float gf[16], of[16];
     bool ov = false, th = false;
     return viewmodel::HandFrames(gf, of, ov, th);
+}
+
+// --- the bake (RELOAD-DESIGN 5): overrides of the gun's drawn bones; the game's pose is put back after the render copy ---
+struct Resolved {
+    std::uintptr_t   mesh = 0;
+    int              num = 0;
+    const GunLine*   line = nullptr;
+    bool             ok = false;
+    std::vector<int> mag, bolt;
+    int              top = -1;
+};
+std::deque<Resolved> g_resolved;
+
+// Row vectors (FMatrix): out = a x b, 4x4 row-major.
+void Mul(const float* a, const float* b, float* out) {
+    float r[16];
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            r[i * 4 + j] = a[i * 4] * b[j] + a[i * 4 + 1] * b[4 + j] + a[i * 4 + 2] * b[8 + j] + a[i * 4 + 3] * b[12 + j];
+    std::memcpy(out, r, sizeof(r));
+}
+// A bone's drawn matrix from a modified game pose: bones[j] = m x kMove.
+void Draw(float* bones, int j, const float* m, const float* kMove) { Mul(m, kMove, bones + 16 * j); }
+// Hidden like the game hides upgrade parts: the 3x3 zeroed, the origin kept (M0: ENGINE-NOTES 5am).
+void Collapse(float* bones, int j, const float* saved, const float* kMove) {
+    float m[16];
+    std::memcpy(m, saved + 16 * j, sizeof(m));
+    for (int i = 0; i < 12; ++i) m[i] = 0.0f;
+    Draw(bones, j, m, kMove);
+}
+
+// Finds the line's bones in the mesh and runs the RefSkeleton check (RELOAD-DESIGN 1.3): the bone count, every listed
+// bone present, a child of the root, and at its reference position (within 0.05 u; FMeshBone position at +28, M0).
+const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const GunLine& l) {
+    for (const Resolved& r : g_resolved)
+        if (r.mesh == mesh && r.num == num && r.line == &l) return &r;
+    Resolved r;
+    r.mesh = mesh;
+    r.num = num;
+    r.line = &l;
+    const std::uintptr_t data = names::ReadPointer(mesh + addr::kSkelMeshRefSkeleton);
+    const int refNum = static_cast<int>(names::ReadPointer(mesh + addr::kSkelMeshRefSkeleton + 4));
+    auto find = [&](const std::string& name) {
+        for (int i = 0; data && i < refNum; ++i)
+            if (names::NameAt(data + i * addr::kMeshBoneStride) == name) return i;
+        return -1;
+    };
+    std::string why;
+    char buf[160];
+    if (!data || refNum != num) {
+        snprintf(buf, sizeof(buf), "the RefSkeleton has %d bones, the pose %d", refNum, num);
+        why = buf;
+    } else if (l.refBones && refNum != l.refBones) {
+        snprintf(buf, sizeof(buf), "%d bones, the line expects %d", refNum, l.refBones);
+        why = buf;
+    }
+    for (size_t k = 0; why.empty() && k < l.ref.size(); ++k) {
+        const int i = find(l.ref[k].name);
+        if (i < 0) {
+            why = "no bone " + l.ref[k].name;
+            break;
+        }
+        const std::uintptr_t b = data + i * addr::kMeshBoneStride;
+        const int parent = *reinterpret_cast<const int*>(b + 56);
+        const std::string pn = parent >= 0 && parent < refNum ? names::NameAt(data + parent * addr::kMeshBoneStride) : "";
+        if (pn != "Root" && pn != "RootOffset") {
+            why = l.ref[k].name + "'s parent is " + pn;
+            break;
+        }
+        const float* pos = reinterpret_cast<const float*>(b + 28);
+        if (std::fabs(pos[0] - l.ref[k].pos.x) > 0.05f || std::fabs(pos[1] - l.ref[k].pos.y) > 0.05f ||
+            std::fabs(pos[2] - l.ref[k].pos.z) > 0.05f) {
+            snprintf(buf, sizeof(buf), "%s at %.3f %.3f %.3f, expected %.3f %.3f %.3f", l.ref[k].name.c_str(), pos[0], pos[1],
+                     pos[2], l.ref[k].pos.x, l.ref[k].pos.y, l.ref[k].pos.z);
+            why = buf;
+        }
+    }
+    for (const std::string& m : l.mag) {
+        const int i = find(m);
+        if (i < 0 && why.empty()) why = "no magazine bone " + m;
+        r.mag.push_back(i);
+    }
+    for (const std::string& b : l.bolt) {
+        const int i = find(b);
+        if (i < 0 && why.empty()) why = "no action bone " + b;
+        r.bolt.push_back(i);
+    }
+    if (!l.topRound.empty()) {
+        r.top = find(l.topRound);
+        if (r.top < 0 && why.empty()) why = "no top-round bone " + l.topRound;
+    }
+    r.ok = why.empty();
+    if (r.ok) {
+        MLOG("reload: %s on %s -- %zu magazine bone(s), %zu action bone(s)%s; the RefSkeleton check passed", l.key.c_str(),
+             names::Name(mesh).c_str(), r.mag.size(), r.bolt.size(), r.top >= 0 ? ", a top round" : "");
+    } else {
+        g_failedKeys.push_back(l.key);
+        MLOG("reload: %s on %s -- the RefSkeleton check FAILED (%s): the gun keeps the game's own reload", l.key.c_str(),
+             names::Name(mesh).c_str(), why.c_str());
+    }
+    (void)comp;
+    g_resolved.push_back(r);
+    return &g_resolved.back();
+}
+
+// The MP40's chamber slide follows its bolt, piecewise-linear through the three (bolt, slide) pairs of the line.
+float SecondZ(const GunLine& l, float z) {
+    float bz[3] = {l.boltZ[0], l.boltZ[1], l.boltZ[2]}, sz[3] = {l.bolt2Z[0], l.bolt2Z[1], l.bolt2Z[2]};
+    for (int i = 0; i < 2; ++i)  // sort by the bolt's Z
+        for (int j = 0; j < 2 - i; ++j)
+            if (bz[j] > bz[j + 1]) {
+                std::swap(bz[j], bz[j + 1]);
+                std::swap(sz[j], sz[j + 1]);
+            }
+    if (z <= bz[0]) return sz[0];
+    if (z >= bz[2]) return sz[2];
+    const int k = z < bz[1] ? 0 : 1;
+    const float t = (z - bz[k]) / (bz[k + 1] - bz[k]);
+    return sz[k] + t * (sz[k + 1] - sz[k]);
+}
+
+struct TraceState {
+    std::string key;
+    int         mag = -1, hold = -1, top = -1;
+} g_trace;
+
+void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int num, const float* kMove) {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const std::uintptr_t w = PawnWeapon(pawn);
+    if (!w) return;
+    const std::string key = AttachKey(w);
+    if (key.empty() || names::ClassName(names::Outer(comp)) != key) return;  // mid-switch: the old gun as the game has it
+    const GunLine* l = Converted(w);
+    if (!l) return;
+    const int smo = names::PropertyOffset(comp, "SkeletalMesh");
+    const std::uintptr_t mesh = smo >= 0 ? names::ReadPointer(comp + smo) : 0;
+    const Resolved* r = mesh ? Resolve(comp, mesh, num, *l) : nullptr;
+    if (!r || !r->ok) return;
+    WState& s = StateFor(w);
+    const int* clipP = Field(w, "AmmoCount");
+    const int c = clipP ? *clipP : 0;
+    // The magazine: in the gun or out (M3 adds grabbed / in the hand from the host).
+    const int magState = s.magIn ? 0 : 3;
+    if (magState == 3)
+        for (int j : r->mag)
+            if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
+    // The action: held at its empty position (RELOAD-DESIGN 5.3; the rack comes with M4).
+    const bool hold = l->emptyCue && (l->open ? !s.cocked : c == 0);
+    float zGame = 0.0f, zDrawn = 0.0f;
+    if (!r->bolt.empty() && r->bolt[0] >= 0 && r->bolt[0] < num) {
+        const int b = r->bolt[0];
+        const float zs = saved[16 * b + 14], zIdle = l->boltZ[0], zEmpty = l->boltZ[1];
+        const float zd = hold ? (zEmpty < zIdle ? std::min(zs, zEmpty) : std::max(zs, zEmpty)) : zs;
+        zGame = zs;
+        zDrawn = zd;
+        if (zd != zs) {
+            float m[16];
+            std::memcpy(m, saved + 16 * b, sizeof(m));
+            m[14] = zd;
+            Draw(bones, b, m, kMove);
+            if (r->bolt.size() > 1 && r->bolt[1] >= 0 && r->bolt[1] < num && l->haveBolt2Z) {
+                float m2[16];
+                std::memcpy(m2, saved + 16 * r->bolt[1], sizeof(m2));
+                m2[14] = SecondZ(*l, zd);
+                Draw(bones, r->bolt[1], m2, kMove);
+            }
+        }
+    }
+    // The top round: only while the magazine is in and has rounds (RELOAD-DESIGN 5.4).
+    int topShown = -1;
+    if (r->top >= 0 && r->top < num) {
+        const bool shown = magState == 0 && (l->open ? (c >= 1 || s.pending) : (c >= 2 || s.pending));
+        if (!shown) Collapse(bones, r->top, saved, kMove);
+        topShown = shown ? 1 : 0;
+    }
+    if (g_cfg.debugReloadTrace && (key != g_trace.key || magState != g_trace.mag || (hold ? 1 : 0) != g_trace.hold ||
+                                   topShown != g_trace.top)) {
+        g_trace.key = key;
+        g_trace.mag = magState;
+        g_trace.hold = hold ? 1 : 0;
+        g_trace.top = topShown;
+        MLOG("reload: trace -- drawn %s: magazine %s, action %s (game Z %.2f -> drawn %.2f), top round %s", key.c_str(),
+             magState == 3 ? "hidden (out)" : "in the gun", hold ? "held empty" : "the game's",
+             zGame, zDrawn,
+             topShown < 0 ? "none" : topShown ? "shown" : "hidden");
+    }
 }
 
 // --- M0 probe state (game thread) ---
@@ -466,8 +733,10 @@ bool Install(const Config& cfg, bool pipelineHooked) {
     return true;
 }
 
-void OnGunBake(std::uintptr_t comp, const float* saved, int num, const float* l2w, const float* a) {
+void OnGunBake(std::uintptr_t comp, const float* saved, float* bones, int num, const float* l2w, const float* a,
+               const float* kMove) {
     g_lastGunBake = GetTickCount();
+    if (g_cfg.manualReload) OverrideBones(comp, saved, bones, num, kMove);
     if (!g_cfg.debugReloadProbe) return;
     ++g_bakesThisDraw;
     const int smo = names::PropertyOffset(comp, "SkeletalMesh");

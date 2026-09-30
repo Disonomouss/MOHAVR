@@ -22,8 +22,9 @@ bool Install(const Config& cfg, bool pipelineHooked);
 // Game thread, once per Draw (vr_view Hook_Draw).
 void OnDraw(shared::Header* hdr);
 // Game thread, every first-person gun update, right after the bake (arms_ik OnMeshUpdate): `saved` = the game's own
-// pose (num row-major 4x4 matrices, component space), `l2w` = the component's LocalToWorld, `a` = L2W x D (where a bone
-// is drawn: bone x a).
-void OnGunBake(std::uintptr_t comp, const float* saved, int num, const float* l2w, const float* a);
+// pose (num row-major 4x4 matrices, component space), `bones` = the drawn ones (saved x kMove; overridden here for the
+// magazine, the action and the top round), `l2w` = the component's LocalToWorld, `a` = L2W x D, kMove = a x inv(L2W).
+void OnGunBake(std::uintptr_t comp, const float* saved, float* bones, int num, const float* l2w, const float* a,
+               const float* kMove);
 
 }  // namespace mohavr::reload
