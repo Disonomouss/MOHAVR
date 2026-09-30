@@ -54,8 +54,10 @@ struct GunLine {
     std::string              topRound;
     int                      refBones = 0;      // the RefSkeleton check (the .Ref line)
     std::vector<RefBone>     ref;
+    std::vector<std::string> sndOut, sndIn, sndRack;  // the arms' reload cues ("group.name"), per variant (M7)
 };
 std::vector<GunLine> g_lines;
+std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
 
 const GunLine* LineFor(const std::string& key) {
     for (const GunLine& l : g_lines)
@@ -137,8 +139,14 @@ void ParseLines(const std::wstring& ini) {
         g.haveBolt2Z = sscanf_s(Token(line, "Bolt2Z").c_str(), "%f,%f,%f", &g.bolt2Z[0], &g.bolt2Z[1], &g.bolt2Z[2]) == 3;
         g.boltGrab = ParseVec(Token(line, "BoltGrab"));
         g.topRound = Token(line, "TopRound");
+        g.sndOut = Split(Token(line, "SndOut"), ';');
+        g.sndIn = Split(Token(line, "SndIn"), ';');
+        g.sndRack = Split(Token(line, "SndRack"), ';');
         g_lines.push_back(g);
     }
+    wchar_t take[128] = L"";
+    GetPrivateProfileStringW(L"ManualReload", L"SndTake", L"", take, 128, ini.c_str());
+    g_sndTake = Narrow(take);
     for (const auto& r : refs)
         for (GunLine& g : g_lines) {
             if (g.key != r.first) continue;
@@ -288,6 +296,177 @@ int ReserveAvailable(std::uintptr_t pawn, std::uintptr_t w) {
 
 bool Ready(const WState& s, const GunLine& l, int clip) { return l.open ? s.cocked : clip >= 1; }
 
+// --- M7, the reload sounds: the arms' own cues (the AnimNotify_Sounds of the reload animations the manual reload no
+// longer plays), played at the events through the weapon's script function WeaponPlaySound (-> Instigator.PlaySound). ---
+struct Cue {
+    std::string    name;  // "group.name", lower case
+    std::uintptr_t cue;
+};
+std::vector<Cue> g_cues;
+std::uintptr_t   g_cuesPawn = 0;
+bool             g_soundsOff = false;  // a fault in ProcessEvent: no more sounds this session
+struct KeyVariant {
+    std::string key;
+    int         v;
+};
+std::vector<KeyVariant> g_variant;     // each gun's visible magazine variant (from the bake)
+
+std::string Lower(std::string s) {
+    for (char& ch : s) ch = static_cast<char>(tolower(static_cast<unsigned char>(ch)));
+    return s;
+}
+int VariantOf(const std::string& key) {
+    for (const KeyVariant& k : g_variant)
+        if (k.key == key) return k.v;
+    return 0;
+}
+
+// Every SoundCue the arms' AnimSets name in an AnimNotify_Sound (FPArms.AnimSets[].Sequences[].Notifies[].Notify).
+void BuildCues(std::uintptr_t pawn) {
+    g_cues.clear();
+    g_cuesPawn = pawn;
+    const int ao = names::PropertyOffset(pawn, "FPArms");
+    const std::uintptr_t arms = ao >= 0 ? names::ReadPointer(pawn + ao) : 0;
+    const int so = arms ? names::PropertyOffset(arms, "AnimSets") : -1;
+    if (so < 0) {
+        MLOG("reload: sounds -- no FPArms.AnimSets on the pawn: silent");
+        return;
+    }
+    const std::uintptr_t sets = names::ReadPointer(arms + so);
+    const int nSets = static_cast<int>(names::ReadPointer(arms + so + 4));
+    int nSeq = 0, nNotify = 0;
+    for (int i = 0; i < nSets && i < 64; ++i) {
+        const std::uintptr_t set = names::ReadPointer(sets + 4 * i);
+        const int qo = set ? names::PropertyOffset(set, "Sequences") : -1;
+        if (qo < 0) continue;
+        const std::uintptr_t seqs = names::ReadPointer(set + qo);
+        const int n = static_cast<int>(names::ReadPointer(set + qo + 4));
+        for (int k = 0; k < n && k < 4096; ++k) {
+            const std::uintptr_t seq = names::ReadPointer(seqs + 4 * k);
+            const int no = seq ? names::PropertyOffset(seq, "Notifies") : -1;
+            if (no < 0) continue;
+            ++nSeq;
+            const std::uintptr_t evs = names::ReadPointer(seq + no);
+            const int ne = static_cast<int>(names::ReadPointer(seq + no + 4));
+            for (int e = 0; e < ne && e < 256; ++e) {
+                // AnimNotifyEvent { float Time; AnimNotify* Notify; FName Comment; } = 16 bytes
+                const std::uintptr_t notify = names::ReadPointer(evs + 16 * e + 4);
+                if (!notify || names::ClassName(notify) != "AnimNotify_Sound") continue;
+                ++nNotify;
+                const int co = names::PropertyOffset(notify, "SoundCue");
+                const std::uintptr_t cue = co >= 0 ? names::ReadPointer(notify + co) : 0;
+                if (!cue) continue;
+                const std::string name = Lower(names::Name(names::Outer(cue)) + "." + names::Name(cue));
+                bool have = false;
+                for (const Cue& q : g_cues) have = have || q.cue == cue;
+                if (!have) g_cues.push_back({name, cue});
+            }
+        }
+    }
+    MLOG("reload: sounds -- %zu cues from %d sound notifies in %d sequences of %d arm animsets", g_cues.size(), nNotify, nSeq, nSets);
+    for (const GunLine& l : g_lines)
+        for (const auto* list : {&l.sndOut, &l.sndIn, &l.sndRack})
+            for (const std::string& want : *list) {
+                bool found = want.empty();
+                for (const Cue& q : g_cues) found = found || q.name == Lower(want);
+                if (!found) MLOG("reload: sounds -- %s's cue %s is not among them (silent)", l.key.c_str(), want.c_str());
+            }
+}
+
+// No C++ objects here: SEH only.
+bool CallProcessEvent(std::uintptr_t pe, std::uintptr_t obj, std::uintptr_t fn, void* parms) {
+    __try {
+        reinterpret_cast<void(__fastcall*)(std::uintptr_t, void*, std::uintptr_t, void*, void*)>(pe)(obj, nullptr, fn, parms, nullptr);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// Debug.ReloadTrace: the audio component the last cue made, looked for among WorldInfo's components for a second.
+struct CueCheck {
+    std::uintptr_t cue = 0, world = 0;
+    DWORD          until = 0;
+    std::string    name;
+} g_cueCheck;
+
+void CheckCue() {
+    if (!g_cueCheck.cue) return;
+    const std::uintptr_t wi = g_cueCheck.world;
+    const int co = wi ? names::PropertyOffset(wi, "Components") : -1;
+    const std::uintptr_t arr = co >= 0 ? names::ReadPointer(wi + co) : 0;
+    const int n = co >= 0 ? static_cast<int>(names::ReadPointer(wi + co + 4)) : 0;
+    for (int i = 0; i < n && i < 4096; ++i) {
+        const std::uintptr_t ac = names::ReadPointer(arr + 4 * i);
+        if (!ac || names::ClassName(ac) != "AudioComponent") continue;
+        const int so = names::PropertyOffset(ac, "SoundCue"), wo = names::PropertyOffset(ac, "WaveInstances"),
+                  po = names::PropertyOffset(ac, "PlaybackTime");
+        if (so < 0 || names::ReadPointer(ac + so) != g_cueCheck.cue) continue;
+        const int waves = wo >= 0 ? static_cast<int>(names::ReadPointer(ac + wo + 4)) : -1;
+        float t = 0.0f;
+        if (po >= 0) std::memcpy(&t, reinterpret_cast<const void*>(ac + po), sizeof(t));
+        if (waves > 0 || t > 0.0f) {
+            MLOG("reload: sound %s is playing (an AudioComponent of WorldInfo: %d wave instance(s), %.2f s in)",
+                 g_cueCheck.name.c_str(), waves, t);
+            g_cueCheck.cue = 0;
+            return;
+        }
+    }
+    if (static_cast<LONG>(GetTickCount() - g_cueCheck.until) >= 0) {
+        MLOG("reload: sound %s -- no playing AudioComponent found within a second", g_cueCheck.name.c_str());
+        g_cueCheck.cue = 0;
+    }
+}
+
+// The cue at the gun: the weapon's script function PlaySoundAt(Sound, Location) (Actor.uc: WorldInfo.CreateAudioComponent
+// at that spot, auto-destroyed, Play) through AActor::ProcessEvent.
+void PlayCue(std::uintptr_t pawn, std::uintptr_t w, const std::string& want, const char* what) {
+    if (!g_cfg.reloadSounds || g_soundsOff || want.empty() || !pawn || !w) return;
+    if (pawn != g_cuesPawn) BuildCues(pawn);
+    std::uintptr_t cue = 0;
+    const std::string lw = Lower(want);
+    for (const Cue& q : g_cues)
+        if (q.name == lw) cue = q.cue;
+    if (!cue) return;
+    const std::uintptr_t cls = names::ReadPointer(w + addr::kObjectClass);
+    const std::uintptr_t fn = cls ? names::FindFieldProbe(cls, "PlaySoundAt") : 0;
+    const std::uintptr_t pSound = fn ? names::FindFieldProbe(fn, "ASound") : 0;
+    const std::uintptr_t pLoc = fn ? names::FindFieldProbe(fn, "SourceLocation") : 0;
+    const std::uintptr_t vt = names::ReadPointer(w);
+    const std::uintptr_t pe = vt ? names::ReadPointer(vt + addr::kVtProcessEvent) : 0;
+    if (!fn || names::ClassName(fn) != "Function" || !pSound || !pLoc || pe != addr::kActorProcessEvent) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            MLOG("reload: sounds -- no PlaySoundAt to call (function %s, ProcessEvent 0x%08X): silent",
+                 fn ? names::ClassName(fn).c_str() : "none", static_cast<unsigned>(pe));
+        }
+        return;
+    }
+    const int oSound = static_cast<int>(names::ReadPointer(pSound + addr::kPropertyOffset));
+    const int oLoc = static_cast<int>(names::ReadPointer(pLoc + addr::kPropertyOffset));
+    alignas(16) std::uint8_t parms[64] = {};
+    if (oSound < 0 || oSound > 60 || oLoc < 0 || oLoc > 52) return;
+    // Where the gun is drawn (the aim line's start), else the pawn.
+    float at[3] = {0, 0, 0}, dir[3], upm = 100.0f;
+    if (!viewmodel::GunRay(at, dir, upm)) {
+        const int lo = names::PropertyOffset(pawn, "Location");
+        if (lo >= 0) names::ReadVector(pawn + lo, at);
+    }
+    std::memcpy(parms + oSound, &cue, sizeof(cue));
+    std::memcpy(parms + oLoc, at, sizeof(at));
+    if (!CallProcessEvent(pe, w, fn, parms)) {
+        g_soundsOff = true;
+        MLOG("reload: sounds -- PlaySoundAt faulted: no more reload sounds this session");
+        return;
+    }
+    if (g_cfg.debugReloadTrace) {
+        MLOG("reload: sound %s (%s) at %.0f %.0f %.0f", want.c_str(), what, at[0], at[1], at[2]);
+        const int wo = names::PropertyOffset(w, "WorldInfo");
+        g_cueCheck = {cue, wo >= 0 ? names::ReadPointer(w + wo) : 0, GetTickCount() + 1000, want};
+    }
+}
+
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP"};
 
 void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, std::uint32_t type) {
@@ -296,6 +475,7 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     if (!clipP || !maxP) return;
     const int c0 = *clipP, m = maxP[0];
     const int r0 = ReserveAvailable(pawn, w);
+    const bool wasIn = s.magIn;
     int& c = *clipP;
     switch (type) {
     case shared::kReloadEject: {
@@ -344,6 +524,13 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     default:
         break;
     }
+    // M7: the gun's own cue (per visible magazine variant).
+    const int v = VariantOf(l.key);
+    auto pick = [&](const std::vector<std::string>& list) { return list.empty() ? std::string() : list[v < static_cast<int>(list.size()) ? v : 0]; };
+    if (type == shared::kReloadEject && wasIn) PlayCue(pawn, w, pick(l.sndOut), "magazine out");
+    else if (type == shared::kReloadInsert && !wasIn) PlayCue(pawn, w, pick(l.sndIn), "magazine in");
+    else if (type == shared::kReloadRack) PlayCue(pawn, w, pick(l.sndRack), "rack");
+    else if (type == shared::kReloadTake && !wasIn) PlayCue(pawn, w, g_sndTake, "from the pouch");
     MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s", type < 6 ? kEventName[type] : "?",
          l.key.c_str(), c0, c, r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.magIn ? "in" : "out",
          s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "");
@@ -575,6 +762,15 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     for (size_t k = 0; k < r->mag.size() && v < 0; ++k) {
         const int j = r->mag[k];
         if (j >= 0 && j < num && std::fabs(Det3(saved + 16 * j)) > 1e-3f) v = static_cast<int>(k);
+    }
+    {
+        bool found = false;
+        for (KeyVariant& k : g_variant)
+            if (k.key == key) {
+                k.v = v < 0 ? 0 : v;
+                found = true;
+            }
+        if (!found) g_variant.push_back({key, v < 0 ? 0 : v});
     }
     const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
@@ -926,12 +1122,14 @@ void OnDraw(shared::Header* hdr) {
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     if (g_cfg.debugReloadProbe) ProbeDraw(pawn);
     if (!g_cfg.manualReload) return;
+    CheckCue();
     g_lastDraw = GetTickCount();
     g_flags = hdr ? hdr->reloadFlags : 0;
     if (pawn != g_pawn) {  // a new local pawn (death, a level load): every state starts over
         g_pawn = pawn;
         g_ws.clear();
         g_owed.clear();
+        g_cuesPawn = 0;
         ++g_pawnSeq;
         if (hdr) hdr->reloadPawnSeq = g_pawnSeq;
         MLOG("reload: a new local pawn -- the manual reload's state reset");

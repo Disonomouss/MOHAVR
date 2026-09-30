@@ -1162,6 +1162,20 @@ gesture sends the game's Reload. With Manual reload on: `[ManualReload] Hook=0` 
 host never engages; `Camera.Stereo=0` and `Weapon.HideViewModel=1` -> "the Draw hook or the arm bake is missing": no
 blocking hook. The hidden gun (HideViewModel) is still baked (0.7-1.1 gun bakes per Draw).
 
+**M7, the reload sounds [S] (2026-09-30, `logs/modlogs/reload-m7b-*`):** the game's reload cues are the arms' reload
+animations' `AnimNotify_Sound`s; with the reload animations gone they are silent, so the mod plays them at its events.
+The cues are found by reflection, no new addresses: `pawn.FPArms.AnimSets[].Sequences[].Notifies[]` (AnimNotifyEvent,
+16 bytes: Time, Notify, Comment) -> `AnimNotify_Sound.SoundCue` -- 120 cues from 473 sound notifies in 553 sequences of
+the 2 arm animsets, named `group.name` (`G43.G43_WpnReloadClipOut_PC_STG44`). Played through **AActor::ProcessEvent**
+(vtable +0xF0 = 0x10DB1FA0, thiscall Function, Parms, Result; checked against the weapon's vtable before each call; a
+new signature row) on the weapon's script function **`PlaySoundAt(ASound, SourceLocation)`** (Actor.uc: WorldInfo.
+CreateAudioComponent at the spot, auto-destroyed, Play), at the drawn gun's aim-line start. Not `WeaponPlaySound`:
+MOHA never calls it and its `PlaySound(.., bNoRepToOwner=true)` goes through the owner-replication path. Parameter
+offsets come from the UFunction's own properties. Proof: after each EJECT / TAKE / INSERT / RACK the trace finds an
+AudioComponent of WorldInfo with that SoundCue and a wave instance, 0.01-0.03 s into playback; DROP plays nothing. A
+loopback recording of the PC's audio could not separate the cues from the level's battle ambience (a silent DROP
+scored as high), so audibility and level are [H].
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

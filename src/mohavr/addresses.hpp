@@ -241,6 +241,16 @@ inline constexpr std::uint8_t   kExecHasReserveAmmoBytes[] = {
     0x15, 0xC4, 0x35, 0x6B, 0x11, 0x8B, 0x06, 0x8B, 0x90, 0x24, 0x03, 0x00, 0x00, 0x8B, 0xCE, 0xFF,
     0xD2, 0x8B, 0x4C, 0x24, 0x0C, 0x89, 0x01, 0x5E, 0xC2, 0x08, 0x00};
 
+// D21 M7, the reload sounds: AActor::ProcessEvent, the actor's vtable slot +0xF0 (thiscall: UFunction*, void* Parms,
+// void* Result; ret 0xC). It forwards to UObject::ProcessEvent 0x109CE980 once the world has begun play (GWorld's info
+// actor +0x310 bit 4) or the object has flag 0x200, and a global at 0x116D3FC0 is 0. The game calls HUD.PostRender this
+// way from its own Draw (ENGINE-NOTES 5o). The mod calls the weapon's script function WeaponPlaySound through it, after
+// checking that the weapon's vtable slot holds this function (disassembled from the unpacked exe, 2026-09-30).
+inline constexpr std::uintptr_t kVtProcessEvent     = 0xF0;
+inline constexpr std::uintptr_t kActorProcessEvent  = 0x10DB1FA0;
+inline constexpr std::uint8_t   kActorProcessEventBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF8, 0xA1, 0x78, 0xCE, 0x6D, 0x11,
+                                                             0x8B, 0x40, 0x58};
+
 // --- M8 arm IK (ENGINE-NOTES 5x) ---
 // UMOHASkeletalMeshComponent::UpdateTransform (fastcall, ECX = component; slot in the arms' vtable 0x11587D38):
 // bLockTranslation, then USkeletalMeshComponent::UpdateTransform 0x10CFAC10, which ends with
@@ -304,6 +314,7 @@ inline constexpr Signature kSignatures[] = {
     {"proxy determinant read (decal B)",   kProxyDetReaderDecalB, kProxyDetReaderBytes, sizeof(kProxyDetReaderBytes)},
     {"particle execActivateSystem",        kExecActivateSystem, kExecActivateSystemBytes, sizeof(kExecActivateSystemBytes)},
     {"weapon execHasReserveAmmo",          kExecHasReserveAmmo, kExecHasReserveAmmoBytes, sizeof(kExecHasReserveAmmoBytes)},
+    {"AActor::ProcessEvent",               kActorProcessEvent, kActorProcessEventBytes, sizeof(kActorProcessEventBytes)},
 };
 
 }  // namespace mohavr::addr

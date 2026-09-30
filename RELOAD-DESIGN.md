@@ -1084,3 +1084,7 @@ deleted; its result is in `verify/otherlevel.txt`.
   (a shot's recoil moves the G43's bolt back for a moment) never make it a tug.
 - **M4/M5, the given guns:** from the harness save's G43, `GiveWeapon MOHAGameNonNative.MOHAThompson` is reached with 7
   `NextWeapon`s (BAR, Colt, three grenades, Comp B, then the given guns in order).
+- **M7, the sound call:** `PlaySoundAt` (script: an AudioComponent of WorldInfo at the gun) rather than `PlaySound`
+  (native) or `WeaponPlaySound` (its `bNoRepToOwner=true` goes through the owner-replication path MOHA never uses). The
+  cues come from the arms' AnimSets by reflection (no object search). Per gun `SndOut`, `SndIn`, `SndRack` (per
+  variant); `[ManualReload] SndTake` for the pouch; nothing for DROP.
