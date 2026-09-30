@@ -393,9 +393,15 @@ void Pad::ReadTests(double now) {
                          testLost_[1] ? "lost" : "tracked");
                 } else if (!strcmp(tok, "reload")) {
                     aimLine = true;
-                    // (GOAL A2: 7-10 the bolt's steps; 6, the taped pair's other half, has no name here)
+                    // (GOAL A2: 7-10 the bolt's steps; 6, the taped pair's other half, has no name here. GOAL A3: a
+                    // pump's strokes are the bolt's back / forward.)
                     static const char* kNames[] = {"", "eject", "insert", "rack", "take", "drop", "", "boltup", "boltback",
                                                    "boltfwd", "boltdown"};
+                    std::uint32_t pumpE = !strcmp(v, "pumpback") ? 8u : !strcmp(v, "pumpfwd") ? 9u : 0u;
+                    if (pumpE) {
+                        testReload_.push_back(pumpE);
+                        MLOG("pad: test reload event %s", v);
+                    }
                     for (std::uint32_t e = 1; e < 11; ++e)
                         if (kNames[e][0] && !strcmp(v, kNames[e])) {
                             testReload_.push_back(e);
@@ -415,10 +421,10 @@ void Pad::ReadTests(double now) {
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
                     if (v[0] && v[1] == ',' && v[2] == '@') {
                         // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
-                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback"};
+                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback", "fore"};
                         const char* name = v + 3;
                         const size_t len = strcspn(name, ",");
-                        for (int i = 0; i < 6; ++i)
+                        for (int i = 0; i < 7; ++i)
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);

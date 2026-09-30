@@ -127,6 +127,10 @@ GUNS = [
     ('Attachment_MP40', 'mp40_reload_2', 'MP40_AnimSet', 'mp40_gun_reload_2', 'MP40_rigged', 'upgrade_02_64rdMagazine', (-1.2, 14.4, 30.8), 'Bolt', (4.5, 0, -3.4), (0.35, 0.97, 1.53)),
     ('Attachment_Colt45', 'colt45_reload', 'US_M1911A1_AnimSet', 'colt45_gun_reload', 'US_M1911A1_Pistol_Rigged', 'magazine', (0, 6.3, -1.3), 'gunSlide', (0.1, -0.3, -4.0), (0.05, 0.72, 1.45)),
     ('Attachment_Mauser', 'mauser_reload_3', 'Mauser_AnimSet', 'mauser_gun_reload_3', 'DE_Mauser_Rigged', 'upgrade_02_magazine', (-0.1, 6.7, 11.3), 'Bolt', (0, 0.5, -0.2), (0.20, 0.39, 1.45)),
+    # GOAL A3: the M12's pump (the left hand on the forend in the rechamber, at rest: f0-3 with the rack window at -0.2 s;
+    # at the Pump_In cue it would take f14, mid-return) -- no "mag" / "hold" here (out / in -1: the shell is the right
+    # hand's, MIRRORED below; work/research/goal/shotgun.md 4.4).
+    ('Attachment_M12CombatShotgun', 'shotgun_rechamber', 'US_M12shotgun_AnimSet', 'shotgun_gun_rechamber', 'US_M12shotgun_Rigged', 'shell', (0.58, 0.65, 17.87), 'pump_slide', (0.5, 0.5, 0.0), (-1.0, -1.0, -0.2)),
 ]
 MAX_DIST = 13.0
 
@@ -144,6 +148,18 @@ MIRRORED = [
     # and "hold", so the hand doesn't jump at the mouth (work/research/goal/launchers.md 4.4).
     ('Attachment_Panzerschreck', 'panzerschreck_reload', 'DE_Panzerschreck_Anim_Set', 'panzerschreck_gun_reload',
      'DE_Panzerschreck_Rigged', [('mag', 'Projectile', 33), ('hold', 'Projectile', 33)], 'VM_AnimSet_Bazooka'),
+    # GOAL A3: the M12's shell under the loading port, nose up, in the right hand's fingertips (the looping reload's f0).
+    ('Attachment_M12CombatShotgun', 'shotgun_reload_loop', 'US_M12shotgun_AnimSet', 'shotgun_gun_reload_loop',
+     'US_M12shotgun_Rigged', [('hold', 'shell', 0)], 'VM_AnimSet_NoBazooka'),
+]
+# GOAL A4: grips the rules above can't find, taken from the LEFT hand at an explicit frame (key, arms seq, gun AnimSet, gun
+# seq, psk, [(kind, part bone, frame)], the arms' AnimSet). The C96 below upgrade 1 (a per-level line, key@0) loads its
+# fixed magazine with a stripper clip: the clip's rest is in the guides, not where it starts, and the wrist is 15-18 units
+# from it (the thumb does the work) -- "hold" f24 (the thumb on the top round, ready to seat it), "bolt" f61 (the bolt
+# held back by its wings; work/research/goal/c96_level0.md 4.3-4.4).
+EXPLICIT = [
+    ('Attachment_Mauser@0', 'mauser_reload_2', 'Mauser_AnimSet', 'mauser_gun_reload_2', 'DE_Mauser_Rigged',
+     [('hold', 'clip', 24), ('bolt', 'Bolt', 61)], 'VM_AnimSet_NoBazooka'),
 ]
 MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
@@ -237,6 +253,30 @@ def main(root):
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
             log.append('%s %s: %.2f s, the right hand mirrored (%.1f units from the part)' % (key, kind, f / a['rate'], d))
+    for key, aseq, gset, gseq, psk, grips, aset in EXPLICIT:
+        if aset not in armsBy:
+            armsBy[aset] = read_psa(os.path.join(root, 'psa', 'MOHAGame', 'AnimSet', aset + '.psa'))
+        arms = armsBy[aset]
+        a = arms['seqs'][aseq]
+        gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
+        sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))
+        g = gp['seqs'][gseq]
+        for kind, bone, f in grips:
+            part = gun_cs(gp, sk, g, bone, f)
+            h = mmul(key_local(arms, a, 'LeftHand', f), inv(key_local(arms, a, 'RightProp', f)))
+            d = math.dist(h[3][:3], part[3][:3])
+            hand = mmul(h, inv(part))
+            fingers = []
+            for fn in FINGERS:
+                m = key_local(arms, a, fn, f)
+                k = int(fn[-1])
+                for lower in range(k - 1, 0, -1):
+                    m = mmul(m, key_local(arms, a, fn[:-1] + str(lower), f))
+                fingers.append(m)
+            out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, f / a['rate'], d))
+            out.append('     {%s},' % rows(hand))
+            out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
+            log.append('%s %s: %.2f s, the left hand at frame %d (%.1f units from the part)' % (key, kind, f / a['rate'], f, d))
     out.append('};')
     print('\n'.join(out))
     sys.stderr.write('\n'.join(log) + '\n')

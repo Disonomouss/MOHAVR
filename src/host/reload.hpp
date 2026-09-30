@@ -15,6 +15,10 @@
 // pull back. One not held back is armed at RackArm of its travel (at least RackMin cm) and racks (RACK) when let go or
 // brought forward again; one held back (locked open, or the empty cue of a handle) racks with a tug of RackTug cm and
 // letting go. The game decides what a rack does (feeds a round, cocks an open bolt).
+// GOAL A3, a pump gun (the M12): the pump is the foregrip -- two-handed, the off hand drawn back along the gun by PumpArm
+// of the pump's travel sends PUMP BACK (= BOLT BACK: the case out), forward again (or let go) PUMP FORWARD (= BOLT
+// FORWARD: a shell chambered); without a foregrip the pump is grabbed at its ring. Shells come one at a time from the
+// pouch (while the tube has room) and go in at the loading port; the trigger is kept from the pad while the game holds it.
 // Twin (taped) magazines (D21): a pair in the off hand is flipped with that hand's trigger (kept from the pad meanwhile);
 // inserted flipped, its other half goes in (INSERT_OTHER), each half keeping its own rounds (the game's count).
 // The game draws the magazine where the host says (bits 1-2 of reloadFlags, magPull, magPose) and keeps the ammo.
@@ -68,6 +72,8 @@ public:
         float   offTrigger = 0.0f;             // the off hand's trigger: flips a held taped pair (MP40: arms the grab)
         float   gunTrigger = 0.0f;             // the gun hand's trigger: releases a locked-back action (Colt)
         bool    showSpots = false;             // the menu's Reload spots page is open: both grab rings show
+        bool    foregrip = false;              // GOAL A3: this gun has a foregrip ([Hands] Foregrip, a long gun, fit ForeFwd)
+        bool    foreHeld = false;              // GOAL A3: the off hand holds it (two-handed) -- on a pump gun, the pump
         double  now = 0.0;
     };
     struct Ring {
@@ -91,7 +97,8 @@ public:
     // off hand holds (a grabbed magazine slides back, one in the hand is dropped).
     bool Begin(const In& in);
     bool Active() const { return active_; }
-    bool MagazineOut() const { return mag_ == kOut; }
+    // (GOAL A3: a pump gun's pouch only while its tube has room.)
+    bool MagazineOut() const { return mag_ == kOut && (!(geo_.caps & 2048u) || (geo_.state & 512u)); }
     // Hands::Update, at an off-hand grip press, before the holsters and the foregrip: true = a reload spot took it (the
     // pouch while the magazine is out, the magazine while in; the nearest by distance / radius; 3.4).
     bool TakePress(const XrVector3f& hand, const XrVector3f& pouch, float pouchR);
@@ -105,11 +112,12 @@ public:
     std::uint32_t KeyHash() const { return keyHash_; }
     float         MagPull() const { return mag_ == kGrabbed ? pull_ : 0.0f; }
     shared::Pose  MagPose() const;
-    float         Rack() const { return (geo_.caps & 4096u) ? actS_ * 0.5f : (boltHeld_ ? rack_ : 0.0f); }
+    float         Rack() const { return (geo_.caps & 4096u) ? actS_ * 0.5f : (boltHeld_ || pumpHeld_ ? rack_ : 0.0f); }
 
 private:
     enum Mag { kInGun = 0, kGrabbed = 1, kInHand = 2, kOut = 3 };
-    enum Press { kPressNone, kPressMag, kPressPouch, kPressBolt };
+    // (kPressFull, GOAL A3: a press in the pouch with the tube full -- taken, and nothing given.)
+    enum Press { kPressNone, kPressMag, kPressPouch, kPressBolt, kPressFull };
     void Pulse(Out& out, int hand, float amp, float ms) const;
     void SetMag(Mag m, const char* why);
 
@@ -145,6 +153,11 @@ private:
     bool          actHeld_ = false;
     XrVector3f    actKnobAtGrab_{}, actHandAtGrab_{};
     bool          acksDone_ = true;  // (Poll) every event sent has been taken
+    // GOAL A3 (a pump gun): the off hand on the pump -- the foregrip (pumpByFore_), or without one the pump's own grab
+    // (boltHeld_) -- the most forward it has been along the gun since (the stroke's start), PumpArm of the travel.
+    bool          pumpHeld_ = false, pumpByFore_ = false;
+    float         pumpAnchor_ = 0.0f, pumpArm_ = 0.85f;
+    bool          foregrip_ = false;  // (Begin) In.foregrip: the press test comes before Frame
     double        lastNow_ = 0.0, nearMissAt_ = 0.0;
     bool          lastGunOk_ = false;
     XrVector3f    lastGrabW_{};      // last frame's grab point (the press test comes before this frame's gun)

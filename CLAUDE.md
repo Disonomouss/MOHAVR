@@ -77,6 +77,7 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   magazine sits exactly as seated (any grip). The writers wait until the host has taken the previous command.
   Bolt actions: `@boltup`, `@boltback` (and `@bolt` = the knob closed), `reload=boltup|boltback|boltfwd|boltdown`; the
   game command `mohavr upgradelevel <type> <level>` (before `GiveWeapon`) gives a lower upgrade level.
+  The M12's pump: `@fore` (the foregrip point; the grip there is the pump, drawn back along the gun), `reload=pumpback|pumpfwd`.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

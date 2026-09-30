@@ -500,13 +500,27 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         seenFree = freeHand;
         MLOG("armik: support hand %s", freeHand ? "free (the mirror of the gun hand's grip, on the other controller)" : "on the gun");
     }
+    // GOAL A3: two-handed on a pump gun, the support hand (the game's own, on the forend) rides the pump as the off hand
+    // draws it back.
+    float pumpD[3] = {0, 0, 0};
+    const bool pumpRide = framesOk && twoHanded && !freeHand && reload::PumpShift(pumpD);
+    if (g_cfg.debugReloadTrace) {  // Debug.ReloadTrace: how far the hand rides, now and then
+        static DWORD nextRideLog = 0;
+        const float moved = std::sqrt(pumpD[0] * pumpD[0] + pumpD[1] * pumpD[1] + pumpD[2] * pumpD[2]);
+        if (pumpRide && moved > 0.5f && static_cast<LONG>(GetTickCount() - nextRideLog) >= 0) {
+            nextRideLog = GetTickCount() + 1000;
+            MLOG("armik: trace -- the support hand rides the pump, %.1f units back", moved);
+        }
+    }
 
     for (int si = 0; si < 2; ++si) {
         const Side& s = g_rig.side[si];
         const std::vector<M4>& S = si == 1 ? side1Pose : saved;  // the pose this arm starts from
         const V3 bodyShoulderS = Origin(Mul(S[s.arm], l2w));
-        const bool moveHand = si == 1 && freeHand;
-        const M4 ah = moveHand ? supportDrawn : A;  // how this side's hand chain is drawn
+        const bool ride = si == 1 && pumpRide;
+        const bool moveHand = (si == 1 && freeHand) || ride;
+        // How this side's hand chain is drawn.
+        const M4 ah = si == 1 && freeHand ? supportDrawn : ride ? Mul(A, Translate(V3{pumpD[0], pumpD[1], pumpD[2]})) : A;
         if (moveHand) {
             const M4 kHand = Mul(ah, invL2W);
             for (int i : s.handGroup) bones[i] = Mul(S[i], kHand);

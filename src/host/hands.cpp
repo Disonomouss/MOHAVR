@@ -113,6 +113,7 @@ Hands::Output Hands::Update(const Input& in) {
     rin.offTrigger = in.trigger[o];
     rin.gunTrigger = in.trigger[g];
     rin.showSpots = in.reloadSpotsShown;
+    rin.foregrip = foregrip_ && in.weaponKind == 0 && in.fit.foreFwd >= 15.0f;  // (GOAL A3: a pump gun's pump)
     rin.now = in.now;
     for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
     if (reload_) reload_->SetRingScale(ringScale_);
@@ -259,6 +260,7 @@ Hands::Output Hands::Update(const Input& in) {
         rin.off = {in.aim[o].orientation, {pt[o].x, pt[o].y, pt[o].z}};
         rin.offAim = in.aim[o];
         rin.offHeld = held_[o];
+        rin.foreHeld = twoHanded_;
         ManualReload::Out rout;
         reload_->Frame(rin, rout);
         for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5; ++i) {
@@ -290,6 +292,9 @@ Hands::Output Hands::Update(const Input& in) {
         }
         out.alignOk = rout.alignOk;
         out.align = rout.align;
+        // GOAL A3: the foregrip point (a pump gun's pump), moved by the hand point like the other spots.
+        out.targetOk[6] = gunOk;
+        out.target[6] = {fore.x - hpOff.x, fore.y - hpOff.y, fore.z - hpOff.z};
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;

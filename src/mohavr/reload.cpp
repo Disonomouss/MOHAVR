@@ -44,6 +44,11 @@ struct RefBone {
 };
 struct GunLine {
     std::string              key;
+    // GOAL A4: a gun may have a line per range of upgrade levels -- "Attachment_Mauser@0=... MinUpgrade=-1 MaxUpgrade=0"
+    // beside "Attachment_Mauser=... MinUpgrade=1" (the C96's clip-loaded fixed magazine below its 20-round box). `key` is
+    // the attachment class; gripKey = the ini key (the reload grips are per line).
+    std::string              gripKey;
+    int                      maxUpgrade = 99;
     bool                     open = false;
     int                      minUpgrade = -1;       // (-1: every level -- an un-upgraded gun is at -1; GOAL A2 found the 0
                                                     // default had left every Step 1 gun unconverted before its first upgrade)
@@ -96,16 +101,20 @@ struct GunLine {
     bool                     haveTopRoundAt = false, haveClipIn = false;
     Vec3                     topRoundAt, clipIn;
     std::vector<Vec3>        magRest;
+    std::vector<std::vector<float>> magRestRot;  // GOAL A3: a MagRest of 12 floats (the rows X, Y, Z, then the point) is
+                                                 // turned too (the M12's shell nose-up through the port); else empty
     std::vector<std::string> sndUp, sndBack, sndFwd, sndDown, sndRound, sndClip, sndCase;
+    // GOAL A3 (the M12, Action=pump): the off hand works the pump after every shot -- back (BOLT BACK: the case out) and
+    // forward (BOLT FORWARD: a shell from the tube into the chamber); the trigger is held meanwhile and the game's own
+    // rechamber is off while the manual reload drives the gun. Shells go one at a time through the loading port into the
+    // tube (the action closed); the chamber is live, spent or empty, and loading an empty gun leaves it empty (pump once).
+    // The pump and its second bone move along their parent's Z row (the M12's RootOffset is tilted 1 degree). SndIn2: the
+    // shell's second cue, 60 ms after SndIn.
+    bool                     pump = false;
+    std::vector<std::string> sndIn2;
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
-
-const GunLine* LineFor(const std::string& key) {
-    for (const GunLine& l : g_lines)
-        if (l.key == key) return &l;
-    return nullptr;
-}
 
 std::string Token(const std::string& line, const char* name) {
     const std::string k = std::string(name) + "=";
@@ -159,7 +168,8 @@ void ParseLines(const std::wstring& ini) {
     for (const wchar_t* k = keys.data(); k < keys.data() + n && *k; k += wcslen(k) + 1) {
         const std::string key = Narrow(k);
         if (key.rfind("Attachment_", 0) != 0) continue;
-        if (std::find(off.begin(), off.end(), key) != off.end()) {
+        const std::string base = key.substr(0, key.find_first_of("@."));  // (GOAL A4: Key@N, a per-level line)
+        if (std::find(off.begin(), off.end(), key) != off.end() || std::find(off.begin(), off.end(), base) != off.end()) {
             MLOG("reload: %s is off ([ManualReload] Off) -- the game's own reload", key.c_str());
             continue;
         }
@@ -172,10 +182,12 @@ void ParseLines(const std::wstring& ini) {
             continue;
         }
         GunLine g;
-        g.key = key;
+        g.key = key.substr(0, key.find('@'));
+        g.gripKey = key;
         g.open = Token(line, "Action") == "open";
-        const std::string mu = Token(line, "MinUpgrade");
+        const std::string mu = Token(line, "MinUpgrade"), xu = Token(line, "MaxUpgrade");
         g.minUpgrade = mu.empty() ? -1 : atoi(mu.c_str());
+        g.maxUpgrade = xu.empty() ? 99 : atoi(xu.c_str());
         g.emptyCue = Token(line, "Empty") != "none";
         for (const std::string& b : Split(Token(line, "Mag"), ';'))
             if (!b.empty()) g.mag.push_back(b);
@@ -221,7 +233,20 @@ void ParseLines(const std::wstring& ini) {
         if (g.haveTopRoundAt) g.topRoundAt = ParseVec(tra);
         g.haveClipIn = !ci.empty();
         if (g.haveClipIn) g.clipIn = ParseVec(ci);
-        g.magRest = ParseVecs(Token(line, "MagRest"));
+        for (const std::string& t : Split(Token(line, "MagRest"), ';')) {
+            if (t.empty()) continue;
+            std::vector<float> f;
+            for (const std::string& x : Split(t, ',')) f.push_back(static_cast<float>(atof(x.c_str())));
+            if (f.size() == 12) {  // a frame: the rows, then the point
+                g.magRest.push_back({f[9], f[10], f[11]});
+                g.magRestRot.push_back(std::vector<float>(f.begin(), f.begin() + 9));
+            } else {
+                g.magRest.push_back(ParseVec(t));
+                g.magRestRot.push_back({});
+            }
+        }
+        g.pump = Token(line, "Action") == "pump";
+        g.sndIn2 = Split(Token(line, "SndIn2"), ';');
         g.sndUp = Split(Token(line, "SndUp"), ';');
         g.sndBack = Split(Token(line, "SndBack"), ';');
         g.sndFwd = Split(Token(line, "SndFwd"), ';');
@@ -268,6 +293,8 @@ struct WState {
     bool           spent = false;        // a fired case in the chamber: the trigger is held until the bolt is worked
     bool           clipSeated = false;   // a stripped clip in the guides until the bolt closes
     bool           gated = false;        // the trigger held (FiringStatesArray[0] = None)
+    bool           chamberEmpty = false; // GOAL A3 (a pump gun): nothing in the chamber (the case out, not yet pumped closed on
+                                         // a shell; or an empty gun loaded) -- the clip's rounds are all in the tube
     std::uint32_t  rechamber[2] = {}, fire0[2] = {};  // the game's FNames set to None (to put back)
     bool           rechamberOff = false, fireOff = false;
 };
@@ -316,12 +343,15 @@ std::vector<std::string> g_failedKeys;  // guns whose RefSkeleton check failed: 
 
 // The converted line for this weapon now, or null (no line, below MinUpgrade, alt mode, the check failed).
 const GunLine* Converted(std::uintptr_t w) {
-    const GunLine* l = LineFor(AttachKey(w));
+    const std::string key = AttachKey(w);
+    const int* up = Field(w, "CurrentUpgradeLevel");
+    // The line whose upgrade levels hold the gun's (GOAL A4: a gun may have one per range, Key@N).
+    const GunLine* l = nullptr;
+    for (const GunLine& g : g_lines)
+        if (!l && g.key == key && (!up || (*up >= g.minUpgrade && *up <= g.maxUpgrade))) l = &g;
     if (!l) return nullptr;
     for (const std::string& k : g_failedKeys)
         if (k == l->key) return nullptr;
-    const int* up = Field(w, "CurrentUpgradeLevel");
-    if (up && *up < l->minUpgrade) return nullptr;
     if (Bit(w, "bAlternateFireMode")) return nullptr;
     return l;
 }
@@ -482,7 +512,8 @@ void BuildCues(std::uintptr_t pawn) {
     }
     MLOG("reload: sounds -- %zu cues from %d sound notifies in %d sequences of %d arm animsets", g_cues.size(), nNotify, nSeq, nSets);
     for (const GunLine& l : g_lines)
-        for (const auto* list : {&l.sndOut, &l.sndIn, &l.sndRack})
+        for (const auto* list : {&l.sndOut, &l.sndIn, &l.sndRack, &l.sndIn2, &l.sndUp, &l.sndBack, &l.sndFwd, &l.sndDown,
+                                 &l.sndRound, &l.sndClip})
             for (const std::string& want : *list) {
                 bool found = want.empty();
                 for (const Cue& q : g_cues) found = found || q.name == Lower(want);
@@ -628,7 +659,7 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     const bool wasIn = s.magIn;
     bool closes = false;  // Feed=insert: the action closed on its own
     const char* refused = nullptr;  // (A2) the event didn't apply, and why
-    bool caseOut = false, clipOut = false, loadedClip = false;
+    bool caseOut = false, clipOut = false, loadedClip = false, fed = false;
     const bool taped = TapedNow(l.key);
     if (taped && s.half < 0) s.half = TapedMode(w);
     int& c = *clipP;
@@ -650,6 +681,11 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         break;
     }
     case shared::kReloadTake:
+        if (l.pump) {  // GOAL A3: a shell, while the tube has room
+            if (c >= m) refused = "the tube is full";
+            else s.heldRounds = 1;
+            break;
+        }
         if (l.boltAction) {  // GOAL A2: a clip or a round, into the open action with room
             if (s.bolt != 2 || c >= m) refused = s.bolt != 2 ? "the bolt is not open" : "the magazine is full";
             else s.heldRounds = 1;
@@ -661,6 +697,16 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         break;
     case shared::kReloadInsert:
     case shared::kReloadInsertOther: {
+        if (l.pump) {  // GOAL A3: a shell through the loading port into the tube; an empty gun's chamber stays empty
+            if (c >= m) {
+                refused = "the tube is full";
+                break;
+            }
+            if (c == 0 && !s.spent) s.chamberEmpty = true;
+            c += FromReserve(pawn, w, 1);
+            s.heldRounds = 0;
+            break;
+        }
         if (l.boltAction) {  // GOAL A2: through the open action -- a stripper clip strips its rounds, a round goes in
             if (s.bolt != 2 || c >= m) {
                 refused = s.bolt != 2 ? "the bolt is not open" : "the magazine is full";
@@ -717,6 +763,20 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         else s.bolt = 1;
         break;
     case shared::kReloadBoltBack:
+        if (l.pump) {  // GOAL A3: the pump back -- a spent case comes out; a live shell stays (a press check loses nothing)
+            if (s.bolt != 0) {
+                refused = "the pump is not forward";
+            } else {
+                s.bolt = 2;
+                if (s.spent) {
+                    EjectCase(pawn);
+                    caseOut = true;
+                    s.spent = false;
+                    s.chamberEmpty = true;
+                }
+            }
+            break;
+        }
         if (!l.boltAction || (s.bolt != 1 && s.bolt != 3)) {
             refused = "the bolt is not lifted";
         } else {
@@ -729,6 +789,18 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         }
         break;
     case shared::kReloadBoltForward:
+        if (l.pump) {  // GOAL A3: the pump forward -- a shell from the tube into an empty chamber
+            if (s.bolt != 2) {
+                refused = "the pump is not back";
+            } else {
+                s.bolt = 0;
+                if (s.chamberEmpty && c >= 1) {
+                    s.chamberEmpty = false;
+                    fed = true;
+                }
+            }
+            break;
+        }
         if (!l.boltAction || s.bolt != 2) {
             refused = "the bolt is not back";
         } else if (g_cfg.holdOpen && c == 0) {
@@ -763,6 +835,25 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         else if (type == shared::kReloadBoltDown) PlayCue(pawn, w, pick(l.sndDown), "bolt down");
         else if (type == shared::kReloadInsert) PlayCue(pawn, w, pick(loadedClip ? l.sndClip : l.sndRound), loadedClip ? "the clip in" : "a round in");
         if (caseOut) g_delayedCue = {true, w, pick(l.sndCase), "the case", GetTickCount() + 120};
+    }
+    if (l.pump && !refused) {  // GOAL A3: the pump's and the shell's cues (the blocked rechamber / looping reload's)
+        if (type == shared::kReloadBoltBack) PlayCue(pawn, w, pick(l.sndBack), "pump back");
+        else if (type == shared::kReloadBoltForward) PlayCue(pawn, w, pick(l.sndFwd), "pump forward");
+        else if (type == shared::kReloadTake) PlayCue(pawn, w, g_sndTake, "from the pouch");
+        else if (type == shared::kReloadInsert) {
+            PlayCue(pawn, w, pick(l.sndIn), "a shell in");
+            if (!pick(l.sndIn2).empty()) g_delayedCue = {true, w, pick(l.sndIn2), "the shell home", GetTickCount() + 60};
+        }
+    }
+    if (l.pump) {
+        const char* ev = type == shared::kReloadBoltBack ? "PUMP BACK" : type == shared::kReloadBoltForward ? "PUMP FORWARD" :
+                         type < kEventCount ? kEventName[type] : "?";
+        MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); pump %s, chamber %s%s%s%s%s", ev, l.key.c_str(), c0, c,
+             r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.bolt == 2 ? "back" : "forward",
+             s.spent ? "spent" : (s.chamberEmpty || c == 0) ? "empty" : "live", caseOut ? "; the case ejected" : "",
+             fed ? "; a shell chambered" : "", type == shared::kReloadInsert && !refused ? "; a shell into the tube" : "",
+             refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
+        return;
     }
     char twin[80] = "";
     if (taped)
@@ -807,6 +898,7 @@ struct Resolved {
     int              taped = -1;  // the second magazine of a taped pair
     std::vector<int> boltTurn;    // GOAL A2: the turning bolt bones
     int              boltSlide = -1;
+    int              boltParent = -1;  // GOAL A3: the action bone's parent (a pump moves along its Z row)
 };
 std::deque<Resolved> g_resolved;
 
@@ -926,6 +1018,8 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
         if (i < 0 && why.empty()) why = "no action bone " + b;
         r.bolt.push_back(i);
     }
+    if (!r.bolt.empty() && r.bolt[0] >= 0 && data)
+        r.boltParent = *reinterpret_cast<const int*>(data + r.bolt[0] * addr::kMeshBoneStride + 56);
     if (!l.taped.empty()) r.taped = find(l.taped);  // missing: no twin handling (not a failure)
     for (const std::string& t : l.boltTurn) {
         const int i = find(t);
@@ -942,7 +1036,7 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
     }
     r.ok = why.empty();
     if (r.ok) {
-        MLOG("reload: %s on %s -- %zu magazine bone(s), %zu action bone(s)%s; the RefSkeleton check passed", l.key.c_str(),
+        MLOG("reload: %s on %s -- %zu magazine bone(s), %zu action bone(s)%s; the RefSkeleton check passed", l.gripKey.c_str(),
              names::Name(mesh).c_str(), r.mag.size(), r.bolt.size(), r.top >= 0 ? ", a top round" : "");
     } else {
         g_failedKeys.push_back(l.key);
@@ -1004,6 +1098,11 @@ struct GripState {
     const GripData* grip = nullptr;
     DWORD           tick = 0;
 } g_gripNow;
+struct PumpShiftState {  // GOAL A3: the pump's move in the world, the last bake (PumpShift)
+    float d[3] = {};
+    DWORD tick = 0;
+    bool  on = false;
+} g_pumpShift;
 // A rotation (columns: the frame's x, y, z axes) as a quaternion (x, y, z, w).
 void MatQuat(const float (&c)[3][3], float (&q)[4]) {
     // c[col][row]: m(row, col)
@@ -1184,15 +1283,29 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         }
     }
     auto posed = [&](int j, float* out) {  // the game's pose of bone j, with the pair moved to the half drawn
-        if (l->boltAction && v >= 0 && v < static_cast<int>(r->mag.size()) && j == r->mag[v] && !l->magRest.empty()) {
-            // GOAL A2: the loading item is parked by the game (in the stock); seated it sits at MagRest (unturned).
+        if (!l->magRest.empty() && v >= 0 && v < static_cast<int>(r->mag.size()) && j == r->mag[v]) {
+            // GOAL A2: the loading item is parked by the game (in the stock); seated it sits at MagRest (unturned -- or, GOAL
+            // A3, turned as its 12 floats say: the M12's shell nose-up through the loading port; GOAL A4, the C96's clip in
+            // the guides, where the hand seats it).
             const Vec3 at = PerVariant(l->magRest, v, Vec3{saved[16 * j + 12], saved[16 * j + 13], saved[16 * j + 14]});
-            const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, at.x, at.y, at.z, 1};
+            float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, at.x, at.y, at.z, 1};
+            const std::vector<float> rot = PerVariant(l->magRestRot, v, std::vector<float>{});
+            if (rot.size() == 9)
+                for (int i = 0; i < 3; ++i)
+                    for (int k = 0; k < 3; ++k) id[i * 4 + k] = rot[i * 3 + k];
             std::memcpy(out, id, sizeof(id));
             return;
         }
         if (havePre) Mul(saved + 16 * j, pre, out);
         else std::memcpy(out, saved + 16 * j, 16 * sizeof(float));
+    };
+    // The seated frame the grips of a held item are taken against: a taped pair's canonical frame (half A in the well), or
+    // (GOAL A3) an item the game parks -- a bolt gun's clip, the M12's shell -- at MagRest, as posed() draws it.
+    auto seatOf = [&](int j, float* out) {
+        if (!l->magRest.empty() && v >= 0 && v < static_cast<int>(r->mag.size()) && j == r->mag[v])
+            posed(j, out);
+        else
+            Mul(saved + 16 * j, preCanon, out);
     };
     const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
@@ -1217,7 +1330,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     }
     // (EjectOnEmpty: the clip the game threw at the last shot flies as its own projectile -- ours doesn't fall too.)
     if (haveRf && magState == 3 && (g_fall.lastMag == 0 || g_fall.lastMag == 2) && g_fall.have && g_cfg.dropFall &&
-        !(g_fall.lastMag == 0 && s.gameEjected) && !l->boltAction) {
+        !(g_fall.lastMag == 0 && s.gameEjected) && !l->boltAction && !l->pump) {
         // Dropped just now: fall from where it was drawn, with its speed (and a push out of the well when ejected).
         g_fall.on = true;
         g_fall.start = nowTick;
@@ -1305,9 +1418,9 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         for (int i = 0; i < 3; ++i)
             for (int k = 0; k < 3; ++k) tr += fgrab[i * 4 + k] * fheld[i * 4 + k];
         heldTurn = std::acos(std::clamp((tr - 1.0f) * 0.5f, -1.0f, 1.0f)) * 57.2958f;
-    } else if (magState == 3 && l->boltAction) {
+    } else if (magState == 3 && (l->boltAction || l->pump)) {
         // GOAL A2: nothing loading in the hand -- the items stay parked (the game's pose, inside the stock), except a
-        // stripped clip, drawn in the guides until the bolt closes.
+        // stripped clip, drawn in the guides until the bolt closes. (GOAL A3: the M12's shell likewise.)
         if (s.clipSeated && l->haveClipIn && v == 0 && r->mag[0] >= 0 && r->mag[0] < num) {
             const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, l->clipIn.x, l->clipIn.y, l->clipIn.z, 1};
             Draw(bones, r->mag[0], id, kMove);
@@ -1389,6 +1502,25 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             Draw(bones, r->top, m, kMove);
         }
     }
+    // GOAL A3: a pump moves along its parent's Z row (the M12's RootOffset is tilted 1 degree: along mesh Z alone the
+    // pump would sit 0.2 u high at the back); the Step 1 actions along mesh Z, as proven.
+    Vec3 ax{0, 0, 1};
+    if (l->pump && r->boltParent >= 0 && r->boltParent < num) {
+        const float* p = saved + 16 * r->boltParent;
+        const Vec3 z = Norm(Vec3{p[8], p[9], p[10]});
+        if (z.z > 0.5f) ax = z;
+    }
+    auto zTo = [&](float* m, float z) {  // a bone's matrix moved so its Z is z
+        if (!l->pump) {
+            m[14] = z;
+            return;
+        }
+        const float k = (z - m[14]) / ax.z;
+        m[12] += ax.x * k;
+        m[13] += ax.y * k;
+        m[14] += ax.z * k;
+    };
+    g_pumpShift.on = false;
     if (b >= 0 && b < num && !l->boltAction) {
         const float zs = saved[16 * b + 14], zIdle = l->boltZ[0], zEmpty = l->boltZ[1];
         const float zh = hold ? (zEmpty < zIdle ? std::min(zs, zEmpty) : std::max(zs, zEmpty)) : zs;
@@ -1399,14 +1531,19 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (zd != zs) {
             float m[16];
             std::memcpy(m, saved + 16 * b, sizeof(m));
-            m[14] = zd;
+            zTo(m, zd);
             Draw(bones, b, m, kMove);
             if (r->bolt.size() > 1 && r->bolt[1] >= 0 && r->bolt[1] < num && l->haveBolt2Z) {
                 float m2[16];
                 std::memcpy(m2, saved + 16 * r->bolt[1], sizeof(m2));
-                m2[14] = SecondZ(*l, zd);
+                zTo(m2, SecondZ(*l, zd));
                 Draw(bones, r->bolt[1], m2, kMove);
             }
+        }
+        if (l->pump && racking) {  // the pump's move in the world: the support hand rides it (arms_ik, two-handed)
+            const float k = (zd - zs) / ax.z;
+            const Vec3 dW = Xform(Vec3{ax.x * k, ax.y * k, ax.z * k}, 0.0f, a);
+            g_pumpShift = {{dW.x, dW.y, dW.z}, nowTick, true};
         }
     }
     // The top round: only while the magazine is in and has rounds (RELOAD-DESIGN 5.4); it slides with a grabbed one.
@@ -1450,18 +1587,18 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     // Round 35: "hold like grab" (the player's, per gun) -- the magazine in the hand (pulled out, or from the pouch) held
     // with the grab grip and its adjustments, so it looks the same coming out as going in (round 34 had it the other way
     // round). Guns whose reload animation has no grab grip (the Colt, the C96) keep the hold.
-    const GripData* grabGd = FindGrip(key, "mag");
+    const GripData* grabGd = FindGrip(l->gripKey, "mag");
     const bool holdLikeGrab = (gripFlags & 1u) && grabGd;
     if (g_cfg.reloadGrips && haveRf) {
         const char* kind = magState == 1 ? "mag" : magState == 2 ? (holdLikeGrab ? "mag" : "hold") : racking ? "bolt" : nullptr;
         const int which = magState == 1 ? 0 : magState == 2 ? (holdLikeGrab ? 0 : 1) : 2;
-        const GripData* gd = kind ? FindGrip(key, kind) : nullptr;
+        const GripData* gd = kind ? FindGrip(l->gripKey, kind) : nullptr;
         const int part = !gd ? -1 : racking && magState != 1 && magState != 2 ? b : (v >= 0 ? r->mag[v] : -1);
         if (gd && part >= 0 && part < num) {
             float partW[16], hand[16], m[16], m2[16];
             if (magState == 2 && haveInHandMove) {
                 // Held: the pair's canonical frame carried into the hand (a flip turns the drawn pair, not the hand).
-                Mul(saved + 16 * part, preCanon, m);
+                seatOf(part, m);
                 Mul(m, inHandMove, m2);
                 Mul(m2, l2w, partW);
             } else if (magState == 1) {
@@ -1486,7 +1623,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     // to the host in the off controller's aim frame (un-mirrored), which then holds the magazine there.
     g_geo.haveHeld = false;
     if (g_cfg.reloadGrips && haveRf && v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
-        const GripData* gd = holdLikeGrab ? grabGd : FindGrip(key, "hold");
+        const GripData* gd = holdLikeGrab ? grabGd : FindGrip(l->gripKey, "hold");
         float relM[16];
         if (gd && armsik::FreeHandRel(relM)) {
             float handT[16], grip[16], gripInv[16], boneW[16], rest[16], restInv[16], grabInBone[16], fheldW[16], offInv[16], rel[16];
@@ -1494,7 +1631,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             gripOf(gd, holdLikeGrab ? 0 : 1, grip);
             AffineInverse(grip, gripInv);
             Mul(gripInv, handT, boneW);
-            Mul(saved + 16 * r->mag[v], preCanon, rest);  // the canonical pair (half A in the well)
+            seatOf(r->mag[v], rest);  // the canonical pair (half A in the well); a parked item's seat
             Mul(rest, a, rest);
             AffineInverse(rest, restInv);
             Mul(fgrab, restInv, grabInBone);
@@ -1558,8 +1695,9 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (g_geo.haveBolt) {
             const Vec3 p{saved[16 * b + 12] + l->boltGrab.x, saved[16 * b + 13] + l->boltGrab.y, zHeld + l->boltGrab.z};
             g_geo.boltGrab = hostPoint(Xform(p, 1.0f, a));
-            g_geo.boltBack = Norm(hostDir(Xform(Vec3{0, 0, -1}, 0.0f, a)));
-            g_geo.boltTravel = Len(Xform(Vec3{0, 0, l->boltZ[2] - zHeld}, 0.0f, a)) / upm;
+            g_geo.boltBack = Norm(hostDir(Xform(Vec3{-ax.x, -ax.y, -ax.z}, 0.0f, a)));  // (GOAL A3: a pump's tilted way)
+            const float k = (l->boltZ[2] - zHeld) / ax.z;
+            g_geo.boltTravel = Len(Xform(Vec3{ax.x * k, ax.y * k, ax.z * k}, 0.0f, a)) / upm;
             g_geo.heldBack = hold && std::fabs(l->boltZ[2] - zHeld) < 2.0f;  // the empty hold only (not a shot's recoil)
         }
     }
@@ -1820,6 +1958,12 @@ bool GripNow(float (&target)[16], const float*& fingers, const char* const*& nam
     return true;
 }
 
+bool PumpShift(float (&d)[3]) {
+    if (!g_pumpShift.on || GetTickCount() - g_pumpShift.tick > 100) return false;
+    for (int i = 0; i < 3; ++i) d[i] = g_pumpShift.d[i];
+    return true;
+}
+
 bool LastGun(float (&l2w)[16], std::string& key) {
     if (g_gunKey.empty() || GetTickCount() - g_lastGunBake > 250) return false;
     std::memcpy(l2w, g_gunL2W, sizeof(l2w));
@@ -1913,6 +2057,7 @@ void OnDraw(shared::Header* hdr) {
                 s->bolt = 0;  // (a bolt action: the game rechambered and loaded it)
                 s->spent = false;
                 s->clipSeated = false;
+                s->chamberEmpty = false;  // (a pump gun likewise)
                 MLOG("reload: %s's clip rose %d -> %d without the mod -- magazine in, ready", line->key.c_str(), s->lastClip, c);
             } else if (c == 0 && line->open && s->cocked) {
                 s->cocked = false;  // the last shot: an open bolt closes on the empty chamber
@@ -1923,11 +2068,16 @@ void OnDraw(shared::Header* hdr) {
                 s->emptyPending = true;
             }
         }
-        // GOAL A2: a bolt action's shot leaves the case in the chamber: the trigger is held until the bolt is worked.
-        if (s->lastClip >= 0 && c < s->lastClip && line->boltAction && !Bit(w, "bAlternateFireMode")) {
+        // GOAL A2: a bolt action's shot leaves the case in the chamber: the trigger is held until the bolt is worked. (GOAL
+        // A3: a pump gun's likewise, until it is pumped. Only while the manual reload drives the gun: otherwise the game's
+        // own rechamber, on then, takes the case out.)
+        if (s->lastClip >= 0 && c < s->lastClip && (line->boltAction || line->pump) && !Bit(w, "bAlternateFireMode") &&
+            Blocking(w)) {
             s->spent = true;
+            s->chamberEmpty = false;
             if (g_cfg.debugReloadTrace)
-                MLOG("reload: %s fired (clip %d -> %d) -- a spent case in: the bolt must be worked", line->key.c_str(), s->lastClip, c);
+                MLOG("reload: %s fired (clip %d -> %d) -- a spent case in: the %s must be worked", line->key.c_str(), s->lastClip,
+                     c, line->pump ? "pump" : "bolt");
         }
         // (A new state for an EjectOnEmpty gun that is already empty -- after a load or a pick-up -- has no clip.)
         if (s->lastClip < 0 && c == 0 && line->ejectOnEmpty) s->magIn = false;
@@ -1986,10 +2136,19 @@ void OnDraw(shared::Header* hdr) {
     if (s && clipP) s->lastClip = *clipP;
     // GOAL A2: while the manual reload drives a bolt action, the game's own rechamber is off (the off hand works the bolt),
     // and the trigger does nothing (FiringStatesArray[0] = None) until the bolt is back down on a fresh round.
-    if (s && line && line->boltAction) {
+    // (GOAL A3: a pump gun likewise, until it is pumped closed on a shell; empty, the trigger is the game's: its dry click.)
+    if (s && line && (line->boltAction || line->pump)) {
         const bool driven = Blocking(w);
+        // Switched off (the player's toggle), the game's own rechamber and reload have the gun: our chamber and action
+        // start over (a spent case of ours would hold the trigger once it is switched on again).
+        if (!(g_flags & 1u) && (s->spent || s->chamberEmpty || s->bolt != 0 || s->clipSeated)) {
+            s->spent = s->chamberEmpty = s->clipSeated = false;
+            s->bolt = 0;
+            MLOG("reload: %s -- the manual reload is off: its chamber and action start over", line->key.c_str());
+        }
         SetNameNone(w, "WeaponRechamberAnim", -1, driven, s->rechamber, s->rechamberOff, line->key, true);
-        s->gated = driven && (s->spent || s->bolt != 0);
+        const int c = clipP ? *clipP : 0;
+        s->gated = driven && (line->pump ? c >= 1 && (s->spent || s->chamberEmpty || s->bolt != 0) : (s->spent || s->bolt != 0));
         SetNameNone(w, "FiringStatesArray", 0, s->gated, s->fire0, s->fireOff, line->key, g_cfg.debugReloadTrace);
     }
     // Publish (RELOAD-DESIGN 4, 5.5) only after a fresh bake of a gun: the host then counts the game's side as alive.
@@ -2010,7 +2169,8 @@ void OnDraw(shared::Header* hdr) {
                       (geoOk && line && TapedNow(key) ? 32u : 0u) | (geoOk && g_geo.haveHeld ? 64u : 0u) |
                       (geoOk && line && line->grabTrigger ? 128u : 0u) | (geoOk && line && line->triggerRack ? 256u : 0u) |
                       (geoOk && line && line->noGrab ? 512u : 0u) | (geoOk && line && !line->latch ? 1024u : 0u) |
-                      (geoOk && line && line->boltAction && g_geo.actN >= 2 ? 4096u : 0u);
+                      (geoOk && line && line->boltAction && g_geo.actN >= 2 ? 4096u : 0u) |
+                      (geoOk && line && line->pump && g_geo.haveBolt ? 2048u : 0u);
     if (geoOk) {
         const Vec3* pts[4] = {&g_geo.magGrab, &g_geo.magOut, &g_geo.boltGrab, &g_geo.boltBack};
         float* dst[4] = {hdr->magGrab, hdr->magOut, hdr->boltGrab, hdr->boltBack};
@@ -2040,15 +2200,20 @@ void OnDraw(shared::Header* hdr) {
     std::uint32_t st = 0;
     if (s && line) {
         const int c = clipP ? *clipP : 0;
-        const bool ready = Ready(*s, *line, c);
+        const bool ready = Ready(*s, *line, c) && !(line->pump && (s->spent || s->chamberEmpty));
         const bool rackNeeded = line->open ? !s->cocked : (c == 0 && s->magIn && s->pending);
-        st = (s->magIn && !line->boltAction ? 1u : 0u) | (s->pending ? 2u : 0u) | (ready ? 4u : 0u) |
+        st = (s->magIn && !line->boltAction && !line->pump ? 1u : 0u) | (s->pending ? 2u : 0u) | (ready ? 4u : 0u) |
              (geoOk && g_geo.heldBack ? 8u : 0u) | (rackNeeded ? 16u : 0u) | (line->open ? 32u : 0u) | (Bit(w, "bInfiniteAmmo") ? 64u : 0u);
         if (line->boltAction) {  // GOAL A2 (reloadState bits 7-15, shared_frame.hpp)
             const int m = maxP ? maxP[0] : 0;
             st |= (s->spent ? 128u : 0u) | (s->bolt == 2 ? 256u : 0u) | (c < m ? 512u : 0u) |
                   (g_cfg.holdOpen && s->bolt == 2 && c == 0 ? 1024u : 0u) | (s->gated ? 2048u : 0u) | (s->clipSeated ? 4096u : 0u) |
                   (s->bolt == 1 ? 16384u : 0u) | (s->bolt == 3 ? 32768u : 0u);
+        }
+        if (line->pump) {  // GOAL A3 (reloadState: 7 spent, 8 the pump back, 9 room, 11 trigger held, 13 the chamber empty)
+            const int m = maxP ? maxP[0] : 0;
+            st |= (s->spent ? 128u : 0u) | (s->bolt == 2 ? 256u : 0u) | (c < m ? 512u : 0u) | (s->gated ? 2048u : 0u) |
+                  (s->chamberEmpty ? 8192u : 0u);
         }
     }
     hdr->reloadState = st;

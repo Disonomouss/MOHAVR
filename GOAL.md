@@ -100,11 +100,30 @@ Items, in D21's order:
   Springfield. **Rounds (level -1, forced):** five pouch trips, `INSERT ...: clip 0 -> 1 ... 4 -> 5, reserve 27 -> 22; a
   round`, on both. Switched off, the game's own `WeaponRechamber` returns. 32 rounds, 7 fired, 25 left (each run). The
   scope variant changes nothing (the Springfield's scope never meets the knob).
-- [ ] **A3 M12 shotgun.**
+- [x] **A3 M12 shotgun.**
   - The pump is worked by hand after each shot, with the trigger blocked until then.
   - Shells go in one at a time from the pouch into the loading port, up to the tube's maximum.
-- [ ] **A4 C96 below upgrade 1.** A fixed magazine charged from the top with a stripper clip (check its reload
+
+  **DONE** (`logs/modlogs/reload-m12b-*`; ENGINE-NOTES 5ar): the foregrip is the pump. Per shot the game's rechamber is
+  off and the trigger held (`fired (clip 8 -> 7) -- a spent case in`, `FiringStatesArray[0] -> None`); the off hand slides
+  back 11.5 cm: `PUMP BACK ...: pump back, chamber empty; the case ejected` (the game's `EjectRechamberedShell`), forward:
+  `PUMP FORWARD ...: chamber live; a shell chambered`, the trigger back; drawn `game Z 42.81 -> drawn 31.31` with the
+  support hand riding it (up to 11.5 u). Fired empty (8 shots), pumped: `chamber empty`; eight pouch shells through the
+  port `INSERT ...: clip 0 -> 1 ... 7 -> 8, reserve 40 -> 32; a shell into the tube`, a ninth refused (`the tube is full
+  (clip 8/8)`), one pump chambers (`PUMP BACK ... chamber empty` -- no case -- `PUMP FORWARD ... a shell chambered`), it
+  fires; a top-up (`INSERT 7 -> 8`, chamber live) fires at once. Switched off: `WeaponRechamber`, then `WeaponReload`
+  (`clip rose 6 -> 7 -> 8 without the mod`). 48 shells in all (8 + 40), 11 fired, 8 + 29 left. The held shell sits in
+  the left hand's fingertips (the game's loading grip, mirrored; 6.2 cm from the controller).
+- [x] **A4 C96 below upgrade 1.** A fixed magazine charged from the top with a stripper clip (check its reload
   animation).
+
+  **DONE** (`logs/modlogs/reload-c96a-*`; ENGINE-NOTES 5as): a line per level range (`Attachment_Mauser@0`, levels -1..0;
+  the box magazine's line stays at 1+). Forced level (`test: weapon type 19's upgrade level 2 -> -1`): `Attachment_Mauser@0
+  on DE_Mauser_Rigged -- ... the RefSkeleton check passed`; ten shots, `fired its last round -- ... (magazine out)`, the
+  bolt held back; a pouch clip seated in the guides: `INSERT Attachment_Mauser: clip 0 -> 0 ...; pending (rack to feed)`
+  (`Mauser.MAUSER_RLD_2_CLIPIN` playing); a tug on the bolt and let go: `RACK ...: clip 0 -> 10` (`MAUSER_RLD_3_SLIDEIN`
+  playing); it fires (10 -> 9); switched off, the game's reload (`clip rose 9 -> 10`). The C96's reserve is infinite
+  (9999), so no count to lose. Grips from the game's clip reload (`mauser_reload_2` f24 hold, f61 bolt).
 - [ ] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
   loaded only when empty.
 

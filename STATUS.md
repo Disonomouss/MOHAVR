@@ -143,7 +143,9 @@ address-space budget for D3D9On12.
    the mounted MG42); **A1 the Garand done** (the en-bloc clip: the game's flight, the mod's ping, a seat that closes,
    the latch; D27, ENGINE-NOTES 5ao). **A5 the Panzerschreck done** (a rocket slides in at the rear: D28, 5ap); the M18
    next with the bolt actions' turning parts. **A2 the bolt actions done** (the K98 and Springfield: the bolt worked by
-   the off hand after every shot, the case, HoldOpen, stripper clips and single rounds: D29, 5aq; shared block v18). The grenade pickup is parked (the player).
+   the off hand after every shot, the case, HoldOpen, stripper clips and single rounds: D29, 5aq; shared block v18).
+   **A3 the M12 done** (the foregrip is the pump; shells one at a time through the port: D30, 5ar; v19). **A4 the C96
+   below upgrade 1 done** (a line per upgrade range; the stripper clip into the fixed magazine: D31, 5as). The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

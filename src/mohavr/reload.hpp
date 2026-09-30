@@ -27,6 +27,9 @@ bool LastGun(float (&l2w)[16], std::string& key);
 // Round 31: the off hand's reload grip this frame (from the game's reload animations): where the support hand goes
 // (world, row-major) and its 15 fingers' frames in the hand's (4x3 each, in `names` order); false = no grip now.
 bool GripNow(float (&target)[16], const float*& fingers, const char* const*& names);
+// GOAL A3: a pump gun's pump drawn back by the off hand -- its move in the world this frame (the bake's world: the
+// mirror world while mirrored), for the support hand riding it while two-handed; false = none now.
+bool PumpShift(float (&d)[3]);
 // Game thread, every first-person gun update, right after the bake (arms_ik OnMeshUpdate): `saved` = the game's own
 // pose (num row-major 4x4 matrices, component space), `bones` = the drawn ones (saved x kMove; overridden here for the
 // magazine, the action and the top round), `l2w` = the component's LocalToWorld, `a` = L2W x D, kMove = a x inv(L2W),

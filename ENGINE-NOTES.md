@@ -1404,6 +1404,58 @@ hold 5, the rifle pool.
 - [S]: `reload-k98a-*`, `-spr2-*` (level 2, clip), `-k98r2-*`, `-sprr2-*` (level -1, rounds): the full cycle, the held-open
   bolt, the loads, the switch off; the Step 1 regression (`reg2`) unchanged.
 
+## 5ar. Manual reload, Step 2: the M12's pump (GOAL A3, 2026-10-01)
+
+Research: `work/research/goal/shotgun.md` (bones, tracks, rules). `Attachment_M12CombatShotgun` (`US_M12shotgun_Rigged`,
+9 bones): `pump_slide` and its child `shell_eject_slide` (the bolt seen in the port) move along RootOffset's Z row, which
+is **tilted 1 degree** in every frame (0, -0.0175, 0.9998): idle Z 42.81, back 31.28 (11.53 along the tilt). Capacity 8,
+the chambered shell counted in it (no separate chamber in the game); reserve 40 at the give, cap 80.
+- **The game's rechamber off and the trigger held** exactly as the bolt actions (5aq): `WeaponRechamberAnim ->
+  None (was shotgun_gun_rechamber)`, `FiringStatesArray[0] -> None (was WeaponSingleFire)`. The trace never shows
+  `WeaponRechamber` while driven; switched off it does, and the game's looping `WeaponReload` adds a shell per loop.
+- **The chamber** (mod state): live, spent (after a shot) or empty (the case out; or an empty gun loaded). The trigger is
+  held while C >= 1 and it isn't live or the pump is back; at C 0 the trigger is the game's (the dry click).
+- **The events:** BOLT BACK = PUMP BACK (a spent case out through the attachment's `EjectRechamberedShell`, as 5aq; a
+  live shell stays: a press check loses nothing), BOLT FORWARD = PUMP FORWARD (a shell from the tube into an empty
+  chamber). INSERT = one shell into the tube (the action closed); loading an empty gun leaves the chamber empty (pump
+  once). TAKE only while the tube has room (the host's pouch press with it full is taken and refused: "the tube is full").
+- **The pump is the foregrip** (host): two-handed, `along` = the off hand's distance ahead of the gun hand along the
+  bore; the stroke from the most forward it has been since it took hold; PUMP BACK at `[ManualReload] PumpArm` (0.85)
+  of the travel, PUMP FORWARD back under 30 % (or letting go after PUMP BACK). The bake draws the pump at the host's
+  `rack` along the tilted axis (a new `zTo` for pump lines only; the Step 1 actions keep `m[14] = z`), and publishes its
+  world move: **arms_ik moves the support hand's group by it** while two-handed (the game's own hand on the forend
+  rides the pump; `armik: trace -- the support hand rides the pump`). Without a foregrip the pump is grabbed at its
+  ring like a Step 1 action.
+- **The shell** is the `shell` bone, parked in the stock by the game: seated at `MagRest` given as a frame (12 floats:
+  the loop's f2, nose up through the port); held with the game's loading grip (the right hand's, mirrored:
+  `shotgun_reload_loop` f0); the pump grip `shotgun_rechamber` f0. **Found:** the held item's grip frame and `magHeld`
+  were taken against the game's parked pose, not `MagRest` (harmless for the bolt guns, which have no hold grip; with
+  one, the shell sat 32 cm from the hand): now `seatOf()`.
+- Shared block **v19** (no layout change): caps bit 11 = a pump gun; reloadState 7 spent, 8 the pump back, 9 room,
+  11 trigger held, 13 the chamber empty. Tests: `@fore` (the foregrip point), `reload=pumpback|pumpfwd`.
+- Switching the manual reload off now clears a bolt / pump gun's chamber state (the game's own rechamber has the gun);
+  a shot marks a spent case only while the manual reload drives the gun.
+- [S]: `reload-m12a-*` (the first run, before the held-shell fix), `reload-m12b-*` (all of it).
+
+## 5as. Manual reload, Step 2: the C96 below upgrade 1 (GOAL A4, 2026-10-01)
+
+Research: `work/research/goal/c96_level0.md`. At levels -1 and 0 the C96 has a **fixed 10-round magazine** loaded from
+the top through the open action with a stripper clip (`mauser_gun_reload_2`: the clip seated in the guides at (0.05,
+-7.21, 10.69), pushed 3.16 u down); the `clip` bone carries the clip and its 10 rounds, parked in the magazine at idle.
+Level 1 (the 20-round box) keeps Step 1's line.
+- **A line per range of upgrade levels:** `Attachment_Mauser@0=... MinUpgrade=-1 MaxUpgrade=0` beside
+  `Attachment_Mauser=... MinUpgrade=1`; `Converted()` picks the line whose range holds `CurrentUpgradeLevel`; the `.Ref`
+  line serves both; the reload grips are keyed by the line (`gripKey` = the ini key); `Off=` takes either key.
+- **The cycle is Step 1's closed bolt:** `EjectOnEmpty=1` (the last shot empties the magazine: out, nothing thrown),
+  the empty hold keeps the bolt back (-4.55), the pouch clip seats at `MagRest` (the guides) and strips at the insert
+  (`pending`, as a magazine into a locked-back gun), and the Step 1 tug-and-let-go on the held-back bolt feeds it (RACK:
+  C 0 -> 10). `NoGrab=1`, `Latch=0`: a loaded C96 isn't topped up (fire it empty first, as the game's own reload can't
+  either). No separate push event (the research's STRIP): seating strips, as the K98's clip (5aq).
+- Grips: `tools/reload_grips.py` gains EXPLICIT (the left hand at a given frame): `mauser_reload_2` f24 (the thumb on the
+  top round, 14.5 u) for the held clip, f61 (the bolt held back, 11.7 u).
+- The C96's reserve is infinite (`bInfiniteAmmo`): `reserve 9999 -> 9999`.
+- [S]: `reload-c96a-*` with the level forced to -1 (`mohavr upgradelevel 19 -1`).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

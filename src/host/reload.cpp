@@ -14,6 +14,12 @@ namespace {
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)", "BOLT UP", "BOLT BACK",
                             "BOLT FORWARD", "BOLT DOWN"};
 const char* kMagName[] = {"in the gun", "grabbed", "in the off hand", "out"};
+// (GOAL A3: a pump gun's BOLT BACK / FORWARD are its pump's strokes.)
+const char* EventName(std::uint32_t type, bool pump) {
+    if (pump && type == shared::kReloadBoltBack) return "PUMP BACK";
+    if (pump && type == shared::kReloadBoltForward) return "PUMP FORWARD";
+    return type <= shared::kReloadBoltDown ? kEventName[type] : "?";
+}
 
 struct V3 { float x, y, z; };
 V3 Add(V3 a, V3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
@@ -64,6 +70,7 @@ void ManualReload::Init(const std::wstring& ini) {
     rackArm_ = iniFloat(L"RackArm", 0.85f);
     rackMin_ = iniFloat(L"RackMin", 4.0f) / 100.0f;
     rackTug_ = iniFloat(L"RackTug", 1.0f) / 100.0f;
+    pumpArm_ = std::clamp(iniFloat(L"PumpArm", 0.85f), 0.3f, 1.0f);
     GetPrivateProfileStringW(L"ManualReload", L"Hold", L"0 0 0", b, 64, ini.c_str());
     float h[3] = {0, 0, 0};
     swscanf_s(b, L"%f %f %f", &h[0], &h[1], &h[2]);
@@ -71,9 +78,9 @@ void ManualReload::Init(const std::wstring& ini) {
     static const char* kButtons[] = {"none", "upper (B / Y)", "lower (A / X)"};
     MLOG("reload: Weapon.ManualReload=%d (the default; the menu's toggle is the player's); release button %s, pull out %.0f cm, "
          "insert within %.0f cm and %.0f deg, hold %.0f %.0f %.0f cm; the action: grab within %.0f cm, armed at %.0f%% of its "
-         "travel (at least %.0f cm), a tug of %.0f cm when held back",
+         "travel (at least %.0f cm), a tug of %.0f cm when held back; a pump back at %.0f%% of its travel",
          on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertAngle_, h[0], h[1], h[2],
-         boltGrabR_ * 100.0f, rackArm_ * 100.0f, rackMin_ * 100.0f, rackTug_ * 100.0f);
+         boltGrabR_ * 100.0f, rackArm_ * 100.0f, rackMin_ * 100.0f, rackTug_ * 100.0f, pumpArm_ * 100.0f);
 }
 
 void ManualReload::SetOn(bool on) {
@@ -148,10 +155,15 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
     if (geo_.key != loggedKey_ || geo_.state != loggedState_) {  // not every shot: the game logs the events' ammo
         loggedKey_ = geo_.key;
         loggedState_ = geo_.state;
-        MLOG("reload: %s -- clip %d/%d, reserve %d; magazine %s%s%s%s%s%s", geo_.key[0] ? geo_.key : "(no gun)", geo_.clip,
+        char act[96] = "";  // (GOAL A2 / A3: the chamber and the action)
+        if (geo_.caps & (2048u | 4096u))
+            snprintf(act, sizeof(act), "; %s%s%s%s%s", (geo_.caps & 2048u) ? "pump" : "bolt", (geo_.state & 256u) ? " back" : " closed",
+                     (geo_.state & 128u) ? ", a spent case in" : "", (geo_.state & 8192u) ? ", the chamber empty" : "",
+                     (geo_.state & 2048u) ? ", the trigger held" : "");
+        MLOG("reload: %s -- clip %d/%d, reserve %d; magazine %s%s%s%s%s%s%s", geo_.key[0] ? geo_.key : "(no gun)", geo_.clip,
              geo_.max, geo_.reserve, (geo_.state & 1u) ? "in" : "out", (geo_.state & 2u) ? ", pending" : "",
              (geo_.state & 4u) ? ", ready" : "", (geo_.state & 8u) ? ", action held back" : "",
-             (geo_.state & 16u) ? ", rack needed" : "", (geo_.caps & 1u) ? "" : " (not converted)");
+             (geo_.state & 16u) ? ", rack needed" : "", (geo_.caps & 1u) ? "" : " (not converted)", act);
         if (geo_.caps & 1u)
             MLOG("reload: %s geometry (cm, the gun frame: right up back) -- magazine grab %.1f %.1f %.1f r %.0f, out %.2f %.2f %.2f; "
                  "action grab %.1f %.1f %.1f, back %.2f %.2f %.2f, travel %.1f", geo_.key, geo_.magGrab[0] * 100.0f,
@@ -174,13 +186,21 @@ bool ManualReload::Begin(const In& in) {
     active_ = active;
     press_ = kPressNone;
     offTrigger_ = in.offTrigger;
+    foregrip_ = in.foregrip;
     // Round 33 (the player: "as soon as I enter the menu, the off hand drops the magazine"): with only a menu in the way,
     // what the off hand holds stays in it -- so the Reload grip page shows the grip -- and nothing new starts.
     menuHold_ = !active_ && !std::strcmp(why, "a menu is open") && (mag_ == kGrabbed || mag_ == kInHand || boltHeld_);
     if (!active_ && !menuHold_) {
         // 3.1: leaving mid-gesture -- a grabbed magazine slides back, one in the hand is dropped, the action is let go
         // without a rack.
-        if (boltHeld_) MLOG("reload: the action let go (not driving): no rack");
+        if (pumpHeld_ && rackArmed_) {  // (GOAL A3: a pump let go after its back stroke closes)
+            Queue(shared::kReloadBoltForward, in.now);
+            MLOG("reload: the pump let go (not driving): it closes");
+        } else if (boltHeld_) {
+            MLOG("reload: the action let go (not driving): no rack");
+        }
+        if (pumpHeld_) rackArmed_ = false;
+        pumpHeld_ = false;
         boltHeld_ = false;
         actHeld_ = false;
         if (mag_ == kGrabbed && !entering_) SetMag(kInGun, "let go: not driving");
@@ -196,13 +216,14 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
     if (!active_) return false;
     float best = 1.0f;
     Press which = kPressNone;
-    // (GOAL A2: a bolt action loads a clip or a round only through its open action, with room.)
-    const bool twoStage = (geo_.caps & 4096u) != 0;
+    // (GOAL A2: a bolt action loads a clip or a round only through its open action, with room. GOAL A3: a pump gun takes a
+    // shell while its tube has room; with it full, the press is taken and nothing given.)
+    const bool twoStage = (geo_.caps & 4096u) != 0, pump = (geo_.caps & 2048u) != 0;
     if (mag_ == kOut && pouchR > 0.0f && (!twoStage || ((geo_.state & 256u) && (geo_.state & 512u)))) {
         const float s = Len(Sub(P(hand), P(pouch))) / pouchR;
         if (s < best) {
             best = s;
-            which = kPressPouch;
+            which = pump && !(geo_.state & 512u) ? kPressFull : kPressPouch;
         }
     }
     // Round 32 (GrabTrigger, the MP40): the magazine only with the off hand's trigger held, so the grip takes the foregrip.
@@ -215,7 +236,8 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
             which = kPressMag;
         }
     }
-    if (((geo_.caps & 2u) || twoStage) && lastGunOk_ && boltGrabR_ > 0.0f) {
+    // (GOAL A3: a pump is the foregrip; its own grab only on a gun without one -- else it would take the foregrip's press.)
+    if ((((geo_.caps & 2u) && !(pump && foregrip_)) || twoStage) && lastGunOk_ && boltGrabR_ > 0.0f) {
         const float s = Len(Sub(P(hand), P(lastBoltW_))) / (boltGrabR_ * ringScale_ * spotAdj_[1][3]);
         if (s < best) {
             best = s;
@@ -371,6 +393,9 @@ void ManualReload::Frame(const In& in, Out& out) {
             MLOG("reload: the pouch is empty (reserve 0)");
             Pulse(out, o, 0.2f, 60.0f);
         }
+    } else if (press_ == kPressFull) {
+        MLOG("reload: the tube is full (clip %d/%d): no shell from the pouch", geo_.clip, geo_.max);
+        Pulse(out, o, 0.2f, 60.0f);
     }
     if (press_ == kPressBolt && twoStage) {
         actHeld_ = true;
@@ -434,8 +459,55 @@ void ManualReload::Frame(const In& in, Out& out) {
         }
     }
 
+    // GOAL A3: a pump gun -- the pump is the foregrip. Two-handed, the off hand drawn back along the gun draws the pump back
+    // (at PumpArm of its travel: PUMP BACK, the case out); forward again closes it (PUMP FORWARD: a shell chambered), and
+    // so does letting go after the back stroke. The stroke is measured along the gun from the most forward the hand has
+    // been since it took hold, so the gun hand's moves don't count. Without a foregrip the pump's own grab (boltHeld_).
+    const bool pump = (geo_.caps & 2048u) != 0;
+    if (pump) {
+        const float along = -Dot(Sub(offP, gunP), backW);  // how far ahead of the gun hand, along the bore
+        const bool byFore = in.foreHeld && foregrip_;
+        const bool held = byFore || boltHeld_;
+        if (held && !pumpHeld_) {
+            pumpHeld_ = true;
+            pumpByFore_ = byFore;
+            pumpAnchor_ = along;
+            rack_ = 0.0f;
+            rackArmed_ = (geo_.state & 256u) != 0;  // the game has it back: forward closes it
+            MLOG("reload: the pump taken (%s)%s", byFore ? "the foregrip" : "its grip", rackArmed_ ? " -- it is back" : "");
+        }
+        if (pumpHeld_ && !held) {
+            if (rackArmed_) {
+                Queue(shared::kReloadBoltForward, in.now);
+                MLOG("reload: PUMP FORWARD (let go)");
+                Pulse(out, o, 0.4f, 30.0f);
+            }
+            pumpHeld_ = false;
+            boltHeld_ = false;
+            rackArmed_ = false;
+            rack_ = 0.0f;
+        } else if (pumpHeld_) {
+            pumpAnchor_ = std::max(pumpAnchor_, along);
+            const float pulled = pumpAnchor_ - along;
+            rack_ = std::clamp(pulled / std::max(geo_.boltTravel, rackMin_), 0.0f, 1.0f);
+            if (!rackArmed_ && rack_ >= pumpArm_) {
+                Queue(shared::kReloadBoltBack, in.now);
+                rackArmed_ = true;
+                MLOG("reload: PUMP BACK (%.1f cm back%s)", 100.0f * pulled, (geo_.state & 128u) ? "; a spent case in" : "");
+                Pulse(out, o, 0.6f, 30.0f);
+            } else if (rackArmed_ && rack_ < 0.3f) {
+                Queue(shared::kReloadBoltForward, in.now);
+                rackArmed_ = false;
+                const bool feeds = (geo_.state & (128u | 8192u)) && geo_.clip >= 1;
+                MLOG("reload: PUMP FORWARD (%s)", feeds ? "a shell to the chamber" : "closed");
+                Pulse(out, o, feeds ? 0.8f : 0.3f, feeds ? 40.0f : 30.0f);
+                if (feeds) Pulse(out, g, 0.8f, 40.0f);
+            }
+        }
+    }
+
     // The action (3.3).
-    if (boltHeld_) {
+    if (boltHeld_ && !pump) {
         const float pulled = Dot(Sub(offP, P(boltStart_)), backW);
         rack_ = std::clamp(pulled / std::max(geo_.boltTravel, rackMin_), 0.0f, 1.0f);
         const bool needed = (geo_.state & 16u) != 0;
@@ -535,6 +607,7 @@ void ManualReload::Frame(const In& in, Out& out) {
     }
     if (gunTrigLatch_) out.maskTrigger[g] = true;
     if (twoStage && (geo_.state & 2048u)) out.maskTrigger[g] = true;  // GOAL A2: work the bolt before the next shot
+    if (pump && ((geo_.state & 2048u) || rackArmed_)) out.maskTrigger[g] = true;  // GOAL A3: pump it first
     float dist = 1e9f, angle = 180.0f;
     const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
     lastNow_ = in.now;
@@ -585,8 +658,9 @@ void ManualReload::Frame(const In& in, Out& out) {
                 Pulse(out, o, 0.5f, 30.0f);
             } else if (active_ && armed_ && dist < insertR_ && angle < insertAngle_) {
                 Queue(twin && flipped_ ? shared::kReloadInsertOther : shared::kReloadInsert, in.now);
-                // (GOAL A2: through a bolt's open action the clip strips / the round goes in: the hand is empty again.)
-                SetMag(twoStage ? kOut : kInGun, twoStage ? "loaded through the open action" : "inserted");
+                // (GOAL A2: through a bolt's open action the clip strips / the round goes in: the hand is empty again. GOAL
+                // A3: likewise a shell into a pump gun's tube.)
+                SetMag(twoStage || pump ? kOut : kInGun, twoStage ? "loaded through the open action" : pump ? "a shell into the tube" : "inserted");
                 MLOG("reload: inserted %.1f cm from the well, %.0f deg off its way", 100.0f * dist, angle);
                 Pulse(out, g, 0.9f, 50.0f);
                 Pulse(out, o, 0.9f, 50.0f);
@@ -607,8 +681,13 @@ void ManualReload::Frame(const In& in, Out& out) {
         const float d = Len(Sub(offP, kw));
         out.rings[out.ringCount++] = {X(kw), boltRingR, d < boltRingR, d < 2.0f * boltRingR};
     }
+    // GOAL A3: a pump gun without a foregrip -- the pump's ring while it must be worked.
+    if (pump && !foregrip_ && !pumpHeld_ && (geo_.state & 2048u) && out.ringCount < 2) {
+        const float d = Len(Sub(offP, boltW));
+        out.rings[out.ringCount++] = {X(boltW), boltRingR, d < boltRingR, d < 2.0f * boltRingR};
+    }
     // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
-    if ((geo_.caps & 2u) && (((geo_.state & 16u) && !boltHeld_) || in.showSpots)) {
+    if ((geo_.caps & 2u) && (((geo_.state & 16u) && !boltHeld_) || in.showSpots) && out.ringCount < 2) {
         const float d = Len(Sub(offP, boltW)), r = boltRingR;
         out.rings[out.ringCount++] = {X(boltW), r, d < r, d < 2.0f * r};
     }
@@ -630,13 +709,14 @@ void ManualReload::Send(shared::Header* hdr, double now) {
         hdr->reloadEvt[s % 8u] = p.type | ((p.hash & 0xFFFFFFu) << 8);
         _ReadWriteBarrier();
         InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->reloadEvtSeq));
-        MLOG("reload: sent %s for %s", kEventName[p.type], geo_.key[0] ? geo_.key : "(no gun)");
+        MLOG("reload: sent %s for %s", EventName(p.type, (geo_.caps & 2048u) != 0), geo_.key[0] ? geo_.key : "(no gun)");
         pending_.pop_front();
     }
 }
 
 std::uint32_t ManualReload::Flags() const {
-    const bool posed = boltHeld_ || ((geo_.caps & 4096u) && (actHeld_ || actS_ > 0.001f));  // (A2: the host poses the bolt)
+    // (A2: the host poses the bolt; A3: the pump while held)
+    const bool posed = boltHeld_ || pumpHeld_ || ((geo_.caps & 4096u) && (actHeld_ || actS_ > 0.001f));
     return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (posed ? 8u : 0u) | (engaged_ ? 16u : 0u) |
            (mag_ == kInHand && flipped_ ? 32u : 0u);
 }

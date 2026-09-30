@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 18;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action
+inline constexpr std::uint32_t kVersion = 19;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -185,7 +185,10 @@ struct Header {
                                            // only with the off hand's trigger held (GrabTrigger), bit8 the gun hand's
                                            // trigger releases a locked-back action (TriggerRack), bit9 the seated
                                            // magazine can't be grabbed (NoGrab: the Garand's clip), bit10 the release
-                                           // button does nothing on this gun (Latch=0), bit12 a two-stage action
+                                           // button does nothing on this gun (Latch=0), bit11 a pump gun (v19: the
+                                           // pump is the foregrip; BOLT BACK / FORWARD are its strokes; reloadState
+                                           // bits 7 spent, 8 the pump back, 9 room, 11 trigger held, 13 the chamber
+                                           // empty), bit12 a two-stage action
                                            // (a bolt: actPath; reloadState bits 7 spent, 8 open, 9 room, 10 held
                                            // open, 11 trigger held, 12 a clip in the guides, 14 lifted, 15 forward)
     char                   reloadKey[48];  // the attachment class the geometry is for

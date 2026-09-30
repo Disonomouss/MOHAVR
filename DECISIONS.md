@@ -294,3 +294,21 @@ controller there.
 rechamber animation work the same four motions.
 **Costs:** [H] -- reaching across to the knob (the gun-hand option is not built), the path's thresholds, the clip
 stripping on seating (not a thumb push), no hand grip on the knob, the round / clip held at the aim point.
+
+### D30. The M12's pump is its foregrip -- Decided 2026-10-01 (GOAL A3)
+After every shot the M12's trigger does nothing until it is pumped: the off hand, holding the foregrip two-handed, slides
+back along the gun (the case flies at 85 % of the stroke, `PumpArm`) and forward again (a shell into the chamber). The
+game's own rechamber is off for the gun while the manual reload drives it. Shells go one at a time from the pouch into
+the loading port (the action closed), up to 8; an emptied gun loaded again needs one pump. The drawn support hand rides
+the pump. Without a foregrip ([Hands] Foregrip=0) the pump is grabbed at its own ring.
+**Why:** GOAL A3; a separate pump grab would take the forend from the foregrip (reload grabs win), so the player could
+not aim two-handed by the pump; the real M12 is pumped by the hand on the forend.
+**Costs:** [H] -- the stroke length (11.5 cm, armed at 9.8), sideways drift turning the gun while pumping, one shell per
+pouch trip, no slam fire, a pump of a loaded gun keeps its shell.
+
+### D31. A line per upgrade range; the C96 below upgrade 1 loads by stripper clip -- Decided 2026-10-01 (GOAL A4)
+A gun may have one `[ManualReload]` line per range of upgrade levels (`Key@N` with MinUpgrade / MaxUpgrade). The C96 at
+levels -1..0 (a fixed 10-round magazine): fired empty the bolt stays back; a stripper clip from the pouch, seated in the
+guides, strips its rounds in; a tug on the bolt and letting go closes it on them. A part-loaded C96 can't be topped up.
+**Why:** GOAL A4; it is the game's own reload at that level (`mauser_gun_reload_2`), done by hand with Step 1's pieces.
+**Costs:** [H] -- no separate thumb push (seating strips), no top-up, the held clip's grip (the game's thumb-on-top frame).
