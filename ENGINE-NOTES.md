@@ -1154,6 +1154,14 @@ Every RefSkeleton check passed. Geometry in the gun frame (cm, right up back) at
 - **C96** (`Attachment_Mauser`, 20 rounds, infinite reserve like the Colt): magazine grab 1.4 -9.8 -3.3 r 7, out -0.14
   -0.99 0.03; locked back when empty; eject, pouch, insert (pending), a tug -> 20.
 
+**M6, the left hand and the fallbacks [S] (2026-09-30, `logs/modlogs/reload-m6a-*`, `reload-m6b-*`, `logs/shots/*-m6a-*`):**
+the G43 drawn with the left hand (mirrored): Y drops the magazine (Y kept from the game), the right hand takes one from
+the pouch and inserts it at the mirrored gun's well (0.0 cm), fired dry, eject, insert (pending), a tug -> 20. The menu's
+Manual reload off: the G43 fired dry reloads by itself (WeaponReload, clip 0 -> 20, the mod re-syncs) and the reload
+gesture sends the game's Reload. With Manual reload on: `[ManualReload] Hook=0` -> the game reloads by itself and the
+host never engages; `Camera.Stereo=0` and `Weapon.HideViewModel=1` -> "the Draw hook or the arm bake is missing": no
+blocking hook. The hidden gun (HideViewModel) is still baked (0.7-1.1 gun bakes per Draw).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

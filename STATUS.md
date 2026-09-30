@@ -125,8 +125,9 @@ address-space budget for D3D9On12.
    events: 5am); **M2 done** (the empty-gun visuals: action holds, the magazine hidden when out, the top round); **M3 done**
    (the host's magazine: B/Y drops it, the off hand grabs and pulls it out, the belt pouch gives a new one, it goes in at
    the well; the menu's Manual reload toggle; the pouch on the Holsters page: 5am); **M4 done** (the rack: a pull past 85 %
-   and let go, or a tug on an action held back); **M5 done** (Thompson drum, MP40, C96: 5am). Next M6: the left hand and the
-   fallbacks. The grenade pickup is parked (the player).
+   and let go, or a tug on an action held back); **M5 done** (Thompson drum, MP40, C96: 5am); **M6 done** (the left hand, the
+   fallbacks; `[Weapon] ManualReload=1` now ships on, D22). Next M7: the reload sounds; then twin magazines; then the
+   headset round. The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

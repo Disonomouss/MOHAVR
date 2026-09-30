@@ -211,3 +211,16 @@ magazine **only once the gun's magazine is out**. The magazine-out, magazine-in 
 the off hand, **flipped with the off hand's trigger** while held (the BAR's pair turns over, the StG44's side-by-side pair
 slides across, as in the game's own taped states A/B), and the other half inserted -- once, before a new pair comes from
 the pouch; each half keeps its own round count, and the half in the gun decides the gun's taped state.
+
+### D22. Manual reload, Step 1 as built: the defaults of the open choices — Decided 2026-09-30 (M6)
+The box-magazine guns (Thompson, MP40, StG44, BAR, G43, Colt, C96 from upgrade 1) reload by hand; the switch
+(`[Weapon] ManualReload`, the menu's "Manual reload") ships on after M0-M6 passed in the simulator. The defaults of
+RELOAD-DESIGN 0.4-0.5, each a switch the player can judge in the headset: the Thompson and MP40 show the bolt forward when
+empty and the StG44/BAR the charging handle back (`Empty=none` per gun turns a cue off); a closed bolt keeps its
+chambered round on a drop (`KeepChambered=1`); the release button is B / Y on the gun hand and is kept from the pad while
+the manual reload drives the gun (`ReleaseButton`); one magazine model per gun, so the pouch gives one only once the
+gun's is out; one RACK event whose effect the game decides (a loaded closed bolt loses nothing); the clip caps at its
+maximum (no +1). As built: a magazine that comes away from the gun must first leave the well (InsertRadius + 2 cm)
+before it can go back in; "held back" (a tug racks it) is the empty hold only.
+**Why:** RELOAD-DESIGN's verified choices; the player's D21 answers where they gave one.
+**Costs:** the reload is silent until M7 (sounds); twin magazines come after M7.
