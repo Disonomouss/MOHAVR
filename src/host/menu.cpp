@@ -34,7 +34,7 @@ int TabCount(int t) {
     return n;
 }
 // The Reload grip page (round 32): which grip, the hand moved on the part and turned at the wrist, per weapon.
-enum GripItem { gWhich, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
+enum GripItem { gWhich, gLikeHeld, gFwd, gUp, gRight, gTilt, gTurn, gRoll, gReset, gBack, gCount };
 const char* kGripNames[3] = {"magazine grab", "held magazine", "handle / bolt"};
 const wchar_t* kGripKinds[3] = {L"mag", L"hold", L"bolt"};
 // The Reload spots page (round 33): the magazine's and the handle's grab rings, moved and sized, per weapon.
@@ -356,6 +356,8 @@ void Menu::SaveFit() {
 
 void Menu::LoadGrips() {
     const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+    gripLikeHeld_ = !weaponKey_.empty() && !iniPath_.empty() &&
+                    GetPrivateProfileIntW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), 0, iniPath_.c_str()) != 0;
     for (int g = 0; g < 3; ++g) {
         for (float& v : gripAdj_[g]) v = 0.0f;
         if (weaponKey_.empty() || iniPath_.empty()) continue;
@@ -405,6 +407,7 @@ void Menu::PublishGrips() {
     hdr_->gripKey[n] = 0;
     for (int g = 0; g < 3; ++g)
         for (int k = 0; k < 6; ++k) hdr_->gripAdj[g][k] = gripAdj_[g][k];
+    hdr_->gripFlags = gripLikeHeld_ ? 1u : 0u;
     InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr_->gripSeq));  // even: done
 }
 
@@ -554,6 +557,13 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         if (in.up) selected_ = (selected_ + gCount - 1) % gCount;
         if (in.down) selected_ = (selected_ + 1) % gCount;
         if ((in.left || in.right) && selected_ == gWhich) gripSel_ = (gripSel_ + (in.right ? 1 : 2)) % 3;
+        if ((in.left || in.right) && selected_ == gLikeHeld && !weaponKey_.empty()) {
+            gripLikeHeld_ = !gripLikeHeld_;
+            const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
+            WritePrivateProfileStringW(L"ReloadGrip", (wkey + L".likeHeld").c_str(), gripLikeHeld_ ? L"1" : nullptr, iniPath_.c_str());
+            PublishGrips();
+            MLOG("menu: %s magazine grab %s", weaponKey_.c_str(), gripLikeHeld_ ? "like the held magazine" : "its own grip");
+        }
         if ((in.left || in.right) && selected_ >= gFwd && selected_ <= gRoll && !weaponKey_.empty()) {
             const float dir = in.right ? 1.0f : -1.0f;
             float& v = gripAdj_[gripSel_][selected_ - gFwd];
@@ -1011,6 +1021,13 @@ void Menu::RenderGripPage() {
     snprintf(label, sizeof(label), "Grip                  <  %s  >", kGripNames[gripSel_]);
     ImGui::Selectable(label, selected_ == gWhich);
     if (!on) ImGui::BeginDisabled();
+    snprintf(label, sizeof(label), "Grab like held        <  %s  >", gripLikeHeld_ ? "yes" : "no");
+    ImGui::Selectable(label, selected_ == gLikeHeld);
+    if (gripSel_ == 0 && gripLikeHeld_) {
+        ImGui::PushFont(nullptr, 28.0f);
+        ImGui::TextDisabled("   the magazine grab uses the held magazine's grip (adjust that one)");
+        ImGui::PopFont();
+    }
     snprintf(label, sizeof(label), "Forward / back        <  %+.1f  >", a[0]);
     ImGui::Selectable(label, selected_ == gFwd);
     snprintf(label, sizeof(label), "Up / down             <  %+.1f  >", a[1]);

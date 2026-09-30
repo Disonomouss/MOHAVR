@@ -1371,6 +1371,41 @@ menu closed; the G43's magazine ring moved 5 cm down and grabbed there (0.0 cm f
 4. The BAR's other issues (from round 32)?
 5. Anything else odd?
 
+**Answers:** (the player's words, 2026-09-30)
+1. Adjusted the Thompson (it is good), the Colt and the MP40.
+2. Fixed it. Some guns would look better if their magazine grab pose were the same as their held magazine pose: make
+   that an option.
+3. No.
+4. After flipping the magazine you can only grab the magazine from the other side, which twists your wrist; then when
+   you throw that magazine away, the next one you can only insert upside down.
+
+**Follow-up (round 34):** below.
+
+**Log received:** (after `tools\deploy.ps1 undeploy`)
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 34: prepared 2026-09-30, the BAR after a flip, "grab like held"
+**Changed:**
+- **The BAR after a flip:** the grips are taken against the pair as if its first half were in the well, so the hand
+  holds whichever half is in the well the same way: no twisted wrist on the next grab, and the next magazine goes in
+  the right way up. (Round 33: they followed the magazine's bone, which the flip turns over.)
+- **Grab like held** (Weapons > Reload grip, per gun): the seated magazine is grabbed with the held magazine's grip
+  (and its adjustments), so the hand keeps one pose from the grab through the pull-out.
+[S]: the BAR grabbed in B like in A; after a flip and a drop the next magazine met the well as the first (67 deg with
+the test hand unturned, both times); the G43's grab like held.
+
+**How to try it:**
+1. The BAR: flip, insert, grab again, drop, a new one in.
+2. Guns whose grab looked wrong: Weapons > Reload grip > "Grab like held".
+
+**Questions:**
+1. The BAR: grab and next magazine right now?
+2. Grab like held: which guns, does it look better?
+3. Anything else odd?
+
 **Answers:** (the player's words)
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)

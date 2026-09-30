@@ -221,7 +221,7 @@ struct Header {
     volatile std::uint32_t gripSeq;        // 1496
     char                   gripKey[48];    // 1500
     float                  gripAdj[3][6];  // 1548
-    std::uint32_t          pad16;          // 1620
+    std::uint32_t          gripFlags;      // 1620 bit0: the magazine is grabbed with the held grip (round 34)
 };
 #pragma pack(pop)
 
@@ -314,7 +314,7 @@ inline bool ReadReloadGeo(const Header* h, ReloadGeo& g, std::uint32_t& seq) {
 }
 
 // Seqlock read of the grip adjustments (v16) for `key`; false if mid-write or for another weapon.
-inline bool ReadGripAdj(const Header* h, const char* key, float (&adj)[3][6]) {
+inline bool ReadGripAdj(const Header* h, const char* key, float (&adj)[3][6], std::uint32_t& flags) {
     const std::uint32_t s1 = h->gripSeq;
     if (s1 & 1u) return false;
 #if defined(_MSC_VER)
@@ -330,6 +330,7 @@ inline bool ReadGripAdj(const Header* h, const char* key, float (&adj)[3][6]) {
     }
     for (int g = 0; g < 3; ++g)
         for (int k = 0; k < 6; ++k) adj[g][k] = h->gripAdj[g][k];
+    flags = h->gripFlags;
 #if defined(_MSC_VER)
     _ReadWriteBarrier();
 #endif

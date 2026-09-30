@@ -135,6 +135,7 @@ private:
     int                     tab_ = 0;                 // the main page's tab (round 32)
     int                     gripSel_ = 0;             // the Reload grip page's grip
     float                   gripAdj_[3][6]{};         // the weapon in hand's grips (cm, degrees)
+    bool                    gripLikeHeld_ = false;    // round 34: the magazine grabbed with the held grip
     int                     spotSel_ = 0;             // the Reload spots page's ring
     float                   spotAdj_[2][4] = {{0, 0, 0, 100}, {0, 0, 0, 100}};  // forward, up, right (cm), size (%)
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)

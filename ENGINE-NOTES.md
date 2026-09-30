@@ -1255,6 +1255,17 @@ pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reload
 - **The old reload gesture is off** (`[Hands] ReloadGesture=0`, the player): no fixed-spot ring; unconverted guns reload
   through the game (B = Xbox A).
 
+**Round 34 [S] (2026-09-30, `logs/modlogs/reload-r34-*`, `logs/shots/*-r34-*`):**
+- **Grips against the canonical pair:** every grip (the grab, the hold, the held magazine's place `magHeld`) is taken
+  against the pair moved to taped state A (`preCanon` = the move from the game's pose to A), i.e. "the half in the
+  well" -- the pair's envelope is the same in A and B (a 180 deg turn about its own centre, or the StG44's slide), so the
+  hand holds the half in the well alike. Round 33 took them against the bone, which B turns over: the grab twisted the
+  wrist and the held magazine (and the next one) sat upside down. Seen: the BAR's grab alike in A and B; the inserts
+  before and after a flip and a drop both 67 deg with the test hand unturned.
+- **Grab like held** (`gripFlags` bit0 in v16's former pad; `[ReloadGrip] <weapon>.likeHeld`): the seated magazine
+  grabbed with the hold grip and its adjustments.
+- The grip adjustments of another weapon (mid-switch) no longer apply: a read for another key or mid-write gives none.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
