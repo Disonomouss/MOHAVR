@@ -580,7 +580,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
     const float magR = PerVariant(l->magR, v, 7.0f);
     const Vec3 grabW = Xform(grabMesh, 1.0f, a);
-    float pullCm = 0.0f, heldGap = -1.0f;
+    float pullCm = 0.0f, heldGap = -1.0f, heldTurn = -1.0f;
     if (magState == 1) {
         // Grabbed: the group slides out along the magazine's way out (mesh space), by the host's pull.
         const float scale = Len(Xform(outMesh, 0.0f, a));
@@ -614,6 +614,11 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             if (j >= 0 && j < num) Mul(saved + 16 * j, hold, bones + 16 * j);
         const float dx = fheld[12] - off[12], dy = fheld[13] - off[13], dz = fheld[14] - off[14];
         heldGap = std::sqrt(dx * dx + dy * dy + dz * dz) * 100.0f / upm;
+        // How far the held frame is turned from the seated one (0 when the off hand points like the gun hand).
+        float tr = 0.0f;
+        for (int i = 0; i < 3; ++i)
+            for (int k = 0; k < 3; ++k) tr += fgrab[i * 4 + k] * fheld[i * 4 + k];
+        heldTurn = std::acos(std::clamp((tr - 1.0f) * 0.5f, -1.0f, 1.0f)) * 57.2958f;
     } else if (magState == 3) {
         for (int j : r->mag)
             if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
@@ -691,10 +696,17 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         static const char* kMag[] = {"in the gun", "grabbed", "in the off hand", "hidden (out)"};
         char extra[96] = "";
         if (magState == 1) snprintf(extra, sizeof(extra), " (pulled %.1f cm)", pullCm);
-        if (magState == 2) snprintf(extra, sizeof(extra), " (its grab point %.1f cm from the off controller)", heldGap);
+        if (magState == 2)
+            snprintf(extra, sizeof(extra), " (its grab point %.1f cm from the off controller, turned %.0f deg from seated)",
+                     heldGap, heldTurn);
         MLOG("reload: trace -- drawn %s: magazine %s%s, action %s%s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
              kMag[magState], extra, hold ? "held empty" : "the game's", racking ? ", racked by the off hand" : "", zGame, zDrawn,
              topShown < 0 ? "none" : topShown ? "shown" : "hidden", hostState ? "drives it" : "not driving");
+        if (v >= 0 && r->mag[v] >= 0 && r->mag[v] < num) {
+            const float* m = saved + 16 * r->mag[v];
+            MLOG("reload: trace -- the visible magazine %s (variant %d): axes %.2f %.2f %.2f / %.2f %.2f %.2f / %.2f %.2f %.2f, at %.2f %.2f %.2f",
+                 l->mag[v].c_str(), v, m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10], m[12], m[13], m[14]);
+        }
         if (haveRf)
             MLOG("reload: trace -- geometry (cm, the gun frame: right up back): magazine grab %.1f %.1f %.1f, out %.2f %.2f %.2f, "
                  "r %.0f; action grab %.1f %.1f %.1f, back %.2f %.2f %.2f, travel %.1f%s", g_geo.magGrab.x * 100.0f,

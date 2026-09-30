@@ -1140,6 +1140,20 @@ dry (handle held back at -2.80): a tug -> cocked; insert -> 20 at once. The held
 of the view's centre with the gun pointed away (the culling question, R10: no culling seen). "Held back" (the tug) is
 the empty hold only: the G43's fire animation briefly moves the bolt back on every shot.
 
+**M5, the other guns [S] (2026-09-30, `logs/modlogs/reload-m5-*`, `reload-drum-*`, `logs/shots/*-m5-*`, `*-drum-*`):**
+given with `GiveWeapon` and reached with 7 `NextWeapon`s from the G43 (then one more each), at the profile's upgrades.
+Every RefSkeleton check passed. Geometry in the gun frame (cm, right up back) at the empty hold:
+- **Thompson** (upgrade 3, the 50-round drum): magazine grab 0.0 -3.2 -6.8 r 9, out -1.00 0.07 0 (to the gun's left);
+  action grab 0.8 8.3 -4.0, travel 11.7 (the bolt forward when empty). Fired dry -> bolt forward; eject, pouch, insert
+  -> pending; a full pull (armed at 11.8 cm) and let go -> 50, reserve 250 -> 200. MOHA's art hangs the drum on the
+  gun's left with its face across the barrel (face-on from behind, edge-on from the side); the held drum is turned 0 deg
+  from the seated one (trace), so a held drum seen from the side looks rounder only by parallax.
+- **MP40** (64): magazine grab 0.4 -13.9 -25.5 r 7, out -0.01 -1.00 0.08; action grab -2.6 6.0 -18.9, travel 17.2 (bolt
+  and chamber_slide). Fired dry -> bolt forward; eject, pouch, insert, a full pull (armed at 17.5) -> 64, reserve
+  200 -> 136.
+- **C96** (`Attachment_Mauser`, 20 rounds, infinite reserve like the Colt): magazine grab 1.4 -9.8 -3.3 r 7, out -0.14
+  -0.99 0.03; locked back when empty; eject, pouch, insert (pending), a tug -> 20.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
