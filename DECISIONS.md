@@ -312,3 +312,21 @@ levels -1..0 (a fixed 10-round magazine): fired empty the bolt stays back; a str
 guides, strips its rounds in; a tug on the bolt and letting go closes it on them. A part-loaded C96 can't be topped up.
 **Why:** GOAL A4; it is the game's own reload at that level (`mauser_gun_reload_2`), done by hand with Step 1's pieces.
 **Costs:** [H] -- no separate thumb push (seating strips), no top-up, the held clip's grip (the game's thumb-on-top frame).
+
+### D32. The M18's breech is worked by its knob -- Decided 2026-10-01 (GOAL A5)
+After the shot the trigger does nothing until the breech has been reloaded: the off hand takes the handle's knob, turns
+it up (unlock) and swings the breech open (the spent case falls out), a round from the pouch goes into the chamber nose
+first and is pushed home, then the breech is swung shut and the knob turned down (lock). The breech stays where it is
+let go; it closes empty too (`HoldOpen=0`).
+**Why:** GOAL A5; it is the game's own reload (`m18_gun_reload`) by hand: the same turn-then-swing, the same cues; the
+Panzerschreck's slide insert for the round.
+**Costs:** [H] -- reaching behind the shoulder to the breech, the knob's arc (up and over, then back and to the right),
+the round's length (43 cm to push home), no hand grip on the knob, the case thrown out automatically at the opening.
+
+### D33. The mounted MG42 keeps the game's belt reload -- Decided 2026-10-01 (GOAL A6)
+The mounted MG42 (47 nests in 6 missions; a 100-round belt, infinite belts) keeps the game's own reload, which runs by
+itself when a belt is empty. A manual version (lid up, a belt, lid down, cock) is blocked: the mod has no VR handling of
+a mounted gun yet (the view and the hands at a nest were never tried), and there is no simulator path (the class isn't in
+the test save's level; the nests are outside the tower the save lands on).
+**Why:** GOAL rule 4 (the time box); nothing is lost meanwhile (infinite belts).
+**Costs:** the one gun without a manual reload; revisit once mounted guns are tried in the headset.

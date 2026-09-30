@@ -541,13 +541,13 @@ void ManualReload::Frame(const In& in, Out& out) {
         const float full = geo_.magSeat + geo_.magLen;
         if (!in.offHeld) {
             Queue(shared::kReloadInsert, in.now);
-            SetMag(kInGun, "let go in the mouth: it slides home");
+            SetMag(twoStage ? kOut : kInGun, "let go in the mouth: it slides home");  // (GOAL A5: the M18's breech)
             Pulse(out, g, 0.9f, 50.0f);
         } else {
             pull_ = std::clamp(Dot(Sub(offP, P(start_)), outW), 0.0f, full + 0.05f);
             if (pull_ <= geo_.magSeat + 0.01f) {
                 Queue(shared::kReloadInsert, in.now);
-                SetMag(kInGun, "pushed home");
+                SetMag(twoStage ? kOut : kInGun, "pushed home");
                 MLOG("reload: slid home (%.1f cm in)", 100.0f * full);
                 Pulse(out, g, 0.9f, 50.0f);
                 Pulse(out, o, 0.9f, 50.0f);

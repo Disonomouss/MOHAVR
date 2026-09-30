@@ -148,6 +148,10 @@ MIRRORED = [
     # and "hold", so the hand doesn't jump at the mouth (work/research/goal/launchers.md 4.4).
     ('Attachment_Panzerschreck', 'panzerschreck_reload', 'DE_Panzerschreck_Anim_Set', 'panzerschreck_gun_reload',
      'DE_Panzerschreck_Rigged', [('mag', 'Projectile', 33), ('hold', 'Projectile', 33)], 'VM_AnimSet_Bazooka'),
+    # GOAL A5: the M18's round at its push into the chamber (f63) -- "mag" (sliding in) and "hold" alike, as the
+    # Panzerschreck's (launchers.md 4.4). The knob's grip isn't mirrorable (the knob is off the block's centre plane).
+    ('Attachment_M18RecoillessRifle', 'm18_reload', 'US_M18_AnimSet', 'm18_gun_reload', 'US_M18recoilless_Rigged',
+     [('mag', 'shell', 63), ('hold', 'shell', 63)], 'VM_AnimSet_Bazooka'),
     # GOAL A3: the M12's shell under the loading port, nose up, in the right hand's fingertips (the looping reload's f0).
     ('Attachment_M12CombatShotgun', 'shotgun_reload_loop', 'US_M12shotgun_AnimSet', 'shotgun_gun_reload_loop',
      'US_M12shotgun_Rigged', [('hold', 'shell', 0)], 'VM_AnimSet_NoBazooka'),

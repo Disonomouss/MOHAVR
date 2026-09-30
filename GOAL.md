@@ -124,19 +124,40 @@ Items, in D21's order:
   (`Mauser.MAUSER_RLD_2_CLIPIN` playing); a tug on the bolt and let go: `RACK ...: clip 0 -> 10` (`MAUSER_RLD_3_SLIDEIN`
   playing); it fires (10 -> 9); switched off, the game's reload (`clip rose 9 -> 10`). The C96's reserve is infinite
   (9999), so no count to lose. Grips from the game's clip reload (`mauser_reload_2` f24 hold, f61 bolt).
-- [ ] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
+- [x] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
   loaded only when empty.
 
   **The Panzerschreck: DONE** (`logs/modlogs/reload-panzer1-*`; ENGINE-NOTES 5ap): the shot -- "fired its last round";
   a pouch rocket, its nose to the rear mouth, slides in as the hand pushes ("slid home (84.6 cm in)"): `INSERT
   Attachment_Panzerschreck: clip 0 -> 1, reserve 9 -> 8`; again `clip 0 -> 1, reserve 8 -> 7`; with the manual reload off
-  the game reloads (`clip rose 0 -> 1`). **The M18: to do** (the breech: handle, swing, the spent case), after A2's
-  turning parts.
+  the game reloads (`clip rose 0 -> 1`). **The M18: DONE** (`logs/modlogs/reload-m18b-*`; ENGINE-NOTES 5at): the
+  breech is A2's two-stage action with a swing. The shot holds the trigger (`fired (clip 1 -> 0) -- a spent case in`,
+  `FiringStatesArray[0] -> None`); the knob turned up: `BOLT UP ...: bolt lifted` (`M18.Reload_M18_5_handle_turn`
+  playing), the breech swung open: `BOLT BACK ...: bolt open; the case ejected`, `the spent case falls from the breech`
+  (`Reload_M18_2_lid_open` playing); let go it stays open (`s 2.00`); a pouch round nose first into the mouth and pushed:
+  `slid home (43.5 cm in)`, `INSERT Attachment_M18RecoillessRifle: clip 0 -> 1, reserve 9 -> 8; a round`
+  (`Reload_M18_3_shell_in`); swung shut `BOLT FORWARD` (`lid_close`), turned down `BOLT DOWN`, the trigger back; it fires
+  (1 -> 0); switched off, the game reloads (`clip rose 0 -> 1`). 10 rockets, 2 fired, 1 + 7 left. Seen from the hinge
+  side (`logs/shots/*final1d-m18-*`): closed, the block on the tube's end with its handle up; open, the block swung out
+  on its arm and the chamber bare; the round pushed in by the left hand.
 - [ ] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
   - **The mounted MG42** (A0): a belt reload every 100 rounds, infinite belts, at a nest (not `GiveWeapon`-able in the
     test level). A manual version would be lid up, a belt, lid down, cock.
+
+    **BLOCKED** (decision D33: the game's own belt reload stays). No simulator path: the class isn't cooked into the
+    test save's level (`Var_Flk_P`), and Der Flakturm's two nests are in `Var_Flk_Exterior_AI`, outside the tower the
+    save lands on. And the mod has no VR handling of a mounted gun yet (never tried in the headset: the view and hands
+    at a nest are unknown), which a manual belt reload would need first. The belts are infinite and the game's reload
+    is automatic, so nothing is lost meanwhile.
   - **The Step 1 guns at their lower levels** (Thompson stick, MP40 single/taped, StG44 and BAR single, G43 10-round):
     one scripted pass with the level forced down.
+
+    **DONE** (`logs/modlogs/reload-lvl1-*`; ENGINE-NOTES 5au): the loadout's BAR and G43 thrown away (`ThrowWeapon`), the
+    levels forced (`weapon type 1's upgrade level 2 -> -1`, MP40 -> 0, StG44, BAR, G43 -> -1), the guns given anew. The
+    Thompson's stick (`upgrade_03_hide_magazine` visible): `EJECT 26 -> 0, reserve 350 -> 376`, `INSERT 0 -> 30, 376 -> 346`;
+    the MP40's taped pair (level 0): `INSERT 0 -> 32` (one magazine, as 5am found: the game has no B pose for it); the
+    StG44 single: `EJECT 28 -> 1` (the chambered round kept), `INSERT 1 -> 30`; the BAR single (no taped pair): `INSERT 0 ->
+    20`; the G43's 10-round `magazine`: `EJECT 8 -> 1`, `INSERT 1 -> 10`. No rounds lost or made.
 
 **Done for a gun** means a scripted simulator run shows all of these:
 - the full cycle: empty → open/out → new ammo in → action worked → it fires;

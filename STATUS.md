@@ -145,7 +145,11 @@ address-space budget for D3D9On12.
    next with the bolt actions' turning parts. **A2 the bolt actions done** (the K98 and Springfield: the bolt worked by
    the off hand after every shot, the case, HoldOpen, stripper clips and single rounds: D29, 5aq; shared block v18).
    **A3 the M12 done** (the foregrip is the pump; shells one at a time through the port: D30, 5ar; v19). **A4 the C96
-   below upgrade 1 done** (a line per upgrade range; the stripper clip into the fixed magazine: D31, 5as). The grenade pickup is parked (the player).
+   below upgrade 1 done** (a line per upgrade range; the stripper clip into the fixed magazine: D31, 5as). **A5 the M18
+   done** (the breech by its knob: unlock, swing open -- the case falls -- the round slid in, shut, lock: D32, 5at). **The
+   mounted MG42 keeps the game's belt reload** (D33: blocked -- no VR handling of mounted guns yet, no simulator path).
+   **A6 the Step 1 guns' lower levels checked** (the Thompson's stick, the MP40's taped pair, the single StG44 and BAR,
+   the G43's 10-round magazine: 5au). The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

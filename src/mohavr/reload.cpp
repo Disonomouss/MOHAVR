@@ -112,6 +112,14 @@ struct GunLine {
     // shell's second cue, 60 ms after SndIn.
     bool                     pump = false;
     std::vector<std::string> sndIn2;
+    // GOAL A5 (the M18's breech, Action=bolt with a swing): stage 2 swings instead of drawing back -- BoltSwing = the hinge
+    // bone, swung SwingDeg degrees about SwingAxis through SwingAt (mesh; right-handed), the turned bones with it. The
+    // "magazine" is the round in the chamber (the game's pose): shown while a round or a spent case is in, else hidden;
+    // opening on a spent case throws it out (it falls). HoldOpen=0|1: per gun, over [ManualReload] HoldOpen.
+    std::string              boltSwing;
+    Vec3                     swingAxis, swingAt;
+    float                    swingDeg = 0.0f;
+    int                      holdOpen = -1;
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -247,6 +255,12 @@ void ParseLines(const std::wstring& ini) {
         }
         g.pump = Token(line, "Action") == "pump";
         g.sndIn2 = Split(Token(line, "SndIn2"), ';');
+        g.boltSwing = Token(line, "BoltSwing");
+        g.swingAxis = ParseVec(Token(line, "SwingAxis"));
+        g.swingAt = ParseVec(Token(line, "SwingAt"));
+        g.swingDeg = static_cast<float>(atof(Token(line, "SwingDeg").c_str()));
+        const std::string ho = Token(line, "HoldOpen");
+        g.holdOpen = ho.empty() ? -1 : atoi(ho.c_str());
         g.sndUp = Split(Token(line, "SndUp"), ';');
         g.sndBack = Split(Token(line, "SndBack"), ';');
         g.sndFwd = Split(Token(line, "SndFwd"), ';');
@@ -295,6 +309,7 @@ struct WState {
     bool           gated = false;        // the trigger held (FiringStatesArray[0] = None)
     bool           chamberEmpty = false; // GOAL A3 (a pump gun): nothing in the chamber (the case out, not yet pumped closed on
                                          // a shell; or an empty gun loaded) -- the clip's rounds are all in the tube
+    bool           caseFall = false;     // GOAL A5: the breech opened on a spent case -- the bake throws it out (it falls)
     std::uint32_t  rechamber[2] = {}, fire0[2] = {};  // the game's FNames set to None (to put back)
     bool           rechamberOff = false, fireOff = false;
 };
@@ -428,6 +443,9 @@ int ReserveAvailable(std::uintptr_t pawn, std::uintptr_t w) {
 }
 
 bool Ready(const WState& s, const GunLine& l, int clip) { return l.open ? s.cocked : clip >= 1; }
+// GOAL A2 / A5: an emptied bolt stays open (per gun: HoldOpen=0|1 over [ManualReload] HoldOpen; the M18's breech has no
+// follower).
+bool HoldOpenFor(const GunLine& l) { return l.holdOpen >= 0 ? l.holdOpen != 0 : g_cfg.holdOpen; }
 
 // --- M7, the reload sounds: the arms' own cues (the AnimNotify_Sounds of the reload animations the manual reload no
 // longer plays), played at the events through the weapon's script function WeaponPlaySound (-> Instigator.PlaySound). ---
@@ -781,8 +799,9 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
             refused = "the bolt is not lifted";
         } else {
             s.bolt = 2;
-            if (s.spent) {  // the case comes out with the extractor
-                EjectCase(pawn);
+            if (s.spent) {  // the case comes out with the extractor (GOAL A5: the M18's is thrown out of the breech)
+                if (l.boltSwing.empty()) EjectCase(pawn);
+                else s.caseFall = true;
                 caseOut = true;
                 s.spent = false;
             }
@@ -803,7 +822,7 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         }
         if (!l.boltAction || s.bolt != 2) {
             refused = "the bolt is not back";
-        } else if (g_cfg.holdOpen && c == 0) {
+        } else if (HoldOpenFor(l) && c == 0) {
             refused = "held open: the magazine is empty";
         } else {
             s.bolt = 3;
@@ -899,6 +918,7 @@ struct Resolved {
     std::vector<int> boltTurn;    // GOAL A2: the turning bolt bones
     int              boltSlide = -1;
     int              boltParent = -1;  // GOAL A3: the action bone's parent (a pump moves along its Z row)
+    int              boltSwing = -1;   // GOAL A5: the hinge bone of a breech that swings open
 };
 std::deque<Resolved> g_resolved;
 
@@ -1029,6 +1049,10 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
     if (!l.boltSlide.empty()) {
         r.boltSlide = find(l.boltSlide);
         if (r.boltSlide < 0 && why.empty()) why = "no bolt slide bone " + l.boltSlide;
+    }
+    if (!l.boltSwing.empty()) {
+        r.boltSwing = find(l.boltSwing);
+        if (r.boltSwing < 0 && why.empty()) why = "no hinge bone " + l.boltSwing;
     }
     if (!l.topRound.empty()) {
         r.top = find(l.topRound);
@@ -1307,6 +1331,42 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         else
             Mul(saved + 16 * j, preCanon, out);
     };
+    // GOAL A2 / A5: bone j of a two-stage action at s (0 closed, 1 the first stage done, 2 open), from the game's pose: a
+    // turned bone turned BoltLift degrees about mesh +Z at its own origin (row vectors: (x, y) -> (x c - y s, x s + y c)),
+    // then, in the second stage, drawn back BoltTravel along -Z (slide) or swung SwingDeg about the hinge (swing:
+    // right-handed about SwingAxis through SwingAt -- the rows as directions, the origin as a point).
+    auto actPose = [&](int j, float sv, bool turn, bool slide, bool swing, float* m) {
+        std::memcpy(m, saved + 16 * j, 16 * sizeof(float));
+        const float ang = std::min(sv, 1.0f) * l->boltLift * 0.0174533f, t2 = std::max(sv - 1.0f, 0.0f);
+        if (turn && ang != 0.0f) {
+            const float ct = std::cos(ang), st = std::sin(ang);
+            for (int row = 0; row < 3; ++row) {
+                const float x = m[row * 4], y = m[row * 4 + 1];
+                m[row * 4] = x * ct - y * st;
+                m[row * 4 + 1] = x * st + y * ct;
+            }
+        }
+        if (slide) m[14] -= t2 * l->boltTravel;
+        if (swing && t2 > 0.0f && l->swingDeg != 0.0f) {
+            const Vec3 u = Norm(l->swingAxis);
+            const float th = t2 * l->swingDeg * 0.0174533f, cs = std::cos(th), sn = std::sin(th);
+            auto rot = [&](float& x, float& y, float& z) {  // Rodrigues
+                const float dp = u.x * x + u.y * y + u.z * z;
+                const float qx = u.y * z - u.z * y, qy = u.z * x - u.x * z, qz = u.x * y - u.y * x;
+                const float nx = x * cs + qx * sn + u.x * dp * (1.0f - cs), ny = y * cs + qy * sn + u.y * dp * (1.0f - cs),
+                            nz = z * cs + qz * sn + u.z * dp * (1.0f - cs);
+                x = nx;
+                y = ny;
+                z = nz;
+            };
+            for (int row = 0; row < 3; ++row) rot(m[row * 4], m[row * 4 + 1], m[row * 4 + 2]);
+            float ox = m[12] - l->swingAt.x, oy = m[13] - l->swingAt.y, oz = m[14] - l->swingAt.z;
+            rot(ox, oy, oz);
+            m[12] = l->swingAt.x + ox;
+            m[13] = l->swingAt.y + oy;
+            m[14] = l->swingAt.z + oz;
+        }
+    };
     const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
     const float magR = PerVariant(l->magR, v, 7.0f);
@@ -1328,6 +1388,54 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         g_fall = Fall{};
         g_fall.key = key;
     }
+    auto feetZ = [&]() {  // the floor: the pawn's feet (its location less the collision cylinder's half height)
+        float loc[3] = {0, 0, 0};
+        const int lo = names::PropertyOffset(pawn, "Location"), co = names::PropertyOffset(pawn, "CylinderComponent");
+        if (lo >= 0) names::ReadVector(pawn + lo, loc);
+        const std::uintptr_t cyl = co >= 0 ? names::ReadPointer(pawn + co) : 0;
+        const int ho = cyl ? names::PropertyOffset(cyl, "CollisionHeight") : -1;
+        float h = 0.0f;
+        if (ho >= 0) std::memcpy(&h, reinterpret_cast<const void*>(cyl + ho), sizeof(h));
+        return loc[2] - (h > 1.0f && h < 200.0f ? h : 50.0f);
+    };
+    // Round 31 (and GOAL A5's case): the magazine falling -- ballistic from f0 until it reaches the floor, then at rest; a
+    // tumble about its own right axis while it falls. False (and the fall off) once it is over.
+    auto fallDraw = [&]() {
+        const float t = static_cast<float>(nowTick - g_fall.start) / (1000.0f * g_cfg.debugReloadSlowMo);
+        if (!g_fall.on || !haveRf || t >= 2.0f) {
+            g_fall.on = false;
+            return false;
+        }
+        const float gz = -9.8f * g_fall.upm;
+        const float z0 = g_fall.f0[14], vz = g_fall.v0[2], floor = g_fall.floorZ + 2.0f;
+        float tl = t;  // the landing time (z0 + vz t + gz t^2 / 2 = floor)
+        const float disc = vz * vz - 2.0f * gz * (z0 - floor);
+        if (z0 > floor && disc >= 0.0f) tl = std::min(t, (-vz - std::sqrt(disc)) / gz);
+        else if (z0 <= floor) tl = 0.0f;
+        float f[16];
+        const float ang = 2.5f * tl, ca = std::cos(ang), sa = std::sin(ang);
+        for (int k = 0; k < 4; ++k) {  // forward and up turned about the frame's right (row 1)
+            f[0 + k] = g_fall.f0[0 + k] * ca + g_fall.f0[8 + k] * sa;
+            f[4 + k] = g_fall.f0[4 + k];
+            f[8 + k] = g_fall.f0[8 + k] * ca - g_fall.f0[0 + k] * sa;
+        }
+        f[12] = g_fall.f0[12] + g_fall.v0[0] * tl;
+        f[13] = g_fall.f0[13] + g_fall.v0[1] * tl;
+        f[14] = std::max(floor, z0 + vz * tl + 0.5f * gz * tl * tl);
+        f[15] = 1.0f;
+        float fgrabInv[16], m1[16], m2[16], move[16];
+        AffineInverse(fgrab, fgrabInv);
+        Mul(a, fgrabInv, m1);
+        Mul(m1, f, m2);
+        Mul(m2, invL2W, move);
+        for (int j : r->mag)
+            if (j >= 0 && j < num) {
+                float m[16];
+                Mul(saved + 16 * j, g_fall.pre, m);
+                Mul(m, move, bones + 16 * j);
+            }
+        return true;
+    };
     // (EjectOnEmpty: the clip the game threw at the last shot flies as its own projectile -- ours doesn't fall too.)
     if (haveRf && magState == 3 && (g_fall.lastMag == 0 || g_fall.lastMag == 2) && g_fall.have && g_cfg.dropFall &&
         !(g_fall.lastMag == 0 && s.gameEjected) && !l->boltAction && !l->pump) {
@@ -1349,15 +1457,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             g_fall.v0[2] += o.z * push;
         }
         g_fall.upm = upm;
-        // The floor: the pawn's feet (its location less the collision cylinder's half height).
-        float loc[3] = {0, 0, 0};
-        const int lo = names::PropertyOffset(pawn, "Location"), co = names::PropertyOffset(pawn, "CylinderComponent");
-        if (lo >= 0) names::ReadVector(pawn + lo, loc);
-        const std::uintptr_t cyl = co >= 0 ? names::ReadPointer(pawn + co) : 0;
-        const int ho = cyl ? names::PropertyOffset(cyl, "CollisionHeight") : -1;
-        float h = 0.0f;
-        if (ho >= 0) std::memcpy(&h, reinterpret_cast<const void*>(cyl + ho), sizeof(h));
-        g_fall.floorZ = loc[2] - (h > 1.0f && h < 200.0f ? h : 50.0f);
+        g_fall.floorZ = feetZ();
         if (g_cfg.debugReloadTrace)
             MLOG("reload: trace -- the magazine falls from %.0f %.0f %.0f at %.0f %.0f %.0f u/s to the floor at %.0f",
                  g_fall.f0[12], g_fall.f0[13], g_fall.f0[14], g_fall.v0[0], g_fall.v0[1], g_fall.v0[2], g_fall.floorZ);
@@ -1425,43 +1525,36 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, l->clipIn.x, l->clipIn.y, l->clipIn.z, 1};
             Draw(bones, r->mag[0], id, kMove);
         }
-    } else if (magState == 3) {
-        const float t = static_cast<float>(nowTick - g_fall.start) / (1000.0f * g_cfg.debugReloadSlowMo);
-        if (g_fall.on && haveRf && t < 2.0f) {
-            // Ballistic from f0 until it reaches the floor, then at rest; a tumble about its own right axis while it falls.
-            const float gz = -9.8f * g_fall.upm;
-            const float z0 = g_fall.f0[14], vz = g_fall.v0[2], floor = g_fall.floorZ + 2.0f;
-            float tl = t;  // the landing time (z0 + vz t + gz t^2 / 2 = floor)
-            const float disc = vz * vz - 2.0f * gz * (z0 - floor);
-            if (z0 > floor && disc >= 0.0f) tl = std::min(t, (-vz - std::sqrt(disc)) / gz);
-            else if (z0 <= floor) tl = 0.0f;
-            float f[16];
-            const float ang = 2.5f * tl, ca = std::cos(ang), sa = std::sin(ang);
-            for (int k = 0; k < 4; ++k) {  // forward and up turned about the frame's right (row 1)
-                f[0 + k] = g_fall.f0[0 + k] * ca + g_fall.f0[8 + k] * sa;
-                f[4 + k] = g_fall.f0[4 + k];
-                f[8 + k] = g_fall.f0[8 + k] * ca - g_fall.f0[0 + k] * sa;
+        // GOAL A5: the M18's round in the chamber -- the game's pose while a round or a spent case is in; a spent case
+        // thrown out as the breech opens falls from it (backwards along the bore at EjectSpeed); an empty chamber shows
+        // nothing.
+        if (r->boltSwing >= 0) {
+            if (s.caseFall && haveRf && g_cfg.dropFall) {
+                g_fall.on = true;
+                g_fall.start = nowTick;
+                std::memcpy(g_fall.f0, fgrab, sizeof(g_fall.f0));
+                const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+                std::memcpy(g_fall.pre, id, sizeof(g_fall.pre));
+                const Vec3 o = Norm(Xform(outMesh, 0.0f, a));
+                const float push = l->ejectSpeed * upm;
+                g_fall.v0[0] = o.x * push;
+                g_fall.v0[1] = o.y * push;
+                g_fall.v0[2] = o.z * push;
+                g_fall.upm = upm;
+                g_fall.floorZ = feetZ();
+                if (g_cfg.debugReloadTrace)
+                    MLOG("reload: trace -- the spent case falls from the breech at %.0f %.0f %.0f to the floor at %.0f",
+                         g_fall.f0[12], g_fall.f0[13], g_fall.f0[14], g_fall.floorZ);
             }
-            f[12] = g_fall.f0[12] + g_fall.v0[0] * tl;
-            f[13] = g_fall.f0[13] + g_fall.v0[1] * tl;
-            f[14] = std::max(floor, z0 + vz * tl + 0.5f * gz * tl * tl);
-            f[15] = 1.0f;
-            float fgrabInv[16], m1[16], m2[16], move[16];
-            AffineInverse(fgrab, fgrabInv);
-            Mul(a, fgrabInv, m1);
-            Mul(m1, f, m2);
-            Mul(m2, invL2W, move);
-            for (int j : r->mag)
-                if (j >= 0 && j < num) {
-                    float m[16];
-                    Mul(saved + 16 * j, g_fall.pre, m);
-                    Mul(m, move, bones + 16 * j);
-                }
-        } else {
-            g_fall.on = false;
+            s.caseFall = false;
+            if (!fallDraw() && c == 0 && !s.spent)
+                for (int j : r->mag)
+                    if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
+        }
+    } else if (magState == 3) {
+        if (!fallDraw())
             for (int j : r->mag)
                 if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
-        }
     }
     // The action: held at its empty position, and drawn back by the host's rack while the off hand holds it
     // (RELOAD-DESIGN 5.3).
@@ -1473,27 +1566,22 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     if (l->boltAction) {
         sDrawn = s.bolt == 2 ? 2.0f : (s.bolt == 1 || s.bolt == 3) ? 1.0f : 0.0f;
         if (racking) sDrawn = std::clamp(rf.view.rack, 0.0f, 1.0f) * 2.0f;  // the host's knob, as the off hand has it
-        const float ang = std::min(sDrawn, 1.0f) * l->boltLift * 0.0174533f, d = std::max(sDrawn - 1.0f, 0.0f) * l->boltTravel;
-        if (ang != 0.0f || d != 0.0f) {
-            const float ct = std::cos(ang), st = std::sin(ang);
+        if (sDrawn > 0.0f) {
             for (int j : r->boltTurn) {
                 if (j < 0 || j >= num) continue;
                 float m[16];
-                std::memcpy(m, saved + 16 * j, sizeof(m));
-                // Turned about mesh +Z through its own origin (row vectors: (x, y) -> (x c - y s, x s + y c)), then back.
-                for (int row = 0; row < 3; ++row) {
-                    const float x = m[row * 4], y = m[row * 4 + 1];
-                    m[row * 4] = x * ct - y * st;
-                    m[row * 4 + 1] = x * st + y * ct;
-                }
-                m[14] -= d;
+                actPose(j, sDrawn, true, true, true, m);
                 Draw(bones, j, m, kMove);
             }
             if (r->boltSlide >= 0 && r->boltSlide < num) {
                 float m[16];
-                std::memcpy(m, saved + 16 * r->boltSlide, sizeof(m));
-                m[14] -= d;
+                actPose(r->boltSlide, sDrawn, false, true, false, m);
                 Draw(bones, r->boltSlide, m, kMove);
+            }
+            if (r->boltSwing >= 0 && r->boltSwing < num) {  // GOAL A5: the M18's hinge arm
+                float m[16];
+                actPose(r->boltSwing, sDrawn, false, false, true, m);
+                Draw(bones, r->boltSwing, m, kMove);
             }
         }
         // The top round, seen through the open action (the game parks the bone in the stock).
@@ -1679,15 +1767,17 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         for (int j : r->boltTurn)
             if (jt < 0 && j >= 0 && j < num && std::fabs(Det3(saved + 16 * j)) > 1e-3f) jt = j;
         if (l->boltAction && jt >= 0) {
-            const float* t0 = saved + 16 * jt;
-            const Vec3 k0 = Xform(l->knob, 1.0f, t0);  // the knob closed, in mesh space
-            const float cx = k0.x - t0[12], cy = k0.y - t0[13];
+            // (GOAL A5: a swing is an arc -- four more samples along it.)
             static const float kS[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 2.0f};
-            for (float sv : kS) {
-                const float ang = std::min(sv, 1.0f) * l->boltLift * 0.0174533f, d = std::max(sv - 1.0f, 0.0f) * l->boltTravel;
-                const Vec3 pk{t0[12] + cx * std::cos(ang) - cy * std::sin(ang), t0[13] + cx * std::sin(ang) + cy * std::cos(ang), k0.z - d};
-                g_geo.actPath[g_geo.actN] = hostPoint(Xform(pk, 1.0f, a));
-                g_geo.actS[g_geo.actN] = sv;
+            static const float kSwing[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+            const bool swings = r->boltSwing >= 0 && l->swingDeg != 0.0f;
+            const float* ss = swings ? kSwing : kS;
+            const int n = swings ? 9 : 6;
+            for (int i = 0; i < n; ++i) {
+                float m[16];
+                actPose(jt, ss[i], true, true, true, m);
+                g_geo.actPath[g_geo.actN] = hostPoint(Xform(Xform(l->knob, 1.0f, m), 1.0f, a));
+                g_geo.actS[g_geo.actN] = ss[i];
                 ++g_geo.actN;
             }
         }
@@ -2207,7 +2297,7 @@ void OnDraw(shared::Header* hdr) {
         if (line->boltAction) {  // GOAL A2 (reloadState bits 7-15, shared_frame.hpp)
             const int m = maxP ? maxP[0] : 0;
             st |= (s->spent ? 128u : 0u) | (s->bolt == 2 ? 256u : 0u) | (c < m ? 512u : 0u) |
-                  (g_cfg.holdOpen && s->bolt == 2 && c == 0 ? 1024u : 0u) | (s->gated ? 2048u : 0u) | (s->clipSeated ? 4096u : 0u) |
+                  (HoldOpenFor(*line) && s->bolt == 2 && c == 0 ? 1024u : 0u) | (s->gated ? 2048u : 0u) | (s->clipSeated ? 4096u : 0u) |
                   (s->bolt == 1 ? 16384u : 0u) | (s->bolt == 3 ? 32768u : 0u);
         }
         if (line->pump) {  // GOAL A3 (reloadState: 7 spent, 8 the pump back, 9 room, 11 trigger held, 13 the chamber empty)

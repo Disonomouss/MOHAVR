@@ -1456,6 +1456,45 @@ Level 1 (the 20-round box) keeps Step 1's line.
 - The C96's reserve is infinite (`bInfiniteAmmo`): `reserve 9999 -> 9999`.
 - [S]: `reload-c96a-*` with the level forced to -1 (`mohavr upgradelevel 19 -1`).
 
+## 5at. Manual reload, Step 2: the M18's breech (GOAL A5, 2026-10-01)
+
+Research: `work/research/goal/launchers.md` 3.2, 4, 5.3. `Attachment_M18RecoillessRifle` (`US_M18recoilless_Rigged`, 7
+bones): `shell` (the round, 42.71 long, its rear seated at (0.30, -5.82, -61.09)), `capHinge` (the hinge arm) and its
+child `capRot` (the breech block, with the handle's knob at local (-10.13, -4.72, 4.08)). Capacity 1; the rocket pool
+(reserve 9 at the give) is shared with the Panzerschreck.
+- **The breech is A2's two-stage action with a swing** (`Action=bolt` + `BoltSwing`): stage 1 turns capRot 87.66 deg
+  about mesh +Z at its own origin (the bore point: unlock), stage 2 swings capHinge -- and capRot with it -- 86 deg about
+  (0.2588, 0.9659, 0) through (-8.011, -2.883, -63.528), **right-handed** (checked against the research's knob: B 85 deg
+  gives (-11.92, -11.75, -79.11)). One helper (`actPose`) draws both kinds of stage 2 (the rifles' slide, the M18's
+  swing); the knob path has 9 samples for a swing (the turn and the swing in quarters).
+- The events are the bolt's: BOLT UP = unlock, BOLT BACK = open, BOLT FORWARD = close, BOLT DOWN = lock; the trigger is
+  held from the shot (a spent case) until it is locked again. `HoldOpen=0` per gun (a new per-line key over the global):
+  the breech closes empty too.
+- **The spent case falls out of the breech as it opens:** the bake starts the drop's fall from the chamber, backwards
+  along the bore at `EjectSpeed` 1.2 m/s (the attachment's `EjectRechamberedShell` isn't called for it). The round in the
+  chamber is the game's pose while a round or a spent case is in, hidden when empty.
+- **Loading:** the Panzerschreck's slide insert (`Insert=slide MagLen=42.71 MagSeat=0.80`) through the open breech;
+  the round counts at the insert (through the open action, as A2's). The host now leaves the hand empty after a slide
+  insert into a two-stage gun (it had reconciled from "in the gun" two frames later).
+- Grips: the round at `m18_reload` f63 (the push; the right hand mirrored, 10.2 u) for "mag" (sliding in) and "hold". No
+  knob grip (the knob sits off the block's centre plane: the mirror would put the hand on the empty side).
+- `WeaponRechamberAnim` is None on the M18 already (`-> None (was None)`).
+- The drop's fall was a block inside the Step 1 branch; now `fallDraw()` (the same code) serves both.
+- [S]: `reload-m18a-*` (the test's grip held while the hand moved away: the unheld breech followed the hand shut --
+  as designed without HoldOpen), `reload-m18b-*` (the full cycle), `reload-final1c-*` / `-final1d-*` and
+  `logs/shots/*final1d-m18-*` (the breech seen from its hinge side: closed, swung open, the round going in). The test
+  poses' yaw: negative turns the gun to the left (the K98's -80 points left), so a launcher's breech is in view with
+  the gun pointing right.
+
+## 5au. Manual reload: the Step 1 guns below their upgrades (GOAL A6, 2026-10-01)
+
+The player's save has every upgrade, so the Step 1 lines' lower-level variants had never run. `ThrowWeapon` (the engine's
+exec; handled) drops the loadout's gun, so a new one given after `mohavr upgradelevel <type> <level>` takes that level
+(the types: Thompson 1, MP40 3, StG44 18, BAR 13, G43 17). [S] `reload-lvl1-*`: the Thompson's stick magazine at -1
+(`upgrade_03_hide_magazine`, 30), the MP40's taped pair at 0 (`magazine` with `upgrade_01_tapedMagazine`: one 32-round
+magazine, 5am), the StG44 (`single_magazine`) and BAR (`magazine`, no pair) at -1, the G43's 10-round `magazine` at -1:
+each ejected, a pouch magazine inserted, the counts right, the visible variant the level's.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
