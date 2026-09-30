@@ -96,6 +96,11 @@ public:
     static const wchar_t* SpotName(int i);
     // The manual reload (owned by the host's main loop; null = none).
     void SetReload(ManualReload* r) { reload_ = r; }
+    // Round 31: where on each controller the hand interacts (the white dot; metres from the aim point: forward, up, in
+    // toward the palm -- mirrored for the left hand), the foregrip ring's radius (m) and the reload rings' scale.
+    void SetHandPoint(const float (&fwdUpIn)[3]) { for (int i = 0; i < 3; ++i) handPoint_[i] = fwdUpIn[i]; }
+    void SetForegripRadius(float r) { foregripR_ = r; }
+    void SetRingScale(float s) { ringScale_ = s; }
 
 private:
     struct Zone {
@@ -105,6 +110,9 @@ private:
     Zone        zones_[kHolsters];
     HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
     ManualReload* reload_ = nullptr;
+    float handPoint_[3]{};       // forward, up, in (m)
+    float foregripR_ = 0.12f;    // the foregrip ring's radius (m)
+    float ringScale_ = 1.0f;     // the reload gesture's and the manual reload's grab rings
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;
     bool  mirrorLeft_ = true;  // the game draws the left hand's gun mirrored ([Weapon] LeftHandMirror): so is the aim line
     float gripWas_[2]{};

@@ -25,7 +25,8 @@ enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fFore
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
 // The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
 // x y z r); the rings' visibility ([Hands] Rings = never / near / always).
-enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hPointFwd, hPointUp, hPointIn, hForeSize, hRingScale, hReset,
+                   hBack, hCount };
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
@@ -196,6 +197,33 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots]) {
     for (int m = 0; m < 3; ++m)
         if (!_wcsicmp(v, kRingModes[m])) ringsMode_ = m;
     MLOG("menu: rings %ls", kRingModes[ringsMode_]);
+    // Round 31: the hand point, the foregrip ring and the reload rings (the player's, else the shipped [Hands] ones).
+    {
+        wchar_t d[64] = L"", u[64] = L"";
+        GetPrivateProfileStringW(L"Hands", L"HandPoint", L"0 0 0", d, 64, shipped.c_str());
+        GetPrivateProfileStringW(L"Hands", L"HandPoint", d, u, 64, iniPath_.c_str());
+        float cm[3] = {0, 0, 0}, cmDef[3] = {0, 0, 0};
+        swscanf_s(d, L"%f %f %f", &cmDef[0], &cmDef[1], &cmDef[2]);
+        swscanf_s(u, L"%f %f %f", &cm[0], &cm[1], &cm[2]);
+        for (int i = 0; i < 3; ++i) {
+            handPointDef_[i] = cmDef[i] / 100.0f;
+            handPoint_[i] = cm[i] / 100.0f;
+        }
+        auto num = [&](const wchar_t* sec, const wchar_t* key, float def, float& shippedOut) {
+            wchar_t a[32] = L"", b[32] = L"";
+            GetPrivateProfileStringW(sec, key, L"", a, 32, shipped.c_str());
+            shippedOut = a[0] ? static_cast<float>(_wtof(a)) : def;
+            GetPrivateProfileStringW(sec, key, L"", b, 32, iniPath_.c_str());
+            return b[0] ? static_cast<float>(_wtof(b)) : shippedOut;
+        };
+        float fr = 12.0f, rs = 100.0f;
+        foregripR_ = num(L"Hands", L"ForegripRadius", 12.0f, fr) / 100.0f;
+        foregripRDef_ = fr / 100.0f;
+        ringScale_ = num(L"Hands", L"ReloadRingScale", 100.0f, rs) / 100.0f;
+        ringScaleDef_ = rs / 100.0f;
+        MLOG("menu: hand point %.0f %.0f %.0f cm (forward, up, in), foregrip ring %.0f cm, reload rings %.0f%%", handPoint_[0] * 100.0f,
+             handPoint_[1] * 100.0f, handPoint_[2] * 100.0f, foregripR_ * 100.0f, ringScale_ * 100.0f);
+    }
     // The free hand: the player's, else the shipped [Hands] FreeHand.
     wchar_t fh[64] = L"", fhDef[64] = L"";
     GetPrivateProfileStringW(L"Hands", L"FreeHand", L"0 0 0 0", fhDef, 64, shipped.c_str());
@@ -204,6 +232,17 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots]) {
     swscanf_s(fh, L"%f %f %f %f", &freeHand_[0], &freeHand_[1], &freeHand_[2], &freeHand_[3]);
     PublishFreeHand(false);
     MLOG("menu: free hand pitch %.0f yaw %.0f roll %.0f, forward %.0f cm", freeHand_[0], freeHand_[1], freeHand_[2], freeHand_[3]);
+}
+
+void Menu::SaveHands() {
+    if (iniPath_.empty()) return;
+    wchar_t b[64];
+    swprintf_s(b, L"%.0f %.0f %.0f", handPoint_[0] * 100.0f, handPoint_[1] * 100.0f, handPoint_[2] * 100.0f);
+    WritePrivateProfileStringW(L"Hands", L"HandPoint", b, iniPath_.c_str());
+    swprintf_s(b, L"%.0f", foregripR_ * 100.0f);
+    WritePrivateProfileStringW(L"Hands", L"ForegripRadius", b, iniPath_.c_str());
+    swprintf_s(b, L"%.0f", ringScale_ * 100.0f);
+    WritePrivateProfileStringW(L"Hands", L"ReloadRingScale", b, iniPath_.c_str());
 }
 
 void Menu::PublishFreeHand(bool save) {
@@ -438,6 +477,29 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                     Save();
                     moved = false;
                     MLOG("menu: rings -> %ls", kRingModes[ringsMode_]);
+                    break;
+                case hPointFwd:
+                case hPointUp:
+                case hPointIn: {
+                    float& v = handPoint_[selected_ - hPointFwd];
+                    v = std::fmax(-0.15f, std::fmin(0.15f, v + dir * 0.01f));
+                    SaveHands();
+                    moved = false;
+                    MLOG("menu: hand point -> %.0f %.0f %.0f cm (forward, up, in)", handPoint_[0] * 100.0f, handPoint_[1] * 100.0f,
+                         handPoint_[2] * 100.0f);
+                    break;
+                }
+                case hForeSize:
+                    foregripR_ = std::fmax(0.04f, std::fmin(0.25f, foregripR_ + dir * 0.01f));
+                    SaveHands();
+                    moved = false;
+                    MLOG("menu: foregrip ring -> %.0f cm", foregripR_ * 100.0f);
+                    break;
+                case hRingScale:
+                    ringScale_ = std::fmax(0.3f, std::fmin(2.0f, ringScale_ + dir * 0.1f));
+                    SaveHands();
+                    moved = false;
+                    MLOG("menu: reload rings -> %.0f%%", ringScale_ * 100.0f);
                     break;
                 default: moved = false; break;
             }
@@ -676,11 +738,22 @@ void Menu::RenderHolsterPage() {
     ImGui::Selectable(label, selected_ == hSize);
     snprintf(label, sizeof(label), "Rings                 <  %ls  >", kRingModes[ringsMode_]);
     ImGui::Selectable(label, selected_ == hRings);
+    snprintf(label, sizeof(label), "Hand point fwd/back   <  %+.0f  >", handPoint_[0] * 100.0f);
+    ImGui::Selectable(label, selected_ == hPointFwd);
+    snprintf(label, sizeof(label), "Hand point up/down    <  %+.0f  >", handPoint_[1] * 100.0f);
+    ImGui::Selectable(label, selected_ == hPointUp);
+    snprintf(label, sizeof(label), "Hand point in/out     <  %+.0f  >", handPoint_[2] * 100.0f);
+    ImGui::Selectable(label, selected_ == hPointIn);
+    snprintf(label, sizeof(label), "Foregrip ring         <  %.0f across  >", foregripR_ * 200.0f);
+    ImGui::Selectable(label, selected_ == hForeSize);
+    snprintf(label, sizeof(label), "Reload rings          <  %.0f%%  >", ringScale_ * 100.0f);
+    ImGui::Selectable(label, selected_ == hRingScale);
     ImGui::Selectable("Reset this spot", selected_ == hReset);
     ImGui::Selectable("Back", selected_ == hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
+    ImGui::TextDisabled("Hand point: move the white dot into your hand (in = toward the palm).");
     ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
     ImGui::PopFont();
 }

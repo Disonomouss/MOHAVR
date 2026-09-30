@@ -737,19 +737,55 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
 
 // Twin magazines: the pair's bone at rest in taped state 0 (A) or 1 (B), and the mesh-space move from one state to the
 // other (inv(M_from) x M_to).
-void PairPose(const GunLine& l, int state, float* m) {
-    const float a = (state ? l.tapedRot : 0.0f) * 0.0174533f, ca = std::cos(a), sa = std::sin(a);
-    const Vec3& t = state ? l.tapedB : l.tapedA;
-    const float r[16] = {ca, sa, 0, 0, -sa, ca, 0, 0, 0, 0, 1, 0, t.x, t.y, t.z, 1};
+// Round 31: the pose part-way (u 0 = A .. 1 = B), so the flip can be seen: a turn about Z goes round the move's own fixed
+// axis (the pair's centre line: c with c - c.Rz = b - a.Rz, in XY) while Z moves evenly; no turn = an even slide.
+void PairPoseAt(const GunLine& l, float u, float* m) {
+    const float full = l.tapedRot * 0.0174533f, ang = full * u, ca = std::cos(ang), sa = std::sin(ang);
+    const Vec3& A = l.tapedA;
+    const Vec3& B = l.tapedB;
+    Vec3 p{A.x + (B.x - A.x) * u, A.y + (B.y - A.y) * u, A.z + (B.z - A.z) * u};
+    if (std::fabs(full) > 1e-3f) {
+        // Row vectors: v.Rz = (x cos - y sin, x sin + y cos).
+        const float cf = std::cos(full), sf = std::sin(full);
+        const float rx = B.x - (A.x * cf - A.y * sf), ry = B.y - (A.x * sf + A.y * cf);
+        // (I - Rz) c = r: [[1 - cf, sf], [-sf, 1 - cf]] (as c.(I - Rz) with row vectors), solved.
+        const float m00 = 1.0f - cf, m01 = -sf, m10 = sf, m11 = 1.0f - cf;  // c.(I - Rz) = (c.x m00 + c.y m10, c.x m01 + c.y m11)
+        const float det = m00 * m11 - m01 * m10;
+        if (std::fabs(det) > 1e-6f) {
+            const float cx = (rx * m11 - ry * m10) / det, cy = (ry * m00 - rx * m01) / det;
+            const float dx = A.x - cx, dy = A.y - cy;
+            p.x = cx + dx * ca - dy * sa;
+            p.y = cy + dx * sa + dy * ca;
+        }
+    }
+    const float r[16] = {ca, sa, 0, 0, -sa, ca, 0, 0, 0, 0, 1, 0, p.x, p.y, p.z, 1};
     std::memcpy(m, r, sizeof(r));
 }
-void PairMove(const GunLine& l, int from, int to, float* out) {
+void PairPose(const GunLine& l, int state, float* m) { PairPoseAt(l, state ? 1.0f : 0.0f, m); }
+void PairMove(const GunLine& l, int from, float to, float* out) {
     float mf[16], mt[16], inv[16];
     PairPose(l, from, mf);
-    PairPose(l, to, mt);
+    PairPoseAt(l, to, mt);
     AffineInverse(mf, inv);
     Mul(inv, mt, out);
 }
+
+// Round 31: a dropped magazine falls (from the well, or from the hand with its speed), tumbling a little, lands at the
+// feet's height, rests a moment and is gone. World frames (the mirror world while mirrored, like everything baked).
+struct Fall {
+    std::string key;
+    int         lastMag = -1;
+    float       last[16] = {}, prev[16] = {};  // the magazine's frame in the last two bakes (in the gun or in the hand)
+    DWORD       lastTick = 0, prevTick = 0;
+    bool        have = false;
+    bool        on = false;
+    DWORD       start = 0;
+    float       f0[16] = {}, v0[3] = {}, pre[16] = {};
+    float       floorZ = 0.0f, upm = 100.0f;
+} g_fall;
+float g_flipU = 0.0f;       // the held pair's drawn flip (0 = A .. 1 = B), eased toward the half the host says
+std::string g_flipKey;
+DWORD g_flipTick = 0;
 
 // The MP40's chamber slide follows its bolt, piecewise-linear through the three (bolt, slide) pairs of the line.
 float SecondZ(const GunLine& l, float z) {
@@ -823,7 +859,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     // else the game's (in or out).
     const bool hostState = haveRf && rf.view.keyHash == shared::KeyHash(key.c_str()) && (rf.view.flags & 1u) && (rf.view.flags & 16u);
     int magState = hostState ? static_cast<int>((rf.view.flags >> 1) & 3u) : (s.magIn ? 0 : 3);
-    if (magState == 2 && !rf.magValid) magState = 3;
+    if (magState == 2 && (!rf.magValid || !haveRf)) magState = 3;
     // The visible variant (hidden upgrade parts have a zeroed 3x3) and its data.
     int v = -1;
     for (size_t k = 0; k < r->mag.size() && v < 0; ++k) {
@@ -853,8 +889,20 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (s.half < 0) s.half = TapedMode(w);
         halfDrawn = s.half;
         if (magState == 2 && (rf.view.flags & 32u)) halfDrawn = 1 - s.half;
-        if (halfDrawn != poseNow) {
-            PairMove(*l, poseNow, halfDrawn, pre);
+        // The flip is seen (round 31): while held, the drawn pair turns to the new half over 0.35 s; otherwise it is at it.
+        const DWORD tick = GetTickCount();
+        const float target = static_cast<float>(halfDrawn);
+        if (key != g_flipKey || magState != 2) {
+            g_flipU = target;
+        } else {
+            const float step = std::min(static_cast<float>(tick - g_flipTick), 100.0f) / (350.0f * g_cfg.debugReloadSlowMo);
+            g_flipU = g_flipU < target ? std::min(target, g_flipU + step) : std::max(target, g_flipU - step);
+        }
+        g_flipKey = key;
+        g_flipTick = tick;
+        const float u = g_flipU * g_flipU * (3.0f - 2.0f * g_flipU);  // ease in and out
+        if (std::fabs(u - static_cast<float>(poseNow)) > 1e-4f) {
+            PairMove(*l, poseNow, u, pre);
             havePre = true;
         }
     }
@@ -867,6 +915,61 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     const float magR = PerVariant(l->magR, v, 7.0f);
     const Vec3 grabW = Xform(grabMesh, 1.0f, a);
     float pullCm = 0.0f, heldGap = -1.0f, heldTurn = -1.0f;
+    // The in-gun grab frame (G's axes at the grab point) and, held, the magazine's frame: where a drop falls from.
+    float fgrab[16], fheld[16], invL2W[16];
+    AffineInverse(l2w, invL2W);
+    const DWORD nowTick = GetTickCount();
+    if (haveRf) {
+        std::memcpy(fgrab, G, sizeof(fgrab));
+        fgrab[12] = grabW.x;
+        fgrab[13] = grabW.y;
+        fgrab[14] = grabW.z;
+        if (magState == 2) Mul(rf.magFrame, carry, fheld);
+    }
+    if (key != g_fall.key) {
+        g_fall = Fall{};
+        g_fall.key = key;
+    }
+    if (haveRf && magState == 3 && (g_fall.lastMag == 0 || g_fall.lastMag == 2) && g_fall.have && g_cfg.dropFall) {
+        // Dropped just now: fall from where it was drawn, with its speed (and a push out of the well when ejected).
+        g_fall.on = true;
+        g_fall.start = nowTick;
+        std::memcpy(g_fall.f0, g_fall.last, sizeof(g_fall.f0));
+        std::memcpy(g_fall.pre, pre, sizeof(g_fall.pre));
+        const float dt = static_cast<float>(g_fall.lastTick - g_fall.prevTick) / 1000.0f;
+        for (int i = 0; i < 3; ++i) g_fall.v0[i] = dt > 0.004f && dt < 0.1f ? (g_fall.last[12 + i] - g_fall.prev[12 + i]) / dt : 0.0f;
+        const float sp = std::sqrt(g_fall.v0[0] * g_fall.v0[0] + g_fall.v0[1] * g_fall.v0[1] + g_fall.v0[2] * g_fall.v0[2]);
+        if (sp > 5.0f * upm)
+            for (float& x : g_fall.v0) x *= 5.0f * upm / sp;
+        if (g_fall.lastMag == 0) {
+            const Vec3 o = Norm(Xform(outMesh, 0.0f, a));
+            g_fall.v0[0] += o.x * 0.4f * upm;
+            g_fall.v0[1] += o.y * 0.4f * upm;
+            g_fall.v0[2] += o.z * 0.4f * upm;
+        }
+        g_fall.upm = upm;
+        // The floor: the pawn's feet (its location less the collision cylinder's half height).
+        float loc[3] = {0, 0, 0};
+        const int lo = names::PropertyOffset(pawn, "Location"), co = names::PropertyOffset(pawn, "CylinderComponent");
+        if (lo >= 0) names::ReadVector(pawn + lo, loc);
+        const std::uintptr_t cyl = co >= 0 ? names::ReadPointer(pawn + co) : 0;
+        const int ho = cyl ? names::PropertyOffset(cyl, "CollisionHeight") : -1;
+        float h = 0.0f;
+        if (ho >= 0) std::memcpy(&h, reinterpret_cast<const void*>(cyl + ho), sizeof(h));
+        g_fall.floorZ = loc[2] - (h > 1.0f && h < 200.0f ? h : 50.0f);
+        if (g_cfg.debugReloadTrace)
+            MLOG("reload: trace -- the magazine falls from %.0f %.0f %.0f at %.0f %.0f %.0f u/s to the floor at %.0f",
+                 g_fall.f0[12], g_fall.f0[13], g_fall.f0[14], g_fall.v0[0], g_fall.v0[1], g_fall.v0[2], g_fall.floorZ);
+    }
+    if (magState != 3) g_fall.on = false;
+    if (haveRf && (magState == 0 || magState == 1 || magState == 2)) {
+        std::memcpy(g_fall.prev, g_fall.last, sizeof(g_fall.prev));
+        g_fall.prevTick = g_fall.lastTick;
+        std::memcpy(g_fall.last, magState == 2 ? fheld : fgrab, sizeof(g_fall.last));
+        g_fall.lastTick = nowTick;
+        g_fall.have = true;
+    }
+    g_fall.lastMag = magState;
     if (magState == 0 && havePre) {
         for (int j : r->mag)
             if (j >= 0 && j < num) {
@@ -893,14 +996,8 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         slide(r->top);  // the top round sits in the magazine's lips
     } else if (magState == 2) {
         // In the off hand: moved rigidly from the in-gun grab frame (G's axes at the grab point) to the held one.
-        float fgrab[16], fgrabInv[16], fheld[16], invL2W[16], m1[16], m2[16], hold[16];
-        std::memcpy(fgrab, G, sizeof(fgrab));
-        fgrab[12] = grabW.x;
-        fgrab[13] = grabW.y;
-        fgrab[14] = grabW.z;
+        float fgrabInv[16], m1[16], m2[16], hold[16];
         AffineInverse(fgrab, fgrabInv);
-        Mul(rf.magFrame, carry, fheld);
-        AffineInverse(l2w, invL2W);
         Mul(a, fgrabInv, m1);
         Mul(m1, fheld, m2);
         Mul(m2, invL2W, hold);
@@ -918,8 +1015,42 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             for (int k = 0; k < 3; ++k) tr += fgrab[i * 4 + k] * fheld[i * 4 + k];
         heldTurn = std::acos(std::clamp((tr - 1.0f) * 0.5f, -1.0f, 1.0f)) * 57.2958f;
     } else if (magState == 3) {
-        for (int j : r->mag)
-            if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
+        const float t = static_cast<float>(nowTick - g_fall.start) / (1000.0f * g_cfg.debugReloadSlowMo);
+        if (g_fall.on && haveRf && t < 2.0f) {
+            // Ballistic from f0 until it reaches the floor, then at rest; a tumble about its own right axis while it falls.
+            const float gz = -9.8f * g_fall.upm;
+            const float z0 = g_fall.f0[14], vz = g_fall.v0[2], floor = g_fall.floorZ + 2.0f;
+            float tl = t;  // the landing time (z0 + vz t + gz t^2 / 2 = floor)
+            const float disc = vz * vz - 2.0f * gz * (z0 - floor);
+            if (z0 > floor && disc >= 0.0f) tl = std::min(t, (-vz - std::sqrt(disc)) / gz);
+            else if (z0 <= floor) tl = 0.0f;
+            float f[16];
+            const float ang = 2.5f * tl, ca = std::cos(ang), sa = std::sin(ang);
+            for (int k = 0; k < 4; ++k) {  // forward and up turned about the frame's right (row 1)
+                f[0 + k] = g_fall.f0[0 + k] * ca + g_fall.f0[8 + k] * sa;
+                f[4 + k] = g_fall.f0[4 + k];
+                f[8 + k] = g_fall.f0[8 + k] * ca - g_fall.f0[0 + k] * sa;
+            }
+            f[12] = g_fall.f0[12] + g_fall.v0[0] * tl;
+            f[13] = g_fall.f0[13] + g_fall.v0[1] * tl;
+            f[14] = std::max(floor, z0 + vz * tl + 0.5f * gz * tl * tl);
+            f[15] = 1.0f;
+            float fgrabInv[16], m1[16], m2[16], move[16];
+            AffineInverse(fgrab, fgrabInv);
+            Mul(a, fgrabInv, m1);
+            Mul(m1, f, m2);
+            Mul(m2, invL2W, move);
+            for (int j : r->mag)
+                if (j >= 0 && j < num) {
+                    float m[16];
+                    Mul(saved + 16 * j, g_fall.pre, m);
+                    Mul(m, move, bones + 16 * j);
+                }
+        } else {
+            g_fall.on = false;
+            for (int j : r->mag)
+                if (j >= 0 && j < num) Collapse(bones, j, saved, kMove);
+        }
     }
     // The action: held at its empty position, and drawn back by the host's rack while the off hand holds it
     // (RELOAD-DESIGN 5.3).

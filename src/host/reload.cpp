@@ -190,14 +190,14 @@ bool ManualReload::TakePress(const XrVector3f& hand, const XrVector3f& pouch, fl
         }
     }
     if (mag_ == kInGun && lastGunOk_ && geo_.magGrabR > 0.0f) {
-        const float s = Len(Sub(P(hand), P(lastGrabW_))) / geo_.magGrabR;
+        const float s = Len(Sub(P(hand), P(lastGrabW_))) / (geo_.magGrabR * ringScale_);
         if (s < best) {
             best = s;
             which = kPressMag;
         }
     }
     if ((geo_.caps & 2u) && lastGunOk_ && boltGrabR_ > 0.0f) {
-        const float s = Len(Sub(P(hand), P(lastBoltW_))) / boltGrabR_;
+        const float s = Len(Sub(P(hand), P(lastBoltW_))) / (boltGrabR_ * ringScale_);
         if (s < best) {
             best = s;
             which = kPressBolt;
@@ -381,15 +381,15 @@ void ManualReload::Frame(const In& in, Out& out) {
     }
     // Rings: the magazine's grab spot while in the gun; the well while one is in the hand (lit where it would go in).
     if (mag_ == kInGun || mag_ == kGrabbed) {
-        const float d = Len(Sub(offP, grabW));
-        out.rings[out.ringCount++] = {X(grabW), geo_.magGrabR, d < geo_.magGrabR, d < 2.0f * geo_.magGrabR};
+        const float d = Len(Sub(offP, grabW)), r = geo_.magGrabR * ringScale_;
+        out.rings[out.ringCount++] = {X(grabW), r, d < r, d < 2.0f * r};
     } else if (mag_ == kInHand && armed_) {
         out.rings[out.ringCount++] = {X(grabW), insertR_, dist < insertR_ && angle < insertAngle_, dist < 3.0f * insertR_};
     }
     // The action's ring while a rack is needed (a fed magazine waiting, or an open bolt forward).
     if ((geo_.caps & 2u) && (geo_.state & 16u) && !boltHeld_) {
-        const float d = Len(Sub(offP, boltW));
-        out.rings[out.ringCount++] = {X(boltW), boltGrabR_, d < boltGrabR_, d < 2.0f * boltGrabR_};
+        const float d = Len(Sub(offP, boltW)), r = boltGrabR_ * ringScale_;
+        out.rings[out.ringCount++] = {X(boltW), r, d < r, d < 2.0f * r};
     }
 }
 

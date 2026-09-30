@@ -39,6 +39,8 @@ public:
     void Init(const std::wstring& ini);
     void SetOn(bool on);
     bool On() const { return on_; }
+    // Round 31: the grab rings' scale (the magazine's and the action's; the player's, the menu).
+    void SetRingScale(float s) { ringScale_ = s > 0.2f ? s : 0.2f; }
     // The release button: 0 none, 1 upper (B / Y), 2 lower (A / X).
     int  ReleaseButton() const { return releaseButton_; }
     // Start of the XR frame: the game's side (geometry, ammo, state, acknowledgements) and the reconcile (3.2).
@@ -100,6 +102,7 @@ private:
     int           releaseButton_ = 1;
     float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
     float         boltGrabR_ = 0.05f, rackArm_ = 0.85f, rackMin_ = 0.04f, rackTug_ = 0.01f;
+    float         ringScale_ = 1.0f;
     float         hold_[3]{};                                                // metres, the left off hand's frame
     std::uint32_t keyHash_ = 0;
     std::uint32_t lastGeoSeq_ = 0, pawnSeq_ = 0;

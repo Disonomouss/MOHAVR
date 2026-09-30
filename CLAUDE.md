@@ -63,7 +63,8 @@ HEADSET-TESTS.md.
   game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
   (`[GunFit]` in the player's ini, keyed by the weapon's class name, e.g. `Attachment_Stg44`). The Holsters page moves
   and sizes the holster spots and the manual reload's magazine pouch (`[Holsters] <Name>Spot`, `MagPouchSpot` in the
-  player's ini) and sets the rings (`[Hands] Rings`). "Manual reload" toggles D21's reload (`[Weapon] ManualReload`).
+  player's ini), the rings (`[Hands] Rings`), the hand point (the white dot: `[Hands] HandPoint`) and the foregrip / reload
+  ring sizes. "Manual reload" toggles D21's reload (`[Weapon] ManualReload`).
 - **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`. `tools/userdata.ps1`
   backs it up and restores it with the MOHA user folder (a test that creates it has it removed).
 - Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`

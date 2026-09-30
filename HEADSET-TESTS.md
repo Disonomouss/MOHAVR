@@ -1211,7 +1211,26 @@ gun's model, so one fit per gun covers them (ENGINE-NOTES 5ak).
 10. Movement where you look (round 29): right? Comfortable?
 11. Anything else odd?
 
-**Answers:** (the player's words)
+**Answers:** (the player's words, 2026-09-30)
+1. Yes.
+2. It is good.
+3. Feels ok for now.
+4. No, the white dot that represents the hand's interact point is not in the hand; can it be adjustable, as well as the
+   foregrip ring size and the reload ring size? Also, is it possible to have the hand pose the game uses during the reload
+   animation as the magazine grip pose for each weapon?
+5. Yes.
+6. Same issues as 4: can the game's slide grip pose be used? It is a much more polished feel for the hand to snap on to
+   the slide or bolt or magazine.
+7. Functions work, but flipping the magazine happens instantly for the BAR; is it possible for it to visually flip over?
+8. As far as I could tell.
+9. Yes, sometimes -- hence the suggestions in 4.
+10. Forgot to pay attention again.
+Also: the magazine disappears when you press the drop button; could it visibly fall?
+Not every gun was tried (the player).
+
+**Follow-up (round 31):** the hand point (the white dot) adjustable, the foregrip and reload ring sizes adjustable
+(menu); the BAR's flip animated; a dropped magazine falls; the reload animations' hand poses for the grips (research
+first). Movement where you look still to judge; the guns not tried in round 30 get a pass in round 31.
 
 **Log received:** (after `tools\deploy.ps1 undeploy`)
 

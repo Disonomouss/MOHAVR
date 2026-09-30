@@ -1190,6 +1190,20 @@ pulled out (A keeps 15), flipped, the other half in -> 20; pulled out, flipped b
 out (1 kept, A 25), flipped -> 30; out, flipped back -> 26. The reserve ends where it started (no round lost). The MP40's
 pair (upgrade 0 only; this profile's MP40 is always 1+) has no B data: it reloads as one magazine.
 
+**Round 31 follow-ups [S] (2026-09-30, `logs/modlogs/reload-r31b-*`, `logs/shots/*-r31b-*`, `r31b-flip-zoom.png`):**
+- **The hand point** (the white dot): every hand interaction (holsters, foregrip, reload spots, the held magazine, the
+  dot) uses the aim point moved by `[Hands] HandPoint` (cm: forward, up, in toward the palm; mirrored for the left
+  hand); `ForegripRadius` and `ReloadRingScale` size the rings. All three on the Holsters page, the player's own.
+- **The flip is seen:** a held pair eases to the new half over 0.35 s. Part-way poses turn about the A->B move's own
+  fixed axis (for the BAR's 180 deg about Z: the line through (a + b) / 2 = (1.28, 4.83) in XY, i.e. about the pair's
+  own centre line) while Z moves evenly; the StG44's pair slides.
+- **A dropped magazine falls:** from the well (B) or the hand (let go), with the drawn frame's speed (plus 0.4 m/s out
+  of the well), tumbling ~140 deg/s about its right axis, to the feet's height (pawn Location z less
+  CylinderComponent.CollisionHeight), resting there until 2 s after the drop (`[ManualReload] DropFall`). Seen on the
+  G43 (x10 slow motion, `Debug.ReloadSlowMo`): out of the well, tilting as it drops.
+- **The harness save now starts with the M1 Garand and the MP40** (the player's round-30 session): tests reach the G43
+  and BAR with `GiveWeapon` and NextWeapon until the trace names them.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

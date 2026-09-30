@@ -113,6 +113,7 @@ Hands::Output Hands::Update(const Input& in) {
     rin.offTrigger = in.trigger[o];
     rin.now = in.now;
     for (int h = 0; h < 2; ++h) rin.release[h] = in.release[h];
+    if (reload_) reload_->SetRingScale(ringScale_);
     const bool reloadActive = reload_ && reload_->Begin(rin);
     // The foregrip is for long guns only, the reload gesture not for grenades (headset round 17).
     const bool foregripOk = foregrip_ && in.weaponKind == 0, reloadOk = reloadGesture_ && in.weaponKind != 2 && !reloadActive;
@@ -121,6 +122,13 @@ Hands::Output Hands::Update(const Input& in) {
         MLOG("hands: foregrip let go (not a long gun)");
     }
     const bool gunOk = (in.valid & (1u << g)) != 0, offOk = (in.valid & (1u << o)) != 0;
+    // Where each hand interacts (round 31: the white dot in the drawn hand): the aim point moved by the hand point, in
+    // the controller's frame (x right, y up, z back); "in" is toward the palm, the right hand's left.
+    V3 pt[2];
+    for (int h = 0; h < 2; ++h) {
+        const float side = h ? -handPoint_[2] : handPoint_[2];
+        pt[h] = Add(P(in.aim[h].position), Rotate(in.aim[h].orientation, V3{side, handPoint_[1], -handPoint_[0]}));
+    }
 
     // The gun's pose before the foregrip: the gun hand's aim pose, pitched by the fit's angle (+ = muzzle up).
     XrPosef gun{};
@@ -154,7 +162,7 @@ Hands::Output Hands::Update(const Input& in) {
         s.radius = r;
         for (int h = 0; h < 2; ++h) {
             if (!(in.valid & (1u << h)) || (onlyOffHand && h != o)) continue;
-            const float d = Len(Sub(P(in.aim[h].position), c));
+            const float d = Len(Sub(pt[h], c));
             if (d < r) s.inside = true;
             if (d < 2.0f * r) s.close = true;
         }
@@ -162,18 +170,18 @@ Hands::Output Hands::Update(const Input& in) {
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
             if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
-    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f) addSpot(kForegrip, fore, 0.12f, true);
-    if (gunOk && reloadOk) addSpot(kMagazine, mag, 0.10f, true);
+    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f) addSpot(kForegrip, fore, foregripR_, true);
+    if (gunOk && reloadOk) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
     if (in.pouchShown || (reloadActive && reload_->MagazineOut())) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
     out.targetOk[1] = true;
     out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
-    out.offHand = in.aim[o].position;
+    out.offHand = {pt[o].x, pt[o].y, pt[o].z};
 
     for (int h = 0; h < 2; ++h) {
         const bool ok = (in.valid & (1u << h)) != 0;
-        const V3 hp = P(in.aim[h].position);
+        const V3 hp = pt[h];
         // Which holster spot the hand is in (a pulse when it enters one).
         int zone = -1;
         if (ok && holsters_) {
@@ -216,12 +224,12 @@ Hands::Output Hands::Update(const Input& in) {
                 MLOG("hands: gun hand -> %s (drew)", h ? "right" : "left");
             }
         } else if (h == o && gunOk) {
-            if (foregripOk && Len(Sub(hp, fore)) < 0.12f) {
+            if (foregripOk && Len(Sub(hp, fore)) < foregripR_) {
                 twoHanded_ = true;
                 consumed_[h] = true;
                 out.pulse[h] = true;
                 MLOG("hands: foregrip taken (%.0f cm from the point)", 100.0f * Len(Sub(hp, fore)));
-            } else if (reloadOk && Len(Sub(hp, mag)) < 0.10f) {
+            } else if (reloadOk && Len(Sub(hp, mag)) < 0.10f * ringScale_) {
                 out.command = "Reload";
                 consumed_[h] = true;
                 out.pulse[h] = true;
@@ -231,7 +239,7 @@ Hands::Output Hands::Update(const Input& in) {
     }
     // A pulse on the off hand as it comes to the foregrip (not while already holding it).
     if (gunOk && offOk && foregripOk && !twoHanded_ && in.gestures) {
-        const bool atFore = Len(Sub(P(in.aim[o].position), fore)) < 0.12f;
+        const bool atFore = Len(Sub(pt[o], fore)) < foregripR_;
         if (atFore && !nearFore_) out.pulse[o] = true;
         nearFore_ = atFore;
     }
@@ -239,14 +247,14 @@ Hands::Output Hands::Update(const Input& in) {
     // Two-handed: the gun turns so that its foregrip point lies on the other hand (a long gun only: the point must
     // be well ahead of the gun hand for the direction to be steady).
     if (gunOk && offOk && twoHanded_ && in.fit.foreFwd >= 15.0f) {
-        const V3 want = Sub(P(in.aim[o].position), gunPos);
+        const V3 want = Sub(pt[o], gunPos);
         const V3 have = Rotate(gun.orientation, foreOff);
         if (Len(want) > 0.12f) gun.orientation = Mul(FromTo(have, want), gun.orientation);
     }
     // The manual reload, with the gun's final pose.
     if (reload_) {
         rin.gun = gun;
-        rin.off = in.aim[o];
+        rin.off = {in.aim[o].orientation, {pt[o].x, pt[o].y, pt[o].z}};
         rin.offHeld = held_[o];
         ManualReload::Out rout;
         reload_->Frame(rin, rout);

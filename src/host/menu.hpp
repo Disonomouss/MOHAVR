@@ -67,6 +67,11 @@ public:
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
     int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
     bool HolsterPageOpen() const { return visible_ && page_ == 2; }
+    // Round 31 (the player's, the Holsters page): the hand point (m: forward, up, in), the foregrip ring's radius (m),
+    // the reload rings' scale.
+    const float (&HandPoint() const)[3] { return handPoint_; }
+    float ForegripRadius() const { return foregripR_; }
+    float RingScale() const { return ringScale_; }
     bool StartLeft() const { return startLeft_; }
 
 private:
@@ -112,6 +117,9 @@ private:
     HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the 5th: the magazine pouch)
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;
+    float                   handPoint_[3]{}, handPointDef_[3]{};  // m
+    float                   foregripR_ = 0.12f, foregripRDef_ = 0.12f, ringScale_ = 1.0f, ringScaleDef_ = 1.0f;
+    void                    SaveHands();
     std::uint32_t           seenWeaponSeq_ = 0xFFFFFFFFu;
     std::string             weaponKey_;               // the weapon in hand ("" none)
     shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)

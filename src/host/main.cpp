@@ -707,8 +707,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     for (int h = 0; h < 2; ++h) hin.grip[h] = pad.GripValue(session, h);
                     hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
                     hin.startLeft = menuOk && menu.StartLeft();
-                    if (menuOk)
+                    if (menuOk) {
                         for (int i = 0; i < mohavr::host::kSpots; ++i) hands.SetSpot(i, menu.Spot(i));
+                        hands.SetHandPoint(menu.HandPoint());
+                        hands.SetForegripRadius(menu.ForegripRadius());
+                        hands.SetRingScale(menu.RingScale());
+                    }
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
                     for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);
                     hin.weaponKind = g_hdr->weaponKind;

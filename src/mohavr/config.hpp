@@ -23,6 +23,8 @@ struct Config {
     bool  reloadHook    = true;   // [ManualReload] Hook -- block the game's own reload of a converted gun (M1 proved it)
     bool  keepChambered = true;   // [ManualReload] KeepChambered -- a closed bolt keeps a round when its magazine drops
     bool  reloadSounds = true;    // [ManualReload] Sounds: the arms' own reload cues at the events (M7)
+    bool  dropFall = true;        // [ManualReload] DropFall: a dropped magazine falls (round 31)
+    float debugReloadSlowMo = 1.0f;  // [Debug] ReloadSlowMo: the fall and the flip this many times slower (captures)
     bool  brassMirror   = true;   // [Weapon] BrassMirror -- with the gun in the left hand, the brass thrown mirrored too
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
