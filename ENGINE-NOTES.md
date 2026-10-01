@@ -1550,6 +1550,15 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
   gun (0.32 m from the eye) ... 1 cm from the red dot's point (25.7 m; the game's line 0.00 deg off the aim)` and `...'s
   projectile started on the aim line` (the override read and cleared); with the player's Panzerschreck fit (aim line 52 up,
   200 left) the rocket left 1.95 m from the eye (`r38b-pz-fired-a`): reset, it went to the dot (`r38c-pz-fired-a`).
+- **Round 39's report** ("the missile travels in a straight line but at an angle from the gun"; the aim differs near and
+  far): the player's shots (`logs/modlogs/round39-player-*`, 18:47-18:48) were all fired before the fit's reset (18:55),
+  the rocket starting 1.95-2.00 m from the eye on the 200 cm-left aim line; no `shot N:` line for them -- the trace's hit a
+  pass-through trigger (hundreds per 5 s there), or the eye-to-start check found something in the way, in which case both
+  the override and ShotFromGun stand down and the rocket leaves the game's barrel for the dot's point: the old angle. The
+  player's hands restored (grip 16 40 -21, foregrip 21 -5, from every backup) with the aim line carried from their own
+  post-reset setting (up 8, right -11 on the default grip 34 11 -17) to their grip: up 12, right -40. [S] `r39c-*` with that
+  fit: `shot 1: from the gun (0.42 m from the eye) ... 25.5 m -- 1 cm from the red dot's point`, `shot 2: from the gun (0.49
+  m) ... 2.1 m -- 0 cm`, each `projectile started on the aim line`.
 - **The Colt's grips** (reload_grips.py BORROWED 'mag'): the C96's hold on its seated `upgrade_02_magazine`, moved from its
   grab point (-0.1, 6.7, 11.3) to the Colt's (0, 6.3, -1.3), turned by MagOut (0.14, 0.99, -0.03) -> (0, 0.94, -0.34), in
   the Colt `magazine`'s seated frame. [S] `logs/shots/*r38b-Attachment_Colt45-*`: grabbed at the grip's base, held in the fist.

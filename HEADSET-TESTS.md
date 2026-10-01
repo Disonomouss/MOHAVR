@@ -1606,10 +1606,16 @@ good.
 [S]: `logs/modlogs/r38b-*` to `r38d-*`: the rocket 1 cm from the red dot at 25.7 m after the reset; the Colt's grab and hold
 (`logs/shots/*r38b-Attachment_Colt45-*`); the two rifles' knob grips alike (`*r39a-*`). `tools/harness.ps1 cycle` OK.
 
+**Update (your report: the Panzerschreck's rocket still angled, near and far differ):** every rocket in your session was
+fired before you reset the fit, so each one left from the 200 cm-left aim line. Your hand positions are restored (grip 16 /
+40 / -21, foregrip 21 / -5), with the aim line at up 12, right -40: the place you lined it up after the reset, carried over
+to your grip. [S] `r39c-*` with exactly that fit: rockets 1 cm (25.5 m) and 0 cm (2.1 m) from the red dot.
+
 **Questions:**
 1. The Colt's magazine grab and hold: like the C96 now?
 2. The Springfield's hand on the bolt knob, through the whole stroke: like the K98?
-3. The Panzerschreck after the reset: does the rocket come out of the tube and go where the red dot is, near and far?
+3. The Panzerschreck (hands restored): does the aim line run down the tube, and does the rocket go where the red dot is,
+   near and far?
 4. The M18: still good?
 5. Anything else odd?
 
