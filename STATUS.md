@@ -166,7 +166,8 @@ address-space budget for D3D9On12.
    5ay). The Panzerschreck is parked (the player: "we will come back to this"). **Round 41** (round 40's report):
    no-gun first-person parts drawn in true 3D (the parachute's harness was double; the landing's body re-based onto the
    held view); the Panzerschreck's tube, which the game turns 12.9 deg in, drawn along the controller (`[BarrelDir]`,
-   D38, ENGINE-NOTES 5az) and the player's aim line set onto it.
+   D38, ENGINE-NOTES 5az) and the player's aim line set onto it. **Round 42** (round 41 passed): once landed, the
+   parachuting body hidden (`Weapon.LandingBody=0`, the pawn's RenderBody, its material kept; D39, ENGINE-NOTES 5ba).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

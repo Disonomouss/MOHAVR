@@ -419,3 +419,15 @@ gun now." -- the aim line ran along the controller and the tube 13 deg off it, s
 at every distance (and the rocket, from the line's start, left beside the tube).
 **Costs:** [H] -- the tube sits 13 deg differently in the hand than before (turned about the grip); a measured constant,
 not live (an animation that turns the tube still turns it).
+
+### D39. Once landed, the parachuting body is hidden -- Decided 2026-10-01 (round 41's report)
+`[Weapon] LandingBody=0`: while the landing's view is held (D37), the first-person body the game shows for the airdrop
+(MOHAPlayerController's AirDropLanding / AirDropLanded states call `RenderBody(true)`: FPArms material 1 -- legs, torso,
+gear) is hidden again with the pawn's own `RenderBody 0`, as in play; the arms stay. `RenderBody(false)` keeps the
+material it hides in `BodyMatInst`, so the body's own material (read after the first call) is put back after the landing
+(and for 10 s after, as the game's own EndState call can come later) -- otherwise the next airdrop or briefing would
+show no body.
+**Why:** the player: "Once landed, could the player body appear instead of the parachuting body. It moves around and
+looks strange."
+**Costs:** [H] -- the arms still play the landing's brace and gear removal for ~3 s before the gun comes up;
+`LandingBody=1` gives the game's body back.

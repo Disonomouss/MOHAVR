@@ -58,6 +58,7 @@ struct Config {
     int  viewModel      = 2;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
     float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)
                                                      // put at the controller (fwd/right/up)
+    int  landingBody    = 0;      // [Weapon] LandingBody -- once landed: 0 the body hidden (as in play), 1 the game's
     bool hideBody       = false;  // [Weapon] HideBody -- hide the first-person body/sleeves (RenderBody exec)
     int  cinemaScreen   = 1;      // [Camera]  CinemaScreen -- flat on the host's screen: 1 UI menus, 2 + cinematic cameras (M5)
     bool debugViewState = false;  // [Debug]   ViewState -- write the game camera to %TEMP%\MOHAVR\view_state.txt (tests)

@@ -94,6 +94,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.aimLauncherFromGun = get(L"Aim", L"LauncherFromGun", c.aimLauncherFromGun);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
+    c.landingBody    = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"LandingBody", c.landingBody, ini.c_str()));
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
     c.armIK          = get(L"Weapon", L"ArmIK", c.armIK);
     c.freeOffHand    = get(L"Weapon", L"FreeOffHand", c.freeOffHand);

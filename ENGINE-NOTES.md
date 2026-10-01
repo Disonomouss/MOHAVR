@@ -1600,6 +1600,16 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
   left of the controller. [S] `logs/modlogs/axes2-*`: `the drawn barrel is 0.00 deg off the aim line` for the BAR, G43,
   M18 and (with [BarrelDir]) the Panzerschreck; the Colt 0.16.
 
+## 5ba. The airdrop's body (D39, 2026-10-01)
+
+`MOHAPlayerPawn.RenderBody(bShow)`: false -> `BodyMatInst = FPArms.GetMaterial(1)`, then material 1 =
+`ViewModel_Mesh.NoRenderMatInst`; true -> material 1 = BodyMatInst. MOHAPlayerController shows it in its airdrop states
+(the first: BeginState true / EndState false; `AirDropLanding`; `AirDropLanded extends PlayerWalking`), the gear-removal
+state (with `OnRemoveGear`) and the briefing (`BRFInTheBriefing`). `BodyMatInst` at 0x970 on MOHASingleplayerPawn
+(reflected). [S] `logs/modlogs/land8-*`: `landed -- the parachuting body hidden` on the touchdown frame; 0.24 s after the
+landing's end the game's own RenderBody(false) had kept NoRenderMatInst and `BodyMatInst put back to Body`;
+`logs/shots/*land8-*`: only the arms through the roll and the gear removal (`*land7-*`: the knees and torso).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

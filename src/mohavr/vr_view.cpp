@@ -335,6 +335,49 @@ void ApplyWeaponCommands(const std::uintptr_t* players) {
     }
 }
 
+bool g_landingHeld = false;  // eye 0: the landing's view is held this frame (the hands' per-view work waits)
+
+// [Weapon] LandingBody=0 (the player, round 41: "once landed, could the player body appear instead of the parachuting
+// body -- it moves around and looks strange"): MOHAPlayerController's AirDropLanding and AirDropLanded states call
+// RenderBody(true), showing the first-person body (legs, torso, gear: FPArms material 1) that play keeps hidden. While
+// the landing's view is held (Camera.SteadyLanding) it is hidden again: RenderBody 0, re-issued every 0.5 s. RenderBody(
+// false) keeps the material it replaces in BodyMatInst, so a second call would keep the hidden one and lose the body for
+// good (the next airdrop, a briefing): the body's own, read after the first call, is put back when the landing ends --
+// and for 10 s after it, in case the game's own EndState RenderBody(false) comes after ours.
+void ApplyLandingBody(const std::uintptr_t* players) {
+    static bool active = false;
+    static std::uintptr_t pawn = 0, bodyMat = 0;
+    static DWORD next = 0, endedAt = 0;
+    if (!players || players[1] < 1 || !players[0]) return;
+    const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
+    const std::uintptr_t p = aim::LocalPlayerPawn();
+    const int bo = p ? names::PropertyOffset(p, "BodyMatInst") : -1;
+    const DWORD now = GetTickCount();
+    if (g_cfg.landingBody == 0 && g_cfg.steadyLanding && g_landingHeld && p && bo >= 0) {
+        if (!active || p != pawn) {
+            active = true;
+            pawn = p;
+            bodyMat = 0;
+            next = now;
+            MLOG("weapon: landed -- the parachuting body hidden (Weapon.LandingBody=0)");
+        }
+        if (static_cast<LONG>(now - next) >= 0) {
+            next = now + 500;
+            gexec::Run(player, L"RenderBody 0");
+            if (!bodyMat) bodyMat = names::ReadPointer(p + bo);
+        }
+        return;
+    }
+    if (active) {
+        active = false;
+        endedAt = now;
+    }
+    if (endedAt && now - endedAt < 10000 && p == pawn && bodyMat && bo >= 0 && names::ReadPointer(p + bo) != bodyMat) {
+        *reinterpret_cast<std::uintptr_t*>(p + bo) = bodyMat;
+        MLOG("weapon: the body's material kept for the game (BodyMatInst put back to %s)", names::Name(bodyMat).c_str());
+    }
+}
+
 // Debug.GameCommands: console commands for scripted tests (e.g. "Suicide" for the death/reload test),
 // one per line in %TEMP%\MOHAVR\game_cmd.txt, read and deleted twice a second on the game thread.
 void RunTestCommands(const std::uintptr_t* players) {
@@ -457,6 +500,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();
     ApplyWeaponCommands(arr);
+    ApplyLandingBody(arr);
     RunTestCommands(arr);
     crashdump::OnDraw();
     if (arr && arr[1] >= 1 && arr[0]) muzzle::OnDraw(*reinterpret_cast<const std::uintptr_t*>(arr[0]));
@@ -857,8 +901,6 @@ M4f MulM(const M4f& a, const M4f& b) {
             for (int k = 0; k < 4; ++k) r.m[i][j] += a.m[i][k] * b.m[k][j];
     return r;
 }
-
-bool g_landingHeld = false;  // eye 0: the landing's view is held this frame (the hands' per-view work waits)
 
 void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
     static float w = 0.0f, held[3] = {0, 0, 0};

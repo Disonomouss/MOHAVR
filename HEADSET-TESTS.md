@@ -1675,6 +1675,22 @@ the descent and landing in stereo (`logs/shots/*land7-*`).
 
 ---
 
+## Round 42: prepared 2026-10-01, the body after landing
+**Your report:** all of round 41 works; once landed, the parachuting body moves around and looks strange.
+
+**Changed:** from touchdown, the parachuting body (legs, torso, gear) is hidden, as in normal play -- only your arms
+show (`[Weapon] LandingBody=0`; 1 gives the game's body back). The arms still play the game's brace and gear removal for
+about 3 seconds before the gun comes up.
+[S]: `logs/shots/*land8-*` (only the arms) against `*land7-*` (knees and torso).
+
+**Questions:**
+1. The landing now: better? Do the arms' few seconds of animation bother you (they could be hidden too)?
+2. Anything else odd?
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
