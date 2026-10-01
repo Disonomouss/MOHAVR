@@ -310,6 +310,7 @@ struct WState {
     bool           chamberEmpty = false; // GOAL A3 (a pump gun): nothing in the chamber (the case out, not yet pumped closed on
                                          // a shell; or an empty gun loaded) -- the clip's rounds are all in the tube
     bool           caseFall = false;     // GOAL A5: the breech opened on a spent case -- the bake throws it out (it falls)
+    DWORD          trigRackUntil = 0;    // TriggerRack (the Colt): the trigger held until then after a rack loaded the gun
     std::uint32_t  rechamber[2] = {}, fire0[2] = {};  // the game's FNames set to None (to put back)
     bool           rechamberOff = false, fireOff = false;
 };
@@ -658,6 +659,18 @@ void EjectCase(std::uintptr_t pawn) {
         MLOG("reload: %s.EjectRechamberedShell %s", names::Name(att).c_str(), ok ? "called (the case)" : "FAULTED");
 }
 
+// The pawn's InventoryManager.PendingFire[0] (array<int>; Weapon.PendingFire reads it) cleared: a trigger press the game
+// took while the gun was empty doesn't fire it once it is loaded.
+void ClearPendingFire(std::uintptr_t pawn) {
+    const int io = pawn ? names::PropertyOffset(pawn, "InvManager") : -1;
+    const std::uintptr_t inv = io >= 0 ? names::ReadPointer(pawn + io) : 0;
+    const int po = inv ? names::PropertyOffset(inv, "PendingFire") : -1;
+    if (po < 0) return;
+    const std::uintptr_t data = names::ReadPointer(inv + po);
+    const int count = *reinterpret_cast<const int*>(inv + po + 4);
+    if (data && count > 0) *reinterpret_cast<int*>(data) = 0;
+}
+
 // A cue played a moment later (GOAL A1: the Garand's op-rod slams home ~0.35 s after the clip goes in).
 struct DelayedCue {
     bool           on = false;
@@ -764,6 +777,13 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
             if (c == 0 && s.magIn && s.pending) {
                 c = FromReserve(pawn, w, std::min(s.pendingRounds, m));
                 s.pending = false;
+                // TriggerRack (the player, 2026-10-01: the press that releases the Colt's slide fired a round too): the
+                // game saw that press while the gun was empty and kept it pending; it is cleared, and the trigger held a
+                // moment, so only the next press fires.
+                if (l.triggerRack && c > 0) {
+                    ClearPendingFire(pawn);
+                    s.trigRackUntil = GetTickCount() + 400;
+                }
             }
         } else if (!s.cocked) {
             s.cocked = true;
@@ -2227,6 +2247,11 @@ void OnDraw(shared::Header* hdr) {
     // GOAL A2: while the manual reload drives a bolt action, the game's own rechamber is off (the off hand works the bolt),
     // and the trigger does nothing (FiringStatesArray[0] = None) until the bolt is back down on a fresh round.
     // (GOAL A3: a pump gun likewise, until it is pumped closed on a shell; empty, the trigger is the game's: its dry click.)
+    // TriggerRack (the Colt): the trigger held a moment after the trigger's own rack loaded the gun.
+    if (s && line && line->triggerRack) {
+        s->gated = Blocking(w) && s->trigRackUntil && static_cast<LONG>(GetTickCount() - s->trigRackUntil) < 0;
+        SetNameNone(w, "FiringStatesArray", 0, s->gated, s->fire0, s->fireOff, line->key, g_cfg.debugReloadTrace);
+    }
     if (s && line && (line->boltAction || line->pump)) {
         const bool driven = Blocking(w);
         // Switched off (the player's toggle), the game's own rechamber and reload have the gun: our chamber and action

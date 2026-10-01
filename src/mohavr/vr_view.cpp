@@ -430,7 +430,21 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
             if (run(L"GiveWeapon MOHAGameNonNative." + std::wstring(cls.begin(), cls.end()))) ++given;
         }
         run(L"GiveAmmo");
-        MLOG("hands: give all weapons -- %d of %d classes handled", given, listed);
+        // What the pawn now carries (its InventoryManager's chain): a class the level can't load gives nothing.
+        std::string carried;
+        int carriedN = 0;
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        const int io = pawn ? names::PropertyOffset(pawn, "InvManager") : -1;
+        const std::uintptr_t inv = io >= 0 ? names::ReadPointer(pawn + io) : 0;
+        const int co = inv ? names::PropertyOffset(inv, "InventoryChain") : -1;
+        std::uintptr_t item = co >= 0 ? names::ReadPointer(inv + co) : 0;
+        while (item && carriedN < 64) {
+            carried += (carriedN ? ", " : "") + names::ClassName(item);
+            ++carriedN;
+            const int no = names::PropertyOffset(item, "Inventory");
+            item = no >= 0 ? names::ReadPointer(item + no) : 0;
+        }
+        MLOG("hands: give all weapons -- %d of %d classes handled; the pawn carries %d: %s", given, listed, carriedN, carried.c_str());
         return;
     }
     const bool ok = gexec::Run(player, cmd);

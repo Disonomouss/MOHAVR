@@ -100,6 +100,12 @@ public:
     // [Controls] MoveDirection (round 29): head = the move stick's forward is where the head faces (its yaw from the body,
     // radians, left positive; set per XR frame), body = the game's own (the body's heading).
     void  SetMoveByHead(bool on) { moveByHead_ = on; }
+    // After the menu's "Give all weapons" (the player, 2026-10-01): the game's switch weapon (Xbox B) cycles only the
+    // slot weapons, so B steps through everything carried instead -- the press is kept from the game and taken here
+    // (main.cpp sends the game NextWeapon). Off again with a new pawn.
+    void  SetAllWeapons(bool on) { allWeapons_ = on; }
+    bool  AllWeapons() const { return allWeapons_; }
+    bool  TakeNextWeapon() { const bool r = nextWeaponReq_; nextWeaponReq_ = false; return r; }
     bool  MoveByHead() const { return moveByHead_; }
     void  SetHeadYaw(float yaw) { headYaw_ = yaw; headYawOk_ = true; }
 
@@ -147,6 +153,9 @@ private:
     XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading
     bool        haveRel_[2]{}, heldNow_[2]{};
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
+    bool        wasNeutral_ = false;          // last frame the menu held the game's pad still
+    bool        allWeapons_ = false, allBDown_ = false, nextWeaponReq_ = false;
+    bool        heldOverMenu_[kSrcCount]{};   // held as the menu closed: kept from the game until let go
     bool        testThrow_ = false;
     std::vector<std::uint32_t> testReload_;
     float       testThrowVel_[3]{};

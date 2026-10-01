@@ -817,13 +817,26 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (controllers)
             pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
                        menuOk && menu.Visible(), menuOk ? menu.SnapTurnDegrees() : 0, g_hdr);
+        static std::uint32_t allWeaponsPawn = 0;  // the pawn "Give all weapons" was for
         if (menuOk && menu.TakeGiveAllRequest() && g_hdr) {
             // The game runs its own cheats for it (vr_view.cpp RunHostCommand: EnableCheats, a GiveWeapon per
             // [Weapon] GiveAllList class, GiveAmmo).
             static const char kGiveAll[] = "mohavr giveall";
             std::memcpy(g_hdr->cmd, kGiveAll, sizeof(kGiveAll));
             InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
-            MLOG("host: give all weapons -> the game");
+            // The game's switch weapon cycles only the slot weapons: switch weapon steps through all of them now.
+            pad.SetAllWeapons(true);
+            allWeaponsPawn = g_hdr->reloadPawnSeq;
+            MLOG("host: give all weapons -> the game; switch weapon now steps through everything carried (NextWeapon)");
+        }
+        if (pad.AllWeapons() && g_hdr && g_hdr->reloadPawnSeq != allWeaponsPawn) {
+            pad.SetAllWeapons(false);  // a new pawn (a death, a level): the given guns are gone
+            MLOG("host: a new pawn -- switch weapon is the game's own again");
+        }
+        if (pad.TakeNextWeapon() && g_hdr) {
+            static const char kNext[] = "NextWeapon";
+            std::memcpy(g_hdr->cmd, kNext, sizeof(kNext));
+            InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
         }
         if (menuOk && menu.TakeRecenterRequest()) {
             if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {

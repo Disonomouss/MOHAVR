@@ -518,7 +518,27 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         Raw r{};
         if (testActive_) r = test_.rawIn;
         else ReadRaw(session, r);
+        // The player (2026-10-01: "when I pressed A on the option the menu closed and my character jumped"): what is
+        // held as the menu closes stays from the game until it is let go.
+        for (int i = 0; i < kSrcCount; ++i) {
+            if (wasNeutral_ && r.src[i] >= 0.5f) {
+                heldOverMenu_[i] = true;
+                MLOG("pad: input %d held as the menu closed -- kept from the game until let go", i);
+            }
+            if (heldOverMenu_[i] && r.src[i] < 0.3f) heldOverMenu_[i] = false;
+            if (heldOverMenu_[i]) r.src[i] = 0.0f;
+        }
         p = Map(r, hdr->gameUiMenu != 0);
+    }
+    wasNeutral_ = neutral && !testActive_;
+    // After "Give all weapons": B (switch weapon) in gameplay is the engine's NextWeapon, sent by main.cpp.
+    if (allWeapons_ && !hdr->gameUiMenu) {
+        const bool down = (p.buttons & 0x2000) != 0;
+        if (down && !allBDown_) nextWeaponReq_ = true;
+        allBDown_ = down;
+        p.buttons &= ~0x2000;
+    } else {
+        allBDown_ = false;
     }
 
     // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.

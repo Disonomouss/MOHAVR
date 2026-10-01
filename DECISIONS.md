@@ -340,3 +340,6 @@ GiveAllList` (the 13 guns with a reload), `GiveAmmo`. Shown with the shipped `[W
 **Costs:** [H] -- the guns join the inventory at the profile's upgrade levels and are reached with next weapon (the holster
 spots know the normal slots only); whether the cheats leave a mark on the save or progress is unknown (the harness always
 restores `Saved\`); a launcher's class outside its missions may give nothing.
+**Addendum (2026-10-01, round 36's report):** the game's switch weapon (`SwitchWeapon` -> `MOHAInventoryManager.SwitchWeapon`)
+cycles only the slot weapons, so the given guns were unreachable. After the give, the host keeps the Xbox B (switch weapon)
+from the game and sends the engine's `NextWeapon` instead, until the game reports a new pawn.

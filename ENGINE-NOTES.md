@@ -1503,6 +1503,17 @@ The host's command channel (`cmd` / `cmdSeq`, the holsters' and reload gesture's
 Der Flakturm save all 13 classes are handled, the launchers included, and next weapon reaches each (with the loadout's
 grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -- 13 of 13 classes handled`. `ThrowWeapon`
 (the engine's exec) drops the gun in hand (5au).
+- **The game's switch weapon only cycles the slot weapons** (`MOHAPlayerController.SwitchWeapon` ->
+  `MOHAInventoryManager.SwitchWeapon`): with all 17 carried, Xbox B went BAR -> G43 -> Colt -> BAR (`giveall2-*`; the
+  pawn's `InvManager.InventoryChain`, now logged after the give, held them all). The engine's `NextWeapon` walks the
+  chain: after the give the host sends it for B (`giveall3-*`: every gun reached). Two presses during a slow put-down (the
+  StG44 entering its scope) move the pending weapon twice.
+- **TriggerRack's pending press:** the trigger press that releases the Colt's slide reached the game while the gun was
+  empty (the host's mask starts a frame later), and `InvManager.PendingFire[0]` (array<int>, Weapon.PendingFire reads it)
+  stayed set, so the round the RACK loaded fired. The RACK now clears it and holds `FiringStatesArray[0]` None for 0.4 s
+  (`giveall2-*`: `RACK ...: clip 0 -> 7`, no shot on that press; the next press 7 -> 6).
+- **Borrowed grips** (`tools/reload_grips.py` BORROWED): the Colt's "bolt" grip is the C96's (`mauser_reload_3` 0.97 s),
+  moved by the difference of the two lines' BoltGrab points (0.1, -0.8, -3.8).
 
 ## 6. Content and UnrealScript
 

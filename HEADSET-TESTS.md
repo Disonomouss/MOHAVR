@@ -1514,6 +1514,44 @@ pickups (the Panzerschreck and the M18 in Der Flakturm; the M18 also in Neptune)
 9. Give all weapons: did every gun arrive? Anything odd afterwards (a checkpoint, the save, the mission)?
 10. Anything else odd?
 
+**Reported mid-round:** (the player's words, 2026-10-01) "The give all weapons setting did not work. When I pressed A on
+the option the menu closed and my character jumped. Also, the colt can be racked by firing now, but it should not fire a
+bullet until after the trigger press that racks it. And add the mauser bolt/slide hand pose as the colts bolt/slide pose
+as well." The rest of the round is still open.
+
+**Log received:** the session's logs in the game folder: the give ran three times, all 13 classes handled; afterwards only
+the BAR, G43 and Colt were drawn.
+
+**Follow-up (round 37):** below.
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
+## Round 37: prepared 2026-10-01, round 36's mid-round fixes
+**Changed:**
+- **Give all weapons, reachable:** the guns were given, but switch weapon (your Y) runs the game's own switch, which only
+  cycles the three slot weapons (BAR -> G43 -> Colt). After "Give all weapons", Y now steps through everything you carry
+  (the engine's next weapon: the slot guns, the grenades, then every given gun), until a death or a level load.
+- **No jump on closing the menu:** a button still held as the menu closes is kept from the game until you let go.
+- **The Colt's trigger release:** the press that releases the locked-back slide no longer fires; the next press does (the
+  game had kept that press pending while the gun was empty: it is cleared, and the trigger held 0.4 s).
+- **The Colt's slide grip:** the off hand takes the C96's bolt grip (its reload animation's) on the Colt's slide, moved to
+  the Colt's grab point. Adjust it on the Reload grip page (handle / bolt).
+[S]: `logs/modlogs/giveall2-*`, `giveall3-*`: the pawn carries all 13 guns after the give; Y reached every one but the C96
+(two presses landed while the StG44 was going into its scope, so the second stepped past it; NextWeapon reached it in the
+first test); the Colt: the trigger's RACK `clip 0 -> 7`, no shot on that press, the next press `7 -> 6`; the slide grip
+seen in `logs/shots/*giveall2-slide-grip*`. The menu-close latch is [H] (the simulator can't press a real A in the menu).
+
+**How to try it:** menu > Weapons > Give all weapons (press A and keep holding a moment: no jump), then Y through the guns.
+The Colt: fire it empty, B, a new magazine, then the trigger (the slide closes, no shot), then fire.
+
+**Questions:**
+1. Give all weapons: does Y reach every gun now? Any jump when the menu closes?
+2. The Colt: the trigger release without a shot, then firing: right?
+3. The Colt's slide grip (the C96's): does it look right?
+4. Anything else odd?
+
 **Deployed for this round:** the shipped defaults.
 
 ---

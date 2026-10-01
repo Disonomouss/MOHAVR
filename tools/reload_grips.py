@@ -165,6 +165,13 @@ EXPLICIT = [
     ('Attachment_Mauser@0', 'mauser_reload_2', 'Mauser_AnimSet', 'mauser_gun_reload_2', 'DE_Mauser_Rigged',
      [('hold', 'clip', 24), ('bolt', 'Bolt', 61)], 'VM_AnimSet_NoBazooka'),
 ]
+# The player (2026-10-01): a gun with no grip of its own takes another gun's -- (key, kind, the gripped bone, from key,
+# from kind, the hand moved by (x, y, z) in the part's frame: the difference between the two lines' grab points). The
+# Colt's reload never touches its slide (19.4 units off); the C96's hand on its bolt (mauser_reload_3) is used, moved from
+# the C96's BoltGrab (0, 0.5, -0.2) to the Colt's (0.1, -0.3, -4.0).
+BORROWED = [
+    ('Attachment_Colt45', 'bolt', 'gunSlide', 'Attachment_Mauser', 'bolt', (0.1, -0.8, -3.8)),
+]
 MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
@@ -184,6 +191,7 @@ def main(root):
            '    float       time, dist;  // s; the hand bone\'s distance from the part then (units)', '    float       hand[12];',
            '    float       fingers[15][12];', '};', 'static const GripData kGrips[] = {']
     log = []
+    made = {}
     for key, aseq, gset, gseq, psk, magb, grab, boltb, boff, (tout, tin, track) in GUNS:
         a = arms['seqs'][aseq]
         gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
@@ -227,6 +235,7 @@ def main(root):
                 for lower in range(k - 1, 0, -1):  # up the chain: X3 -> X2 -> X1 (-> the hand)
                     m = mmul(m, key_local(arms, a, fn[:-1] + str(lower), f))
                 fingers.append(m)
+            made[(key, kind)] = (aseq, f / a['rate'], d, hand, fingers)
             out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, f / a['rate'], d))
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
@@ -281,6 +290,13 @@ def main(root):
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
             log.append('%s %s: %.2f s, the left hand at frame %d (%.1f units from the part)' % (key, kind, f / a['rate'], f, d))
+    for key, kind, bone, fkey, fkind, (dx, dy, dz) in BORROWED:
+        aseq, t, d, hand, fingers = made[(fkey, fkind)]
+        moved = [hand[0], hand[1], hand[2], [hand[3][0] + dx, hand[3][1] + dy, hand[3][2] + dz, 1]]
+        out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, t, d))
+        out.append('     {%s},' % rows(moved))
+        out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
+        log.append('%s %s: borrowed from %s %s, moved %.1f %.1f %.1f' % (key, kind, fkey, fkind, dx, dy, dz))
     out.append('};')
     print('\n'.join(out))
     sys.stderr.write('\n'.join(log) + '\n')
