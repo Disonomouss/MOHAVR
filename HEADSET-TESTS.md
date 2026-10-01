@@ -1485,11 +1485,15 @@ the player's folder).
 - **The mounted MG42 keeps the game's own belt reload** (infinite belts; the mod doesn't handle mounted guns in VR yet).
 - **The rifle grenade** (alt fire) keeps the game's own reload.
 - The Step 1 guns (Thompson, MP40, StG44, BAR, G43, Colt, C96) are as in round 35.
+- **Give all weapons** (menu > Weapons, the last item; `[Weapon] GiveAllMenu`): the game's own cheats give you every gun
+  with a reload (and full ammo) in whatever mission you're in. Switch to them with next weapon. [S]: 13 of 13 given in
+  the Der Flakturm save.
 [S]: every gun's full cycle, its counts and cues (GOAL.md A1-A5, ENGINE-NOTES 5an-5at); the landing's lowest eye 17.8
 -> 60.0 cm.
 
-**How to try it:** Claude has deployed the shipped defaults. The new guns come from the mission briefing's loadout
-(Garand, K98, Springfield, M12) and from pickups (the Panzerschreck and the M18 in Der Flakturm; the M18 also in Neptune).
+**How to try it:** Claude has deployed the shipped defaults. Quickest: menu > Weapons > "Give all weapons", then next
+weapon through them. Otherwise the guns come from the mission briefing's loadout (Garand, K98, Springfield, M12) and from
+pickups (the Panzerschreck and the M18 in Der Flakturm; the M18 also in Neptune).
 1. Jump into a mission: the landing, including a botched one (no flare).
 2. The Garand: fire it empty, a clip from the pouch; later B with a part-used clip.
 3. The K98 and Springfield: the bolt after each shot; fire empty; a stripper clip.
@@ -1507,7 +1511,8 @@ the player's folder).
 6. The trigger waiting for the bolt / pump: always as you expect? Any shot that didn't fire when it should?
 7. The held clips, shells and rounds (the game's loading grips, mirrored to your hand): do they look right?
 8. Sounds: every step heard?
-9. Anything else odd?
+9. Give all weapons: did every gun arrive? Anything odd afterwards (a checkpoint, the save, the mission)?
+10. Anything else odd?
 
 **Deployed for this round:** the shipped defaults.
 

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 #include "addresses.hpp"
 #include "aim.hpp"
@@ -404,6 +405,34 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
     cmd[n] = 0;
     if (!n) return;
     const auto player = *reinterpret_cast<const std::uintptr_t*>(players[0]);
+    // The menu's "Give all weapons" (the player's request, 2026-10-01): the game's own cheats -- EnableCheats, a
+    // GiveWeapon per [Weapon] GiveAllList class (comma-separated, MOHAGameNonNative), GiveAmmo. A class the level
+    // doesn't hold gives nothing.
+    if (!wcscmp(cmd, L"mohavr giveall")) {
+        int given = 0, listed = 0;
+        auto run = [&](const std::wstring& c) {
+            const bool ok = gexec::Run(player, c.c_str());
+            MLOG("hands: give all -- '%ls' -> %s", c.c_str(), ok ? "handled" : "not handled");
+            return ok;
+        };
+        run(L"EnableCheats");
+        std::string list = g_cfg.giveAllList;
+        size_t p = 0;
+        while (p < list.size()) {
+            size_t e = list.find(',', p);
+            if (e == std::string::npos) e = list.size();
+            std::string cls = list.substr(p, e - p);
+            p = e + 1;
+            while (!cls.empty() && cls.front() == ' ') cls.erase(cls.begin());
+            while (!cls.empty() && cls.back() == ' ') cls.pop_back();
+            if (cls.empty()) continue;
+            ++listed;
+            if (run(L"GiveWeapon MOHAGameNonNative." + std::wstring(cls.begin(), cls.end()))) ++given;
+        }
+        run(L"GiveAmmo");
+        MLOG("hands: give all weapons -- %d of %d classes handled", given, listed);
+        return;
+    }
     const bool ok = gexec::Run(player, cmd);
     MLOG("hands: game command '%ls' -> %s", cmd, ok ? "handled" : "not handled");
 }

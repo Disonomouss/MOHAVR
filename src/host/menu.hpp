@@ -47,6 +47,8 @@ public:
 
     // True once after the player chose Recentre; the host then re-creates its LOCAL space.
     bool TakeRecenterRequest() { const bool r = recenterRequested_; recenterRequested_ = false; return r; }
+    // "Give all weapons" chosen ([Weapon] GiveAllMenu): the host sends the game "mohavr giveall" once.
+    bool TakeGiveAllRequest() { const bool r = giveAllRequested_; giveAllRequested_ = false; return r; }
     // After a recentre the panel's old pose is meaningless: close it.
     void Close();
     // Turning (Comfort): 0 = smooth, else the snap step in degrees. Used by the virtual pad.
@@ -130,6 +132,7 @@ private:
     float                   heightOffset_ = 0.0f;   // metres
     int                     snapDeg_ = 0;           // 0 = smooth turning
     bool                    recenterRequested_ = false;
+    bool                    giveAllRequested_ = false;
     std::wstring            iniPath_;
     int                     page_ = 0;                // 0 main, 1 gun fit, 2 holsters, 3 free hand, 4 reload grip
     int                     tab_ = 0;                 // the main page's tab (round 32)

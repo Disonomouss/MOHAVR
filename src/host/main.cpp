@@ -817,6 +817,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (controllers)
             pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
                        menuOk && menu.Visible(), menuOk ? menu.SnapTurnDegrees() : 0, g_hdr);
+        if (menuOk && menu.TakeGiveAllRequest() && g_hdr) {
+            // The game runs its own cheats for it (vr_view.cpp RunHostCommand: EnableCheats, a GiveWeapon per
+            // [Weapon] GiveAllList class, GiveAmmo).
+            static const char kGiveAll[] = "mohavr giveall";
+            std::memcpy(g_hdr->cmd, kGiveAll, sizeof(kGiveAll));
+            InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
+            MLOG("host: give all weapons -> the game");
+        }
         if (menuOk && menu.TakeRecenterRequest()) {
             if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {
                 MLOG("host: recentre ignored (%s)", !menuHeadOk ? "no head pose" : "previous recentre still in flight");

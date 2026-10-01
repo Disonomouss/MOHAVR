@@ -18,19 +18,29 @@ namespace {
 constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
-            kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kItemCount };
+            kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
+            kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
 const int kTabItems[kTabCount][12] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kGripPage, kSpotPage, kClose, -1},
+    {kGunFit, kReload, kGripPage, kSpotPage, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
+// "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
+bool g_giveAllMenu = false;
+bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
+// Tab t's i-th shown item (-1 past the end), and how many it shows.
+int ItemAt(int t, int i) {
+    for (int k = 0; k < 12 && kTabItems[t][k] >= 0; ++k)
+        if (Shown(kTabItems[t][k]) && i-- == 0) return kTabItems[t][k];
+    return -1;
+}
 int TabCount(int t) {
     int n = 0;
-    while (n < 12 && kTabItems[t][n] >= 0) ++n;
+    while (ItemAt(t, n) >= 0) ++n;
     return n;
 }
 // The Reload grip page (round 32): which grip, the hand moved on the part and turned at the wrist, per weapon.
@@ -165,6 +175,8 @@ void Menu::ApplySavedSettings() {
                    shippedFloat(L"Hands", L"ForeUp", 0.0f)};
     fit_ = fitDefault_;
     gunInHand_ = GetPrivateProfileIntW(L"Weapon", L"ViewModel", 2, shipped.c_str()) == 2;
+    g_giveAllMenu = GetPrivateProfileIntW(L"Weapon", L"GiveAllMenu", 0, shipped.c_str()) != 0;
+    MLOG("menu: \"Give all weapons\" %s ([Weapon] GiveAllMenu)", g_giveAllMenu ? "shown" : "hidden");
 
     // Controls (the player's): the sticks and the starting gun hand; the shipped [Controls] ones are the defaults.
     const int defSwap = static_cast<int>(GetPrivateProfileIntW(L"Controls", L"SwapSticks", 0, shipped.c_str()));
@@ -487,7 +499,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : page_ == 4 ? kGripPage : kSpotPage;
         for (int t = 0; t < kTabCount; ++t)
             for (int i = 0; i < TabCount(t); ++i)
-                if (kTabItems[t][i] == opener) {
+                if (ItemAt(t, i) == opener) {
                     tab_ = t;
                     selected_ = i;
                 }
@@ -656,7 +668,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
     if (selected_ >= count) selected_ = count - 1;
     if (in.up) selected_ = selected_ < 0 ? count - 1 : selected_ - 1;
     if (in.down) selected_ = selected_ + 1 >= count ? -1 : selected_ + 1;
-    const int item = selected_ >= 0 ? kTabItems[tab_][selected_] : -1;
+    const int item = selected_ >= 0 ? ItemAt(tab_, selected_) : -1;
     if ((in.left || in.right) && selected_ < 0) {
         tab_ = (tab_ + (in.right ? 1 : kTabCount - 1)) % kTabCount;
         MLOG("menu: tab %s", kTabNames[tab_]);
@@ -739,6 +751,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 5;
             selected_ = 0;
             MLOG("menu: reload spots page (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
+        } else if (item == kGiveAll) {
+            giveAllRequested_ = true;  // the host sends the game "mohavr giveall"; the menu closes so the guns can be seen
+            MLOG("menu: give all weapons requested");
+            Close();
+            return;
         } else if (item == kRecenter) {
             recenterRequested_ = true;  // the host re-creates LOCAL at the current head pose, then closes us
             MLOG("menu: recentre requested");
@@ -799,7 +816,7 @@ void Menu::Render() {
         ImGui::PopFont();
     };
     for (int i = 0; i < TabCount(tab_); ++i) {
-        const int it = kTabItems[tab_][i];
+        const int it = ItemAt(tab_, i);
         const bool sel = selected_ == i;
         switch (it) {
             case kWorldScale:
@@ -839,6 +856,10 @@ void Menu::Render() {
                 note("on = one game frame per headset frame");
                 break;
             case kRecenter: ImGui::Selectable("Recentre (face forward, here)", sel); break;
+            case kGiveAll:
+                ImGui::Selectable("Give all weapons", sel);
+                note("the game's cheat: every gun, full ammo (switch with next weapon)");
+                break;
             case kResetScale:
                 snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
                 ImGui::Selectable(label, sel);

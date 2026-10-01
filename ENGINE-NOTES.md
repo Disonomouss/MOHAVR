@@ -1495,6 +1495,15 @@ exec; handled) drops the loadout's gun, so a new one given after `mohavr upgrade
 magazine, 5am), the StG44 (`single_magazine`) and BAR (`magazine`, no pair) at -1, the G43's 10-round `magazine` at -1:
 each ejected, a pouch magazine inserted, the counts right, the visible variant the level's.
 
+## 5av. "Give all weapons" (the menu; D34, 2026-10-01)
+
+The host's command channel (`cmd` / `cmdSeq`, the holsters' and reload gesture's) carries `mohavr giveall`; the game's
+`RunHostCommand` runs `EnableCheats`, a `GiveWeapon MOHAGameNonNative.<Class>` per `[Weapon] GiveAllList` class and
+`GiveAmmo` through the same console path (`gexec::Run` on the player controller) -- no `Debug.GameCommands` needed. In the
+Der Flakturm save all 13 classes are handled, the launchers included, and next weapon reaches each (with the loadout's
+grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -- 13 of 13 classes handled`. `ThrowWeapon`
+(the engine's exec) drops the gun in hand (5au).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

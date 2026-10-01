@@ -150,7 +150,8 @@ address-space budget for D3D9On12.
    done** (the breech by its knob: unlock, swing open -- the case falls -- the round slid in, shut, lock: D32, 5at). **The
    mounted MG42 keeps the game's belt reload** (D33: blocked -- no VR handling of mounted guns yet, no simulator path).
    **A6 the Step 1 guns' lower levels checked** (the Thompson's stick, the MP40's taped pair, the single StG44 and BAR,
-   the G43's 10-round magazine: 5au). The grenade pickup is parked (the player).
+   the G43's 10-round magazine: 5au). **"Give all weapons"** in the menu's Weapons tab (the player's request,
+   2026-10-01; D34): the game's own cheats give every gun in any mission ([S] `logs/modlogs/giveall1-*`). The grenade pickup is parked (the player).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

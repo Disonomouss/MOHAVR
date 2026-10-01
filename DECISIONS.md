@@ -330,3 +330,13 @@ a mounted gun yet (the view and the hands at a nest were never tried), and there
 the test save's level; the nests are outside the tower the save lands on).
 **Why:** GOAL rule 4 (the time box); nothing is lost meanwhile (infinite belts).
 **Costs:** the one gun without a manual reload; revisit once mounted guns are tried in the headset.
+
+### D34. "Give all weapons" in the menu -- Decided 2026-10-01 (the player's request)
+The menu's Weapons tab has "Give all weapons": the host sends the game `mohavr giveall`, and the game side runs the game's
+own cheats on the player controller -- `EnableCheats`, `GiveWeapon MOHAGameNonNative.<Class>` for each class in `[Weapon]
+GiveAllList` (the 13 guns with a reload), `GiveAmmo`. Shown with the shipped `[Weapon] GiveAllMenu=1`.
+**Why:** the player wants every gun at hand to try the manual reloads; the test channel that did this (`game_cmd.txt`,
+`Debug.GameCommands`) is off for the player.
+**Costs:** [H] -- the guns join the inventory at the profile's upgrade levels and are reached with next weapon (the holster
+spots know the normal slots only); whether the cheats leave a mark on the save or progress is unknown (the harness always
+restores `Saved\`); a launcher's class outside its missions may give nothing.
