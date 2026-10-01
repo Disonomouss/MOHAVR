@@ -124,6 +124,8 @@ struct State {
     shared::ReloadView reload;
     M4    magFrame;
     float upm;
+    // DrawWithoutHands: the parts drawn with d, no hands (HandFrames, CurrentMove ... report none).
+    bool  noHands;
 } g_state{};
 
 M4 PawnFrame(std::uintptr_t pawn) {
@@ -195,6 +197,7 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
 SafetyHookMid g_activityHook;
 // The first-person part drawn isn't a weapon's (the parachute's harness) and no weapon's is: the game draws them.
 bool g_noGunDrawn = false;
+std::uintptr_t g_gunComp = 0;  // the weapon's first-person part (UpdateWeaponKey)
 unsigned      g_sprintSwaps = 0, g_walkSwaps = 0, g_jumpSwaps = 0;
 
 // Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
@@ -390,6 +393,7 @@ void UpdateWeaponKey(shared::Header* hdr) {
     }
     // Something drawn first-person that isn't a weapon (the parachute) and no weapon: the game's own drawing (OnPlayerView).
     g_noGunDrawn = notGun && !gun;
+    g_gunComp = gun;
     const std::string key = gun ? names::ClassName(names::Outer(gun)) : std::string();
     // What it is, by the weapon's class chain: a grenade (EALAGrenade), a pistol (MOHAPistol), else a long gun.
     static std::uint32_t currentKind = 0;
@@ -411,6 +415,49 @@ void UpdateWeaponKey(shared::Header* hdr) {
     std::memcpy(hdr->weaponKey, key.c_str(), n);
     hdr->weaponKey[n] = 0;
     InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->weaponSeq));
+}
+
+// [BarrelDir] (round 40, the Panzerschreck: "the further away I aim the more to the right the red dot goes"): the game's
+// own pose points a gun's barrel (its mesh +Z) along the camera's forward -- all but the Panzerschreck, whose tube on the
+// right shoulder is turned 12.9 deg left and 3.8 deg up, towards the flat screen's crosshair. In the hand the aim line
+// runs along the controller, so the two parted with distance. A gun listed (its barrel's direction in the camera frame,
+// forward right up) is drawn turned about the fit's grip point so the barrel runs along the controller. Per weapon key,
+// read once.
+M4 BarrelTurn(const char* key) {
+    struct Cached {
+        std::string key;
+        M4          r;
+    };
+    static Cached cache[24];
+    static int used = 0;
+    for (int i = 0; i < used; ++i)
+        if (cache[i].key == key) return cache[i].r;
+    M4 r{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
+    wchar_t wkey[64], buf[96];
+    MultiByteToWideChar(CP_ACP, 0, key, -1, wkey, 64);
+    GetPrivateProfileStringW(L"BarrelDir", wkey, L"", buf, 96, g_cfg.iniPath.c_str());
+    float a[3] = {0, 0, 0};
+    if (swscanf_s(buf, L"%f %f %f", &a[0], &a[1], &a[2]) == 3) {
+        const float n = std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+        if (n > 0.5f) {
+            for (float& x : a) x /= n;
+            // The rotation (row vectors: v' = v * r) taking the barrel a onto forward b = (1, 0, 0), the shortest way.
+            const float k[3] = {0.0f, a[2], -a[1]};  // a x b
+            const float sn = std::sqrt(k[1] * k[1] + k[2] * k[2]), cs = a[0];
+            if (sn > 1e-6f) {
+                const float u[3] = {0.0f, k[1] / sn, k[2] / sn};
+                for (int i = 0; i < 3; ++i) {
+                    const float v[3] = {i == 0 ? 1.0f : 0.0f, i == 1 ? 1.0f : 0.0f, i == 2 ? 1.0f : 0.0f};
+                    const float uv[3] = {u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
+                    for (int j = 0; j < 3; ++j) r.m[i][j] = v[j] * cs + uv[j] * sn + u[j] * u[i] * (1.0f - cs);
+                }
+            }
+            MLOG("viewmodel: %s's barrel (%.3f %.3f %.3f in the camera frame) turned onto the controller's forward ([BarrelDir]: "
+                 "%.1f deg)", key, a[0], a[1], a[2], std::acos(cs > 1.0f ? 1.0f : cs) * 57.2958f);
+        }
+    }
+    if (used < 24) cache[used++] = {key, r};
+    return r;
 }
 
 // The fit for the weapon in hand: the host's (the menu, per weapon) when it's for this weapon, else the ini's.
@@ -437,6 +484,29 @@ void OnPlayerView() {
     const float cx[3] = {cp * cy, cp * sy, sp}, cyv[3] = {-sy, cy, 0.0f}, cz[3] = {-sp * cy, -sp * sy, cp};
     const M4 cam = Frame(cx, cyv, cz, camLoc);
     const M4 camInv = RigidInverse(cam);
+    {
+        // Research (round 40, the Panzerschreck's aim): the gun mesh's axes and origin in the game camera's frame (forward,
+        // right, up; the game's own pose), once per weapon after 2 s in hand (settled) -- how the game points the barrel
+        // against the view.
+        static std::uintptr_t logged = 0, seen = 0;
+        static DWORD seenAt = 0;
+        const std::uintptr_t comp = g_gunComp;
+        if (comp != seen) {
+            seen = comp;
+            seenAt = GetTickCount();
+        }
+        const int lo = comp ? names::PropertyOffset(comp, "LocalToWorld") : -1;
+        if (comp && comp != logged && lo >= 0 && GetTickCount() - seenAt > 2000) {
+            logged = comp;
+            M4 l2w;
+            std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + lo), sizeof(l2w.m));
+            const M4 local = Mul(l2w, camInv);
+            MLOG("viewmodel: %s's mesh in the camera frame (fwd right up): X %.3f %.3f %.3f, Y %.3f %.3f %.3f, Z %.3f %.3f %.3f, "
+                 "origin %.1f %.1f %.1f", names::ClassName(names::Outer(comp)).c_str(), local.m[0][0], local.m[0][1],
+                 local.m[0][2], local.m[1][0], local.m[1][1], local.m[1][2], local.m[2][0], local.m[2][1], local.m[2][2],
+                 local.m[3][0], local.m[3][1], local.m[3][2]);
+        }
+    }
 
     M4 d{{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}}, dInv = d;  // ViewModel=1: where the game put it
     M4 gunFrameNow = d, offFrameNow = d, mirror = d, magFrameNow = d;
@@ -450,8 +520,13 @@ void OnPlayerView() {
         shared::Pose gun, ray;
         std::uint32_t flags = 0xFFFFFFFFu;
         if (!hdr) return;
-        if (g_noGunDrawn || !shared::ReadGun(hdr, gun, ray, flags)) {
-            if (!g_noGunDrawn && flags == 0xFFFFFFFFu) return;  // mid-write: keep last frame's
+        if (g_noGunDrawn) {  // the parachute: where the game puts it, in true 3D
+            static const float kIdentity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+            DrawWithoutHands(kIdentity);
+            return;
+        }
+        if (!shared::ReadGun(hdr, gun, ray, flags)) {
+            if (flags == 0xFFFFFFFFu) return;  // mid-write: keep last frame's
             g_line.valid = false;
             AcquireSRWLockExclusive(&g_lock);
             g_state.valid = false;  // no gun hand this frame: the game's own drawing
@@ -480,7 +555,7 @@ void OnPlayerView() {
         // the grip -- in the mirror world for the left hand, where the fit (tuned on the right hand) applies as it is and
         // comes out mirrored (round 26: put on before the mirror, its sideways part landed on the wrong side, 2 x 11 cm).
         const float back[3] = {-fit.grip[0], -fit.grip[1], -fit.grip[2]};
-        const M4 gunFrame = Mul(Frame(kAxisX, kAxisY, kAxisZ, back), ctrlFrame);
+        const M4 gunFrame = Mul(Mul(Frame(kAxisX, kAxisY, kAxisZ, back), BarrelTurn(hdr->weaponKey)), ctrlFrame);
         d = Mul(camInv, gunFrame);
         dInv = Mul(RigidInverse(gunFrame), cam);
         // The aim line: the host's, mapped the same way.
@@ -493,6 +568,27 @@ void OnPlayerView() {
             }
             g_line.upm = rupm;
             g_line.valid = true;
+            // Research (round 40): once per weapon, settled 3 s, the drawn barrel (mesh +Z through the move) against the
+            // aim line: the angle between them ([BarrelDir] should bring it to ~0).
+            static std::uintptr_t checked = 0, seen = 0;
+            static DWORD seenAt = 0;
+            const std::uintptr_t comp = g_gunComp;
+            if (comp != seen) {
+                seen = comp;
+                seenAt = GetTickCount();
+            }
+            const int lo = comp ? names::PropertyOffset(comp, "LocalToWorld") : -1;
+            if (comp && comp != checked && lo >= 0 && GetTickCount() - seenAt > 3000) {
+                checked = comp;
+                M4 l2w;
+                std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + lo), sizeof(l2w.m));
+                const M4 drawn = Mul(l2w, d);
+                float z[3] = {drawn.m[2][0], drawn.m[2][1], drawn.m[2][2]};
+                const float zn = std::sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
+                const float c = (z[0] * rdir[0] + z[1] * rdir[1] + z[2] * rdir[2]) / (zn > 1e-6f ? zn : 1.0f);
+                MLOG("viewmodel: %s's drawn barrel is %.2f deg off the aim line", hdr->weaponKey,
+                     std::acos(c > 1.0f ? 1.0f : c < -1.0f ? -1.0f : c) * 57.2958f);
+            }
         }
         static std::uint32_t seenFlags = 0;
         if ((flags & 6u) != (seenFlags & 6u)) {
@@ -542,7 +638,31 @@ void OnPlayerView() {
     g_state.d = d;
     g_state.dInv = dInv;
     g_state.camInv = camInv;
+    g_state.noHands = false;
     ReleaseSRWLockExclusive(&g_lock);
+}
+
+void DrawWithoutHands(const float (&d)[16]) {
+    if (!g_installed) return;
+    g_line.valid = false;
+    M4 m;
+    std::memcpy(m.m, d, sizeof(m.m));
+    const M4 inv = RigidInverse(m);
+    AcquireSRWLockExclusive(&g_lock);
+    g_state.valid = true;
+    g_state.noHands = true;
+    g_state.tick = GetTickCount();
+    g_state.d = m;
+    g_state.dInv = inv;
+    g_state.mirrored = false;
+    g_state.offValid = g_state.twoHanded = g_state.reloadValid = g_state.magValid = false;
+    g_state.pawn = 0;
+    ReleaseSRWLockExclusive(&g_lock);
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        MLOG("viewmodel: first-person parts with no gun in the hand drawn in true 3D (the parachute, the landing)");
+    }
 }
 
 bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHanded) {
@@ -551,7 +671,7 @@ bool HandFrames(float (&gun)[16], float (&off)[16], bool& offValid, bool& twoHan
     AcquireSRWLockShared(&g_lock);
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
-    if (!s.valid || GetTickCount() - s.tick > 250) return false;
+    if (!s.valid || s.noHands || GetTickCount() - s.tick > 250) return false;
     std::memcpy(gun, s.gunFrame.m, sizeof(gun));
     std::memcpy(off, s.offFrame.m, sizeof(off));
     offValid = s.offValid;
@@ -565,7 +685,7 @@ bool ReloadInputs(ReloadFrame& out) {
     AcquireSRWLockShared(&g_lock);
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
-    if (!s.valid || !s.reloadValid || GetTickCount() - s.tick > 250) return false;
+    if (!s.valid || s.noHands || !s.reloadValid || GetTickCount() - s.tick > 250) return false;
     out.view = s.reload;
     std::memcpy(out.magFrame, s.magFrame.m, sizeof(out.magFrame));
     out.magValid = s.magValid;
@@ -580,7 +700,7 @@ bool CurrentMove(float (&d)[16], float (&dInv)[16]) {
     AcquireSRWLockShared(&g_lock);
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
-    if (!s.valid || GetTickCount() - s.tick > 250) return false;
+    if (!s.valid || s.noHands || GetTickCount() - s.tick > 250) return false;
     std::memcpy(d, s.d.m, sizeof(d));
     std::memcpy(dInv, s.dInv.m, sizeof(dInv));
     return true;
@@ -593,7 +713,7 @@ bool DrawMirror(float (&r)[16]) {
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
     // As the proxy hook decides it for the first-person parts.
-    if (!s.mirrored || !s.valid || GetTickCount() - s.tick > 250) return false;
+    if (!s.mirrored || !s.valid || s.noHands || GetTickCount() - s.tick > 250) return false;
     std::memcpy(r, s.mirror.m, sizeof(r));
     return true;
 }
@@ -605,7 +725,7 @@ bool BodyMoveSinceView(float (&w)[16]) {
     s = g_state;
     ReleaseSRWLockShared(&g_lock);
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
-    if (!s.valid || !s.pawn || pawn != s.pawn || GetTickCount() - s.tick > 250) return false;
+    if (!s.valid || s.noHands || !s.pawn || pawn != s.pawn || GetTickCount() - s.tick > 250) return false;
     const M4 now = PawnFrame(pawn);
     // More than a frame's walk isn't one (a teleport, a respawn at the same pawn): no catch-up.
     const float dx = now.m[3][0] - s.pawnFrame.m[3][0], dy = now.m[3][1] - s.pawnFrame.m[3][1], dz = now.m[3][2] - s.pawnFrame.m[3][2];

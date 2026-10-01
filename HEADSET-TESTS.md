@@ -1648,6 +1648,33 @@ descent with the right hand swept left and right: nothing followed it (`logs/mod
 
 ---
 
+## Round 41: prepared 2026-10-01, round 40's report
+**Your report:** the harness back to double vision; the landing better, but the body contorts around you; the
+Panzerschreck's dot goes further right the further you aim, and the rocket leaves from the left of the tube.
+
+**Changed:**
+- **Parachuting:** the harness and the arms on the toggles are drawn properly in 3D (they were drawn the flat game's
+  way, a different picture for each eye). They stay where the game puts them on your body.
+- **The landing:** the arms and body are drawn steady in front of you, as the flat game shows them, instead of
+  tumbling around the still view.
+- **The Panzerschreck:** the game holds its tube on the right shoulder turned 13 degrees in, towards the flat screen's
+  crosshair; in VR your aim line runs along your hand, so the two parted with distance. The tube is now turned to run
+  along your hand (`[BarrelDir]`), and your aim line set to where the tube's centre line is for your grip: up 7.5, right
+  -0.5 (it was 46 / -128; the old file is backed up). The rocket starts on that line.
+[S]: the drawn tube 0.00 deg off the aim line (it was 13.5); the other guns were already 0 (`logs/modlogs/axes2-*`);
+the descent and landing in stereo (`logs/shots/*land7-*`).
+
+**Questions:**
+1. Parachuting: is the double vision gone? Do the harness and arms sit right?
+2. The landing: does the body stay put now?
+3. The Panzerschreck: does the dot stay on the tube's line near and far, and does the rocket leave from the tube?
+   (Fine-tune the aim line in Gun fit if the line isn't quite down the middle.)
+4. Anything else odd?
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

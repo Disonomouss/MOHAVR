@@ -823,7 +823,43 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
 // up) plays a camera animation -- down to 18 cm above the feet and turned about (ENGINE-NOTES 5an). Held instead at the
 // pawn's standing eye, Location + BaseEyeHeight (where the game's camera is when the landing ends: 160.8 cm above the
 // feet), facing the controller's yaw: at once (the touchdown frame already has the camera 50 cm down), eased out over
-// 0.25 s. Decided on eye 0, applied to both.
+// 0.25 s. Decided on eye 0, applied to both. The first-person body (the arms and legs of the roll) is drawn re-based from
+// the game's tumbling camera onto the held one (round 40: "the body visibly contorts around you"), as the flat game shows
+// it: d = inverse(game camera) * held (level, the held yaw), eased with the view. True while held (eye 0's decision).
+// UE3's FRotationMatrix rows (pitch p, yaw y, roll r): X forward, Y right, Z up; a world point p' = p * M.
+struct M4f {
+    float m[4][4];
+};
+
+M4f RotFrame(float p, float y, float r, const float* t) {
+    const float sp = std::sin(p), cp = std::cos(p), sy = std::sin(y), cy = std::cos(y), sr = std::sin(r), cr = std::cos(r);
+    M4f m{};
+    m.m[0][0] = cp * cy; m.m[0][1] = cp * sy; m.m[0][2] = sp;
+    m.m[1][0] = sr * sp * cy - cr * sy; m.m[1][1] = sr * sp * sy + cr * cy; m.m[1][2] = -sr * cp;
+    m.m[2][0] = -(cr * sp * cy + sr * sy); m.m[2][1] = cy * sr - cr * sp * sy; m.m[2][2] = cr * cp;
+    m.m[3][0] = t[0]; m.m[3][1] = t[1]; m.m[3][2] = t[2]; m.m[3][3] = 1.0f;
+    return m;
+}
+
+M4f RigidInv(const M4f& a) {
+    M4f r{};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) r.m[i][j] = a.m[j][i];
+    for (int j = 0; j < 3; ++j) r.m[3][j] = -(a.m[3][0] * r.m[0][j] + a.m[3][1] * r.m[1][j] + a.m[3][2] * r.m[2][j]);
+    r.m[3][3] = 1.0f;
+    return r;
+}
+
+M4f MulM(const M4f& a, const M4f& b) {
+    M4f r{};
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 4; ++k) r.m[i][j] += a.m[i][k] * b.m[k][j];
+    return r;
+}
+
+bool g_landingHeld = false;  // eye 0: the landing's view is held this frame (the hands' per-view work waits)
+
 void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
     static float w = 0.0f, held[3] = {0, 0, 0};
     static int heldYaw = 0;
@@ -856,11 +892,21 @@ void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
                  "the standing eye and the controller's heading" : "the landing over -- back to the game's camera", act);
         }
     }
+    if (g_thisEye == 0) g_landingHeld = w > 0.0f;
     if (w <= 0.0f) return;
     const float e = w * w * (3.0f - 2.0f * w);
+    const float gameLoc[3] = {loc[0], loc[1], loc[2]};
+    const int gameRot[3] = {rot[0], rot[1], rot[2]};
     for (int i = 0; i < 3; ++i) loc[i] += (held[i] - loc[i]) * e;
     const int dy = static_cast<std::int16_t>(static_cast<std::uint16_t>((heldYaw - rot[1]) & 0xFFFF));
     rot[1] = (rot[1] + static_cast<int>(std::lround(dy * e))) & 0xFFFF;
+    if (g_thisEye == 0) {
+        const float gp = UnrToRad(static_cast<std::int16_t>(gameRot[0] & 0xFFFF)), gr = UnrToRad(static_cast<std::int16_t>(gameRot[2] & 0xFFFF));
+        const M4f game = RotFrame(gp, UnrToRad(gameRot[1]), gr, gameLoc);
+        const M4f base = RotFrame(gp * (1.0f - e), UnrToRad(rot[1]), gr * (1.0f - e), loc);
+        const M4f d = MulM(RigidInv(game), base);
+        viewmodel::DrawWithoutHands(*reinterpret_cast<const float(*)[16]>(&d.m[0][0]));
+    }
 }
 
 // --- the view merge hook ------------------------------------------------------------------------
@@ -1052,7 +1098,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
     LeaveCriticalSection(&g_lock);
     g_thisViewActive = true;
-    if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi) {
+    if (g_thisEye == 0 && g_viewIsPlayers && ctx.edi && !g_landingHeld) {
         viewmodel::OnPlayerView();  // first: the aim follows the gun's barrel
         aim::OnPlayerView(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), g_gameCam);
         throwing::OnPlayerView();

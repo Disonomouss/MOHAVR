@@ -1586,6 +1586,20 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
   touchdown frame; the game camera 17.9); `land4-*` with a 0.25 s ease-in showed 115 on the touchdown frame -- hence at
   once. The descent with the right hand swept 25 cm each way (`logs/shots/*land4-*`): the view and the parachute still.
 
+## 5az. Round 40's report: no-gun parts in true 3D, the Panzerschreck's barrel (D37 addendum, D38, 2026-10-01)
+
+- **The game's per-eye transform:** a first-person part (FOV != 0) with no valid move goes through the game's own proxy
+  transform -- the view-model FOV re-projection, per view -- seen double in stereo (the parachute's harness, round 40).
+  `DrawWithoutHands(d)` sets the move with `noHands` (HandFrames, CurrentMove, ReloadInputs, DrawMirror and
+  BodyMoveSinceView report none, so nothing is baked): LocalToWorld * d. [S] `logs/shots/*land7-*`: the descent's hands on
+  the toggles in stereo; the landing's arms and knees steady in front of the held view.
+- **The guns' barrels in the game camera's frame** (`viewmodel: X's mesh in the camera frame`, 2 s after the switch):
+  BAR, G43, Colt, M18 -- mesh Z = (1.000, 0.000, 0.000) (forward, right, up); **the Panzerschreck (0.973, -0.223, 0.067)**,
+  origin (14.7, 40.0, -34.0) -- 12.9 deg left, 3.8 up. Its tube's axis (the `Projectile` bone's line, mesh (0.37, -20.31,
+  z)) passes the camera-frame point (13.32, 40.09, -13.73); turned about a grip at (16, 40, -21) it lies 7.4 above and 0.5
+  left of the controller. [S] `logs/modlogs/axes2-*`: `the drawn barrel is 0.00 deg off the aim line` for the BAR, G43,
+  M18 and (with [BarrelDir]) the Panzerschreck; the Colt 0.16.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

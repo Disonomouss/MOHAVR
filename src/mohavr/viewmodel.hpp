@@ -24,6 +24,12 @@ bool Install(const Config& cfg);
 // host's fit for it.
 void OnPlayerView();
 
+// No gun in the hand, but first-person parts to draw (the parachute's harness and arms; the landing's body): draw them in
+// true 3D -- LocalToWorld * d (world, row-major), not the game's per-eye flat-screen transform (seen double in stereo)
+// -- with no hands (the arm IK and the reload stand down). d = identity: where the game puts them. Game thread, per
+// player view; lapses after 250 ms like the hands' move.
+void DrawWithoutHands(const float (&d)[16]);
+
 // ViewModel=2: this frame's aim line along the gun in the hand (world: start, unit direction; the scale in use).
 // False when the gun isn't in the hand.
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter);

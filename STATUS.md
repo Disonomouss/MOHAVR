@@ -163,7 +163,10 @@ address-space budget for D3D9On12.
    5ax) -- the player's Panzerschreck fit needs a reset. **Round 40** (the parachute): the landing's camera animation left
    out (`Camera.SteadyLanding`: the standing eye and the controller's heading through activities 41-42), and the
    parachute's harness no longer carried by the gun hand (only a WeaponAttachment goes in the hand; D37, ENGINE-NOTES
-   5ay). The Panzerschreck is parked (the player: "we will come back to this").
+   5ay). The Panzerschreck is parked (the player: "we will come back to this"). **Round 41** (round 40's report):
+   no-gun first-person parts drawn in true 3D (the parachute's harness was double; the landing's body re-based onto the
+   held view); the Panzerschreck's tube, which the game turns 12.9 deg in, drawn along the controller (`[BarrelDir]`,
+   D38, ENGINE-NOTES 5az) and the player's aim line set onto it.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

@@ -401,3 +401,21 @@ roll at 60 cm; the roll still dropped the view 1 m and turned it.
 **Costs:** [H] -- none of the landing's motion is seen (a comfort choice; `SteadyLanding=0` gives the game's, floored);
 the arms' gear-removal animation plays in front of a still view; while parachuting the arms and harness are where the
 game puts them, not following the controllers.
+**Addendum (round 40's report: "now that the chest is not held like a weapon it is back to the double vision effect";
+"the body visibly contorts around you"):** first-person parts with no gun in the hand were left to the game's own
+transform -- the flat-screen view-model FOV applied per eye, seen double. They are now drawn in true 3D with no hands
+(`viewmodel::DrawWithoutHands`: the arm IK and the reload stand down): while parachuting where the game puts them; during
+the held landing re-based from the game's tumbling camera onto the held view (d = inverse(game camera) * held, level),
+so the body stays in front of you as the flat game shows it instead of rolling around the still view.
+
+### D38. A barrel the game points off the view is turned onto the controller ([BarrelDir]) -- Decided 2026-10-01
+The game's own pose points every gun's barrel (mesh +Z) exactly along the camera's forward -- except the Panzerschreck,
+whose tube on the right shoulder is turned 12.9 deg left and 3.8 deg up (towards the flat screen's crosshair). A gun in
+`[BarrelDir]` (its barrel direction in the camera frame) is drawn turned about the fit's grip point so the barrel runs
+along the controller, parallel to the aim line. The player's Panzerschreck aim line set to where the turned tube's axis
+lies for their grip: up 7.5, right -0.5 (from up 46, right -128; backed up).
+**Why:** the player: "the further away I aim the more to the right the red dot goes. Missile fires from left side of the
+gun now." -- the aim line ran along the controller and the tube 13 deg off it, so no offset could put the line on the tube
+at every distance (and the rocket, from the line's start, left beside the tube).
+**Costs:** [H] -- the tube sits 13 deg differently in the hand than before (turned about the grip); a measured constant,
+not live (an animation that turns the tube still turns it).
