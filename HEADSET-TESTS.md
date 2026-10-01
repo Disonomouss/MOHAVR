@@ -1595,8 +1595,8 @@ good.
 
 **Changed:**
 - **The Colt:** grabs and holds its magazine the C96's way.
-- **The K98:** the Springfield's hand on the bolt knob (turned for the K98's higher lift, so the hand lies the same while you
-  pull the bolt back).
+- **The Springfield:** the K98's hand on the bolt knob (you had the rifles mixed up; the K98 keeps round 38's pose, turned
+  for the Springfield's lower lift so the hand lies the same while you pull the bolt back).
 - **The Panzerschreck (and the M18):** the rocket now starts where the aim line starts and flies down it. Before, the game
   launched it from its own gun position beside your head towards the red dot, so no aim-line setting could line it up.
   `[Aim] LauncherFromGun=0` brings the old way back.
@@ -1604,11 +1604,11 @@ good.
   chasing the rocket), and the rocket now follows that line. With the Panzerschreck in hand: menu > Weapons > Gun fit >
   **Reset this gun**, then adjust it again if needed (the aim line should run down the tube).
 [S]: `logs/modlogs/r38b-*` to `r38d-*`: the rocket 1 cm from the red dot at 25.7 m after the reset; the Colt's grab and hold
-(`logs/shots/*r38b-Attachment_Colt45-*`); the K98 against the Springfield (`*r38c-*`, `*r38d-*`). `tools/harness.ps1 cycle` OK.
+(`logs/shots/*r38b-Attachment_Colt45-*`); the two rifles' knob grips alike (`*r39a-*`). `tools/harness.ps1 cycle` OK.
 
 **Questions:**
 1. The Colt's magazine grab and hold: like the C96 now?
-2. The K98's hand on the bolt knob, through the whole stroke: like the Springfield?
+2. The Springfield's hand on the bolt knob, through the whole stroke: like the K98?
 3. The Panzerschreck after the reset: does the rocket come out of the tube and go where the red dot is, near and far?
 4. The M18: still good?
 5. Anything else odd?

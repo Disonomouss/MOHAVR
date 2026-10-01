@@ -158,8 +158,8 @@ address-space budget for D3D9On12.
    the reloads for weapons are functional"; D35, ENGINE-NOTES 5aw): the M12's foregrip pumps only with the off hand's
    trigger, the MP40's foregrip hand takes the magazine with it; the pistols' hand closes on the magazine; the bolt
    actions' knob grip; the gun fit's aim line to +-200 cm and a foregrip right / left line. **Round 39** (round 38's
-   report: the M12, MP40, C96, Springfield and M18 good): the Colt holds its magazine the C96's way, the K98 its knob the
-   Springfield's way (D35 addendum); a launcher's rocket starts on the aim line (`Aim.LauncherFromGun`, D36, ENGINE-NOTES
+   report: the M12, MP40, C96, Springfield and M18 good): the Colt holds its magazine the C96's way, the Springfield its knob
+   the K98's way (D35 addendum); a launcher's rocket starts on the aim line (`Aim.LauncherFromGun`, D36, ENGINE-NOTES
    5ax) -- the player's Panzerschreck fit needs a reset.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and

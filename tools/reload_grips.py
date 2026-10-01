@@ -173,21 +173,20 @@ EXPLICIT = [
 # like the others" -- the grab is each pistol's own magazine-insert pose (its hold), so the hand snaps onto the magazine
 # in the gun and holds it the same way out of it. (The MP40's hold, moved by the difference of the grab points, was
 # tried: a translation only, it put the held magazine 16 cm from the hand, turned 65 deg -- the magazine bones' axes differ.)
-# Round 38 (the player: "C96 is good, give the colt the same mag hold and grab pose"; "Springfield looks good, give the
-# K98 the same bolt pose"): 'mag' = through the gun frame -- the source's hand on its seated magazine, carried from that
+# Round 38 (the player: "C96 is good, give the colt the same mag hold and grab pose"; then, of the knob grips, "I want
+# the springfield to use the K98 pose"): 'mag' = through the gun frame -- the source's hand on its seated magazine, carried from that
 # magazine's grab point to this one's and turned by the angle between the two MagOut directions (MAG_OUT), then put in
-# this magazine bone's seated frame (the bones' own axes don't matter). The K98's knob grip is the Springfield's moved by
-# the difference of the two Knob points: both bolt bones are the mesh's axes at rest (the K98's own, mirrored at frame 12,
-# was taken with its bolt turned 93 deg, so the mirror plane lay across the gun), then turned back 33 deg about the bolt's
-# axis through the knob (the K98's BoltLift 93.3 against the Springfield's 60): lifted -- the pull back -- the hand lies on
-# the gun as the Springfield's does (turned 33 deg less over the top when the bolt is down).
+# this magazine bone's seated frame (the bones' own axes don't matter). The Springfield's knob grip is the K98's moved by
+# the difference of the two Knob points (both bolt bones are the mesh's axes at rest), then turned 33 deg on about the
+# bolt's axis through the knob (the K98's BoltLift 93.3 against the Springfield's 60): lifted -- the pull back -- the hand
+# lies on the gun as the K98's does (turned 33 deg further over the top when the bolt is down).
 BORROWED = [
     ('Attachment_Colt45', 'bolt', 'gunSlide', 'Attachment_Mauser', 'bolt', (0.1, -0.8, -3.8)),
     ('Attachment_Colt45', 'mag', 'magazine', 'Attachment_Mauser', 'hold', 'mag'),
     ('Attachment_Colt45', 'hold', 'magazine', 'Attachment_Mauser', 'hold', 'mag'),
     ('Attachment_Mauser', 'mag', 'upgrade_02_magazine', 'Attachment_Mauser', 'hold', (0.0, 0.0, 0.0)),
-    ('Attachment_K98', 'bolt', 'upgrade_01_polished_bolt', 'Attachment_Springfield', 'bolt',
-     {'move': (-1.92, 1.97, -9.53), 'turnZ': -33.3, 'about': (-5.19, 4.72, -4.20)}),
+    ('Attachment_Springfield', 'bolt', 'upgrade_01_polished_bolt', 'Attachment_K98', 'bolt',
+     {'move': (1.92, -1.97, 9.53), 'turnZ': 33.3, 'about': (-3.27, 2.75, 5.33)}),
 ]
 # The lines' MagOut (the mesh frame: +Y down out of a pistol's grip).
 MAG_OUT = {'Attachment_Colt45': (0.0, 0.94, -0.34), 'Attachment_Mauser': (0.14, 0.99, -0.03)}

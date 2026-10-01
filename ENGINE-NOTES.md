@@ -1553,11 +1553,12 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
 - **The Colt's grips** (reload_grips.py BORROWED 'mag'): the C96's hold on its seated `upgrade_02_magazine`, moved from its
   grab point (-0.1, 6.7, 11.3) to the Colt's (0, 6.3, -1.3), turned by MagOut (0.14, 0.99, -0.03) -> (0, 0.94, -0.34), in
   the Colt `magazine`'s seated frame. [S] `logs/shots/*r38b-Attachment_Colt45-*`: grabbed at the grip's base, held in the fist.
-- **The K98's knob grip:** both rifles' bolt bones (`upgrade_01_polished_bolt`, `upgrade_01_hide_nasty_bolt`) are the mesh's
-  axes at rest; at frame 12 of `k98_rechamber_1` the K98's is turned 93 deg and 10 back (the Springfield's 18 deg), so its
-  own mirrored grip was mirrored across the wrong plane. Now the Springfield's, moved by the Knob difference (-1.92, 1.97,
-  -9.53) and turned -33.3 deg about the bone's Z through the K98's knob. [S] `logs/shots/*r38d-Attachment_K98-*` against
-  `*r38c-Attachment_Springfield-*`; the trace's `the off hand's grip bolt` while held.
+- **The knob grips:** both rifles' bolt bones (`upgrade_01_polished_bolt`, `upgrade_01_hide_nasty_bolt`) are the mesh's
+  axes at rest; at frame 12 of `k98_rechamber_1` the K98's is turned 93 deg and 10 back (the Springfield's 18 deg), so the
+  K98's mirrored grip reaches over the receiver to the knob from above -- the pose the player chose. The Springfield's is
+  the K98's, moved by the Knob difference (1.92, -1.97, 9.53) and turned +33.3 deg about the bone's Z through the
+  Springfield's knob. [S] `logs/shots/*r39a-*`: both rifles alike with the bolt lifted; the K98's entry byte-identical to
+  round 38's; the trace's `the off hand's grip bolt` while held.
 
 ## 6. Content and UnrealScript
 

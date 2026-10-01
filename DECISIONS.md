@@ -368,10 +368,11 @@ mirrored, not the game's own left hand (the game has none).
 the held magazine 16 cm from the hand and turned 65 deg (the magazine bones' axes differ); dropped.
 **Addendum (round 38's report):** the M12, the MP40, the C96, the Springfield and the M18 passed. The Colt takes the C96's
 magazine hold for both the grab and the hold, carried through the gun frame (the hand on the C96's seated magazine,
-moved from its grab point to the Colt's and turned by the angle between the two MagOut directions). The K98 takes the
-Springfield's knob grip (moved by the difference of the Knob points; both bolt bones are the mesh's axes at rest), turned
-back 33 deg about the bolt's axis through the knob for the K98's larger lift (93 vs 60 deg), so the lifted bolt -- the pull
-back -- is held as the Springfield's is.
+moved from its grab point to the Colt's and turned by the angle between the two MagOut directions). The knob grips: the
+player had the rifles mixed up -- the pose they liked was the K98's (round 38's, unchanged), and the Springfield takes it
+(moved by the difference of the Knob points; both bolt bones are the mesh's axes at rest), turned on 33 deg about the
+bolt's axis through the knob for its smaller lift (60 vs 93 deg), so the lifted bolt -- the pull back -- is held as the
+K98's is.
 
 ### D36. A launcher's rocket starts on the aim line -- Decided 2026-10-01 (round 38's report)
 `[Aim] LauncherFromGun=1` (with `ShotFromGun`): each frame, the player's projectile weapon (fire mode 0 `EWFT_Projectile`,
