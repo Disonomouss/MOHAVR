@@ -1515,6 +1515,27 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
 - **Borrowed grips** (`tools/reload_grips.py` BORROWED): the Colt's "bolt" grip is the C96's (`mauser_reload_3` 0.97 s),
   moved by the difference of the two lines' BoltGrab points (0.1, -0.8, -3.8).
 
+## 5aw. Round 38: the foregrip's trigger, the pistols' and bolt actions' grips (D35, 2026-10-01)
+
+- **The M12's pump** needs the off hand's trigger (`PumpTrigger`): [S] `logs/modlogs/feat1-*`: the foregrip held without
+  it, drawn back 11.5 cm and forward: `hands: foregrip taken` / `released`, no pump; with `lt=1`: `the pump taken (the
+  foregrip)`, `PUMP BACK`, `PUMP FORWARD` (clip 7, a shell chambered).
+- **The MP40 from the foregrip** (`ForeGrabTrigger`): the foregrip point is 30 cm forward of the grip, the magazine's grab
+  ring (r 7) about 15 cm below it, so the reach is 3 r. [S] `feat1-*`: `the foregrip hand took the magazine, 3.8 cm from
+  its grab ring's centre`, `hands: foregrip let go`, `EJECT Attachment_MP40: clip 64 -> 0`.
+- **The pistols' grab grip** (reload_grips.py BORROWED: Colt `mag` <- its `hold` at `magazine`, C96 `mag` <- its `hold` at
+  `upgrade_02_magazine`). [S] `feat3-*`: the hand closed on the magazine in the well (`logs/shots/*feat3-*-grab*`), held
+  in the fist out of it (`*-held*`), the grab point 6.0 cm from the off controller (round 37: 7.6). The MP40's hold moved
+  by the grab points' difference (`feat2-*`): 15.9 cm, turned 65 deg -- the hand beside the magazine.
+- **The knob grip** (reload_grips.py KNOB_MIRRORED): `k98_rechamber_1` / `springfield_rechamber_1` frame 12, the right
+  hand 9.9 / 11.5 units from the knob, mirrored x -> 2k - x about the knob's plane on the turned bolt bone
+  (`upgrade_01_polished_bolt`; knobs (-5.19, 4.72, -4.20) and (-3.27, 2.75, 5.33)). The game side draws it on the first
+  turned bolt bone that shows, only with `reloadFlags` bit 6 (the host: the off hand holds the bolt, pump or action).
+  [S] `feat4-*`: the trace's `the off hand's grip bolt` from the take through BOLT UP and BOLT BACK, `none` once let go
+  with the bolt open (the trace line now names the grip in use).
+- **The gun fit:** the aim line +-200 cm ([S] `feat1-*`: `aim line up 30.0` -> `48.0`, 2 cm steps past 30); foregrip
+  right / left ([S] `0` -> `-5`, saved as `[GunFit]`'s 9th value; 6 or 8 values still read).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

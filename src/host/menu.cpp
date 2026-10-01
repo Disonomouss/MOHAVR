@@ -53,8 +53,8 @@ const char* kSpotNames[2] = {"magazine", "handle / bolt"};
 const wchar_t* kSpotKinds[2] = {L"mag", L"bolt"};
 constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 (degrees)
 // The Gun fit page (M8): per weapon, saved in the player's ini [GunFit] <weapon class> = gx gy gz angle rayUp rayRight
-// foreFwd foreUp (older entries have the first six).
-enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fForeUp, fReset, fBack, fCount };
+// foreFwd foreUp foreRight (older entries have the first six or eight).
+enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fForeUp, fForeRight, fReset, fBack, fCount };
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
 // The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
 // x y z r); the rings' visibility ([Hands] Rings = never / near / always).
@@ -321,17 +321,19 @@ void Menu::SyncWeapon() {
     LoadSpots();
 }
 
-// [GunFit] <weapon> = gx gy gz angle rayUp rayRight foreFwd foreUp (6 values: saved before the foregrip existed).
+// [GunFit] <weapon> = gx gy gz angle rayUp rayRight foreFwd foreUp foreRight (6 values: saved before the foregrip existed;
+// 8: before its right / left).
 bool Menu::ReadFit(const std::wstring& ini, shared::GunFit& f) const {
     if (weaponKey_.empty() || ini.empty()) return false;
     const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
     wchar_t b[128] = L"";
     GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", b, 128, ini.c_str());
     shared::GunFit t = f;
-    const int n = b[0] ? swscanf_s(b, L"%f %f %f %f %f %f %f %f", &t.grip[0], &t.grip[1], &t.grip[2], &t.angle, &t.rayUp,
-                                   &t.rayRight, &t.foreFwd, &t.foreUp)
+    const int n = b[0] ? swscanf_s(b, L"%f %f %f %f %f %f %f %f %f", &t.grip[0], &t.grip[1], &t.grip[2], &t.angle, &t.rayUp,
+                                   &t.rayRight, &t.foreFwd, &t.foreUp, &t.foreRight)
                        : 0;
-    if (n != 6 && n != 8) return false;
+    if (n != 6 && n != 8 && n != 9) return false;
+    if (n < 9) t.foreRight = f.foreRight;
     f = t;
     return true;
 }
@@ -361,8 +363,8 @@ void Menu::SaveFit() {
     if (weaponKey_.empty() || iniPath_.empty()) return;
     const std::wstring wkey(weaponKey_.begin(), weaponKey_.end());
     wchar_t b[128];
-    swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp,
-               fit_.rayRight, fit_.foreFwd, fit_.foreUp);
+    swprintf_s(b, L"%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f", fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle,
+               fit_.rayUp, fit_.rayRight, fit_.foreFwd, fit_.foreUp, fit_.foreRight);
     WritePrivateProfileStringW(L"GunFit", wkey.c_str(), b, iniPath_.c_str());
 }
 
@@ -436,18 +438,20 @@ void Menu::AdjustFit(int item, float dir) {
         case fRight: fit_.grip[1] -= dir * kFitStep; break;
         case fUp: fit_.grip[2] -= dir * kFitStep; break;
         case fAngle: fit_.angle = std::fmax(-180.0f, std::fmin(180.0f, fit_.angle + dir * kAngleStep)); break;  // round 17: grenades want more than 45
-        case fRayUp: fit_.rayUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayUp + dir * kRayStep)); break;
-        case fRayRight: fit_.rayRight = std::fmax(-30.0f, std::fmin(30.0f, fit_.rayRight + dir * kRayStep)); break;
+        // (The player, 2026-10-01: the Panzerschreck's aim needed more than 30 cm.)
+        case fRayUp: fit_.rayUp = std::fmax(-200.0f, std::fmin(200.0f, fit_.rayUp + dir * (std::fabs(fit_.rayUp) >= 30.0f ? 2.0f : kRayStep))); break;
+        case fRayRight: fit_.rayRight = std::fmax(-200.0f, std::fmin(200.0f, fit_.rayRight + dir * (std::fabs(fit_.rayRight) >= 30.0f ? 2.0f : kRayStep))); break;
         case fForeFwd: fit_.foreFwd = std::fmax(0.0f, std::fmin(80.0f, fit_.foreFwd + dir * kFitStep)); break;
         case fForeUp: fit_.foreUp = std::fmax(-30.0f, std::fmin(30.0f, fit_.foreUp + dir * kFitStep)); break;
+        case fForeRight: fit_.foreRight = std::fmax(-40.0f, std::fmin(40.0f, fit_.foreRight + dir * kFitStep)); break;
         default: return;
     }
     for (float& g : fit_.grip) g = std::fmax(-200.0f, std::fmin(200.0f, g));
     PublishFit();
     SaveFit();
-    MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f, foregrip %.0f / %.0f cm",
-         weaponKey_.c_str(), fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp, fit_.rayRight, fit_.foreFwd,
-         fit_.foreUp);
+    MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f, foregrip %.0f / %.0f / %.0f cm "
+         "(forward, up, right)", weaponKey_.c_str(), fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp,
+         fit_.rayRight, fit_.foreFwd, fit_.foreUp, fit_.foreRight);
 }
 
 void Menu::SetHeightOffset(float v, bool save) {
@@ -966,6 +970,8 @@ void Menu::RenderFitPage() {
     ImGui::Selectable(label, selected_ == fForeFwd);
     snprintf(label, sizeof(label), "Foregrip up / down    <  %+.0f cm  >", fit_.foreUp);
     ImGui::Selectable(label, selected_ == fForeUp);
+    snprintf(label, sizeof(label), "Foregrip right / left <  %+.0f cm  >", fit_.foreRight);
+    ImGui::Selectable(label, selected_ == fForeRight);
     ImGui::Selectable("Reset this gun", selected_ == fReset);
     if (!on) ImGui::EndDisabled();
     ImGui::Selectable("Back", selected_ == fBack);

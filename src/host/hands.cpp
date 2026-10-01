@@ -141,7 +141,9 @@ Hands::Output Hands::Update(const Input& in) {
         gun.orientation = Mul(in.aim[g].orientation, XrQuaternionf{std::sin(a * 0.5f), 0.0f, 0.0f, std::cos(a * 0.5f)});
     }
     const V3 gunPos = P(gun.position);
-    const V3 foreOff = {0.0f, in.fit.foreUp / 100.0f, -in.fit.foreFwd / 100.0f};  // the gun's frame: -Z forward
+    // The gun's frame: -Z forward; the fit's right / left mirrored for a left gun hand, like the aim line.
+    const float foreRight = (g == 0 && mirrorLeft_) ? -in.fit.foreRight : in.fit.foreRight;
+    const V3 foreOff = {foreRight / 100.0f, in.fit.foreUp / 100.0f, -in.fit.foreFwd / 100.0f};
     const V3 fore = Add(gunPos, Rotate(gun.orientation, foreOff));
     const V3 mag = Add(gunPos, Rotate(gun.orientation, V3{0.0f, -0.08f, -0.10f}));  // the magazine well
 
@@ -263,6 +265,10 @@ Hands::Output Hands::Update(const Input& in) {
         rin.foreHeld = twoHanded_;
         ManualReload::Out rout;
         reload_->Frame(rin, rout);
+        if (rout.releaseForegrip && twoHanded_) {
+            twoHanded_ = false;  // the grip now holds the magazine (it stays consumed)
+            MLOG("hands: foregrip let go (the hand took the magazine)");
+        }
         for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5; ++i) {
             Spot& sp = out.spots[out.spotCount++];
             sp = {kMagWell, rout.rings[i].pos, rout.rings[i].radius, rout.rings[i].inside, rout.rings[i].close};

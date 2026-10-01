@@ -169,8 +169,24 @@ EXPLICIT = [
 # from kind, the hand moved by (x, y, z) in the part's frame: the difference between the two lines' grab points). The
 # Colt's reload never touches its slide (19.4 units off); the C96's hand on its bolt (mauser_reload_3) is used, moved from
 # the C96's BoltGrab (0, 0.5, -0.2) to the Colt's (0.1, -0.3, -4.0).
+# The player (2026-10-01): the pistols' grips "need a better hand pose for mag grabbing and holding, one that snaps on
+# like the others" -- the grab is each pistol's own magazine-insert pose (its hold), so the hand snaps onto the magazine
+# in the gun and holds it the same way out of it. (The MP40's hold, moved by the difference of the grab points, was
+# tried: a translation only, it put the held magazine 16 cm from the hand, turned 65 deg -- the magazine bones' axes differ.)
 BORROWED = [
     ('Attachment_Colt45', 'bolt', 'gunSlide', 'Attachment_Mauser', 'bolt', (0.1, -0.8, -3.8)),
+    ('Attachment_Colt45', 'mag', 'magazine', 'Attachment_Colt45', 'hold', (0.0, 0.0, 0.0)),
+    ('Attachment_Mauser', 'mag', 'upgrade_02_magazine', 'Attachment_Mauser', 'hold', (0.0, 0.0, 0.0)),
+]
+# The player (2026-10-01): the bolt actions' knob "needs a better pose ... one that snaps on". The game works the bolt
+# with the RIGHT hand, gripping the knob from behind; mirrored across the plane through the knob (the bolt bone's x =
+# knob x) it is a LEFT hand gripping it from behind and a little inboard (reached over the receiver). key, arms seq, gun
+# AnimSet, gun seq, psk, the turned bolt bone, the frame, the knob in that bone (the line's Knob).
+KNOB_MIRRORED = [
+    ('Attachment_K98', 'k98_rechamber_1', 'K98_AnimSet', 'k98_gun_rechamber_1', 'DE_K98_Rigged', 'upgrade_01_polished_bolt',
+     12, (-5.19, 4.72, -4.20)),
+    ('Attachment_Springfield', 'springfield_rechamber_1', 'Springfield_AnimSet', 'springfield_gun_rechamber_1',
+     'US_1903sniper_Rigged', 'upgrade_01_polished_bolt', 12, (-3.27, 2.75, 5.33)),
 ]
 MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
@@ -192,6 +208,7 @@ def main(root):
            '    float       fingers[15][12];', '};', 'static const GripData kGrips[] = {']
     log = []
     made = {}
+    replaced = {(b[0], b[1]) for b in BORROWED} | {(k[0], 'bolt') for k in KNOB_MIRRORED}
     for key, aseq, gset, gseq, psk, magb, grab, boltb, boff, (tout, tin, track) in GUNS:
         a = arms['seqs'][aseq]
         gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
@@ -236,6 +253,9 @@ def main(root):
                     m = mmul(m, key_local(arms, a, fn[:-1] + str(lower), f))
                 fingers.append(m)
             made[(key, kind)] = (aseq, f / a['rate'], d, hand, fingers)
+            if (key, kind) in replaced:  # (kept as a source; a BORROWED entry is emitted instead)
+                log.append('%s %s: %.2f s, %.1f units -- replaced below' % (key, kind, f / a['rate'], d))
+                continue
             out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, f / a['rate'], d))
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
@@ -297,6 +317,29 @@ def main(root):
         out.append('     {%s},' % rows(moved))
         out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
         log.append('%s %s: borrowed from %s %s, moved %.1f %.1f %.1f' % (key, kind, fkey, fkind, dx, dy, dz))
+    arms = armsBy['VM_AnimSet_NoBazooka']
+    for key, aseq, gset, gseq, psk, bone, f, knob in KNOB_MIRRORED:
+        a = arms['seqs'][aseq]
+        gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
+        sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))
+        g = gp['seqs'][gseq]
+        part = gun_cs(gp, sk, g, bone, f)
+        right = mmul(key_local(arms, a, 'RightHand', f), inv(key_local(arms, a, 'RightProp', f)))
+        d = math.dist(right[3][:3], xform(knob, part))
+        mirror_k = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [2 * knob[0], 0, 0, 1]]  # x -> 2 k - x (the knob's plane)
+        hand = mmul(mmul(MIRROR_D, mmul(right, inv(part))), mirror_k)
+        fingers = []
+        for fn in FINGERS:
+            rn = 'Right' + fn[len('Left'):]
+            m = key_local(arms, a, rn, f)
+            k = int(rn[-1])
+            for lower in range(k - 1, 0, -1):
+                m = mmul(m, key_local(arms, a, rn[:-1] + str(lower), f))
+            fingers.append([m[0], m[1], m[2], [-m[3][0], -m[3][1], -m[3][2], 1]])
+        out.append('    {"%s", "bolt", "%s", "%s", %.3ff, %.1ff,' % (key, bone, aseq, f / a['rate'], d))
+        out.append('     {%s},' % rows(hand))
+        out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
+        log.append('%s bolt: %.2f s, the right hand mirrored about the knob (%.1f units from it)' % (key, f / a['rate'], d))
     out.append('};')
     print('\n'.join(out))
     sys.stderr.write('\n'.join(log) + '\n')

@@ -207,7 +207,8 @@ struct Header {
     std::uint32_t          reloadFlags;    // bit0 manual reload on (the player's toggle); bits 1-2 the magazine (0 in gun,
                                            // 1 grabbed, 2 in the off hand, 3 out); bit3 action held; bit4 engaged (the
                                            // pipeline is alive: the game blocks its own reload only then); bit5 the held
-                                           // taped pair flipped (its other half toward the well)
+                                           // taped pair flipped (its other half toward the well); bit6 the off hand holds
+                                           // the action (a bolt's knob, a handle, the pump) -- its grip applies
     std::uint32_t          reloadKeyHash;  // FNV-1a 32 of the attachment class these flags are for
     float                  magPull;        // metres the grabbed magazine is drawn out along magOut
     Pose                   magPose;        // the held magazine's grab-point frame in LOCAL (the gun frame's axes)
@@ -378,6 +379,7 @@ struct GunFit {
     float angle;
     float rayUp, rayRight;
     float foreFwd, foreUp;
+    float foreRight = 0.0f;  // the player (2026-10-01: the M18's foregrip to the left): + = right, cm
 };
 
 // Seqlock readers spin a little when they meet the host mid-write: the host holds the lock only for the copies

@@ -1694,14 +1694,23 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     };
     // Round 35: "hold like grab" (the player's, per gun) -- the magazine in the hand (pulled out, or from the pouch) held
     // with the grab grip and its adjustments, so it looks the same coming out as going in (round 34 had it the other way
-    // round). Guns whose reload animation has no grab grip (the Colt, the C96) keep the hold.
+    // round). (The Colt's and the C96's grab grip is their hold: reload_grips.py BORROWED.)
     const GripData* grabGd = FindGrip(l->gripKey, "mag");
     const bool holdLikeGrab = (gripFlags & 1u) && grabGd;
     if (g_cfg.reloadGrips && haveRf) {
-        const char* kind = magState == 1 ? "mag" : magState == 2 ? (holdLikeGrab ? "mag" : "hold") : racking ? "bolt" : nullptr;
+        // (The player, 2026-10-01: the bolt actions' knob grip -- on the first turned bolt bone that shows, and only while
+        // the off hand holds it: an open bolt let go is still posed by the host.)
+        int actPart = b;
+        if (l->boltAction) {
+            actPart = -1;
+            for (int j : r->boltTurn)
+                if (actPart < 0 && j >= 0 && j < num && std::fabs(Det3(saved + 16 * j)) > 1e-3f) actPart = j;
+        }
+        const bool onAction = racking && (!l->boltAction || (rf.view.flags & 64u));
+        const char* kind = magState == 1 ? "mag" : magState == 2 ? (holdLikeGrab ? "mag" : "hold") : onAction ? "bolt" : nullptr;
         const int which = magState == 1 ? 0 : magState == 2 ? (holdLikeGrab ? 0 : 1) : 2;
         const GripData* gd = kind ? FindGrip(l->gripKey, kind) : nullptr;
-        const int part = !gd ? -1 : racking && magState != 1 && magState != 2 ? b : (v >= 0 ? r->mag[v] : -1);
+        const int part = !gd ? -1 : onAction && magState != 1 && magState != 2 ? actPart : (v >= 0 ? r->mag[v] : -1);
         if (gd && part >= 0 && part < num) {
             float partW[16], hand[16], m[16], m2[16];
             if (magState == 2 && haveInHandMove) {
@@ -1848,9 +1857,10 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (taped)
             MLOG("reload: trace -- taped pair: the game's pose %c, half %c in the gun, half %c drawn%s", poseNow ? 'B' : 'A',
                  s.half ? 'B' : 'A', halfDrawn ? 'B' : 'A', havePre ? " (moved)" : "");
-        MLOG("reload: trace -- drawn %s: magazine %s%s, action %s%s (game Z %.2f -> drawn %.2f), top round %s; host %s", key.c_str(),
-             kMag[magState], extra, hold ? "held empty" : "the game's", racking ? ", racked by the off hand" : "", zGame, zDrawn,
-             topShown < 0 ? "none" : topShown ? "shown" : "hidden", hostState ? "drives it" : "not driving");
+        MLOG("reload: trace -- drawn %s: magazine %s%s, action %s%s (game Z %.2f -> drawn %.2f), top round %s; host %s; the off "
+             "hand's grip %s", key.c_str(), kMag[magState], extra, hold ? "held empty" : "the game's",
+             racking ? ", racked by the off hand" : "", zGame, zDrawn, topShown < 0 ? "none" : topShown ? "shown" : "hidden",
+             hostState ? "drives it" : "not driving", g_gripNow.grip ? g_gripNow.grip->kind : "none");
         for (size_t k = 0; k < r->mag.size(); ++k) {
             const int j = r->mag[k];
             if (j < 0 || j >= num) continue;

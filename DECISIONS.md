@@ -343,3 +343,26 @@ restores `Saved\`); a launcher's class outside its missions may give nothing.
 **Addendum (2026-10-01, round 36's report):** the game's switch weapon (`SwitchWeapon` -> `MOHAInventoryManager.SwitchWeapon`)
 cycles only the slot weapons, so the given guns were unreachable. After the give, the host keeps the Xbox B (switch weapon)
 from the game and sends the engine's `NextWeapon` instead, until the game reports a new pawn.
+
+### D35. Round 38: the foregrip's trigger, the pistols' and bolt actions' grips, the fit's limits -- Decided 2026-10-01
+The player's requests after round 36 ("all of the reloads for weapons are functional"):
+- **The M12's foregrip holds the gun without pumping it** (`[Weapon] PumpTrigger=1`): the pump is taken only while the
+  off hand's trigger is squeezed (0.6 to take it, kept above 0.4); without it the foregrip is the normal two-handed hold.
+  The player chose the off hand's trigger (asked: the gun hand's trigger fires).
+- **The MP40 works alike** (`[Weapon] ForeGrabTrigger=1`): on a `GrabTrigger` gun, holding the foregrip and squeezing that
+  hand's trigger takes the magazine (within 3 x the grab ring's radius: the MP40's magazine is about 15 cm below its
+  foregrip point); the foregrip is let go, the hand holds the magazine.
+- **The pistols' magazine grip snaps on**: the Colt's and the C96's grab grip is their own hold (the reload animation's
+  insert pose; they had none, so the hand never closed on the magazine in the well), and the hold stays theirs.
+- **The bolt actions' knob grip**: the K98's and Springfield's off hand on the knob is the game's right hand on it (the
+  rechamber animation, frame 12) mirrored about the knob's plane; drawn only while the off hand holds the bolt
+  (`reloadFlags` bit 6, no layout change), so an open bolt let go leaves the hand free.
+- **The gun fit's aim line** goes to +-200 cm (was +-30; 2 cm steps past 30): the Panzerschreck's aim needed more.
+- **Foregrip right / left** in the gun fit (+-40 cm; the 9th value of `[GunFit]`, mirrored in left-hand mode): the M18's
+  foregrip to the left.
+**Why:** the player's requests; the switches are on by default because the simulator proved them (`feat1`-`feat4`).
+**Costs:** [H] -- the squeeze while holding the foregrip (a two-handed aim with the trigger held is the pump, not a hold);
+the MP40's reach from the foregrip to the magazine; the pistols' grip is the animation's, not hand-made; the knob grip is
+mirrored, not the game's own left hand (the game has none).
+**Tried:** the MP40's hold borrowed for the pistols, moved by the difference of the grab points: a translation only, it put
+the held magazine 16 cm from the hand and turned 65 deg (the magazine bones' axes differ); dropped.

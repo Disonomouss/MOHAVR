@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-01 (GOAL.md done: every reachable gun reloads by hand, the landing fixed; HEADSET-TESTS round 36
+_Last updated: 2026-10-01 (GOAL.md done: every reachable gun reloads by hand, the landing fixed; HEADSET-TESTS round 38
 prepared; **the shipped defaults are deployed** for the player -- `tools/deploy.ps1 deploy`, no `-Set`)_
 
 ## Where things stand
@@ -154,7 +154,10 @@ address-space budget for D3D9On12.
    2026-10-01; D34): the game's own cheats give every gun in any mission ([S] `logs/modlogs/giveall1-*`). **Round 37**
    (round 36's mid-round report): after the give, Y steps through every gun (the game's own switch only cycles the
    slots); a button held as the menu closes no longer reaches the game; the Colt's trigger release no longer fires; the
-   Colt's slide takes the C96's bolt grip. The grenade pickup is parked (the player).
+   Colt's slide takes the C96's bolt grip. The grenade pickup is parked (the player). **Round 38** (the player: "all of
+   the reloads for weapons are functional"; D35, ENGINE-NOTES 5aw): the M12's foregrip pumps only with the off hand's
+   trigger, the MP40's foregrip hand takes the magazine with it; the pistols' hand closes on the magazine; the bolt
+   actions' knob grip; the gun fit's aim line to +-200 cm and a foregrip right / left line.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

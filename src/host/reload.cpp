@@ -71,6 +71,10 @@ void ManualReload::Init(const std::wstring& ini) {
     rackMin_ = iniFloat(L"RackMin", 4.0f) / 100.0f;
     rackTug_ = iniFloat(L"RackTug", 1.0f) / 100.0f;
     pumpArm_ = std::clamp(iniFloat(L"PumpArm", 0.85f), 0.3f, 1.0f);
+    pumpTrigger_ = GetPrivateProfileIntW(L"ManualReload", L"PumpTrigger", 1, ini.c_str()) != 0;
+    foreGrabTrigger_ = GetPrivateProfileIntW(L"ManualReload", L"ForeGrabTrigger", 1, ini.c_str()) != 0;
+    MLOG("reload: the pump %s; the foregrip hand's trigger %s", pumpTrigger_ ? "only with the foregrip hand's trigger held" :
+         "whenever the foregrip is held", foreGrabTrigger_ ? "takes a GrabTrigger gun's magazine" : "does nothing on the foregrip");
     GetPrivateProfileStringW(L"ManualReload", L"Hold", L"0 0 0", b, 64, ini.c_str());
     float h[3] = {0, 0, 0};
     swscanf_s(b, L"%f %f %f", &h[0], &h[1], &h[2]);
@@ -373,6 +377,21 @@ void ManualReload::Frame(const In& in, Out& out) {
             Pulse(out, o, 0.6f, 40.0f);
         }
     }
+    // The player (2026-10-01): a GrabTrigger gun (the MP40) held by its foregrip -- a squeeze of that hand's trigger takes the
+    // magazine out of the well (the foregrip lets go; the grip that held it now holds the magazine). ForeGrabTrigger.
+    {
+        const bool squeeze = !foreTrigHeld_ && in.offTrigger >= 0.6f;
+        if (in.offTrigger >= 0.6f) foreTrigHeld_ = true;
+        else if (in.offTrigger < 0.4f) foreTrigHeld_ = false;
+        if (squeeze && foreGrabTrigger_ && active_ && (geo_.caps & 128u) && in.foreHeld && in.offHeld && mag_ == kInGun &&
+            !(geo_.caps & 512u) && Len(Sub(offP, magRingW)) < 3.0f * magRingR) {  // (the MP40's is ~15 cm below its foregrip)
+            start_ = X(offP);
+            SetMag(kGrabbed, "the foregrip hand's trigger");
+            out.releaseForegrip = true;
+            MLOG("reload: the foregrip hand took the magazine, %.1f cm from its grab ring's centre", 100.0f * Len(Sub(offP, magRingW)));
+            Pulse(out, o, 0.5f, 30.0f);
+        }
+    }
     if (press_ == kPressMag && mag_ == kInGun) {
         start_ = X(offP);
         SetMag(kGrabbed, "the off hand's grip at it");
@@ -466,7 +485,10 @@ void ManualReload::Frame(const In& in, Out& out) {
     const bool pump = (geo_.caps & 2048u) != 0;
     if (pump) {
         const float along = -Dot(Sub(offP, gunP), backW);  // how far ahead of the gun hand, along the bore
-        const bool byFore = in.foreHeld && foregrip_;
+        // (The player, 2026-10-01: the foregrip held normally doesn't pump; the foregrip hand's trigger engages the pump --
+        // PumpTrigger; hysteresis 0.6 / 0.4.)
+        const bool trigOk = !pumpTrigger_ || in.offTrigger >= (pumpHeld_ && pumpByFore_ ? 0.4f : 0.6f);
+        const bool byFore = in.foreHeld && foregrip_ && trigOk;
         const bool held = byFore || boltHeld_;
         if (held && !pumpHeld_) {
             pumpHeld_ = true;
@@ -608,6 +630,7 @@ void ManualReload::Frame(const In& in, Out& out) {
     if (gunTrigLatch_) out.maskTrigger[g] = true;
     if (twoStage && (geo_.state & 2048u)) out.maskTrigger[g] = true;  // GOAL A2: work the bolt before the next shot
     if (pump && ((geo_.state & 2048u) || rackArmed_)) out.maskTrigger[g] = true;  // GOAL A3: pump it first
+    if (pump && pumpHeld_ && pumpByFore_ && pumpTrigger_) out.maskTrigger[o] = true;  // (the pump's trigger isn't the game's)
     float dist = 1e9f, angle = 180.0f;
     const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
     lastNow_ = in.now;
@@ -717,8 +740,10 @@ void ManualReload::Send(shared::Header* hdr, double now) {
 std::uint32_t ManualReload::Flags() const {
     // (A2: the host poses the bolt; A3: the pump while held)
     const bool posed = boltHeld_ || pumpHeld_ || ((geo_.caps & 4096u) && (actHeld_ || actS_ > 0.001f));
+    // bit6: the off hand holds the action now (the grips: an open bolt let go is posed, but not held).
+    const bool held = boltHeld_ || pumpHeld_ || actHeld_;
     return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (posed ? 8u : 0u) | (engaged_ ? 16u : 0u) |
-           (mag_ == kInHand && flipped_ ? 32u : 0u);
+           (mag_ == kInHand && flipped_ ? 32u : 0u) | (held ? 64u : 0u);
 }
 
 shared::Pose ManualReload::MagPose() const {

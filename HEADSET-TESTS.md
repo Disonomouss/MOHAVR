@@ -1556,6 +1556,38 @@ The Colt: fire it empty, B, a new magazine, then the trigger (the slide closes, 
 
 ---
 
+## Round 38: prepared 2026-10-01, the foregrip's trigger, the pistols' and bolt actions' grips, the fit's limits
+**Changed (your requests):**
+- **The M12:** holding the foregrip is just a two-handed hold now. To pump, squeeze the off hand's trigger while holding
+  the foregrip, then draw back and forward. (`[Weapon] PumpTrigger=0` brings back the old pump-on-grip.)
+- **The MP40:** while the off hand holds the foregrip, squeezing that hand's trigger takes the magazine (the hand lets go
+  of the foregrip and holds it). Grabbing the magazine directly still works as before (grip + trigger at the magazine).
+  (`[Weapon] ForeGrabTrigger=0` turns it off.)
+- **The Colt and the C96:** the hand now closes on the magazine in the gun when you grab it, and holds it the same way
+  out of it (the game's own reload pose for each pistol).
+- **The K98 and Springfield:** the off hand closes on the bolt knob while you hold it (the game's own hand on the knob,
+  mirrored to the left), and lets go when you do.
+- **Gun fit:** the aim line (up / right) now goes to 200 cm either way (2 cm steps past 30), for the Panzerschreck. A new
+  line, **Foregrip right / left**, under Foregrip up, for the M18.
+[S]: `logs/modlogs/feat1-*` to `feat4-*`: the M12 without the trigger -- no pump, with it -- back and forward; the MP40's
+magazine taken from the foregrip; both pistols' grab and hold (`logs/shots/*feat3-*`); the K98's knob grip on while held,
+off once let go; the menu's aim line to 48 and the foregrip to -5. `tools/harness.ps1 cycle` OK.
+
+**How to try it:** menu > Weapons > Give all weapons, then Y to each gun. Gun fit: menu > Weapons > Gun fit with the
+Panzerschreck or the M18 in hand.
+
+**Questions:**
+1. The M12: does the foregrip hold feel right, and the squeeze-to-pump?
+2. The MP40: the squeeze on the foregrip for the magazine -- does the hand reach and take it?
+3. The Colt and C96: do the hand poses on the magazine (in the gun and in the hand) look right now?
+4. The K98 / Springfield: does the hand on the bolt knob look right through the whole stroke?
+5. The Panzerschreck's aim line and the M18's foregrip: could you set them where you wanted?
+6. Anything else odd?
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

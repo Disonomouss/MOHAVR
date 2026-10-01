@@ -90,6 +90,7 @@ public:
         bool  targetOk[5]{};
         XrVector3f target[5]{};  // tests: 0 the magazine's grab point, 1 the action's, 2 where the off hand's aim point
                                  // puts a held magazine's grab point at the well, 3 / 4 a bolt's knob lifted / drawn back
+        bool    releaseForegrip = false;  // the foregrip hand took the magazine (ForeGrabTrigger): two-handed ends
         bool    alignOk = false;  // tests ("hand=l,@magin,dx,dy,dz,align"): the off hand's aim pose that seats the held
         XrPosef align{};          // magazine exactly -- turned as well, whatever grip holds it (GOAL: the new guns' grips)
     };
@@ -157,6 +158,9 @@ private:
     // (boltHeld_) -- the most forward it has been along the gun since (the stroke's start), PumpArm of the travel.
     bool          pumpHeld_ = false, pumpByFore_ = false;
     float         pumpAnchor_ = 0.0f, pumpArm_ = 0.85f;
+    bool          pumpTrigger_ = true;      // [ManualReload] PumpTrigger: the foregrip pumps only with its hand's trigger held
+    bool          foreGrabTrigger_ = true;  // [ManualReload] ForeGrabTrigger: on a GrabTrigger gun, it takes the magazine
+    bool          foreTrigHeld_ = false;
     bool          foregrip_ = false;  // (Begin) In.foregrip: the press test comes before Frame
     double        lastNow_ = 0.0, nearMissAt_ = 0.0;
     bool          lastGunOk_ = false;
