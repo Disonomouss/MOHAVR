@@ -42,6 +42,7 @@ struct Config {
     float aimSpread     = 0.0f;   // [Aim] Spread -- the game's shot spread, scaled (0 none, 1 the game's; Mode 1-3)
     bool  aimShotFromGun = true;  // [Aim] ShotFromGun -- the shot starts at the gun, along the red dot's ray (modes 2/3)
     bool  aimShotLog    = true;   // [Aim] ShotLog -- log where each shot went, against the red dot (first 400)
+    bool  aimLauncherFromGun = true;  // [Aim] LauncherFromGun -- a launcher's rocket starts on the aim line (ShotFromGun)
     float aimRayUp      = 8.0f;   // [Aim] RayUp -- cm the hand's aim ray is raised to the gun's barrel (ViewModel=2 only)
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
     bool throwByHand    = true;   // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)

@@ -366,3 +366,23 @@ the MP40's reach from the foregrip to the magazine; the pistols' grip is the ani
 mirrored, not the game's own left hand (the game has none).
 **Tried:** the MP40's hold borrowed for the pistols, moved by the difference of the grab points: a translation only, it put
 the held magazine 16 cm from the hand and turned 65 deg (the magazine bones' axes differ); dropped.
+**Addendum (round 38's report):** the M12, the MP40, the C96, the Springfield and the M18 passed. The Colt takes the C96's
+magazine hold for both the grab and the hold, carried through the gun frame (the hand on the C96's seated magazine,
+moved from its grab point to the Colt's and turned by the angle between the two MagOut directions). The K98 takes the
+Springfield's knob grip (moved by the difference of the Knob points; both bolt bones are the mesh's axes at rest), turned
+back 33 deg about the bolt's axis through the knob for the K98's larger lift (93 vs 60 deg), so the lifted bolt -- the pull
+back -- is held as the Springfield's is.
+
+### D36. A launcher's rocket starts on the aim line -- Decided 2026-10-01 (round 38's report)
+`[Aim] LauncherFromGun=1` (with `ShotFromGun`): each frame, the player's projectile weapon (fire mode 0 `EWFT_Projectile`,
+not a grenade) gets `EALAWeapon.PhysicalStartFireOverride` = where the aim ray starts, unless something stands between
+the eye and it. `ProjectileFire` spawns the rocket there instead of `GetPhysicalFireStartLoc` (the Panzerschreck's and
+M18's `GetBarrelPosition`: the game's own first-person gun, beside the head), and its aim, from the game's trace (already
+run from the gun along the ray), is the ray itself.
+**Why:** the player: "the Panzerschreck's missile comes from beside the player and adjustments don't seem to take or maybe
+the aim changes at distance" -- the rocket flew from beside the head towards the dot's point, crossing the aim line only
+there, so no aim-line offset could fix it (the player had pushed it to 200 cm left, 52 up). The rocket flies straight
+(`MOHAProj_Rocket` is PHYS_Projectile): no drop to allow for.
+**Costs:** [H] -- the rocket leaves from the aim line's start (at the hand, on the tube's line once the fit is right), not
+the tube's mouth; a fit with a large aim-line offset now moves the rocket's start with it (the player's Panzerschreck fit
+needs "Reset this gun").

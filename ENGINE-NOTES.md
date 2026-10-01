@@ -1536,6 +1536,29 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
 - **The gun fit:** the aim line +-200 cm ([S] `feat1-*`: `aim line up 30.0` -> `48.0`, 2 cm steps past 30); foregrip
   right / left ([S] `0` -> `-5`, saved as `[GunFit]`'s 9th value; 6 or 8 values still read).
 
+## 5ax. Round 38's report: the launchers' rocket, the Colt's and K98's grips (D35 addendum, D36, 2026-10-01)
+
+- **The rocket's start** (`EALAWeapon.ProjectileFire`, Role Authority): `StartTrace` = the eye (`GetWeaponStartTraceLocation`),
+  `RealStartLoc` = `PhysicalStartFireOverride` if non-zero (then cleared), else `GetPhysicalFireStartLoc()` ->
+  `GetMuzzleLoc()`, which the Panzerschreck and the M18 override with `GetBarrelPosition()` (their `WeaponSkeletalMesh`:
+  the game's own first-person gun). Standalone and the two different: `CalcWeaponFire(StartTrace, StartTrace +
+  GetAdjustedAim * range)` (the bullet trace the mod already moves to the gun with `ShotFromGun`), AimDir =
+  normalize(HitLocation - RealStartLoc), `SpawnProjectile(RealStartLoc, AimDir)`. `TimeWeaponEquipping` clears the override.
+- **The rocket's flight:** `MOHAProj_PanzerschreckProjectile` extends `MOHAProj_Rocket` (Physics=6, PHYS_Projectile: a
+  straight line; `MOHAProj_Explosive`'s Physics=2 is overridden), fSpeed 3000 (the M18's 14000).
+- [S] `logs/modlogs/r38b-*`, `r38c-*`: `aim: MOHAPanzerschreck fires projectiles -- from the aim line`; the shot `from the
+  gun (0.32 m from the eye) ... 1 cm from the red dot's point (25.7 m; the game's line 0.00 deg off the aim)` and `...'s
+  projectile started on the aim line` (the override read and cleared); with the player's Panzerschreck fit (aim line 52 up,
+  200 left) the rocket left 1.95 m from the eye (`r38b-pz-fired-a`): reset, it went to the dot (`r38c-pz-fired-a`).
+- **The Colt's grips** (reload_grips.py BORROWED 'mag'): the C96's hold on its seated `upgrade_02_magazine`, moved from its
+  grab point (-0.1, 6.7, 11.3) to the Colt's (0, 6.3, -1.3), turned by MagOut (0.14, 0.99, -0.03) -> (0, 0.94, -0.34), in
+  the Colt `magazine`'s seated frame. [S] `logs/shots/*r38b-Attachment_Colt45-*`: grabbed at the grip's base, held in the fist.
+- **The K98's knob grip:** both rifles' bolt bones (`upgrade_01_polished_bolt`, `upgrade_01_hide_nasty_bolt`) are the mesh's
+  axes at rest; at frame 12 of `k98_rechamber_1` the K98's is turned 93 deg and 10 back (the Springfield's 18 deg), so its
+  own mirrored grip was mirrored across the wrong plane. Now the Springfield's, moved by the Knob difference (-1.92, 1.97,
+  -9.53) and turned -33.3 deg about the bone's Z through the K98's knob. [S] `logs/shots/*r38d-Attachment_K98-*` against
+  `*r38c-Attachment_Springfield-*`; the trace's `the off hand's grip bolt` while held.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -384,6 +384,41 @@ void OnBulletTrace(SafetyHookContext& ctx) {
     }
 }
 
+// [Aim] LauncherFromGun (the player, round 38: "the Panzerschreck's missile comes from beside the player"): a projectile
+// weapon's EALAWeapon.ProjectileFire spawns at GetPhysicalFireStartLoc -- the Panzerschreck's and M18's GetBarrelPosition,
+// the barrel of the game's own first-person gun, beside the head -- unless PhysicalStartFireOverride is set (it reads and
+// clears it per shot). Set every frame to where the aim ray starts: the game's trace (CalcWeaponFire, from the gun along
+// the ray with ShotFromGun) then gives AimDir = the ray itself. Not when something stands between the eye and the gun.
+void SetLauncherStart(std::uintptr_t pawn, bool barrel) {
+    static std::uintptr_t lastWeapon = 0;
+    static bool lastSet = false;
+    static unsigned taken = 0;
+    const int wo = names::PropertyOffset(pawn, "Weapon");
+    const std::uintptr_t weapon = wo >= 0 ? names::ReadPointer(pawn + wo) : 0;
+    if (!weapon || names::IsA(weapon, "EALAGrenade")) return;
+    const int so = names::PropertyOffset(weapon, "PhysicalStartFireOverride"), fo = names::PropertyOffset(weapon, "WeaponFireTypes");
+    if (so < 0 || fo < 0) return;
+    // WeaponFireTypes: array<EWeaponFireType> (TArray: data, count) -- fire mode 0 is EWFT_Projectile (1).
+    const std::uintptr_t data = names::ReadPointer(weapon + fo);
+    const int count = *reinterpret_cast<const int*>(weapon + fo + 4);
+    if (!data || count < 1 || *reinterpret_cast<const std::uint8_t*>(data) != 1) return;
+    float* over = reinterpret_cast<float*>(weapon + so);
+    if (weapon == lastWeapon && lastSet && over[0] == 0.0f && over[1] == 0.0f && over[2] == 0.0f && taken < 20) {
+        ++taken;  // the game read and cleared it: a projectile left from the aim line
+        MLOG("aim: %s's projectile started on the aim line (%.0f %.0f %.0f, %.2f m from the eye)", names::ClassName(weapon).c_str(),
+             g_frame.from[0], g_frame.from[1], g_frame.from[2], Dist(g_frame.start, g_frame.from) / g_frame.upm);
+    }
+    float at[3];
+    const bool clear = barrel && g_frame.valid && !TraceThrough(pawn, g_frame.start, g_frame.from, at, nullptr);
+    if (weapon != lastWeapon) {
+        lastWeapon = weapon;
+        MLOG("aim: %s fires projectiles -- %s", names::ClassName(weapon).c_str(),
+             clear ? "from the aim line (Aim.LauncherFromGun)" : "from the game's barrel for now (no clear aim line)");
+    }
+    for (int i = 0; i < 3; ++i) over[i] = clear ? g_frame.from[i] : 0.0f;
+    lastSet = clear;
+}
+
 // Right after it: where the bullet went (the Hit at esp+0x14).
 void OnBulletTraceDone(SafetyHookContext& ctx) {
     if (!g_shot.active) return;
@@ -557,6 +592,7 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     g_frame.tick = GetTickCount();
     std::memcpy(g_frame.start, shotStart, sizeof(g_frame.start));
     std::memcpy(g_frame.point, point, sizeof(g_frame.point));
+    if (g_cfg.aimShotFromGun && g_cfg.aimLauncherFromGun) SetLauncherStart(pawn, barrel);
     const float dx = point[0] - pos[0], dy = point[1] - pos[1], dz = point[2] - pos[2];
     Publish(std::sqrt(dx * dx + dy * dy + dz * dz) / upm, static_cast<std::uint32_t>(g_cfg.aimMode));
     static DWORD nextLog = 0;

@@ -173,11 +173,24 @@ EXPLICIT = [
 # like the others" -- the grab is each pistol's own magazine-insert pose (its hold), so the hand snaps onto the magazine
 # in the gun and holds it the same way out of it. (The MP40's hold, moved by the difference of the grab points, was
 # tried: a translation only, it put the held magazine 16 cm from the hand, turned 65 deg -- the magazine bones' axes differ.)
+# Round 38 (the player: "C96 is good, give the colt the same mag hold and grab pose"; "Springfield looks good, give the
+# K98 the same bolt pose"): 'mag' = through the gun frame -- the source's hand on its seated magazine, carried from that
+# magazine's grab point to this one's and turned by the angle between the two MagOut directions (MAG_OUT), then put in
+# this magazine bone's seated frame (the bones' own axes don't matter). The K98's knob grip is the Springfield's moved by
+# the difference of the two Knob points: both bolt bones are the mesh's axes at rest (the K98's own, mirrored at frame 12,
+# was taken with its bolt turned 93 deg, so the mirror plane lay across the gun), then turned back 33 deg about the bolt's
+# axis through the knob (the K98's BoltLift 93.3 against the Springfield's 60): lifted -- the pull back -- the hand lies on
+# the gun as the Springfield's does (turned 33 deg less over the top when the bolt is down).
 BORROWED = [
     ('Attachment_Colt45', 'bolt', 'gunSlide', 'Attachment_Mauser', 'bolt', (0.1, -0.8, -3.8)),
-    ('Attachment_Colt45', 'mag', 'magazine', 'Attachment_Colt45', 'hold', (0.0, 0.0, 0.0)),
+    ('Attachment_Colt45', 'mag', 'magazine', 'Attachment_Mauser', 'hold', 'mag'),
+    ('Attachment_Colt45', 'hold', 'magazine', 'Attachment_Mauser', 'hold', 'mag'),
     ('Attachment_Mauser', 'mag', 'upgrade_02_magazine', 'Attachment_Mauser', 'hold', (0.0, 0.0, 0.0)),
+    ('Attachment_K98', 'bolt', 'upgrade_01_polished_bolt', 'Attachment_Springfield', 'bolt',
+     {'move': (-1.92, 1.97, -9.53), 'turnZ': -33.3, 'about': (-5.19, 4.72, -4.20)}),
 ]
+# The lines' MagOut (the mesh frame: +Y down out of a pistol's grip).
+MAG_OUT = {'Attachment_Colt45': (0.0, 0.94, -0.34), 'Attachment_Mauser': (0.14, 0.99, -0.03)}
 # The player (2026-10-01): the bolt actions' knob "needs a better pose ... one that snaps on". The game works the bolt
 # with the RIGHT hand, gripping the knob from behind; mirrored across the plane through the knob (the bolt bone's x =
 # knob x) it is a LEFT hand gripping it from behind and a little inboard (reached over the receiver). key, arms seq, gun
@@ -190,6 +203,24 @@ KNOB_MIRRORED = [
 ]
 MIRROR_D = [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 MIRROR_S = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
+
+def turn_onto(a, b):
+    na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
+    a = [x / na for x in a]
+    b = [x / nb for x in b]
+    k = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    sn, cs = math.sqrt(sum(x * x for x in k)), sum(a[i] * b[i] for i in range(3))
+    m = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    if sn < 1e-9:
+        return m
+    u = [x / sn for x in k]
+    for i in range(3):  # row i = e_i turned (Rodrigues): v c + (u x v) s + u (u.v)(1 - c)
+        v = [1.0 if j == i else 0.0 for j in range(3)]
+        uv = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+        ud = u[i]
+        m[i][:3] = [v[j] * cs + uv[j] * sn + u[j] * ud * (1 - cs) for j in range(3)]
+    return m
 
 
 def rows(m):
@@ -208,7 +239,8 @@ def main(root):
            '    float       fingers[15][12];', '};', 'static const GripData kGrips[] = {']
     log = []
     made = {}
-    replaced = {(b[0], b[1]) for b in BORROWED} | {(k[0], 'bolt') for k in KNOB_MIRRORED}
+    borrowedKeys = {(b[0], b[1]) for b in BORROWED}
+    replaced = borrowedKeys | {(k[0], 'bolt') for k in KNOB_MIRRORED}
     for key, aseq, gset, gseq, psk, magb, grab, boltb, boff, (tout, tin, track) in GUNS:
         a = arms['seqs'][aseq]
         gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
@@ -216,6 +248,7 @@ def main(root):
         g = gp['seqs'][gseq]
         mag0 = gun_cs(gp, sk, g, magb, 0)
         grabInMag = xform(grab, inv(mag0))
+        made[(key, 'seat')] = (mag0, grab)
         n = min(a['frames'], g['frames'])
 
         def hand_at(f):
@@ -310,13 +343,6 @@ def main(root):
             out.append('     {%s},' % rows(hand))
             out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
             log.append('%s %s: %.2f s, the left hand at frame %d (%.1f units from the part)' % (key, kind, f / a['rate'], f, d))
-    for key, kind, bone, fkey, fkind, (dx, dy, dz) in BORROWED:
-        aseq, t, d, hand, fingers = made[(fkey, fkind)]
-        moved = [hand[0], hand[1], hand[2], [hand[3][0] + dx, hand[3][1] + dy, hand[3][2] + dz, 1]]
-        out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, t, d))
-        out.append('     {%s},' % rows(moved))
-        out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
-        log.append('%s %s: borrowed from %s %s, moved %.1f %.1f %.1f' % (key, kind, fkey, fkind, dx, dy, dz))
     arms = armsBy['VM_AnimSet_NoBazooka']
     for key, aseq, gset, gseq, psk, bone, f, knob in KNOB_MIRRORED:
         a = arms['seqs'][aseq]
@@ -336,10 +362,39 @@ def main(root):
             for lower in range(k - 1, 0, -1):
                 m = mmul(m, key_local(arms, a, rn[:-1] + str(lower), f))
             fingers.append([m[0], m[1], m[2], [-m[3][0], -m[3][1], -m[3][2], 1]])
+        made[(key, 'bolt')] = (aseq, f / a['rate'], d, hand, fingers)
+        if (key, 'bolt') in borrowedKeys:
+            log.append('%s bolt: %.2f s, the right hand mirrored about the knob -- replaced below' % (key, f / a['rate']))
+            continue
         out.append('    {"%s", "bolt", "%s", "%s", %.3ff, %.1ff,' % (key, bone, aseq, f / a['rate'], d))
         out.append('     {%s},' % rows(hand))
         out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
         log.append('%s bolt: %.2f s, the right hand mirrored about the knob (%.1f units from it)' % (key, f / a['rate'], d))
+    for key, kind, bone, fkey, fkind, off in BORROWED:
+        aseq, t, d, hand, fingers = made[(fkey, fkind)]
+        if off == 'mag':
+            (seatS, grabS), (seatD, grabD) = made[(fkey, 'seat')], made[(key, 'seat')]
+            onGun = mmul(hand, seatS)  # the source hand on its seated magazine, in its gun frame
+            rot = turn_onto(MAG_OUT[fkey], MAG_OUT[key])
+            toGrab = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [-grabS[0], -grabS[1], -grabS[2], 1]]
+            fromGrab = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [grabD[0], grabD[1], grabD[2], 1]]
+            moved = mmul(mmul(mmul(mmul(onGun, toGrab), rot), fromGrab), inv(seatD))
+            how = 'through the gun frame (grab %.1f %.1f %.1f -> %.1f %.1f %.1f, MagOut turned)' % (tuple(grabS) + tuple(grabD))
+        else:
+            dx, dy, dz = off['move'] if isinstance(off, dict) else off
+            moved = [hand[0], hand[1], hand[2], [hand[3][0] + dx, hand[3][1] + dy, hand[3][2] + dz, 1]]
+            how = 'moved %.1f %.1f %.1f' % (dx, dy, dz)
+            if isinstance(off, dict):  # then turned about the bone's Z through a point, as the bolt's lift turns it
+                a, (kx, ky, kz) = math.radians(off['turnZ']), off['about']
+                c, sn = math.cos(a), math.sin(a)
+                rz = [[c, sn, 0, 0], [-sn, c, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+                moved = mmul(mmul(mmul(moved, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [-kx, -ky, -kz, 1]]), rz),
+                             [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [kx, ky, kz, 1]])
+                how += ', turned %.1f deg about Z through %.2f %.2f %.2f' % (off['turnZ'], kx, ky, kz)
+        out.append('    {"%s", "%s", "%s", "%s", %.3ff, %.1ff,' % (key, kind, bone, aseq, t, d))
+        out.append('     {%s},' % rows(moved))
+        out.append('     {' + ',\n      '.join('{%s}' % rows(m) for m in fingers) + '}},')
+        log.append('%s %s: borrowed from %s %s, %s' % (key, kind, fkey, fkind, how))
     out.append('};')
     print('\n'.join(out))
     sys.stderr.write('\n'.join(log) + '\n')

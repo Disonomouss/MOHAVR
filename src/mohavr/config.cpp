@@ -91,6 +91,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.aimSpread      = getf(L"Aim", L"Spread", c.aimSpread, 0.0f, 1.0f);
     c.aimShotFromGun = get(L"Aim", L"ShotFromGun", c.aimShotFromGun);
     c.aimShotLog     = get(L"Aim", L"ShotLog", c.aimShotLog);
+    c.aimLauncherFromGun = get(L"Aim", L"LauncherFromGun", c.aimLauncherFromGun);
     c.hideViewModel  = get(L"Weapon", L"HideViewModel", c.hideViewModel);
     c.hideBody       = get(L"Weapon", L"HideBody", c.hideBody);
     c.throwByHand    = get(L"Hands", L"Throw", c.throwByHand);
