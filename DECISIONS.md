@@ -387,3 +387,17 @@ there, so no aim-line offset could fix it (the player had pushed it to 200 cm le
 **Costs:** [H] -- the rocket leaves from the aim line's start (at the hand, on the tube's line once the fit is right), not
 the tube's mouth; a fit with a large aim-line offset now moves the rocket's start with it (the player's Panzerschreck fit
 needs "Reset this gun").
+
+### D37. The parachute: the landing's camera left out, the harness not in the hand -- Decided 2026-10-01
+`[Camera] SteadyLanding=1`: through the parachute landing (CurrentActivity 41 CONTROLLED_LANDING, the roll; 42
+REMOVE_GEAR, getting up) the view is held at the pawn's standing eye (Location + BaseEyeHeight) facing the controller's
+yaw -- at once on the touchdown frame, eased back to the game's camera over 0.25 s when the landing ends (where the two
+meet: 160.0 against 161.0 cm). The head still turns and moves the view. And only a weapon's attachment (a
+`WeaponAttachment`: every gun, grenade and the demo charge) is put in the gun hand: while parachuting the newest
+first-person part was the `MOHAParachuteActor`'s harness, which the hand carried with the arms; now the game draws them.
+**Why:** the player (after round 39): "While the camera no longer goes underground, it still freaks out in the same way.
+The chest of the character is held like a gun in the right hand and moves with it." MinEyeHeight (D26) only floored the
+roll at 60 cm; the roll still dropped the view 1 m and turned it.
+**Costs:** [H] -- none of the landing's motion is seen (a comfort choice; `SteadyLanding=0` gives the game's, floored);
+the arms' gear-removal animation plays in front of a still view; while parachuting the arms and harness are where the
+game puts them, not following the controllers.

@@ -139,6 +139,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.noDepthOfField = get(L"Camera", L"DisableDepthOfField", c.noDepthOfField);
     c.jumpLift       = get(L"Camera", L"JumpLift", c.jumpLift);
     c.minEyeHeight   = getf(L"Camera", L"MinEyeHeight", c.minEyeHeight, 0.0f, 150.0f);
+    c.steadyLanding  = get(L"Camera", L"SteadyLanding", c.steadyLanding);
     c.xrEnabled      = get(L"OpenXR", L"Enabled", c.xrEnabled);
     wchar_t buf[MAX_PATH] = L"";
     GetPrivateProfileStringW(L"OpenXR", L"RuntimeJson", L"", buf, MAX_PATH, ini.c_str());

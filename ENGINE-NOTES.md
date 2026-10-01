@@ -1569,6 +1569,23 @@ grenades, 17 weapons). [S] `logs/modlogs/giveall1-*`: `hands: give all weapons -
   Springfield's knob. [S] `logs/shots/*r39a-*`: both rifles alike with the bolt lifted; the K98's entry byte-identical to
   round 38's; the trace's `the off hand's grip bolt` while held.
 
+## 5ay. The parachute: the landing's camera, the harness in the hand (D37, 2026-10-01)
+
+- **The harness:** from the jump to touchdown the newest first-person part drawn is a `MOHASkeletalMeshComponent` of
+  `MOHAParachuteActor_0` (`viewmodel: weapon in hand: 'MOHAParachuteActor' -- long gun`, the pawn's Weapon the BAR), so the
+  gun hand's move was applied to it and the arms: the orange pack and the harness rode the right controller
+  (`logs/shots/*land3-*`). Every held item's attachment derives from `WeaponAttachment` (SmallArmsAttachment,
+  GrenadeAttachment, Attachment_CompBExplosive); the parachute actor doesn't. Now a non-weapon part with no weapon part
+  drawn = the game's own drawing (`g_noGunDrawn`, the "no gun hand" path).
+- **The landing's activities** (MOHAPlayerPawn's enum): 35 CHUTE_DEPLOY, 36 CHUTE_HANGING, 37 CHUTE_CUT_ROPES, 38
+  CONTROLLED_FALL, 40 CONTROLLED_FLARE, **41 CONTROLLED_LANDING** (the roll: the camera from 167 cm above the feet to 114
+  on the touchdown frame, 17.8 at 0.7 s, back to ~150 at 3 s), **42 REMOVE_GEAR** (~2.8 s, the camera 145-156 cm), then 20
+  and 0 with the camera at 161.0 = Location.Z + BaseEyeHeight 64 + half height 96. The half height stays 96 throughout.
+  `eLandingType`: 0 perfect, 1-4 hard forward/back/left/right, 5 flared, 6 greased.
+- [S] `logs/modlogs/land6-*` (SteadyLanding on): the eye at least **160.0 cm** above the feet on the ground (from the
+  touchdown frame; the game camera 17.9); `land4-*` with a 0.25 s ease-in showed 115 on the touchdown frame -- hence at
+  once. The descent with the right hand swept 25 cm each way (`logs/shots/*land4-*`): the view and the parachute still.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

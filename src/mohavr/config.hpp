@@ -85,6 +85,7 @@ struct Config {
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
     bool  jumpLift          = false;  // [Camera] JumpLift -- the game's camera lift on a jump (fJumpCameraOffset) in the view
+    bool  steadyLanding     = true;   // [Camera] SteadyLanding -- the parachute landing's camera animation left out
     float minEyeHeight      = 0.0f;   // [Camera] MinEyeHeight -- cm: the view is kept at least this high above the pawn's
                                       // feet (0 = off; GOAL B: the parachute landing's roll took it into the ground)
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)

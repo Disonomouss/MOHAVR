@@ -193,6 +193,8 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
 }
 
 SafetyHookMid g_activityHook;
+// The first-person part drawn isn't a weapon's (the parachute's harness) and no weapon's is: the game draws them.
+bool g_noGunDrawn = false;
 unsigned      g_sprintSwaps = 0, g_walkSwaps = 0, g_jumpSwaps = 0;
 
 // Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
@@ -363,6 +365,7 @@ void UpdateWeaponKey(shared::Header* hdr) {
     }
     std::uintptr_t gun = 0;
     DWORD newest = 0;
+    bool notGun = false;
     for (auto& p : g_parts) {
         const std::uintptr_t comp = p.comp.load(std::memory_order_relaxed);
         const DWORD tick = p.tick.load(std::memory_order_relaxed);
@@ -374,11 +377,19 @@ void UpdateWeaponKey(shared::Header* hdr) {
             ProbeArms(comp);
         }
         if (!outer || outer == pawn) continue;
+        // (The player, 2026-10-01: "the chest of the character is held like a gun in the right hand" -- while parachuting
+        // the newest part is the MOHAParachuteActor's harness. Only a weapon's attachment goes in the hand.)
+        if (!names::IsA(outer, "WeaponAttachment")) {
+            notGun = true;
+            continue;
+        }
         if (!gun || static_cast<LONG>(tick - newest) > 0) {
             gun = comp;
             newest = tick;
         }
     }
+    // Something drawn first-person that isn't a weapon (the parachute) and no weapon: the game's own drawing (OnPlayerView).
+    g_noGunDrawn = notGun && !gun;
     const std::string key = gun ? names::ClassName(names::Outer(gun)) : std::string();
     // What it is, by the weapon's class chain: a grenade (EALAGrenade), a pistol (MOHAPistol), else a long gun.
     static std::uint32_t currentKind = 0;
@@ -439,8 +450,8 @@ void OnPlayerView() {
         shared::Pose gun, ray;
         std::uint32_t flags = 0xFFFFFFFFu;
         if (!hdr) return;
-        if (!shared::ReadGun(hdr, gun, ray, flags)) {
-            if (flags == 0xFFFFFFFFu) return;  // mid-write: keep last frame's
+        if (g_noGunDrawn || !shared::ReadGun(hdr, gun, ray, flags)) {
+            if (!g_noGunDrawn && flags == 0xFFFFFFFFu) return;  // mid-write: keep last frame's
             g_line.valid = false;
             AcquireSRWLockExclusive(&g_lock);
             g_state.valid = false;  // no gun hand this frame: the game's own drawing

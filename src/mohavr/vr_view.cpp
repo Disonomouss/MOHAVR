@@ -818,6 +818,51 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
     }
 }
 
+// Camera.SteadyLanding (the player, 2026-10-01: the landing "still freaks out in the same way" -- MinEyeHeight only kept
+// it out of the ground): the parachute landing (CurrentActivity 41 CONTROLLED_LANDING, the roll; 42 REMOVE_GEAR, getting
+// up) plays a camera animation -- down to 18 cm above the feet and turned about (ENGINE-NOTES 5an). Held instead at the
+// pawn's standing eye, Location + BaseEyeHeight (where the game's camera is when the landing ends: 160.8 cm above the
+// feet), facing the controller's yaw: at once (the touchdown frame already has the camera 50 cm down), eased out over
+// 0.25 s. Decided on eye 0, applied to both.
+void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
+    static float w = 0.0f, held[3] = {0, 0, 0};
+    static int heldYaw = 0;
+    static LONGLONG last = 0;
+    static bool wasOn = false;
+    if (g_thisEye == 0) {
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        const std::uintptr_t ctrl = localPlayer ? *reinterpret_cast<std::uintptr_t*>(localPlayer + addr::kLocalPlayerActor) : 0;
+        const int ao = pawn ? names::PropertyOffset(pawn, "CurrentActivity") : -1;
+        const int bo = pawn ? names::PropertyOffset(pawn, "BaseEyeHeight") : -1;
+        const std::uint8_t act = ao >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + ao) : 0;
+        const bool atPawn = pawn && ViewAtPawn(pawn, loc);
+        const bool on = atPawn && ctrl && bo >= 0 && (act == 41 || act == 42);
+        if (on) {
+            const float* pl = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+            held[0] = pl[0];
+            held[1] = pl[1];
+            held[2] = pl[2] + *reinterpret_cast<const float*>(pawn + bo);
+            heldYaw = *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4);
+        }
+        LARGE_INTEGER q;
+        QueryPerformanceCounter(&q);
+        const double dt = last ? QpcMs(q.QuadPart - last) / 1000.0 : 0.0;
+        last = q.QuadPart;
+        const float step = static_cast<float>(dt < 0.1 ? dt : 0.1) / 0.25f;
+        w = !atPawn ? 0.0f : on ? 1.0f : (w - step > 0.0f ? w - step : 0.0f);
+        if (on != wasOn) {
+            wasOn = on;
+            MLOG("view: %s (Camera.SteadyLanding; activity %u)", on ? "the landing's camera animation left out -- the view held at "
+                 "the standing eye and the controller's heading" : "the landing over -- back to the game's camera", act);
+        }
+    }
+    if (w <= 0.0f) return;
+    const float e = w * w * (3.0f - 2.0f * w);
+    for (int i = 0; i < 3; ++i) loc[i] += (held[i] - loc[i]) * e;
+    const int dy = static_cast<std::int16_t>(static_cast<std::uint16_t>((heldYaw - rot[1]) & 0xFFFF));
+    rot[1] = (rot[1] + static_cast<int>(std::lround(dy * e))) & 0xFFFF;
+}
+
 // --- the view merge hook ------------------------------------------------------------------------
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
@@ -879,6 +924,8 @@ void OnViewPoint(SafetyHookContext& ctx) {
             loc[2] -= std::cos(p) * lift;
         }
     }
+
+    if (g_cfg.steadyLanding) SteadyLanding(ctx.edi, loc, rot);
 
     // Camera.MinEyeHeight (GOAL B, "you clip into the ground when landing"): the parachute's botched landing rolls the
     // arms' Cam socket down to the floor, and in VR the view keeps the head's orientation, so the eye looked out from

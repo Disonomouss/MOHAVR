@@ -1623,6 +1623,31 @@ to your grip. [S] `r39c-*` with exactly that fit: rockets 1 cm (25.5 m) and 0 cm
 
 ---
 
+## Round 40: prepared 2026-10-01, the parachute
+**Your report:** the landing still freaks out the same way (no longer underground), and the character's chest is held
+like a gun in the right hand.
+
+**Changed:**
+- **The landing:** the game's tumbling landing camera is left out (`[Camera] SteadyLanding=1`). From touchdown until
+  you're back on your feet, the view stays at your standing eye height facing your heading; your own head still looks
+  and moves as normal. You'll see the hands take the gear off in front of you. `SteadyLanding=0` brings the game's camera
+  back (still kept out of the ground).
+- **The chest:** while parachuting, the harness was being treated as "the gun" and put in your right hand. Now only real
+  weapons go in the hand; the harness and arms are where the game puts them.
+[S]: the eye stayed at 160 cm above the feet through the whole landing (the game's camera went down to 18 cm); the
+descent with the right hand swept left and right: nothing followed it (`logs/modlogs/land4-*`, `land6-*`).
+
+**How to try it:** Campaign -> Continue (or any mission start): the drop and the landing, with and without a flare.
+
+**Questions:**
+1. The landing: comfortable now? Anything still moving that shouldn't?
+2. While parachuting: is the chest/harness gone from your hand? Do the arms and harness sit OK?
+3. Anything else odd?
+
+**Deployed for this round:** the shipped defaults.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
