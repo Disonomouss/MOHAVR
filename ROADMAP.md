@@ -114,6 +114,16 @@ feels 1:1.
 Hand frame, per-weapon fits adjustable in the in-headset menu and saved to the player's ini,
 two-handed weapons, and arm IK. Expect many rounds of adjustment.
 
+### M8a. Off-hand grenade ("dual wield", step 1) — [S] then [H] — **researched and spiked 2026-10-02**
+Take a grenade from a body spot with the off hand, pull the pin, (cook,) and throw it with the hand's velocity while the
+gun stays in the gun hand (the player's request). *As found:* the game holds one weapon at a time, but its holstered
+grenade weapon can launch its own projectile through `EALAWeapon.SpawnProjectile` (ProcessEvent), and a clone of the
+grenade's first-person mesh can be drawn in the off hand; both spikes pass (ENGINE-NOTES 5bb, `OFFHAND-DESIGN.md`).
+Phases: the host's state machine and shared block v20, the hand's grip, the carrier, feedback, then a headset round; a
+second firing gun is not planned (OFFHAND-DESIGN 15).
+**Accept [S]:** a grenade taken, armed and thrown by the off hand flies from the hand, goes off at its fuse, counts down
+the HUD, and the gun in hand is untouched. **[H]:** it feels natural, and never throws or drops by accident.
+
 ### M9. Comfort and in-headset menu — [H]
 An in-headset menu (ImGui, with stable IDs for controller focus), snap or smooth turning, a
 vignette, and a seated offset. MOHA-specific: comfort during the parachute jump.

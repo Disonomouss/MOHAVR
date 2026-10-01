@@ -251,6 +251,14 @@ inline constexpr std::uintptr_t kActorProcessEvent  = 0x10DB1FA0;
 inline constexpr std::uint8_t   kActorProcessEventBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF8, 0xA1, 0x78, 0xCE, 0x6D, 0x11,
                                                              0x8B, 0x40, 0x58};
 
+// The off-hand grenade (spike S2, work/research/dualwield/native-engine.md): UObject::ProcessEvent itself -- a component's
+// vtable +0xF0 (thiscall: UFunction*, void* Parms, void* Result; ret 0xC), where AActor::ProcessEvent ends up too. Its
+// refusals (Ghidra, from 0x109CE9FF): a function with a native index, a pending-kill object, a probe the state masks;
+// natives without an index (Object.Clone, SkeletalMeshComponent.AttachComponent) run. Prologue checked 2026-10-02.
+inline constexpr std::uintptr_t kObjectProcessEvent = 0x109CE980;
+inline constexpr std::uint8_t   kObjectProcessEventBytes[] = {0x55, 0x8B, 0xEC, 0x6A, 0xFF, 0x68, 0x08, 0x94, 0x1B, 0x11, 0x64, 0xA1,
+                                                              0x00, 0x00, 0x00, 0x00};
+
 // --- M8 arm IK (ENGINE-NOTES 5x) ---
 // UMOHASkeletalMeshComponent::UpdateTransform (fastcall, ECX = component; slot in the arms' vtable 0x11587D38):
 // bLockTranslation, then USkeletalMeshComponent::UpdateTransform 0x10CFAC10, which ends with
@@ -279,6 +287,10 @@ inline constexpr std::uintptr_t kObjectOuter  = 0x28, kObjectName = 0x2C, kObjec
 // ElementSize +0x48, PropertyFlags +0x4C, Offset +0x64 -- verified: Actor.Location 0xE8 and Rotation 0xF4 (known),
 // Velocity 0x100, Pawn.InvManager 0x3A4, Pawn.Weapon 0x3A8.
 inline constexpr std::uintptr_t kFieldSuper = 0x3C, kFieldNext = 0x40, kStructChildren = 0x4C, kPropertyOffset = 0x64;
+// UFunction (Ghidra, UObject::ProcessEvent 0x109CE980, 2026-10-02; the off-hand grenade): FunctionFlags +0x8C (DWORD),
+// iNative +0x90 (WORD; non-zero = refused by ProcessEvent), ParmsSize +0x9E (WORD) -- verified at run time on
+// EALAWeapon.SpawnProjectile: flags 0x20102, native 0, 28 bytes (two vectors and the return value).
+inline constexpr std::uintptr_t kFunctionFlags = 0x8C, kFunctionNative = 0x90, kFunctionParmsSize = 0x9E;
 
 inline constexpr Signature kSignatures[] = {
     {"entry_OEP",               kOep,                   kOepBytes,                  sizeof(kOepBytes)},
@@ -315,6 +327,7 @@ inline constexpr Signature kSignatures[] = {
     {"particle execActivateSystem",        kExecActivateSystem, kExecActivateSystemBytes, sizeof(kExecActivateSystemBytes)},
     {"weapon execHasReserveAmmo",          kExecHasReserveAmmo, kExecHasReserveAmmoBytes, sizeof(kExecHasReserveAmmoBytes)},
     {"AActor::ProcessEvent",               kActorProcessEvent, kActorProcessEventBytes, sizeof(kActorProcessEventBytes)},
+    {"UObject::ProcessEvent",              kObjectProcessEvent, kObjectProcessEventBytes, sizeof(kObjectProcessEventBytes)},
 };
 
 }  // namespace mohavr::addr

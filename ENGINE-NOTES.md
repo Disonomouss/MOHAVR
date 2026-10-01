@@ -874,6 +874,10 @@ Research agent (read-only, the scripts incl. the map packages' weapon classes, G
   native index (Spawn, Destroy, SetTimer...).
 - Options ranked: A1 swap-and-return (low), A2 fast swap (+ short equip times, lower/raise activities to idle), A3 the
   mod throws an inactive grenade weapon through ProcessEvent so the gun stays (high), B4 two firing guns (very high).
+- **Un-parked 2026-10-02 (5bb):** A3 works (spikes S1/S2). Corrections: the grenade leaves on the arms' AnimNotify_Script
+  `OnProjectileToss` at **0.12 s** into `*_fire` (0.04 s into `*_alt_fire`); 0.09 s is the throw *sound* notify. An actor's
+  vtable +0xF0 is AActor::ProcessEvent 0x10DB1FA0 (a gate, then UObject::ProcessEvent 0x109CE980); a component's +0xF0 is
+  UObject::ProcessEvent itself.
 
 ## 5ag. Controllers that stop tracking (2026-09-29, round 24 -> 25)
 
@@ -1609,6 +1613,42 @@ state (with `OnRemoveGear`) and the briefing (`BRFInTheBriefing`). `BodyMatInst`
 (reflected). [S] `logs/modlogs/land8-*`: `landed -- the parachuting body hidden` on the touchdown frame; 0.24 s after the
 landing's end the game's own RenderBody(false) had kept NoRenderMatInst and `BodyMatInst put back to Body`;
 `logs/shots/*land8-*`: only the arms through the roll and the gear removal (`*land7-*`: the knees and torso).
+
+## 5bb. The off-hand grenade ("dual wield"): research and spikes (2026-10-02)
+
+The player: "investigate the possibility of a dual wield mode. Being able to grab a grenade with the off hand and throw it
+without unequipping your gun would be very immersive." A research workflow (six research angles, a designer, three
+adversarial verifiers: none of 23 load-bearing claims refuted) wrote `OFFHAND-DESIGN.md` (notes in
+`work/research/dualwield/`); the two spikes below were then run. **Feasible: both PASS.**
+- **The throw (S1):** the holstered grenade weapon (`IM.FragGrenadeWeapon` / Gammon / Stick, or the InventoryChain: the
+  pointers are set only for the loadout) launches its projectile through its own script function
+  `EALAWeapon.SpawnProjectile(vStartPos, vForward)` (ProcessEvent: flags 0x20102, native index 0, 28 bytes of parms,
+  ReturnValue at +24, read back from the parms block) after `CurrentFireMode = 0`. It reads only CurrentFireMode,
+  WeaponProjectiles, the WorldInfo pool, Instigator and its Controller -- never Pawn.Weapon, the weapon's state or timers.
+  The projectile: owner the grenade weapon, instigator the pawn, InstigatorController the player's, enabled, exactly at the
+  start. Then, as `EALAGrenade.ProjectileFire` does: `SetDrawScale(ExplosiveDrawScale)` (an unnumbered native: 1.00 ->
+  1.50 through ProcessEvent), `CreateLight(...)`, `MyDamageType = MyCookedDamageType`, `SetFuseTime(4.0)` (went off at
+  4.00 s each time), Velocity written last (+ pawn velocity x `ExplosivePawnVelocityScale` 0.25), the reserve -1 (the HUD
+  count follows). The gun in hand, FlashCount and PendingFire untouched; the gun fires normally after. The game's own
+  `ProjectileFire` / `FireAmmunition` / `OnProjectileToss` can't be used with a gun in hand (IncrementFlashCount plays the
+  gun's fire effects; the attachment calls reach the active weapon's; the shared PendingFire is cleared) and the inactive
+  grenade is in stasis (no Tick, no timers: AActor::Tick 0x10B38042, predicate 0x10F0CCF0). The pool holds only exploded
+  projectiles (FindProjectileInPool 0x10F0D720 clears the slot it returns): a second throw after the first went off reused
+  `MOHAProj_MKII_0`; a throw while one is live gets a fresh spawn, so no live grenade is yanked ([S] `nade2-*`: two frags
+  in the same Draw became `MOHAProj_MKII_0` and `_1`, both went off at 4.00 s, a stick beside them).
+  [S] `logs/modlogs/nade0-*` (`work/research/tests/nade0.ps1`; the BAR in hand): three throws (hand, hand, eye), reserve
+  3 -> 0; `nade1-*`: the stick from the hand.
+- **The carrier (S2):** `Object.Clone(InOuter = the grenade weapon)` on its `DroppedPickupMesh` (a MOHASkeletalMeshComponent
+  with the first-person grenade mesh: `US_FragGrenade`, `DE_StickGrenade_Rigged`), the arms' depth group, light
+  environment, LOD and FOV (65) copied, collision off, then `FPArms.AttachComponent(clone, 'Camera', 0, 0, (1,1,1))` -- both
+  natives without an index, through **UObject::ProcessEvent 0x109CE980** (pinned: prologue `55 8B EC 6A FF 68 08 94 1B 11
+  64 A1 00 00 00 00`, Ghidra); `RelativeScale` must be passed (no default through ProcessEvent). The arms' updates then
+  update it, and the bake MidHook places it: `bones x Gw x inv(LocalToWorld)` with Gw at the off controller (arms_ik
+  `BakeCarrier`, before the move test), collapsed when there is no off-hand frame. [S] `logs/shots/*nade1-*`: the frag in
+  true 3D in both eyes at the off hand in three poses, gone after detaching (`DetachComponent`), the stick the same, the gun
+  unaffected. Not done: the fingers' grip (OFFHAND-DESIGN Phase 2) and the pin/spoon bones.
+- Test commands (Debug.GameCommands): `mohavr nade` (a dump), `mohavr nade throw <frag|gammon|stick|any> <hand|eye> <vx> <vy>
+  <vz> [fuse]` (LOCAL m/s x Hands.ThrowScale), `mohavr nade carrier <frag|gammon|stick|off>`.
 
 ## 6. Content and UnrealScript
 

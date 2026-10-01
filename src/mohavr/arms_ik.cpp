@@ -17,6 +17,7 @@
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
+#include "offhand.hpp"
 #include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
@@ -707,6 +708,35 @@ void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     s.lastT = t;
 }
 
+// The off-hand grenade's carrier (offhand.cpp, spike S2): its bones put where the off hand holds it (the mesh's frame in
+// the world: bones x Gw x inv(LocalToWorld)), or collapsed (a zero 3x3: nothing drawn) when there is no off-hand frame.
+void BakeCarrier(std::uintptr_t comp) {
+    const int sbo = names::PropertyOffset(comp, "SpaceBases"), l2wo = names::PropertyOffset(comp, "LocalToWorld");
+    if (sbo < 0 || l2wo < 0) return;
+    auto* bones = reinterpret_cast<M4*>(names::ReadPointer(comp + sbo));
+    const int num = static_cast<int>(names::ReadPointer(comp + sbo + 4));
+    if (!bones || num <= 0 || num > 512) return;
+    Saved* sv = nullptr;
+    for (Saved& s : g_saved)
+        if (s.comp == comp || (!sv && s.comp == 0)) sv = &s;
+    if (!sv) return;  // no slot free: left as the game has it this update
+    sv->comp = comp;
+    sv->bones.assign(bones, bones + num);
+    float gw[16];
+    if (offhand::CarrierFrame(gw)) {
+        M4 l2w, G;
+        std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
+        std::memcpy(G.m, gw, sizeof(G.m));
+        const M4 k = Mul(G, AffineInverse(l2w));
+        for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], k);
+    } else {
+        for (int i = 0; i < num; ++i)
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c) bones[i].m[r][c] = 0.0f;
+    }
+    MarkBaked(comp);
+}
+
 // Just before MeshObject->Update (EBX = the component; its LocalToWorld is final): bake the move into a first-person
 // part of the player's (and, for the arms, the IK).
 void OnMeshUpdate(SafetyHookContext& ctx) {
@@ -722,6 +752,10 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
+    if (comp == offhand::CarrierComponent()) {  // the off-hand grenade: needs no move, so before its test
+        BakeCarrier(comp);
+        return;
+    }
     float d[16], dInv[16];
     if (!viewmodel::CurrentMove(d, dInv)) return;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();

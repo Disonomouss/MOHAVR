@@ -168,6 +168,12 @@ address-space budget for D3D9On12.
    held view); the Panzerschreck's tube, which the game turns 12.9 deg in, drawn along the controller (`[BarrelDir]`,
    D38, ENGINE-NOTES 5az) and the player's aim line set onto it. **Round 42** (round 41 passed): once landed, the
    parachuting body hidden (`Weapon.LandingBody=0`, the pawn's RenderBody, its material kept; D39, ENGINE-NOTES 5ba).
+   **The off-hand grenade ("dual wield", the player's request 2026-10-02): researched and proven feasible** -- a research
+   workflow wrote `OFFHAND-DESIGN.md`, and its two spikes pass in the simulator: the holstered grenade launches from the off
+   hand through its own `SpawnProjectile` while the gun stays in hand (owner, instigator, fuse, cooked damage, reserve and
+   HUD count right; the gun untouched), and a clone of the grenade's first-person mesh is drawn in the off hand (ENGINE-NOTES
+   5bb). Test commands only (`mohavr nade ...`); nothing changes in play. Next, if the player wants it: OFFHAND-DESIGN
+   section 10, Phase 1 (the host's grab / pin / throw and the shared block v20) behind `[OffHand] Grenade=0`.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,
