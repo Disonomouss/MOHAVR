@@ -44,8 +44,10 @@ constexpr const wchar_t* kTargetKeys[] = {L"A",     L"B",    L"X",      L"Y",   
 // toggles the stance) -> a flick of the right stick down; Xbox Y = jump -> A; RB = grenade -> X;
 // LB = alt fire (a weapon attachment on/off) -> nothing (round 24: the left grip is for the foregrip and holsters);
 // LS = sprint (latched, SprintToggle) -> left stick click; RS = melee.
-constexpr const wchar_t* kTargetDefaults[] = {L"b,rgrip", L"y",    L"rflickdown", L"a",    L"none",  L"x",
-                                              L"lthumb",  L"rthumb", L"menu",     L"none", L"none",  L"none",
+// Round 50 (the player: "Remap crouch to right stick click"): crouch (X) -> the right stick's click; the game's melee
+// (RS) -> its down flick.
+constexpr const wchar_t* kTargetDefaults[] = {L"b,rgrip", L"y",    L"rthumb",     L"a",    L"none",  L"x",
+                                              L"lthumb",  L"rflickdown", L"menu", L"none", L"none",  L"none",
                                               L"none",    L"none",   L"ltrigger", L"rtrigger"};
 constexpr const wchar_t* kSrcNames[] = {L"none",   L"a",      L"b",        L"x",        L"y",      L"lgrip",
                                         L"rgrip",  L"ltrigger", L"rtrigger", L"lthumb", L"rthumb", L"menu",

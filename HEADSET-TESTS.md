@@ -1967,6 +1967,10 @@ the game's zoom and the real one in the menu, and two hands needed.
 
 **Deployed for this round:** the shipped defaults (scopes on, realistic zoom).
 
+**Answers (2026-10-03):** "It feels really good." Passed. Next requests: the StG44's scope taken from a holster and attached
+by hand; crouch on the right stick click (done: round 50); the MP40's Dagger as an off-hand knife with melee, from a
+lower-back holster.
+
 ---
 
 ## Template
