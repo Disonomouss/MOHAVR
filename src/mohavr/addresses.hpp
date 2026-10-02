@@ -132,6 +132,11 @@ inline constexpr std::uintptr_t kViewX = 0x1C, kViewY = 0x20, kViewSizeX = 0x24,
 inline constexpr std::uintptr_t kHudMatrixPush = 0x10C15440;
 inline constexpr std::uint8_t   kHudMatrixPushBytes[] = {0x83, 0xC7, 0x0C, 0x8B, 0xF7, 0xE8, 0x96, 0xD8, 0x07, 0x00};
 inline constexpr std::uintptr_t kHudMatrixStackOffset = 0x130;
+// The HUD loop's start (scopes, SCOPE-DESIGN): `mov edx,[GEngine]` before `mov eax,[edx+0x2A8]` (GamePlayers.Num); the
+// loop's end compares the index with Num again on every pass (0x10C1564B). A third player (the scope view) is dropped
+// here, so it gets no HUD. Verified by disassembly of the unpacked exe (2026-10-03).
+inline constexpr std::uintptr_t kHudLoopStart = 0x10C1526F;
+inline constexpr std::uint8_t   kHudLoopStartBytes[] = {0x8B, 0x15, 0x64, 0xD9, 0x6D, 0x11, 0x8B, 0x82, 0xA8, 0x02, 0x00, 0x00};
 
 // A decal's screen box (ENGINE-NOTES 5r): stdcall (EAX = an input, stack: ?, FSceneView*, float* min,
 // float* max), RET 0x10, returns nonzero if the box is on screen. It projects to ABSOLUTE pixels (it adds
@@ -316,6 +321,7 @@ inline constexpr Signature kSignatures[] = {
     {"ULocalPlayer ctor ViewState store",  kLocalPlayerCtorViewStateStore, kLocalPlayerCtorViewStateStoreBytes, sizeof(kLocalPlayerCtorViewStateStoreBytes)},
     {"Draw HUD loop view read",            kHudViewRead, kHudViewReadBytes, sizeof(kHudViewReadBytes)},
     {"Draw HUD matrix push",               kHudMatrixPush, kHudMatrixPushBytes, sizeof(kHudMatrixPushBytes)},
+    {"Draw HUD loop start",                kHudLoopStart, kHudLoopStartBytes, sizeof(kHudLoopStartBytes)},
     {"decal screen box",                   kDecalScreenBox, kDecalScreenBoxBytes, sizeof(kDecalScreenBoxBytes)},
     {"execGetBaseAimRotation",             kExecGetBaseAimRotation, kExecGetBaseAimRotationBytes, sizeof(kExecGetBaseAimRotationBytes)},
     {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},

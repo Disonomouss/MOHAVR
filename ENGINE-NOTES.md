@@ -2063,6 +2063,27 @@ The research is in work/research/melee/ and the design in MELEE-DESIGN.md. Measu
   A one-host-frame jump can therefore reach the game spread over ~22 ms: a 30 cm step of the foregrip hand read as under
   20 m/s. A step is told from a swing by its newest sample, which is still.
 
+## 5bn. Scopes: the third view and the game's scopes (D50, 2026-10-03)
+
+Research in work/research/scope/, the design in SCOPE-DESIGN.md. Measured in the simulator (work/research/tests/scope1-5.ps1):
+- **A third player in the stereo Draw works.** GamePlayers pointed at 3 entries renders 3 views in one family (3
+  CalcSceneView calls). The scope view needs its own FSceneViewState (AllocateViewState again). Draw's HUD loop
+  (`0x10C1526F`) re-reads GamePlayers.Num at its end on every pass (`cmp edx,[eax+0x2A8]` at `0x10C1564B`): setting Num
+  back to 2 at the loop's start keeps the HUD out of the third view. The view-model proxy hook is called per view: the
+  view's X tells the scope view (the column's x).
+- **Cost:** in the simulator (paced, 1920x1080) the wait per Draw was 10.1-10.6 ms with and without the third view, and the
+  process's memory the same (the view renders into the existing backbuffer).
+- **The game's scopes at run time:** `IsScopeEnabled()` is true for the Springfield and the G43 at level 2 and the StG44 at
+  level 2 (about 0.3 s after the switch; its scope bone is posed by the mount, ~3 s); `ScopeComponent.ScopeParams` (MinFOV,
+  MaxFOV: the first two floats of ScopeTuning): the Springfield 10..40, **the G43 10..40** (DefaultWeapon.ini's 25..50 for
+  MOHAUpgradeG43_1 is dead), the StG44 35..35.
+- **The tubes in the host's gun frame** (the shipped fits; x right, y up, z back, m): the Springfield's eyepiece
+  (0.039, 0.072, 0.040), objective z -0.284, r 1.3 cm; the G43's (0.031, 0.064, 0.068), objective z -0.087, r 1.2 cm; the
+  StG44's (0.023, 0.146, 0.085), objective (0.020, 0.156, -0.068), r 1.1 cm -- **tilted 3.9 deg nose-up against the aim
+  line** (the mount's pose; the barrel follows the aim line as every gun's does). Left-hand mode: x mirrored.
+- **The simulator's eye poses are both at the head's centre** (xrLocateViews gives no IPD there); the eye separation the
+  game renders comes from elsewhere.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

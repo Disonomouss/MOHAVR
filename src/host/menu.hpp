@@ -70,6 +70,8 @@ public:
     bool PouchReload() const { return pouchReload_; }  // [Hands] PouchReload (the player's once toggled)
     // Physical melee (MELEE-DESIGN; likewise the shipped [Melee] Physical until toggled).
     bool PhysicalMelee() const { return physicalMelee_; }
+    bool ScopeOn() const { return scope_; }               // [Scope] Enable (the player's once toggled)
+    bool ScopeZoomGame() const { return scopeZoomGame_; } // [Scope] Zoom=game (else the real scopes' magnification)
     // The off-hand pistol (OFFPISTOL-DESIGN; likewise the shipped [OffHand] Pistol until toggled).
     bool OffHandPistolOn() const { return offHandPistol_; }
     // The fit of any weapon by its class (the off-hand pistol's): the player's saved one, else the shipped one, else the
@@ -175,6 +177,7 @@ private:
     bool                    gunNadePin_ = false;
     bool                    pouchReload_ = false;
     bool                    physicalMelee_ = false;
+    bool                    scope_ = false, scopeZoomGame_ = false;
     bool                    offHandPistol_ = false;
     std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
     shared::GunFit          fitForFit_{};

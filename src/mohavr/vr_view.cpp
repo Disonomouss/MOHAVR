@@ -18,6 +18,7 @@
 #include "offhand.hpp"
 #include "melee.hpp"
 #include "offpistol.hpp"
+#include "scope.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
@@ -71,6 +72,13 @@ struct AppliedFrame {
     shared::Pose pose[2];
     shared::Fov  fov[2];
     bool         stereo;
+    // Scopes (SCOPE-DESIGN): the eyes' width and the scope view this frame (scopeRect[2] 0: none).
+    std::uint32_t eyeWidth;
+    std::uint32_t scopeRect[4];
+    shared::Pose scopeCam;
+    float        scopeTan;
+    shared::Pose gunPose;        // the host's gun pose this frame was drawn with (the lens stays on the drawn scope)
+    bool         gunValid;
     DWORD        thread;
     bool         valid;
     bool         cinema;   // rendered as a flat full-screen image (menu/cutscene): no view, show on the quad
@@ -116,9 +124,25 @@ float        g_thisAspect = 1.0f;    // viewport aspect of THIS view (half width
 // Stereo draw state (game thread only).
 bool         g_inStereoDraw = false;
 int          g_eyeCounter = 0;
-void*        g_stereoPlayers[2] = {};
+void*        g_stereoPlayers[3] = {};
 void*        g_leftViewState = nullptr;   // the player's own FSceneViewState
 void*        g_rightViewState = nullptr;  // ours, for eye 1 (allocated once, lives for the process)
+
+// Scopes (SCOPE-DESIGN): a third player in the stereo Draw renders the scope view into a column at the backbuffer's
+// right ([Scope] Column px, square, taken from the eyes' width). Game thread, per Draw.
+int          g_thisIndex = 0;             // this CalcSceneView's player in the stereo Draw (0, 1 the eyes; 2 the scope)
+bool         g_thisScope = false;
+int          g_viewCount = 2;             // players in this Draw
+bool         g_committed = false;         // this Draw's frame record committed
+void*        g_scopeViewState = nullptr;  // the scope view's own FSceneViewState (allocated once)
+int          g_eyeW = 0;                  // px of each eye (0 before the first Draw)
+int          g_colX = 0, g_colS = 0;      // the scope column: its x and side (px; 0 none)
+float        g_scopeTanNow = 0.0f;        // this Draw's scope half-FOV tangent
+shared::Pose g_scopeCam{};                // this Draw's scope camera from the host (LOCAL)
+bool         g_scopeCamOk = false;        // the host wants the view (else Debug.ScopeView: the right eye's)
+std::atomic<int> g_scopeViewX{-1};        // the scope view's x (px) while one renders, for the render thread's hooks
+SafetyHookMid g_hudLoopHook;
+void CommitBuilding();
 
 // M5 cinema mode (Camera.CinemaScreen): UI menus and cinematic cameras are rendered flat and
 // full-screen, without head tracking, and the host shows them on a world-locked screen.
@@ -432,6 +456,7 @@ void RunTestCommands(const std::uintptr_t* players) {
             continue;
         }
         if (offhand::TestCommand(line)) continue;  // "mohavr nade ..." (the off-hand grenade's spike)
+        if (scope::TestCommand(line)) continue;      // "mohavr scope ..." (scopes)
         if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol)
         if (melee::TestCommand(line)) continue;      // "mohavr melee ..." (physical melee)
         const bool ok = gexec::Run(player, line);
@@ -530,6 +555,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     offhand::OnDraw(hdr);
     offpistol::OnDraw(hdr);
     melee::OnDraw(hdr);
+    scope::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -546,10 +572,37 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
         return;
     }
     void* player = *reinterpret_cast<void**>(arr[0]);
-    g_stereoPlayers[0] = g_stereoPlayers[1] = player;
+    g_stereoPlayers[0] = g_stereoPlayers[1] = g_stereoPlayers[2] = player;
+    // The host's scope request (SCOPE-DESIGN): the scope view renders as the third player, into a square column at the
+    // backbuffer's right taken from the eyes' width -- only while a scope is at an eye (the eyes are full width otherwise:
+    // no cost, the backbuffer and the menus' shape unchanged).
+    std::uint32_t scopeWant = 0;
+    float wantTan = 0.0f;
+    if (!shared::ReadScopeWant(hdr, scopeWant, wantTan, g_scopeCam)) scopeWant = 0;
+    g_scopeCamOk = (scopeWant & 1u) != 0;
+    const bool scopeView = g_cfg.scopeColumn > 0 && (g_cfg.debugScopeView || g_scopeCamOk);
+    {
+        const int W = static_cast<int>(hdr->width), H = static_cast<int>(hdr->height);
+        int col = scopeView ? g_cfg.scopeColumn : 0;
+        if (col > W / 3) col = W / 3;
+        g_eyeW = (W - col) / 2;
+        g_colX = 2 * g_eyeW;
+        g_colS = col > 0 ? (W - g_colX < H ? W - g_colX : H) : 0;
+    }
+    g_scopeTanNow = g_scopeCamOk ? wantTan : std::tan(0.5f * g_cfg.debugScopeFov * kPi / 180.0f);
+    if (!(g_scopeTanNow > 0.001f && g_scopeTanNow < 2.0f)) g_scopeTanNow = std::tan(0.5f * 10.0f * kPi / 180.0f);
+    g_viewCount = g_colS > 0 ? 3 : 2;
+    if (g_cfg.scopeColumn > 0) {
+        // The column's x at this width, whether or not it renders this Draw (the render thread may still be drawing the last
+        // scope view): no eye view starts there (eye 1 at the half, or at the narrowed width).
+        const int W = static_cast<int>(hdr->width);
+        const int col = g_cfg.scopeColumn < W / 3 ? g_cfg.scopeColumn : W / 3;
+        g_scopeViewX.store(2 * ((W - col) / 2));
+    }
+    g_committed = false;
     const std::uintptr_t savedData = arr[0];
     arr[0] = reinterpret_cast<std::uintptr_t>(g_stereoPlayers);
-    arr[1] = 2;
+    arr[1] = static_cast<std::uintptr_t>(g_viewCount);
     g_inStereoDraw = true;
     g_eyeCounter = 0;
 
@@ -558,10 +611,11 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     g_inStereoDraw = false;
     arr[0] = savedData;
     arr[1] = 1;
+    if (!g_committed && g_eyeCounter >= 2) CommitBuilding();  // (a view the engine skipped: the frame is still the eyes')
     // Back to a full-screen player (and its own view state) for anything outside Draw.
     auto* lp = static_cast<std::uint8_t*>(player);
-    if (g_leftViewState && *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState) == g_rightViewState)
-        *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState) = g_leftViewState;
+    void*& vs = *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState);
+    if (g_leftViewState && (vs == g_rightViewState || (g_scopeViewState && vs == g_scopeViewState))) vs = g_leftViewState;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 1.0f;
@@ -569,6 +623,12 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     if (!g_loggedStereo) {
         g_loggedStereo = true;
         MLOG("stereo: first two-player Draw -- %d CalcSceneView calls", g_eyeCounter);
+    }
+    static bool loggedScope = false;
+    if (g_viewCount == 3 && !loggedScope) {
+        loggedScope = true;
+        MLOG("scope: first three-player Draw -- %d CalcSceneView calls; the eyes %d px each, the scope view %dx%d at x %d",
+             g_eyeCounter, g_eyeW, g_colS, g_colS, g_colX);
     }
     PaceAfterDraw();
 }
@@ -578,17 +638,40 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
 void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
     g_thisEye = 0;
     g_thisStereo = false;
+    g_thisScope = false;
     if (!g_inStereoDraw) return;
     auto* lp = *reinterpret_cast<std::uint8_t**>(ctx.esp + 4);
     if (!lp) return;
-    // Debug.SwapEyeOrder: render the right eye first (experiment: which eye does per-frame-once work).
-    const int eye = (g_eyeCounter++ & 1) ^ (g_cfg.debugSwapEyes ? 1 : 0);
-    g_thisEye = eye;
+    const shared::Header* hdr = bridge::SharedHeader();
+    const float W = hdr && hdr->width ? static_cast<float>(hdr->width) : 1.0f, H = hdr && hdr->height ? static_cast<float>(hdr->height) : 1.0f;
+    g_thisIndex = g_eyeCounter++;
     g_thisStereo = true;
+    if (g_thisIndex >= 2) {
+        // The scope view (SCOPE-DESIGN): the square column at the right, its own view state (its occlusion history).
+        g_thisScope = true;
+        g_thisEye = 1;
+        // (CalcSceneView truncates Origin x width in float: a quarter pixel in lands on the pixel meant.)
+        *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = (static_cast<float>(g_colX) + 0.25f) / W;
+        *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
+        *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = (static_cast<float>(g_colS) + 0.25f) / W;
+        *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = (static_cast<float>(g_colS) + 0.25f) / H;
+        auto* slot = reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState);
+        if (!g_scopeViewState) {
+            using AllocFn = void*(__cdecl*)();
+            g_scopeViewState = reinterpret_cast<AllocFn>(addr::kAllocateViewState)();
+            MLOG("scope: allocated the scope view's FSceneViewState %p", g_scopeViewState);
+        }
+        if (g_scopeViewState) *slot = g_scopeViewState;
+        return;
+    }
+    // Debug.SwapEyeOrder: render the right eye first (experiment: which eye does per-frame-once work).
+    const int eye = (g_thisIndex & 1) ^ (g_cfg.debugSwapEyes ? 1 : 0);
+    g_thisEye = eye;
     // Debug.SwapHalves (experiment): the left eye in the right half and vice versa; the host swaps back.
-    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = (eye ^ (g_cfg.debugSwapHalves ? 1 : 0)) ? 0.5f : 0.0f;
+    const float eyeFrac = (static_cast<float>(g_eyeW) + 0.25f) / W;  // (a quarter pixel in: the engine truncates)
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginX) = (eye ^ (g_cfg.debugSwapHalves ? 1 : 0)) ? eyeFrac : 0.0f;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerOriginY) = 0.0f;
-    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = 0.5f;
+    *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeX) = eyeFrac;
     *reinterpret_cast<float*>(lp + addr::kLocalPlayerSizeY) = 1.0f;
 
     // Each eye needs its own FSceneViewState (occlusion/visibility history). Sharing the player's
@@ -596,7 +679,8 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
     // (headset round 3). Eye 1 gets a second state from the engine's own AllocateViewState.
     auto* slot = reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState);
     if (eye == 0) {
-        if (*slot != g_rightViewState) g_leftViewState = *slot;  // follow the engine if it replaces its own
+        if (*slot != g_rightViewState && (!g_scopeViewState || *slot != g_scopeViewState))
+            g_leftViewState = *slot;  // follow the engine if it replaces its own
     } else if (g_cfg.stereoViewState) {
         if (!g_rightViewState) {
             using AllocFn = void*(__cdecl*)();
@@ -1078,8 +1162,9 @@ void OnViewPoint(SafetyHookContext& ctx) {
         std::memcpy(g_gameCam, gameCam, sizeof(g_gameCam));
         TrackCameraSway(loc, rot[1]);
     }
-    // Stereo: this eye's own pose (orientation and position); mono: the head.
-    const shared::Pose& p = g_thisStereo ? eye[g_thisEye] : head;
+    // Stereo: this eye's own pose (orientation and position); mono: the head. The scope view: the host's scope camera
+    // (Debug.ScopeView without one: the right eye) -- mapped into the world exactly as the eyes are.
+    const shared::Pose& p = g_thisScope ? (g_scopeCamOk ? g_scopeCam : eye[1]) : g_thisStereo ? eye[g_thisEye] : head;
 
     // View basis in Unreal axes, then turned by the game's yaw (body heading).
     const Vec3 fXr = QuatRotate(p, 0, 0, -1), rXr = QuatRotate(p, 1, 0, 0), uXr = QuatRotate(p, 0, 1, 0);
@@ -1154,7 +1239,26 @@ void OnViewPoint(SafetyHookContext& ctx) {
     LARGE_INTEGER viewQpc;
     QueryPerformanceCounter(&viewQpc);
     EnterCriticalSection(&g_lock);
+    if (g_thisScope) {
+        g_building.scopeCam = p;  // (the projection records its size and FOV)
+        LeaveCriticalSection(&g_lock);
+        g_thisViewActive = true;
+        return;
+    }
     if (g_thisEye == 0) g_building.qpc = viewQpc.QuadPart;
+    if (g_thisStereo && g_thisIndex == 0) {  // a new frame: no scope view until one renders
+        g_building.scopeRect[2] = g_building.scopeRect[3] = 0;
+        g_building.eyeWidth = g_colS > 0 ? static_cast<std::uint32_t>(g_eyeW) : 0u;
+        // The gun pose this frame's drawn gun was baked with: the last Draw's (the view model builds the move at Draw N and
+        // the bake applies it in the next tick) -- the lens sits on the drawn eyepiece.
+        static shared::Pose lastGun{};
+        static bool lastGunOk = false;
+        g_building.gunPose = lastGun;
+        g_building.gunValid = g_colS > 0 && lastGunOk;
+        shared::Pose aimRay{};
+        std::uint32_t gf = 0;
+        lastGunOk = shared::ReadGun(hdr, lastGun, aimRay, gf);
+    }
     g_building.pose[g_thisEye] = p;
     g_building.fov[g_thisEye] = g_thisFov;
     g_building.stereo = g_thisStereo;
@@ -1186,6 +1290,14 @@ void OnViewPoint(SafetyHookContext& ctx) {
 // MOHA's HUD positions its elements by the canvas clip but draws them at fixed pixel sizes, so the
 // canvas gets a virtual clip of panel/Scale and its matrix is scaled by Scale (OnHudMatrix): the HUD
 // lays out on a larger virtual screen and is shrunk uniformly into the panel.
+// The HUD loop's start (scopes): the scope view is the third player -- the loop runs over the eyes only.
+void OnHudLoopStart(SafetyHookContext&) {
+    if (!g_inStereoDraw || g_viewCount < 3) return;
+    const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
+    auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
+    if (arr && arr[0] == reinterpret_cast<std::uintptr_t>(g_stereoPlayers) && arr[1] == 3) arr[1] = 2;
+}
+
 void OnHudView(SafetyHookContext& ctx) {
     if (!g_inStereoDraw || g_cfg.hudMode != 1) return;
     const shared::Header* hdr = bridge::SharedHeader();
@@ -1207,7 +1319,7 @@ void OnHudView(SafetyHookContext& ctx) {
     }
     const shared::Fov f = g_building.fov[eye];  // this frame's widened FOV (game thread writes it)
     if (!(f.tanRight > f.tanLeft) || !(f.tanUp > f.tanDown)) return;
-    const float eyeW = 0.5f * static_cast<float>(hdr->width), H = static_cast<float>(hdr->height);
+    const float eyeW = g_eyeW > 0 ? static_cast<float>(g_eyeW) : 0.5f * static_cast<float>(hdr->width), H = static_cast<float>(hdr->height);
     const float D = g_cfg.hudDistance;
     // Panel centre as seen from this eye: the eye sits +-IPD/2 along the head's right axis.
     const float ex = (eye == 0 ? -0.5f : 0.5f) * g_ipd;
@@ -1314,13 +1426,8 @@ void OnDecalScreenBox(SafetyHookContext& ctx) {
 }
 
 // --- the projection hooks -----------------------------------------------------------------------
-void CommitFrameIfComplete() {
-    // Called after the projection of each view: mono completes on its only view, stereo on eye 1.
-    if (g_thisStereo && g_thisEye != 1) return;
-    // With stereo running, the only views that describe the presented image are the two computed
-    // inside the stereo Draw. CalcSceneView is also called outside Draw (FUN_10B224E0, one mono
-    // view per frame) -- those must not overwrite the stereo record.
-    if (!g_thisStereo && g_drawHook && g_cfg.stereo) return;
+void CommitBuilding() {
+    g_committed = true;
     EnterCriticalSection(&g_lock);
     g_previous = g_current;
     g_current = g_building;
@@ -1331,6 +1438,17 @@ void CommitFrameIfComplete() {
     LeaveCriticalSection(&g_lock);
 }
 
+void CommitFrameIfComplete() {
+    // Called after the projection of each view: mono completes on its only view, stereo on its last (eye 1, or the scope
+    // view when it renders).
+    if (g_thisStereo && g_thisIndex != g_viewCount - 1) return;
+    // With stereo running, the only views that describe the presented image are the ones computed inside the stereo
+    // Draw. CalcSceneView is also called outside Draw (FUN_10B224E0, one mono view per frame) -- those must not overwrite
+    // the stereo record.
+    if (!g_thisStereo && g_drawHook && g_cfg.stereo) return;
+    CommitBuilding();
+}
+
 void OnProjection(SafetyHookContext& ctx) {
     if (!g_thisViewActive) return;
     shared::Header* hdr = bridge::SharedHeader();
@@ -1338,11 +1456,32 @@ void OnProjection(SafetyHookContext& ctx) {
     auto* m = reinterpret_cast<float*>(ctx.eax);  // 4x4 row-major, row vectors (ENGINE-NOTES 5g)
     if (!m) return;
 
+    if (g_thisScope) {
+        // The scope view: a square, symmetric frustum of the scope's FOV (depth terms as the engine built them).
+        const float t = g_scopeTanNow;
+        m[0] = 1.0f / t;
+        m[1] = 0.0f;
+        m[4] = 0.0f;
+        m[5] = 1.0f / t;
+        m[8] = 0.0f;
+        m[9] = 0.0f;
+        EnterCriticalSection(&g_lock);
+        g_building.scopeTan = t;
+        g_building.scopeRect[0] = static_cast<std::uint32_t>(g_colX);
+        g_building.scopeRect[1] = 0;
+        g_building.scopeRect[2] = g_building.scopeRect[3] = static_cast<std::uint32_t>(g_colS);
+        LeaveCriticalSection(&g_lock);
+        static int logged = 0;
+        if (logged++ == 0) MLOG("scope: the scope view's projection -- %.1f deg square, %d px", 2.0f * std::atan(t) * 180.0f / kPi, g_colS);
+        CommitFrameIfComplete();
+        return;
+    }
     if (g_cfg.headsetProjection) {
-        // Widen to this view's aspect (half the viewport in stereo) so its whole rect is used and
+        // Widen to this view's aspect (its share of the viewport in stereo) so its whole rect is used and
         // nothing inside the eye's FOV is cut: grow the short axis around its centre.
         shared::Fov f = g_thisFov;
-        const float aspect = (g_thisStereo ? 0.5f : 1.0f) * static_cast<float>(hdr->width) / static_cast<float>(hdr->height);
+        const float share = g_thisStereo ? (g_eyeW > 0 ? static_cast<float>(g_eyeW) / static_cast<float>(hdr->width) : 0.5f) : 1.0f;
+        const float aspect = share * static_cast<float>(hdr->width) / static_cast<float>(hdr->height);
         const float w = f.tanRight - f.tanLeft, h = f.tanUp - f.tanDown;
         if (w < aspect * h) {
             const float cx = 0.5f * (f.tanRight + f.tanLeft), hw = 0.5f * aspect * h;
@@ -1442,6 +1581,7 @@ bool Install(const Config& cfg) {
                 bridge::SetPacingAvailable(true);
                 if (cfg.hudMode == 1 && Hook(g_hudMatrixHook, addr::kHudMatrixPush, OnHudMatrix, "HUD canvas matrix"))
                     Hook(g_hudHook, addr::kHudViewRead, OnHudView, "HUD canvas (per eye)");
+                if (cfg.scopeColumn > 0) Hook(g_hudLoopHook, addr::kHudLoopStart, OnHudLoopStart, "HUD loop start (scopes)");
             } else {
                 MLOG("stereo: inline hook on Draw failed (error %d) -- mono", static_cast<int>(res.error().type));
             }
@@ -1454,6 +1594,7 @@ bool Install(const Config& cfg) {
     offhand::Configure(cfg, armsOk);          // (the grenade drawn in the off hand needs the bake)
     offpistol::Configure(cfg, armsOk);       // (likewise the pistol)
     melee::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (physical melee: the drawn gun)
+    scope::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (scopes: the drawn gun's tube)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);
@@ -1476,7 +1617,9 @@ bool LastEye0(float (&loc)[3], int (&rot)[3], float (&fov)[4]) {
     return true;
 }
 
-bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info) {
+int ScopeColumnX() { return g_scopeViewX.load(); }
+
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info, shared::SlotScope* scope) {
     EnterCriticalSection(&g_lock);
     // With UE3's render thread the frame being presented was computed one game frame earlier -- unless its Draw was
     // paced (frame pacing): the next Draw waits for this Present before it commits, so the last one committed is this.
@@ -1490,6 +1633,17 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info) {
             meta.fov[e] = v.fov[e];
         }
         meta.stereo = v.stereo ? (g_cfg.debugSwapHalves ? 2u : 1u) : 0u;  // 2: halves swapped (experiment)
+    }
+    if (scope) {
+        *scope = shared::SlotScope{};
+        if (ok && v.stereo) {
+            scope->eyeWidth = v.eyeWidth;
+            for (int i = 0; i < 4; ++i) scope->rect[i] = v.scopeRect[i];
+            scope->camera = v.scopeCam;
+            scope->tanHalf = v.scopeTan;
+            scope->gunPose = v.gunPose;
+            scope->flags = v.gunValid ? 1u : 0u;
+        }
     }
     LeaveCriticalSection(&g_lock);
     meta.hasView = ok ? 1u : 0u;

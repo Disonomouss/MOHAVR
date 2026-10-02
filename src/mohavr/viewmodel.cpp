@@ -149,7 +149,29 @@ void SetDeterminantSign(std::uint8_t* proxy, bool negative) {
     det = negative ? -mag : mag;
 }
 
+void ViewModelTransform(std::uint8_t* proxy, void* view, M4* outL2W, M4* outW2L);
+
+// Scopes (SCOPE-DESIGN): the scope view's camera sits at the gun -- the first-person parts (the gun, the arms) are shrunk
+// to a point in that view only (it starts at the scope column's x; the eyes at 0 and their width).
 void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void* view, M4* outL2W, M4* outW2L) {
+    ViewModelTransform(proxy, view, outL2W, outW2L);
+    const int colX = view::ScopeColumnX();
+    if (colX < 0 || !view) return;
+    const float vx = *reinterpret_cast<const float*>(static_cast<const std::uint8_t*>(view) + addr::kViewX);
+    if (vx < static_cast<float>(colX) - 1.5f) return;  // (only the scope view starts at or past the column's x)
+    const auto comp = *reinterpret_cast<const std::uintptr_t*>(proxy + addr::kProxyComponent);
+    if (!comp || *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov) == 0.0f) return;
+    constexpr float kTiny = 1e-4f;
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 4; ++c) {
+            outL2W->m[r][c] *= kTiny;   // the local axes (rows: p_world = p_local x L2W)
+            outW2L->m[c][r] /= kTiny;   // its inverse: the columns
+        }
+    static int logged = 0;
+    if (logged++ == 0) MLOG("scope: a first-person part shrunk in the scope view (view x %.0f)", vx);
+}
+
+void ViewModelTransform(std::uint8_t* proxy, void* view, M4* outL2W, M4* outW2L) {
     const auto comp = *reinterpret_cast<const std::uintptr_t*>(proxy + addr::kProxyComponent);
     const float fov = comp ? *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov) : 0.0f;
     if (fov != 0.0f) NotePart(comp);

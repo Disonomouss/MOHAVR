@@ -122,6 +122,10 @@ public:
     bool  AllWeapons() const { return allWeapons_; }
     bool  TakeNextWeapon() { const bool r = nextWeaponReq_; nextWeaponReq_ = false; return r; }
     bool  MoveByHead() const { return moveByHead_; }
+    // Scopes: while looking through with the game zoom, the turning stick's up / down is the zoom's (ScopeStickY, -1..1,
+    // up +) -- kept from the game (its crouch flick, the look) until the stick is back under 30%.
+    void  SetScopeZoom(bool on) { scopeZoom_ = on; }
+    float ScopeStickY() const { return scopeStickY_; }
     void  SetHeadYaw(float yaw) { headYaw_ = yaw; headYawOk_ = true; }
 
 private:
@@ -169,6 +173,8 @@ private:
     bool        testTargetOk_[10]{};   // "@pistol", "@chest" (LOCAL)
     XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
     bool        testAlignOk_ = false;
+    bool        scopeZoom_ = false, zoomHold_ = false;
+    float       scopeStickY_ = 0.0f;
     bool        testRoom_ = false;     // "handframe=room": the test poses in the head's frame when it came (taken next frame)
     mutable bool       testRoomSet_ = false;
     mutable XrVector3f testRoomBase_{};

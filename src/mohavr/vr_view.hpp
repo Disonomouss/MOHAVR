@@ -30,7 +30,11 @@ struct PresentedFrameInfo {
     std::uint32_t serial;
     bool          paced;
 };
-bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr);
+// `scope` (optional, v24): where the eyes and the scope view are in that frame, and the scope view's camera.
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr, shared::SlotScope* scope = nullptr);
+// Scopes (SCOPE-DESIGN): the scope column's x in the backbuffer (px; -1 none) -- only the scope view starts there (the
+// render thread's per-view hooks tell it by its x).
+int ScopeColumnX();
 // Debug.MuzzleFreeze: the left eye's last view location, rotation (Unreal units) and FOV tangents L R U D.
 bool LastEye0(float (&loc)[3], int (&rot)[3], float (&fov)[4]);
 

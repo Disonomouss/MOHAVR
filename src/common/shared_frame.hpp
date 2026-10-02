@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 23;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee
+inline constexpr std::uint32_t kVersion = 24;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -50,6 +50,16 @@ struct SlotMeta {
     Fov           fov[2];
     std::uint32_t hasView;
     std::uint32_t stereo;
+};
+// v24 (SCOPE-DESIGN.md), per slot beside slotMeta: where the eyes and the scope view are in the image, and what the scope
+// view was rendered with. With a scope column the eyes are eyeWidth wide each from the left and the column follows.
+struct SlotScope {
+    std::uint32_t eyeWidth;   // px of each eye (0: half the width -- no scope column)
+    std::uint32_t rect[4];    // the scope view: x, y, w, h px (w 0: not rendered this frame)
+    Pose          camera;     // its camera (LOCAL; -Z the view direction, +Y up)
+    float         tanHalf;    // its half-FOV tangent (square, symmetric)
+    Pose          gunPose;    // the gun pose the frame was drawn with (the lens stays on the drawn scope)
+    std::uint32_t flags;      // bit0 gunPose valid
 };
 
 enum class GameState : std::uint32_t { None = 0, Starting = 1, Ready = 2, Failed = 3 };
@@ -312,6 +322,24 @@ struct Header {
     volatile std::uint32_t meleeHits;         // 2532 game -> host: +1 per strike that hit (the host's pulse)
     volatile float         meleePower;        // 2536 game -> host: that strike's speed over its gate, 0..1 (written before meleeHits)
     volatile std::uint32_t meleeKind;         // 2540 game -> host: 1 a soldier, 2 an actor, 3 the world (written before meleeHits)
+    // --- v24: scopes (SCOPE-DESIGN.md) ---
+    SlotScope              slotScope[kRing];  // 2544 game -> host, per slot, written with slotMeta (before publishedFrame)
+    // host -> game, per XR frame INSIDE the view seqlock
+    std::uint32_t          scopeWant;         // 2796 bit0 render the scope view, bit1 the right eye looks through it (else left)
+    float                  scopeTanHalf;      // 2800 the scope view's half-FOV tangent (the magnification chosen)
+    Pose                   scopeCamera;       // 2804 its camera (LOCAL; -Z the view direction): on the aim line, at the objective
+    // game -> host, once per Draw (seqlock scopeSeq: odd while the game writes)
+    volatile std::uint32_t scopeSeq;          // 2832
+    std::uint32_t          scopeCaps;         // 2836 bit0 the column is there (a scope view can render), bit1 a scope on the gun
+                                              //      in hand (the game's IsScopeEnabled), bit2 the scope's geometry is known
+    char                   scopeKey[48];      // 2840 the attachment class
+    float                  scopeOcular[3];    // 2888 the eyepiece's centre, host gun frame (x right, y up, z back, m), un-mirrored
+    float                  scopeObjective[3]; // 2900 the objective's centre (the axis runs ocular -> objective)
+    float                  scopeRadius;       // 2912 the eyepiece's radius (m)
+    float                  scopeGameFov[2];   // 2916 the game's zoom: its narrowest and widest FOV (deg; its 80 deg view = 1x)
+    float                  scopeRealMag;      // 2924 the real scope's magnification (x; 0 unknown)
+    std::uint32_t          scopeReticle;      // 2928 0 a crosshair, 1 a post and bars (the German scopes)
+    std::uint32_t          pad24;             // 2932
 };
 #pragma pack(pop)
 
@@ -385,7 +413,14 @@ static_assert(offsetof(Header, meleeOn) == 2528, "shared::Header layout must mat
 static_assert(offsetof(Header, meleeHits) == 2532, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, meleePower) == 2536, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, meleeKind) == 2540, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 2544, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(SlotScope) == 84, "shared structs must be packed identically");
+static_assert(offsetof(Header, slotScope) == 2544, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, scopeWant) == 2796, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, scopeCamera) == 2804, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, scopeSeq) == 2832, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, scopeKey) == 2840, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, scopeReticle) == 2928, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 2936, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -397,6 +432,60 @@ inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
     std::uint32_t h = 2166136261u;
     for (; s && *s; ++s) h = (h ^ static_cast<std::uint8_t>(*s)) * 16777619u;
     return h;
+}
+
+// What the game publishes about the scope on the gun in hand (v24).
+struct ScopeInfo {
+    std::uint32_t caps;
+    char          key[48];
+    float         ocular[3], objective[3], radius, gameFov[2], realMag;
+    std::uint32_t reticle;
+};
+// Seqlock read of it; false while the game is mid-write (try next frame).
+inline bool ReadScopeInfo(const Header* h, ScopeInfo& s, std::uint32_t& seq) {
+    const std::uint32_t s1 = h->scopeSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    s.caps = h->scopeCaps;
+    for (int i = 0; i < 48; ++i) s.key[i] = h->scopeKey[i];
+    s.key[47] = 0;
+    for (int i = 0; i < 3; ++i) {
+        s.ocular[i] = h->scopeOcular[i];
+        s.objective[i] = h->scopeObjective[i];
+    }
+    s.radius = h->scopeRadius;
+    s.gameFov[0] = h->scopeGameFov[0];
+    s.gameFov[1] = h->scopeGameFov[1];
+    s.realMag = h->scopeRealMag;
+    s.reticle = h->scopeReticle;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    seq = s1;
+    return h->scopeSeq == s1;
+}
+// Seqlock read of what the host wants rendered (v24, inside the view seqlock).
+inline bool ReadScopeWant(const Header* h, std::uint32_t& want, float& tanHalf, Pose& camera) {
+    for (int t = 0; t < 64; ++t) {
+        const std::uint32_t s1 = h->viewSeq;
+        if (s1 & 1u) {
+            _mm_pause();
+            continue;
+        }
+#if defined(_MSC_VER)
+        _ReadWriteBarrier();
+#endif
+        want = h->scopeWant;
+        tanHalf = h->scopeTanHalf;
+        camera = h->scopeCamera;
+#if defined(_MSC_VER)
+        _ReadWriteBarrier();
+#endif
+        if (h->viewSeq == s1) return true;
+    }
+    return false;
 }
 
 // The off-hand grenade's events (nadeEvt low byte) and types (bits 8-15); flags (bits 16-23): bit16 a toss (v20).

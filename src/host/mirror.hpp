@@ -1,4 +1,4 @@
-﻿// The desktop mirror (MOHAVR-host.exe, Bridge.Mirror). Under D3D9On12 the game's own window stays
+// The desktop mirror (MOHAVR-host.exe, Bridge.Mirror). Under D3D9On12 the game's own window stays
 // white (ENGINE-NOTES 5e), so the host shows what the headset gets on the monitor instead:
 //   1 = over the game window: a click-through, never-activated window kept on the game's client
 //       area while the game is in the foreground (hidden otherwise);
@@ -20,7 +20,8 @@ public:
     // mode: 1 overlay, 2 own window. False (logged) if it can't start; the host carries on without.
     bool Init(ID3D11Device* dev, DWORD gamePid, int mode);
     // Per XR frame, after the newest game frame was copied into `frame` (meta = how it was rendered).
-    void Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shared::SlotMeta& meta, bool haveFrame);
+    void Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shared::SlotMeta& meta, bool haveFrame,
+                std::uint32_t eyeWidth = 0);  // (v24: each eye's width with a scope column)
     void Shutdown();
 
 private:

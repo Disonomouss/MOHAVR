@@ -155,6 +155,11 @@ Config LoadConfig(const std::wstring& dir) {
     c.meleeProps = get(L"Melee", L"Props", c.meleeProps);
     c.meleeLOS = get(L"Melee", L"LineOfSight", c.meleeLOS);
     c.meleeChargeKill = get(L"Melee", L"ChargeKill", c.meleeChargeKill);
+    c.scopeEnable = get(L"Scope", L"Enable", c.scopeEnable);
+    c.scopeColumn = static_cast<int>(GetPrivateProfileIntW(L"Scope", L"Column", c.scopeColumn, ini.c_str()));
+    if (c.scopeColumn < 0 || c.scopeColumn > 2048) c.scopeColumn = 512;
+    c.debugScopeView = get(L"Debug", L"ScopeView", c.debugScopeView);
+    c.debugScopeFov = getf(L"Debug", L"ScopeViewFov", c.debugScopeFov, 1.0f, 90.0f);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

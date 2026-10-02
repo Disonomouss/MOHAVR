@@ -19,14 +19,15 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
-const int kTabItems[kTabCount][13] = {
+const int kTabItems[kTabCount][15] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kPouchReload, kMelee, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage, kGiveAll, kClose, -1},
+    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage,
+     kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
@@ -34,7 +35,7 @@ bool g_giveAllMenu = false;
 bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
 // Tab t's i-th shown item (-1 past the end), and how many it shows.
 int ItemAt(int t, int i) {
-    for (int k = 0; k < 13 && kTabItems[t][k] >= 0; ++k)
+    for (int k = 0; k < 15 && kTabItems[t][k] >= 0; ++k)
         if (Shown(kTabItems[t][k]) && i-- == 0) return kTabItems[t][k];
     return -1;
 }
@@ -232,6 +233,14 @@ void Menu::ApplySavedSettings() {
         const int defMelee = static_cast<int>(GetPrivateProfileIntW(L"Melee", L"Physical", 0, shipped.c_str()));
         physicalMelee_ = GetPrivateProfileIntW(L"Melee", L"Physical", defMelee, iniPath_.c_str()) != 0;
         MLOG("menu: physical melee %s", physicalMelee_ ? "on" : "off");
+        // Scopes (SCOPE-DESIGN): the shipped [Scope] Enable and Zoom until the player toggles them.
+        const int defScope = static_cast<int>(GetPrivateProfileIntW(L"Scope", L"Enable", 0, shipped.c_str()));
+        scope_ = GetPrivateProfileIntW(L"Scope", L"Enable", defScope, iniPath_.c_str()) != 0;
+        wchar_t dz[16] = L"", uz[16] = L"";
+        GetPrivateProfileStringW(L"Scope", L"Zoom", L"real", dz, 16, shipped.c_str());
+        GetPrivateProfileStringW(L"Scope", L"Zoom", dz, uz, 16, iniPath_.c_str());
+        scopeZoomGame_ = !_wcsicmp(uz, L"game");
+        MLOG("menu: scopes %s, zoom %s", scope_ ? "on" : "off", scopeZoomGame_ ? "the game's" : "realistic");
     }
     // The off-hand pistol: likewise the shipped [OffHand] Pistol until the player toggles it.
     const int defPistol = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Pistol", 0, shipped.c_str()));
@@ -817,6 +826,14 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             physicalMelee_ = !physicalMelee_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Melee", L"Physical", physicalMelee_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: physical melee -> %s", physicalMelee_ ? "on (a swing of the gun's butt strikes)" : "off (the right stick's melee only)");
+        } else if (item == kScope) {
+            scope_ = !scope_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Scope", L"Enable", scope_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: scopes -> %s", scope_ ? "on (raise the scope to your eye, two hands on the gun)" : "off");
+        } else if (item == kScopeZoom) {
+            scopeZoomGame_ = !scopeZoomGame_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Scope", L"Zoom", scopeZoomGame_ ? L"game" : L"real", iniPath_.c_str());
+            MLOG("menu: scope zoom -> %s", scopeZoomGame_ ? "the game's (the turning stick up / down zooms)" : "realistic");
         } else if (item == kGunNade) {
             gunNadePin_ = !gunNadePin_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"GrenadePin", gunNadePin_ ? L"1" : L"0", iniPath_.c_str());
@@ -1002,6 +1019,17 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Physical melee   <  %s  >", physicalMelee_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
                 note("swing the butt of your gun into an enemy (a bayonet: thrust or slash): the game's melee");
+                break;
+            case kScope:
+                snprintf(label, sizeof(label), "Scopes           <  %s  >", scope_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("raise a scoped gun to your eye, both hands on it: you look through the scope");
+                break;
+            case kScopeZoom:
+                snprintf(label, sizeof(label), "Scope zoom       <  %s  >", scopeZoomGame_ ? "game" : "realistic");
+                ImGui::Selectable(label, sel);
+                note(scopeZoomGame_ ? "the game's zoom: the turning stick up / down zooms while you look through"
+                                    : "each scope's real magnification (Springfield 2.5x, G43 and StG44 4x)");
                 break;
             case kGunNade:
                 snprintf(label, sizeof(label), "Hand grenades    <  %s  >", gunNadePin_ ? "pin & grip" : "game");

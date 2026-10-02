@@ -719,3 +719,29 @@ hands and the pouch is where they reach; the slide and the flash are good.
 **Why:** the player (2026-10-03): "In game with most weapons clicking right stick whacks enemies with the butt of the gun.
 Can the motion of hitting with the butt of the gun do the melee damage? If this system can be worked out, apply it for
 special cases, such as upgraded guns that have bayonets." 
+
+### D50. Scopes you raise to your eye: a third view through the drawn eyepiece -- Decided 2026-10-03
+`[Scope] Enable=1` (shipped on, proven in the simulator; the menu's Weapons tab "Scopes", the player's), `Zoom=real`
+("Scope zoom": real or the game's), `TwoHands=1`. SCOPE-DESIGN.md.
+- **What:** with both hands on a scoped gun (the Springfield, the G43 from level 1, the StG44 from level 2) and an eye just
+  behind the eyepiece on its axis, that eye looks through the scope: a magnified view in the eyepiece, for that eye only,
+  with the scope's reticle. No button, no overlay; the game's own scope state never runs.
+- **How the view is made:** the stereo Draw's third player renders the scope view (its own view state, a square frustum,
+  the HUD loop over the eyes only, the first-person parts shrunk) into a 512 px column taken from the eyes' width only
+  while a scope is at an eye. Of the options researched (a crop of the eye image, a third view, an engine scene capture,
+  a zoom of the eye's whole view) it is the only one at full resolution and in step with the eyes, on machinery the mod
+  already proved; a crop is blurry and sees the scope's own tube, a scene capture has never run in this game, a whole-view
+  zoom is a known sickness trigger.
+- **Where:** each scope's tube from the gun meshes (tools/scope_points.py), carried by the live scope bone into the host's
+  gun frame (the StG44's mount). The camera at the objective down the optical axis, zeroed to the bore (the StG44's tube
+  is drawn 3.9 deg off its barrel); the reticle at the scope's zero (50 m) on the aim line.
+- **The lens:** a one-eye quad on the drawn eyepiece, direction-mapped (parallax-free), with an exit-pupil shadow and the
+  field stop's ring.
+- **Magnification:** the real scopes' (2.5x, 4x) or the game's zoom on the turning stick.
+- **Not covered:** the M18 (its sight is part of the body mesh).
+- **The code review** (8 of 17 confirmed, all fixed; SCOPE-DESIGN 5): the lens a frame ahead of the drawn gun, the view's
+  x truncated a pixel at some widths, a stale lens picture on raising, the render thread's column x, the geometry after
+  a re-mount or a hand change, the lens mid-recentre.
+**Why:** the player (2026-10-03): "I don't want scopes to be a button press that brings up an overlay. I'd like scopes to
+feel natural, you bring them up to your eye and can see through them"; "Make both the game's value and realistic a toggle
+in menu. Two hands needed to use scope."

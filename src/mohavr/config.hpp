@@ -81,6 +81,9 @@ struct Config {
     bool  meleeProps = false;         // [Melee] Props -- the game's damage to every prop struck (fuel barrels, radios...)
     bool  meleeLOS = true;            // [Melee] LineOfSight -- no strike the eye can't see (through a wall)
     bool  meleeChargeKill = true;     // [Melee] ChargeKill -- the game's rule: struck while sprinting, the soldier dies
+// [Scope] (SCOPE-DESIGN): a scope raised to the eye shows a third view rendered down its axis.
+bool  scopeEnable = false;        // [Scope] Enable
+int   scopeColumn = 512;          // [Scope] Column -- px at the backbuffer's right kept for the scope view (taken from the eyes)
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)
@@ -106,6 +109,8 @@ struct Config {
     bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
     bool debugOffHandTrace = false;  // [Debug] OffHandTrace -- the off-hand grenade: availability, the hold's states, ticks
     bool debugMeleeTrace = false;    // [Debug] MeleeTrace -- physical melee: each armed swing, its speeds, contacts, refusals
+bool  debugScopeView = false;    // [Debug] ScopeView -- the scope spike: the third view always on, from the right eye
+float debugScopeFov = 10.0f;     // [Debug] ScopeViewFov -- its FOV (degrees)
     bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)

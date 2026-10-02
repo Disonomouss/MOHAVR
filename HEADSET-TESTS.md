@@ -1933,6 +1933,42 @@ button and an overlay.
 
 ---
 
+## Round 49: prepared 2026-10-03, scopes you raise to your eye
+**Your request:** "I'd like scopes to feel natural, you bring them up to your eye and can see through them" -- with both
+the game's zoom and the real one in the menu, and two hands needed.
+
+**Changed:**
+- **Scopes:** hold a scoped gun with both hands (the other hand on the foregrip) and bring the scope to your eye: that eye
+  looks through it -- the world magnified in the eyepiece, with the scope's reticle. Lower it or let go with one hand and
+  it is just the scope again.
+  - The scoped guns: the Springfield, the G43 (from upgrade 1), the StG44 (from upgrade 2: give its scope a few seconds to
+    mount after the switch). Not the M18 yet.
+  - The reticle: a crosshair on the Springfield, the German post and bars on the G43 and the StG44. It marks where the
+    shot goes at 50 m; up close the shot lands a little low, as with a real scope.
+- **Menu -> Weapons:** "Scopes" (on / off) and "Scope zoom": realistic (Springfield 2.5x, G43 and StG44 4x) or game (the
+  game's zoom, 2.3x to 9.6x: while looking through, push the turning stick up to zoom in, down to zoom out).
+
+**How to try it:**
+1. Give yourself the Springfield (menu -> Give all weapons, if shown) or pick one up. Hold it with both hands and raise
+   the scope to your aiming eye, about where a real scope would sit (a few cm in front of the eye).
+2. Aim at something far, then something near. Move your eye a little off the centre and back: the picture should darken
+   at the edge, as in a real scope.
+3. Fire a few shots at a wall through the scope: do they land on the reticle?
+4. Menu -> Weapons -> Scope zoom -> game, and zoom with the turning stick.
+5. Try the G43 or the StG44 too.
+
+**Questions:**
+1. Does it feel like looking through a scope? Is the lens the right size; is the "eye at the scope" spot too strict or too
+   loose?
+2. Realistic or the game's zoom? Does the stick zoom work?
+3. Two hands: right, or should one hand do too?
+4. At 4x, does the picture swim or shake too much?
+5. Does it pick your aiming eye?
+
+**Deployed for this round:** the shipped defaults (scopes on, realistic zoom).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

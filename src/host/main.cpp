@@ -35,6 +35,7 @@
 #include "offpistol.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
+#include "scope.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -394,6 +395,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             reticleOffOk = reticleOff.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
         }
     }
+    // Scopes (SCOPE-DESIGN): the scope raised to an eye -- the lens and the scope view the game renders for it.
+    mohavr::host::Scope scope;
+    const bool scopeOk = handsOk && scope.Init(dev, ctx, session, fmt, ExeDir() + L"\\MOHAVR.ini");
+    XrPosef eyeNow[2] = {};  // this XR frame's eye poses (the lens is drawn for the looking eye's)
+    bool eyesNowOk = false;
     XrPosef handPose[2] = {};
     std::uint32_t handBits = 0;
     mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
@@ -485,6 +491,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     bool running = false;
     bool loggedViews = false, loggedProjection = false, loggedStereo = false;
     mohavr::shared::SlotMeta lastMeta{};  // render pose/fov of the frame in `last`
+    mohavr::shared::SlotScope lastScope{};  // v24: where its eyes and scope view are
     std::uint64_t shown = 0;  // last game frame copied into `last`
     // Recentre (menu): `local` is re-created at the head's heading and floor position. Frames the game
     // rendered with views from the old space are still submitted in it (`prevLocal`) until they are
@@ -773,6 +780,30 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     handsOut = hands.Update(hin);
                     gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
                 }
+                // Scopes: the gate (an eye at the eyepiece, two hands on the gun), the zoom and the scope view's camera.
+                eyeNow[0] = views[0].pose;
+                eyeNow[1] = views[1].pose;
+                eyesNowOk = true;
+                if (scopeOk) {
+                    if (menuOk) {
+                        scope.SetOn(menu.ScopeOn());
+                        scope.SetZoomGame(menu.ScopeZoomGame());
+                    }
+                    mohavr::host::Scope::In sin{};
+                    sin.gunValid = handsOut.gunValid;
+                    sin.twoHanded = handsOut.twoHanded;
+                    sin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
+                    sin.hasView = lastMeta.hasView != 0;
+                    sin.eyesOk = true;
+                    sin.gun = handsOut.gun;
+                    sin.aimRay = handsOut.aimRay;
+                    sin.eye[0] = views[0].pose;
+                    sin.eye[1] = views[1].pose;
+                    sin.stickY = pad.ScopeStickY();
+                    sin.now = nowS;
+                    scope.Update(g_hdr, sin);
+                    pad.SetScopeZoom(scope.ZoomStick());
+                }
                 manualReload.Send(g_hdr, nowS);
                 if (handsOk) offhandNade.Send(g_hdr, nowS);
                 if (handsOk) gunNade.Send(g_hdr, nowS);
@@ -831,6 +862,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     g_hdr->gunPose = toPose(handsOut.gun);
                     g_hdr->aimRay = toPose(handsOut.aimRay);
                 }
+                g_hdr->scopeWant = scopeOk ? scope.Want() : 0u;
+                g_hdr->scopeTanHalf = scope.TanHalf();
+                g_hdr->scopeCamera = scope.Camera();
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // even: done
                 if (handsOk) {
                     if (!handsOut.command.empty()) {
@@ -976,6 +1010,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             // Frame f's own slot (not publishedSlot, which a paced game may already have moved on to the next frame).
             const UINT slot = static_cast<UINT>(f % kRing);
             lastMeta = g_hdr->slotMeta[slot];  // written by the game before it published f
+            lastScope = g_hdr->slotScope[slot];
             lastViewQpc = g_hdr->slotViewQpc[slot];
             {
                 // Diagnostics (headset round 8): log whenever what we submit changes kind or FOV.
@@ -1067,7 +1102,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // reproject it and the world stays locked.
                 //   stereo (M4): left half = eye 0, right half = eye 1, each with its own pose/fov;
                 //   mono   (M3): the whole image, eye 0's pose/fov, in both eyes (slice e).
-                const int32_t half = static_cast<int32_t>(width / 2);
+                // (v24: with a scope column each eye is lastScope.eyeWidth wide and the column follows.)
+                const int32_t half = lastScope.eyeWidth ? static_cast<int32_t>(lastScope.eyeWidth) : static_cast<int32_t>(width / 2);
+                const int32_t rightW = lastScope.eyeWidth ? half : static_cast<int32_t>(width) - half;
                 for (uint32_t e = 0; e < 2; ++e) {
                     const uint32_t src = lastMeta.stereo ? e : 0u;
                     const auto& p = lastMeta.pose[src];
@@ -1079,8 +1116,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     if (lastMeta.stereo) {
                         const bool leftHalf = (e == 0) != (lastMeta.stereo == 2);  // 2 = halves swapped (experiment)
                         pviews[e].subImage.imageRect = leftHalf ? XrRect2Di{{0, 0}, {half, static_cast<int32_t>(height)}}
-                                                              : XrRect2Di{{half, 0}, {static_cast<int32_t>(width) - half,
-                                                                                      static_cast<int32_t>(height)}};
+                                                              : XrRect2Di{{half, 0}, {rightW, static_cast<int32_t>(height)}};
                         pviews[e].subImage.imageArrayIndex = 0;
                     } else {
                         pviews[e].subImage.imageRect = full;
@@ -1120,7 +1156,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (reticleOk && lastMeta.hasView && menuHeadOk && (!menuOk || menu.RedDot())) {
                 const std::uint32_t src = g_hdr->aimSource;
                 const float d = g_hdr->aimDistance;
-                if (src == 2 || src == 3) {
+                if ((src == 2 || src == 3) && !(scopeOk && scope.Active())) {  // (not while looking through a scope)
                     // With the gun in the hand: the host's aim line (hands.cpp: the gun hand, foregrip, the fit's
                     // angle and offset) -- the one the game traces along. Otherwise the aiming controller itself.
                     XrPosef ray{};
@@ -1142,7 +1178,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 if (reticleOffOk && handsOk && offhandPistol.DotRay(offRay))
                     if (const XrCompositionLayerBaseHeader* rl = reticleOff.Layer(local, offRay, menuHead, g_hdr->pistolAimDistance))
                         layers[layerCount++] = rl;
-            }            // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
+            }
+            // The scope's lens (SCOPE-DESIGN): the scope view through the drawn eyepiece, for the looking eye.
+            if (scopeOk && lastMeta.hasView && !(prevLocal != XR_NULL_HANDLE && shown <= prevLocalUntil))  // (not mid-recentre)
+                if (const XrCompositionLayerBaseHeader* sl = scope.Layer(local, last, shown, lastScope, eyeNow, eyesNowOk))
+                    layers[layerCount++] = sl;
+            // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
             if (markersOk && lastMeta.hasView && menuHeadOk && handsOk)
                 layerCount += static_cast<uint32_t>(markers.Layers(
                     local, menuHead, handsOut, static_cast<mohavr::host::Markers::Mode>(menuOk ? menu.RingsMode() : 1),
@@ -1153,7 +1194,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
             }
         }
-        if (mirrorOk) mirror.Update(ctx, last, lastMeta, shown > 0);
+        if (mirrorOk) mirror.Update(ctx, last, lastMeta, shown > 0, lastScope.eyeWidth);
         XrFrameEndInfo fe{XR_TYPE_FRAME_END_INFO};
         fe.displayTime = fs.predictedDisplayTime;
         fe.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;

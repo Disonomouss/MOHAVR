@@ -146,7 +146,8 @@ bool Mirror::Place() {
     return true;
 }
 
-void Mirror::Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shared::SlotMeta& meta, bool haveFrame) {
+void Mirror::Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shared::SlotMeta& meta, bool haveFrame,
+                    std::uint32_t eyeWidth) {
     if (!swap_) return;
     MSG m;
     while (PeekMessageW(&m, hwnd_, 0, 0, PM_REMOVE)) DispatchMessageW(&m);
@@ -166,7 +167,7 @@ void Mirror::Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shar
     // Source: the left eye (left half) in stereo, else the whole frame -- cropped to the window's shape.
     D3D11_TEXTURE2D_DESC fd{};
     frame->GetDesc(&fd);
-    const UINT srcW = meta.stereo ? fd.Width / 2 : fd.Width, srcH = fd.Height;
+    const UINT srcW = meta.stereo ? (eyeWidth ? eyeWidth : fd.Width / 2) : fd.Width, srcH = fd.Height;
     RECT wr{};
     GetClientRect(hwnd_, &wr);
     const float aspect = (wr.right > 0 && wr.bottom > 0) ? static_cast<float>(wr.right) / static_cast<float>(wr.bottom)

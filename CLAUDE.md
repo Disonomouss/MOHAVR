@@ -85,6 +85,10 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   (only the first placement in a run sticks), `mohavr melee enemy at butt|bayonet [depth]`, `where`, `status` (his
   Health, the melee-kill count), `hit` (the executor alone); `Debug.MeleeTrace=1` logs each armed swing.
 
+- Scope tests (SCOPE-DESIGN 3): the simulator reports both eyes at the head's centre, so a test puts the eyepiece before the
+  head's centre (`work/research/tests/scope3.ps1 -Gun -Key -Ex -Ey -Ez -Pitch -Zoom`); the host logs "scope: looking
+  through" and "the lens shown"; `Debug.ScopeView=1` renders the scope view always (from the right eye).
+
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
   Other actions: `launch`, `to-gameplay`, `ingame`, `wait <check>`, `state`, `key <keys>`,

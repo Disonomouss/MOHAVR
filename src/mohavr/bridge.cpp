@@ -236,9 +236,11 @@ void Publish(IDirect3DDevice9* dev) {
 
     // The pose/FOV this image was rendered with (M3); the host submits it with exactly these.
     shared::SlotMeta meta{};
+    shared::SlotScope scope{};
     view::PresentedFrameInfo info{};
-    view::MetaForPresentedFrame(meta, &info);
+    view::MetaForPresentedFrame(meta, &info, &scope);
     g_hdr->slotMeta[slot] = meta;
+    g_hdr->slotScope[slot] = scope;
     g_hdr->slotViewQpc[slot] = info.qpc;
     MemoryBarrier();
     NotePublished(info);

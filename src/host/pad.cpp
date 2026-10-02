@@ -282,6 +282,14 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     }
     const auto& map = menuLayout ? mapMenu_ : map_;
     r.src[kMenu] = now_ < startUntil_ ? 1.0f : 0.0f;  // the menu-button tap (main.cpp)
+    // Scopes: the game zoom's stick (the turning stick's up / down) while looking through, and until it is centred again.
+    if (scopeZoom_ || zoomHold_) {
+        scopeStickY_ = scopeZoom_ ? r.ry : 0.0f;
+        zoomHold_ = scopeZoom_ || std::fabs(r.ry) >= 0.3f;
+        r.ry = 0.0f;
+    } else {
+        scopeStickY_ = 0.0f;
+    }
     // Right-stick flicks: a push past 70% down/up = a 0.15 s press; re-armed once back under 30%.
     const float fy[2] = {-r.ry, r.ry};
     for (int d = 0; d < 2; ++d) {
