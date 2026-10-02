@@ -58,6 +58,8 @@ struct Config {
     bool  offPistolUpgrades = true;   // [OffHand] PistolUpgrades -- the save's upgrade level applied at the draw if behind
     bool  offPistolKeep = true;       // [OffHand] PistolKeep -- the game's weapon switches never take the held pistol
     bool  offPistolPair = false;      // [OffHand] PistolPair -- the gun hand's own pistol drawn a second time (two pistols)
+    bool  offPistolSlide = false;     // [OffHand] PistolSlide -- its slide (the C96's bolt) back on each shot, locked back empty
+    bool  offPistolFlash = false;     // [OffHand] PistolFlash -- its own muzzle flash at the muzzle on each shot
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)

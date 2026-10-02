@@ -620,3 +620,25 @@ grip. Round 45's answers: the chest spot is right; the click hold is the player'
 hand grenades and the grenade pose pass; the off-hand pistol lacks its flash and slide.
 **Why:** the player (2026-10-02): "when a hand with a gun equipped grips the ammo holster, it automatically reloads. No
 animation, just an instant reload." -- "Make it a toggle option in menu."
+
+### D47. The off-hand pistol's slide and muzzle flash -- Decided 2026-10-02 (round 45)
+`[OffHand] PistolSlide=1` and `PistolFlash=1` (both shipped on, proven in the simulator).
+- **The slide:** the Colt's `gunSlide` (the C96's `Bolt`) on the drawn clone moves back on each shot: back in 20 ms, held
+  40 ms, forward over 70 ms. The distance is the one the game's own fire animations use. It stays back while the held
+  pistol (or its twin) is empty, and goes forward when it is refilled (holster or pouch). It is a bone fix in the carrier's
+  bake, like the C96's clip.
+- **The flash:** the pistol's own first-person flash template (`1911a_muzzleflash_FP`, `c96_muzzleflash_FP`) fires at the
+  drawn muzzle along the off line on each shot. Its component is minted by the game's own
+  `SmallArmsAttachment.InitHitspangPSC` on the gun hand's attachment, with an absolute transform, and is remade with the
+  next attachment. muzzle.cpp's hook leaves it alone. A grenade in the gun hand gives no flash (no SmallArmsAttachment).
+- `Debug.MuzzleFreeze` now covers this flash too (`muzzle::ArmFreeze`).
+**Why:** round 45, answer 5: "No, just the lack of flash and slide back on the off hand pistol."
+
+**The review** (2 of 6 confirmed):
+- The flash's component is forgotten at the first Draw after the gun hand's attachment changes, which destroys it. Before
+  this, a purge could recycle the address and the next off shot could write to another object.
+- The flash's distance along the off line is recomputed with every placement: a fit change while the pistol is held, and
+  the fit's angle.
+
+Also fixed, though rated harmless: the slide bone is forgotten with the carrier, and a new shot starts the slide from
+where it is, so the C96's full auto doesn't snap it forward.

@@ -71,6 +71,7 @@ SafetyHookInline g_hook;
 int              g_logged = 0, g_checked = 0;
 int              g_freezeIn = -1;    // Debug.MuzzleFreeze: Draws left until the world is paused (-1: not armed)
 std::uintptr_t   g_frozenFlash = 0;  // the flash the freeze logs
+bool             g_frozeOnce = false;
 
 enum Kind { kNone, kFlash, kBrass };
 const char* const kKindName[] = {"", "muzzle flash", "brass"};
@@ -164,12 +165,7 @@ void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void*
     }
     g_hook.thiscall<void>(psc, stack, result);
     if (kind == kNone) return;
-    static bool frozeOnce = false;
-    if (kind == kFlash && g_cfg.debugMuzzleFreeze > 0 && !frozeOnce) {
-        frozeOnce = true;
-        g_freezeIn = g_cfg.debugMuzzleFreeze - 1;  // 1: at the first Draw after the activation
-        g_frozenFlash = psc;
-    }
+    if (kind == kFlash) ArmFreeze(psc);
     if (mode == 0) {
         // hide: ActivateSystem cleared it; with it set the emitters skip spawning (bursts too) until the next shot.
         int so = -1;
@@ -220,6 +216,13 @@ void TraceFlash(int draw) {
 }
 
 }  // namespace
+
+void ArmFreeze(std::uintptr_t psc) {
+    if (g_cfg.debugMuzzleFreeze <= 0 || g_frozeOnce) return;
+    g_frozeOnce = true;
+    g_freezeIn = g_cfg.debugMuzzleFreeze - 1;  // 1: at the first Draw after the activation
+    g_frozenFlash = psc;
+}
 
 // Debug.MuzzleFreeze: the flash's flame shows for about one frame (the game's own too; in slow motion as well, where its
 // smoke lives ~15 Draws), too short for a capture to catch; paused, it stays where it was drawn, and the log gives its

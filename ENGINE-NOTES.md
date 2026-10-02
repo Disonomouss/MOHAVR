@@ -1952,6 +1952,41 @@ nadepose2 (the click hold after the review's fixes) and the harness cycle passed
 
 The harness cycle with the shipped defaults (PistolPair 1, GrenadePin 1) passed.
 
+## 5bk. The off-hand pistol's slide and flash (D47, 2026-10-02)
+
+- **The slide bones:**
+
+  | Mesh | Bone | Index | Rest | Back (the fire animation's extreme) |
+  |---|---|---|---|---|
+  | DE_Mauser_Rigged | `Bolt` | #7 | (0, -8.42, 0.65) | Z -4.55 |
+  | the Colt's | `gunSlide` | #3 | (0, -7.0, 2.5) | Z -1.85 |
+
+  Written as the mesh-space translation of the bone's space base in the carrier's bake (arms_ik BakeCarrier through
+  offpistol::CarrierBone). [S] slide3/slide4, side-on captures:
+  - the C96 emptied (`mohavr pistol empty 1`, one pull): its bolt held back, sticking out of the rear of the receiver;
+    refilled at the pouch, forward again;
+  - the Colt emptied: its slide held back, the barrel bare at the front and the ejection port open.
+- **The flash component:** `InitHitspangPSC` on the pawn's CurrentWeaponAttachment (Attachment_Bar_1 in the test) returns
+  a new ParticleSystemComponent. Its Translation (0x1B0), Rotation (0x1BC) and bNeedsUpdateTransform (0x50 mask 0x8) are
+  written, then `SetTemplate` with `HUS_VFX_Mauser_muzzle.c96_muzzleflash_FP` (or `HUS_VFX_1911a_pistol_muzzle.1911a_muzzleflash_FP`),
+  found by `Object.FindObject` with the class of the attachment's own MuzzleFlashParticleSystemTemplate, then
+  `ActivateSystem`.
+- **Like every flash in the game, its flame lasts about one frame** (5aj). In the [S] slide1 test (SloMo 0.05) the timed
+  captures missed it. slide2 used `Debug.MuzzleFreeze=1` (which now covers this flash) to pause the world at the first
+  Draw after the shot:
+  - L2W at 7589.5 -8929.8 -4577.3, 43 cm in front of the left eye; its X axis (-0.94, 0.34, 0) was along the side-on
+    C96's line;
+  - the bounds grew to an extent of 38.6 (live particles);
+  - the capture shows the flame and smoke at the C96's muzzle.
+- **`FreezeFrame 0` sent again does not unpause:** the next capture was still frozen. A test that needs the world back
+  after a freeze has to end there.
+- **The component's lifetime:** `InitHitspangPSC` creates it with `new (Outer)` and attaches it to the attachment. The
+  attachment is destroyed at every switch of the gun hand (`MOHAPawn.WeaponAttachmentChanged`), so the component is
+  reachable only through it. The mod therefore drops it at the first Draw where CurrentWeaponAttachment differs. [S]
+  slide5 (BAR, then a switch to the M12, then back to the BAR): the component was remade each time
+  (ParticleSystemComponent_360 on Attachment_Bar_1, _376 on Attachment_M12CombatShotgun_1, _381 on Attachment_Bar_8).
+  An 8-round C96 burst (712) followed.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

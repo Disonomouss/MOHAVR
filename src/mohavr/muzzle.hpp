@@ -21,5 +21,7 @@ bool Install(const Config& cfg);
 // Debug.MuzzleFreeze ([S] tool): once per Draw, with the game's first ULocalPlayer (game thread): traces the first
 // flash each Draw, then pauses the world.
 void OnDraw(std::uintptr_t localPlayer);
+// Debug.MuzzleFreeze for a flash the hook doesn't classify (the off-hand pistol's): the first one activated arms the freeze.
+void ArmFreeze(std::uintptr_t psc);
 
 }  // namespace mohavr::muzzle

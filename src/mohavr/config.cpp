@@ -132,6 +132,8 @@ Config LoadConfig(const std::wstring& dir) {
     c.offPistolUpgrades = get(L"OffHand", L"PistolUpgrades", c.offPistolUpgrades);
     c.offPistolKeep = get(L"OffHand", L"PistolKeep", c.offPistolKeep);
     c.offPistolPair = get(L"OffHand", L"PistolPair", c.offPistolPair);
+    c.offPistolSlide = get(L"OffHand", L"PistolSlide", c.offPistolSlide);
+    c.offPistolFlash = get(L"OffHand", L"PistolFlash", c.offPistolFlash);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

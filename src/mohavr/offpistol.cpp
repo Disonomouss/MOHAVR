@@ -16,6 +16,7 @@
 #include "carrier.hpp"
 #include "config.hpp"
 #include "log.hpp"
+#include "muzzle.hpp"
 #include "names.hpp"
 #include "offhand.hpp"
 #include "reload.hpp"
@@ -185,6 +186,18 @@ int Kills(std::uintptr_t pawn, int& lastType, std::string& lastDamage) {
 
 // Object.FindObject(path, the SoundCue class) -- the class taken once from a SoundCue the pawn or the gun's attachment
 // refers to (a grenade's attachment has no dry-fire cue: the first off shot with a grenade in hand was silent).
+// Object.FindObject(path, cls) through the pistol (an unnumbered static native).
+std::uintptr_t FindByPath(std::uintptr_t p, const wchar_t* path, std::uintptr_t cls) {
+    if (!cls) return 0;
+    struct FString {
+        const wchar_t* data;
+        int            num, max;
+    } s{path, static_cast<int>(std::wcslen(path)) + 1, static_cast<int>(std::wcslen(path)) + 1};
+    Call find(p, "FindObject");
+    if (!find.Set("ObjectName", &s, sizeof(s)) || !find.Set("ObjectClass", &cls, sizeof(cls)) || !find.Run()) return 0;
+    return find.ReturnObject();
+}
+
 std::uintptr_t FindCue(std::uintptr_t pawn, std::uintptr_t p, const wchar_t* path) {
     for (const char* prop : {"GotHitSnd", "DeathSnd", "MeleeImpactPC", "LeanInSnd"}) {
         if (g_cueClass) break;
@@ -608,6 +621,21 @@ struct BoneFix {
 };
 BoneFix g_fix[4];
 int     g_fixN = 0;
+// The slide (the C96's bolt) on the clone ([OffHand] PistolSlide; round 45: "the lack of flash and slide back on the off hand
+// pistol"): back on each shot as the game's fire animation moves it (colt45_gun_fire: gunSlide 2.50 -> -1.85 along the
+// mesh's Z; mauser_gun_fire: Bolt 0.65 -> -4.55), and held back once the pistol is empty.
+int   g_slideIdx = -1;
+float g_slideRest[3]{}, g_slideBack[3]{};
+DWORD g_shotTick = 0;
+float g_slideFrom = 0.0f;       // where the slide was at the last shot (0 forward, 1 back): full auto doesn't jump forward
+bool  g_slideEmpty = false;     // (set per Draw: the held pistol's clip is 0)
+float g_muzzleFwd = 15.0f;      // how far along the off line from its start the drawn muzzle is (units; set by Place)
+
+// How far back the slide is now (0 forward .. 1 back): back in 20 ms from where it was, held 40 ms, forward over 70 ms.
+float SlideNow() {
+    const DWORD t = GetTickCount() - g_shotTick;
+    return t < 20 ? g_slideFrom + (1.0f - g_slideFrom) * (t / 20.0f) : t < 60 ? 1.0f : t < 130 ? 1.0f - (t - 60) / 70.0f : 0.0f;
+}
 
 // out = a x b (row-major 4x4, Unreal's row vectors).
 void Mul16(const float* a, const float* b, float* out) {
@@ -664,6 +692,14 @@ bool FitFromIni(const std::string& key, float (&fit)[4], const char*& from) {
     return v[0] && swscanf_s(v, L"%f %f %f %f", &fit[0], &fit[1], &fit[2], &fit[3]) >= 3;
 }
 
+// The muzzle (tag_barrell: the Colt's (0, -7.40, 19.60) / the C96's (0, -7.70, 27.26) in the mesh) in the off
+// controller's frame (forward, right, up), by g_mEff.
+void MuzzleIn(const std::string& key, float (&muzzle)[16]) {
+    const bool colt = key == "Attachment_Colt45";
+    const float tb[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, colt ? -7.40f : -7.70f, colt ? 19.60f : 27.26f, 1};
+    Mul16(tb, g_mEff, muzzle);
+}
+
 // The pistol mesh in the off controller's frame for `key` and the fit (grip forward, right, up in units; angle in degrees).
 bool Place(const std::string& key, const float (&fit)[4]) {
     float o[3];
@@ -676,16 +712,35 @@ bool Place(const std::string& key, const float (&fit)[4]) {
     const float pitch[16] = {c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1};
     Mul16(m, pitch, g_mEff);
     std::memcpy(g_fitNow, fit, sizeof(g_fitNow));
+    // The flash's distance along the off line (pitched by the same angle): the muzzle (tag_barrell) in this frame.
+    float muzzle[16];
+    MuzzleIn(key, muzzle);
+    g_muzzleFwd = muzzle[12] * c + muzzle[14] * s;
     return true;
 }
 
 // The C96's parts (BoneFix) by the pistol's upgrade level.
 void FixBones(std::uintptr_t comp, const std::string& key, std::uintptr_t p) {
     g_fixN = 0;
-    if (key != "Attachment_Mauser") return;
+    g_slideIdx = -1;
     const std::uintptr_t mesh = Obj(comp, "SkeletalMesh");
     const std::uintptr_t data = mesh ? names::ReadPointer(mesh + addr::kSkelMeshRefSkeleton) : 0;
     const int num = mesh ? static_cast<int>(ReadU32(mesh + addr::kSkelMeshRefSkeleton + 4)) : 0;
+    if (g_cfg.offPistolSlide) {
+        const bool colt = key == "Attachment_Colt45";
+        const char* bone = colt ? "gunSlide" : key == "Attachment_Mauser" ? "Bolt" : nullptr;
+        for (int i = 0; bone && i < num && i < 64 && data; ++i)
+            if (names::NameAt(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride) == bone) {
+                g_slideIdx = i;
+                const float rest[3] = {0.0f, colt ? -7.0f : -8.42f, colt ? 2.5f : 0.65f};
+                std::memcpy(g_slideRest, rest, sizeof(rest));
+                std::memcpy(g_slideBack, rest, sizeof(rest));
+                g_slideBack[2] = colt ? -1.85f : -4.55f;
+            }
+        MLOG("offpistol: the slide -- %s", g_slideIdx >= 0 ? (std::string(bone) + " #" + std::to_string(g_slideIdx)).c_str()
+                                                           : "no such bone (not moved)");
+    }
+    if (key != "Attachment_Mauser") return;
     const int level = Int(p, "CurrentUpgradeLevel", -1);
     std::string what;
     for (int i = 0; i < num && i < 64 && data && g_fixN < 4; ++i) {
@@ -705,6 +760,7 @@ void CarrierOff() {
     carrier::Detach(g_carrier, "offpistol", g_cfg.debugOffHandTrace);
     g_carried = 0;
     g_fixN = 0;
+    g_slideIdx = -1;
 }
 
 // The pistol drawn in the off hand. `fit`: the host's for this pistol (zero grip: none -- the inis', the test command).
@@ -734,13 +790,11 @@ bool CarrierOn(std::uintptr_t pawn, std::uintptr_t p, const float (&hostFit)[4],
     g_carried = p;
     g_carriedKey = key;
     FixBones(g_carrier.comp, key, p);
+    // Where it is drawn, in the off controller's frame (forward, right, up): the mesh origin, the muzzle, the hand bone.
     if (log) {
-        // Where it is drawn, in the off controller's frame (forward, right, up): the mesh origin, the muzzle (tag_barrell,
-        // the Colt's (0, -7.40, 19.60) / the C96's (0, -7.70, 27.26) in the mesh), the hand bone.
-        const bool colt = key == "Attachment_Colt45";
-        const float tb[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, colt ? -7.40f : -7.70f, colt ? 19.60f : 27.26f, 1};
-        float muzzle[16], rel[16];
-        Mul16(tb, g_mEff, muzzle);
+        float muzzle[16];
+        MuzzleIn(key, muzzle);
+        float rel[16];
         Mul16(g_hand, g_mEff, rel);
         const std::uintptr_t c = g_carrier.comp;
         MLOG("offpistol: carrier %s -- mesh %s, Outer %s, PhysicsAsset %s, bAttached %d, FOV %.0f; %s fit %.1f %.1f %.1f, %.0f deg; in the "
@@ -992,6 +1046,8 @@ bool Line(shared::Header* hdr, std::uintptr_t pawn, const shared::Pose& ray, boo
 }
 
 // One pull (or one round of a held trigger: `autoFire`) of the held pistol along `ray`.
+void MuzzleFlash(std::uintptr_t pawn, std::uintptr_t p, const float (&start)[3], const float (&dir)[3]);
+
 void Pull(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const shared::Pose& ray, bool autoFire,
           bool holdOk, const char* notOk) {
     const std::uintptr_t p = g_hold.p;
@@ -1043,6 +1099,70 @@ void Pull(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uin
         return;
     }
     ++g_shotsN;
+    g_slideFrom = SlideNow();
+    g_shotTick = GetTickCount();
+    if (g_cfg.offPistolFlash) {
+        // From the drawn muzzle along the off line (not the eye's fallback line): the ray's own start and direction.
+        float fwd[3], u = upm, at[3];
+        if (view::PoseToWorld(ray, at, fwd, u)) MuzzleFlash(pawn, p, at, fwd);
+    }
+}
+
+// The off pistol's muzzle flash ([OffHand] PistolFlash; OFFPISTOL-DESIGN 3.6): a ParticleSystemComponent made by the gun
+// attachment's own SmallArmsAttachment.InitHitspangPSC (new, absolute transform, attached to the attachment -- remade with the
+// next attachment), with the pistol's attachment's first-person flash template, put at the drawn muzzle along the off line
+// and activated per shot. muzzle.cpp's ActivateSystem hook only moves the attachment's own flash and brass.
+struct Flash {
+    std::uintptr_t att = 0, psc = 0, tmplFor = 0, tmpl = 0;
+} g_flash;
+
+void MuzzleFlash(std::uintptr_t pawn, std::uintptr_t p, const float (&start)[3], const float (&dir)[3]) {
+    const std::uintptr_t att = Obj(pawn, "CurrentWeaponAttachment");
+    if (!att || !names::IsA(att, "SmallArmsAttachment")) return;  // (a grenade in the gun hand: no flash)
+    if (g_flash.att != att || !g_flash.psc) {
+        g_flash = Flash{};
+        Call init(att, "InitHitspangPSC");
+        if (!init.ok || !init.Run()) return;
+        const std::uint8_t* r = init.At("HS_PSC", 4);
+        std::uintptr_t psc = 0;
+        if (r) std::memcpy(&psc, r, 4);
+        if (!psc) return;
+        g_flash.att = att;
+        g_flash.psc = psc;
+        MLOG("offpistol: the flash's component %s (on %s)", names::Name(psc).c_str(), names::Name(att).c_str());
+    }
+    if (g_flash.tmplFor != p) {
+        g_flash.tmplFor = p;
+        // The ParticleSystem class: the gun's own flash template's.
+        const int to = names::PropertyOffset(att, "MuzzleFlashParticleSystemTemplate");
+        const std::uintptr_t any = to >= 0 ? names::ReadPointer(att + to) : 0;
+        const std::uintptr_t cls = any ? names::ReadPointer(any + addr::kObjectClass) : 0;
+        const wchar_t* path = names::IsA(p, "MOHAColt45") ? L"HUS_VFX_1911a_pistol_muzzle.1911a_muzzleflash_FP"
+                                                          : L"HUS_VFX_Mauser_muzzle.c96_muzzleflash_FP";
+        g_flash.tmpl = FindByPath(p, path, cls);
+        MLOG("offpistol: the flash %ls -> %s", path, g_flash.tmpl ? names::Name(g_flash.tmpl).c_str() : "not found (no flash)");
+        if (g_flash.tmpl) {
+            Call set(g_flash.psc, "SetTemplate");
+            if (!set.Set("NewTemplate", &g_flash.tmpl, sizeof(g_flash.tmpl)) || !set.Run()) g_flash.tmpl = 0;
+        }
+    }
+    if (!g_flash.tmpl) return;
+    // At the drawn muzzle (the off line's start, its muzzle ahead), turned along the line (absolute: world space).
+    const int to = names::PropertyOffset(g_flash.psc, "Translation"), ro = names::PropertyOffset(g_flash.psc, "Rotation");
+    int uo = -1;
+    std::uint32_t um = 0;
+    if (to < 0 || ro < 0 || !names::BoolProperty(g_flash.psc, "bNeedsUpdateTransform", uo, um)) return;
+    float* t = reinterpret_cast<float*>(g_flash.psc + to);
+    int* r = reinterpret_cast<int*>(g_flash.psc + ro);
+    for (int i = 0; i < 3; ++i) t[i] = start[i] + dir[i] * g_muzzleFwd;
+    constexpr float kToUnr = 32768.0f / 3.14159265f;
+    r[0] = static_cast<int>(std::atan2(dir[2], std::sqrt(dir[0] * dir[0] + dir[1] * dir[1])) * kToUnr);
+    r[1] = static_cast<int>(std::atan2(dir[1], dir[0]) * kToUnr);
+    r[2] = 0;
+    *reinterpret_cast<std::uint32_t*>(g_flash.psc + uo) |= um;
+    Call act(g_flash.psc, "ActivateSystem");
+    act.Run();
+    muzzle::ArmFreeze(g_flash.psc);
 }
 
 void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, std::uint32_t e, const shared::Pose& ray,
@@ -1130,15 +1250,20 @@ void OnDraw(shared::Header* hdr) {
         g_carrier = carrier::Slot{};  // (attached to the old pawn's arms)
         g_carried = 0;
         g_fixN = 0;
+        g_slideIdx = -1;
         g_hold = Hold{};
         g_refill[0] = g_refill[1] = Refill{};
         g_twin = Twin{};
+        g_flash = Flash{};
         g_resolvedFor = 0;
         g_cueFor = g_cue = g_dryFor = g_dry = 0;  // (a new pistol may get an old one's address)
         g_levelFor = 0;
         g_pawn = pawn;
         ++g_pawnSeq;
     }
+    // The flash's component lives on the gun hand's attachment, destroyed with it at a switch: forgotten at once (its address
+    // and the attachment's may come back as other objects after a purge).
+    if (g_flash.att && (!pawn || Obj(pawn, "CurrentWeaponAttachment") != g_flash.att)) g_flash = Flash{};
     // The host's side: its switch, the trigger, the off line and the pistol's fit.
     shared::Pose hand[2];
     std::uint32_t valid = 0;
@@ -1243,6 +1368,8 @@ void OnDraw(shared::Header* hdr) {
         }
         g_inSequence = inSeq;
     }
+    // The slide held back on an empty pistol.
+    g_slideEmpty = g_hold.state == kHeld && (g_hold.twin ? g_twin.clip : Int(g_hold.p, "AmmoCount", 1)) <= 0;
     // The second dot: how far along the off line its point is.
     g_aimDist = 0.0f;
     if (g_hold.state == kHeld && pawn && g_haveView && !(g_view.flags & 4u)) {
@@ -1269,6 +1396,12 @@ bool CarrierFrame(float (&gw)[16]) {
 }
 
 bool CarrierBone(int index, bool& collapse, float (&pos)[3]) {
+    if (index == g_slideIdx && g_slideIdx >= 0) {
+        const float s = g_slideEmpty ? 1.0f : SlideNow();  // (held back on an empty pistol)
+        for (int k = 0; k < 3; ++k) pos[k] = g_slideRest[k] + s * (g_slideBack[k] - g_slideRest[k]);
+        collapse = false;
+        return true;
+    }
     for (int i = 0; i < g_fixN; ++i)
         if (g_fix[i].index == index) {
             collapse = g_fix[i].collapse;

@@ -1830,6 +1830,38 @@ pistol." And a new request: the pouch reload (D46).
 
 ---
 
+## Round 46: prepared 2026-10-02, the pouch reload, the off-hand pistol's slide and flash
+**Your requests:** "when a hand with a gun equipped grips the ammo holster, it automatically reloads. No animation, just
+an instant reload" and "Make it a toggle option in menu"; round 45: "just the lack of flash and slide back on the off hand
+pistol."
+
+**Changed:**
+- **The pouch reload:** grip the ammo pouch on your belt (the middle) with the hand holding a gun:
+  - right hand: the gun is reloaded at once from your reserve;
+  - left hand holding the pistol: it is refilled and stays in your hand.
+
+  The pouch ring shows near a hand while you hold a gun. Switch it in the menu: Weapons -> **Pouch reload**.
+- **The left-hand pistol's slide** moves back on each shot. It stays back when the pistol is empty and goes forward once
+  it is refilled (in the holster or at the pouch). On the C96 it is the bolt.
+- **The left-hand pistol's muzzle flash:** each shot now shows the pistol's own flash at its muzzle.
+
+**How to try it:**
+1. Fire part of a magazine with your gun, then grip the pouch with your right hand: full again.
+2. Draw the left-hand pistol at your chest, fire it empty: watch the slide go back and stay back. Grip the pouch with
+   your left hand: refilled, the slide goes forward.
+3. Fire the left-hand pistol in a dark spot: the flash.
+4. Menu -> Weapons -> Pouch reload: off. The pouch does nothing now. Put it back on (or leave it off if you prefer).
+
+**Questions:**
+1. The pouch reload: does it work with both hands, and is the pouch where you reach for it?
+2. The slide: does it read as the pistol firing? Too fast or too slow?
+3. The flash: at the muzzle, the right size?
+4. Anything else odd with the left-hand pistol?
+
+**Deployed for this round:** the shipped defaults (all of the above on).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
