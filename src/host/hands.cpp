@@ -59,7 +59,7 @@ bool PistolZone(const std::string& cmd) {
 }  // namespace
 
 const wchar_t* Hands::SpotName(int i) {
-    static const wchar_t* kNames[kSpots] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip", L"MagPouch"};
+    static const wchar_t* kNames[kSpots] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip", L"Chest", L"MagPouch"};
     return i >= 0 && i < kSpots ? kNames[i] : L"";
 }
 
@@ -70,9 +70,11 @@ void Hands::Init(const std::wstring& ini) {
     zones_[1] = {L"LeftShoulder", "SwitchSecondary"};
     zones_[2] = {L"RightHip", "SwitchPistol"};
     zones_[3] = {L"LeftHip", "SwitchGrenade"};
-    // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r. The 5th is
+    zones_[4] = {L"Chest", "SwitchPistol"};  // the player, 2026-10-02: "Add chest holster" (the off-hand pistol's cross-draw)
+    // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r. The last is
     // the manual reload's magazine pouch, at the middle of the belt (D21).
-    const HolsterSpot builtIn[kSpots] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}, {0, -60, 14, 12}};
+    const HolsterSpot builtIn[kSpots] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}, {0, -34, 10, 12},
+                                         {0, -60, 14, 12}};
     for (int i = 0; i < kSpots; ++i) {
         wchar_t v[64] = L"";
         if (i < kHolsters) {
@@ -84,6 +86,7 @@ void Hands::Init(const std::wstring& ini) {
                 for (const wchar_t* p = v; *p; ++p) s += static_cast<char>(*p < 128 ? *p : '?');
                 z.command = s;
             }
+            defaultCommands_[i] = z.command;
         }
         HolsterSpot cm = builtIn[i];
         const std::wstring key = std::wstring(SpotName(i)) + L"Spot";
@@ -104,9 +107,15 @@ void Hands::Init(const std::wstring& ini) {
     foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
     mirrorLeft_ = GetPrivateProfileIntW(L"Weapon", L"LeftHandMirror", 1, ini.c_str()) != 0;
-    MLOG("hands: holsters %d (%s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
-         zones_[0].command.c_str(), zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(), foregrip_,
-         reloadGesture_, mirrorLeft_);
+    MLOG("hands: holsters %d (%s / %s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
+         zones_[0].command.c_str(), zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(),
+         zones_[4].command.c_str(), foregrip_, reloadGesture_, mirrorLeft_);
+}
+
+void Hands::SetCommand(int i, const std::string& c) {
+    if (i < 0 || i >= kHolsters || zones_[i].command == c) return;
+    zones_[i].command = c;
+    MLOG("hands: %ls holds '%s'", zones_[i].key, c.empty() ? "nothing" : c.c_str());
 }
 
 Hands::Output Hands::Update(const Input& in) {
@@ -200,7 +209,7 @@ Hands::Output Hands::Update(const Input& in) {
     };
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
-            if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
+            if (!zones_[z].command.empty() || in.pouchShown) addSpot(kHolster, centre[z], spots_[z].r, false);
     if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !offBusy) addSpot(kForegrip, fore, foregripR_, true);
     if (gunOk && reloadOk && !offBusy) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
@@ -250,6 +259,11 @@ Hands::Output Hands::Update(const Input& in) {
                 if (Len(Sub(hp, centre[z])) < spots_[z].r) zone = z;
             }
         }
+        // The off hand at the foregrip and a holster at once (the chest spot, a long gun at low ready): whichever centre the
+        // hand is closer to (the review: a squeeze meant for the foregrip drew a weapon).
+        if (zone >= 0 && h == 1 - gunHand_ && foregrip_ && in.weaponKind == 0 && in.fit.foreFwd >= 15.0f && (in.valid & (1u << gunHand_)) &&
+            Len(Sub(hp, fore)) < foregripR_ && Len(Sub(hp, fore)) < Len(Sub(hp, centre[zone])))
+            zone = -1;
         if (zone >= 0 && zone != inZone_[h] && in.gestures) out.pulse[h] = true;
         inZone_[h] = zone;
 
@@ -321,9 +335,10 @@ Hands::Output Hands::Update(const Input& in) {
             consumed_[h] = true;
             out.pulse[h] = true;
             MLOG("hands: %s hand at %ls -> '%s'", h ? "right" : "left", zones_[zone].key, out.command.c_str());
-            if (h != gunHand_) {
+            if (h != gunHand_ && _strnicmp(out.command.c_str(), "Switch", 6) == 0) {
                 // The hand that draws holds the gun; the other one becomes the foregrip / reload hand. (Pressed
-                // this frame: the rest of this frame still works out the old gun hand's gun.)
+                // this frame: the rest of this frame still works out the old gun hand's gun.) Only a draw does (a holster
+                // may run Reload).
                 gunHand_ = h;
                 twoHanded_ = false;
                 MLOG("hands: gun hand -> %s (drew)", h ? "right" : "left");
@@ -439,7 +454,8 @@ Hands::Output Hands::Update(const Input& in) {
                 out.pulseAmp[h] = std::fmax(out.pulseAmp[h], pout.pulseAmp[h]);
                 out.pulseMs[h] = std::fmax(out.pulseMs[h], pout.pulseMs[h]);
             }
-        // Tests (pad_cmd.txt hand=l,@pistol): the first pistol holster, moved by the hand point like the other spots.
+        // Tests (pad_cmd.txt hand=l,@pistol): the first pistol holster, moved by the hand point like the other spots;
+        // hand=l,@chest: the chest holster.
         const V3 hpOff = Sub(pt[o], P(in.aim[o].position));
         for (int z = 0; z < kHolsters && holsters_; ++z)
             if (PistolZone(zones_[z].command)) {
@@ -447,6 +463,8 @@ Hands::Output Hands::Update(const Input& in) {
                 out.target[8] = {centre[z].x - hpOff.x, centre[z].y - hpOff.y, centre[z].z - hpOff.z};
                 break;
             }
+        out.targetOk[9] = true;
+        out.target[9] = {centre[4].x - hpOff.x, centre[4].y - hpOff.y, centre[4].z - hpOff.z};
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;

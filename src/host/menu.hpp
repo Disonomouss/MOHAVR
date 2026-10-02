@@ -71,9 +71,11 @@ public:
     // defaults. Read once per key.
     shared::GunFit FitFor(const std::string& key);
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
-    // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
-    void LoadHolsters(const HolsterSpot (&defaults)[kSpots]);
+    // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres) and what each holster holds
+    // (its game command, "" none), then the current ones.
+    void LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string (&commands)[kHolsters]);
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
+    const std::string& HolsterCommand(int i) const { return commands_[i]; }
     int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
     bool HolsterPageOpen() const { return visible_ && page_ == 2; }
     bool ReloadSpotsPageOpen() const { return visible_ && page_ == 5; }
@@ -150,7 +152,8 @@ private:
     float                   spotAdj_[2][4] = {{0, 0, 0, 100}, {0, 0, 0, 100}};  // forward, up, right (cm), size (%)
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
-    HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the 5th: the magazine pouch)
+    HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the last: the magazine pouch)
+    std::string             commands_[kHolsters], commandDefaults_[kHolsters];  // what each holster holds (game commands)
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;
     float                   handPoint_[3]{}, handPointDef_[3]{};  // m

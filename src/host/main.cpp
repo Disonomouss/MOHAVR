@@ -414,7 +414,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (menuOk) {
             mohavr::host::HolsterSpot defaults[mohavr::host::kSpots];
             for (int i = 0; i < mohavr::host::kSpots; ++i) defaults[i] = hands.DefaultSpot(i);
-            menu.LoadHolsters(defaults);
+            std::string commands[mohavr::host::kHolsters];
+            for (int i = 0; i < mohavr::host::kHolsters; ++i) commands[i] = hands.DefaultCommand(i);
+            menu.LoadHolsters(defaults, commands);
         }
         markersOk = markers.Init(dev, ctx, session, fmt);
     }
@@ -729,6 +731,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.startLeft = menuOk && menu.StartLeft();
                     if (menuOk) {
                         for (int i = 0; i < mohavr::host::kSpots; ++i) hands.SetSpot(i, menu.Spot(i));
+                        for (int i = 0; i < mohavr::host::kHolsters; ++i) hands.SetCommand(i, menu.HolsterCommand(i));
                         hands.SetHandPoint(menu.HandPoint());
                         hands.SetForegripRadius(menu.ForegripRadius());
                         hands.SetRingScale(menu.RingScale());

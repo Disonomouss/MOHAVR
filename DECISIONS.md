@@ -525,3 +525,17 @@ it. [H] round 44 passed.
 upgrade level only as far as the bone names go (a capture of the main C96 at each level is still to compare); two
 pistols (the same pistol twinned) and the chest holster with the per-holster menu are the next steps. The long gun is
 one-handed while it is out (the physical trade every dual-wield game makes).
+
+### D42. A chest holster, and what each holster holds is the player's -- Decided 2026-10-02
+A fifth holster spot, `Chest` (shipped `[Holsters] Chest=SwitchPistol`, `ChestSpot=0 -34 10 12`: cm from the head, right,
+up, forward, radius), the off-hand pistol's cross-draw. The menu's Holsters page gains **Holds** for the selected holster:
+primary, secondary, pistol, grenade, frag grenade, Gammon bomb, stick grenade, reload or nothing, saved in the player's ini
+(`[Holsters] <Name>` = the game command, or none) on top of the shipped one; Reset this spot puts back both the place and
+the contents. An empty holster's ring shows only on that page, so it can be placed. The off-hand pistol and grenade
+follow the contents (a pistol holster draws the off-hand pistol, a grenade holster the off-hand grenade).
+- Only a draw (a Switch command) makes the pressing hand the gun hand: a holster may run Reload.
+- The off hand at the foregrip and a holster at once (the chest and a long gun at low ready): the closer centre wins.
+- A command the player wrote into the ini and the menu doesn't list is shown as it is; left goes to "nothing", right to
+  "primary".
+**Why:** the player (2026-10-02): "Add chest holster, add option in menu to decide what is in each holster." A review
+(one reviewer, a skeptic: 3 of 3 confirmed) set the three rules above.

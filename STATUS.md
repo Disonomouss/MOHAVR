@@ -207,8 +207,9 @@ address-space budget for D3D9On12.
    passed** (2026-10-02). Round 43 brought requests: a click-to-take option for the grenade, the trigger pin and cook
    for
    the gun hand's grenades with a grip throw, and the grenade held as the main hand holds each type.
+   **The chest holster and the per-holster menu done** (D42): `[Holsters] Chest=SwitchPistol`, and the Holsters page's
+   Holds chooses what each holster draws (saved for the player).
    Next:
-   - the chest holster and the per-holster menu;
    - those grenade requests;
    - two pistols.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative

@@ -56,13 +56,25 @@ constexpr int kSnapSteps[] = {0, 30, 45};  // Turning: smooth, snap 30, snap 45 
 // foreFwd foreUp foreRight (older entries have the first six or eight).
 enum FitItem { fForward, fRight, fUp, fAngle, fRayUp, fRayRight, fForeFwd, fForeUp, fForeRight, fReset, fBack, fCount };
 constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (cm at scale 100), degrees, cm
-// The Holsters page: pick a holster, move it and size it (cm; saved in the player's ini [Holsters] <Name>Spot =
-// x y z r); the rings' visibility ([Hands] Rings = never / near / always).
-enum HolsterItem { hWhich, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+// The Holsters page: pick a holster, choose what it holds (the player, 2026-10-02: "add option in menu to decide what is
+// in each holster"; saved in the player's ini [Holsters] <Name> = a game command or none), move it and size it (cm; [Holsters]
+// <Name>Spot = x y z r); the rings' visibility ([Hands] Rings = never / near / always).
+enum HolsterItem { hWhich, hHolds, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+// What a holster can hold: the game's commands, in the menu's order, with their names.
+const char* const kHoldCommands[] = {"SwitchPrimary", "SwitchSecondary", "SwitchPistol", "SwitchGrenade", "SwitchFragGrenade",
+                                     "SwitchGammon", "SwitchStick", "Reload", ""};
+const char* const kHoldNames[] = {"primary", "secondary", "pistol", "grenade", "frag grenade", "Gammon bomb", "stick grenade",
+                                  "reload", "nothing"};
+constexpr int kHoldCount = 9;
+int HoldIndex(const std::string& c) {
+    for (int i = 0; i < kHoldCount; ++i)
+        if (!_stricmp(c.c_str(), kHoldCommands[i])) return i;
+    return -1;  // a command of the player's own ini, kept as it is
+}
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
-const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "magazine pouch"};
+const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
 std::wstring UserIniPath() {
@@ -215,7 +227,20 @@ void Menu::ApplySavedSettings() {
          fitDefault_.grip[1], fitDefault_.grip[2], fitDefault_.rayUp, gunInHand_);
 }
 
-void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots]) {
+void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string (&commands)[kHolsters]) {
+    // What each holster holds: the player's ([Holsters] <Name> = a command, or none), else the shipped one.
+    for (int i = 0; i < kHolsters; ++i) {
+        commandDefaults_[i] = commands_[i] = commands[i];
+        wchar_t b[64] = L"";
+        GetPrivateProfileStringW(L"Holsters", Hands::SpotName(i), L"", b, 64, iniPath_.c_str());
+        if (b[0]) {
+            std::string c;
+            for (const wchar_t* p = b; *p; ++p) c += static_cast<char>(*p < 128 ? *p : '?');
+            commands_[i] = _stricmp(c.c_str(), "none") ? c : std::string();
+        }
+        MLOG("menu: holster %ls holds '%s' (%s)", Hands::SpotName(i), commands_[i].empty() ? "nothing" : commands_[i].c_str(),
+             b[0] ? "player's" : "default");
+    }
     for (int i = 0; i < kSpots; ++i) {
         spotDefaults_[i] = spots_[i] = defaults[i];
         const std::wstring key = std::wstring(Hands::SpotName(i)) + L"Spot";
@@ -665,6 +690,19 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             bool moved = true;
             switch (selected_) {
                 case hWhich: holsterSel_ = (holsterSel_ + (in.right ? 1 : kSpots - 1)) % kSpots; moved = false; break;
+                case hHolds:
+                    moved = false;
+                    if (holsterSel_ < kHolsters) {
+                        const int at = HoldIndex(commands_[holsterSel_]);
+                        const int next = at < 0 ? (in.right ? 0 : kHoldCount - 1) : (at + (in.right ? 1 : kHoldCount - 1)) % kHoldCount;
+                        commands_[holsterSel_] = kHoldCommands[next];
+                        const std::wstring w(commands_[holsterSel_].begin(), commands_[holsterSel_].end());
+                        if (!iniPath_.empty())
+                            WritePrivateProfileStringW(L"Holsters", Hands::SpotName(holsterSel_), w.empty() ? L"none" : w.c_str(),
+                                                       iniPath_.c_str());
+                        MLOG("menu: holster %ls -> holds %s", Hands::SpotName(holsterSel_), kHoldNames[next]);
+                    }
+                    break;
                 case hRight: s.x = std::fmax(-0.8f, std::fmin(0.8f, s.x + dir * 0.01f)); break;
                 case hUp: s.y = std::fmax(-1.2f, std::fmin(0.4f, s.y + dir * 0.01f)); break;
                 case hForward: s.z = std::fmax(-0.6f, std::fmin(0.6f, s.z + dir * 0.01f)); break;
@@ -687,6 +725,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             spots_[holsterSel_] = spotDefaults_[holsterSel_];
             const std::wstring key = std::wstring(Hands::SpotName(holsterSel_)) + L"Spot";
             WritePrivateProfileStringW(L"Holsters", key.c_str(), nullptr, iniPath_.c_str());
+            if (holsterSel_ < kHolsters) {  // and what it holds
+                commands_[holsterSel_] = commandDefaults_[holsterSel_];
+                WritePrivateProfileStringW(L"Holsters", Hands::SpotName(holsterSel_), nullptr, iniPath_.c_str());
+            }
             MLOG("menu: holster %ls reset", Hands::SpotName(holsterSel_));
         }
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
@@ -1041,6 +1083,13 @@ void Menu::RenderHolsterPage() {
     char label[128];
     snprintf(label, sizeof(label), "Spot                  <  %s  >", kHolsterLabels[holsterSel_]);
     ImGui::Selectable(label, selected_ == hWhich);
+    if (holsterSel_ < kHolsters) {
+        const int at = HoldIndex(commands_[holsterSel_]);
+        snprintf(label, sizeof(label), "Holds                 <  %s  >", at >= 0 ? kHoldNames[at] : commands_[holsterSel_].c_str());
+        ImGui::Selectable(label, selected_ == hHolds);
+    } else {
+        ImGui::Selectable("Holds                    a new magazine (the manual reload)", selected_ == hHolds);
+    }
     snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", s.x * 100.0f);
     ImGui::Selectable(label, selected_ == hRight);
     snprintf(label, sizeof(label), "Up / down             <  %+.0f  >", s.y * 100.0f);

@@ -6,7 +6,8 @@
 //     makes it two-handed while held -- the gun then points from the gun hand through the other hand.
 //   * The aim line: gunPose offset by the fit's aim line (up/right).
 //   * Holsters: a grip squeezed at a body spot (relative to the head's heading) draws that weapon -- right shoulder
-//     long gun 1, left shoulder long gun 2, right hip pistol, left hip grenade ([Holsters] in MOHAVR.ini).
+//     long gun 1, left shoulder long gun 2, right hip pistol, left hip grenade, chest pistol ([Holsters] in MOHAVR.ini;
+//     what each holds is the player's, the menu's Holsters page).
 //   * Reload gesture: the other hand's grip squeezed at the gun's magazine (not while the manual reload drives the gun).
 //   * The manual reload (D21, reload.hpp): its spots (the magazine, the belt pouch) come before the holsters and the
 //     foregrip at an off-hand press; the belt pouch is the 5th body spot ([Holsters] MagPouchSpot).
@@ -37,7 +38,7 @@ namespace mohavr::host {
 struct HolsterSpot {
     float x, y, z, r;
 };
-constexpr int kHolsters = 4;  // right shoulder, left shoulder, right hip, left hip
+constexpr int kHolsters = 5;  // right shoulder, left shoulder, right hip, left hip, chest
 constexpr int kSpots = kHolsters + 1;  // ... and the magazine pouch (the manual reload; it runs no command)
 
 class Hands {
@@ -97,10 +98,10 @@ public:
         float       pulseAmp[2]{}, pulseMs[2]{};  // ... of this strength and length (0: the default short one)
         bool        maskFace[2]{};  // the manual reload's release button kept from the pad (per physical hand)
         bool        maskTrigger[2]{};  // ... and a trigger (the flip of a held taped pair)
-        bool        targetOk[9]{};  // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade|
-        XrVector3f  target[9]{};    // @pistol): the magazine, the pouch, the action, the aim point that seats a held magazine, a
-                                    // bolt lifted / back, the foregrip (GOAL A3: a pump gun's pump), the grenade holster, the
-                                    // pistol holster
+        bool        targetOk[10]{}; // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade|
+        XrVector3f  target[10]{};   // @pistol|@chest): the magazine, the pouch, the action, the aim point that seats a held
+                                    // magazine, a bolt lifted / back, the foregrip (GOAL A3: a pump gun's pump), the grenade
+                                    // holster, the pistol holster, the chest holster
         bool        alignOk = false;  // tests: @magin with "align": the aim pose that seats the held magazine, turned too
         XrPosef     align{};
         bool        maskSwitch = false;  // the off hand holds a grenade: the game's own grenade switch (Xbox RB) kept back
@@ -115,6 +116,10 @@ public:
     const HolsterSpot& DefaultSpot(int i) const { return defaultSpots_[i]; }
     void SetSpot(int i, const HolsterSpot& s) { spots_[i] = s; }
     static const wchar_t* SpotName(int i);
+    // What each holster holds: the game command it runs ("" none) -- the shipped ones ([Holsters] RightHip=SwitchPistol),
+    // and the player's (the menu's Holsters page: Holds).
+    const std::string& DefaultCommand(int i) const { return defaultCommands_[i]; }
+    void SetCommand(int i, const std::string& c);
     // The manual reload (owned by the host's main loop; null = none).
     void SetReload(ManualReload* r) { reload_ = r; }
     // The off-hand grenade (likewise).
@@ -133,6 +138,7 @@ private:
         std::string    command;
     };
     Zone        zones_[kHolsters];
+    std::string defaultCommands_[kHolsters];
     HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
     ManualReload* reload_ = nullptr;
     OffHandGrenade* nade_ = nullptr;
