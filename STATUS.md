@@ -219,7 +219,7 @@ address-space budget for D3D9On12.
    the M12's bayonet at level 2) swung into an enemy does the game's own melee. Two code reviews' findings fixed (11 in all:
    the bolt guns, a fired M12 or an emptied Garand counted as reloading; a glance or a tracking step could arm; the levers
    from the raise; props narrowed).
-   Next: HEADSET-TESTS rounds 47 and 48 (one session).
+   **HEADSET-TESTS rounds 47 and 48 passed** ("Melee is excellent"). Next: scopes raised to the eye (the player's request).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

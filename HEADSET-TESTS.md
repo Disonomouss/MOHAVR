@@ -1889,6 +1889,8 @@ pistol."
 
 **Deployed for this round:** the shipped defaults.
 
+**Answers (2026-10-03, with round 48):** "Brass and recoil on second gun present." Passed.
+
 ---
 
 ## Round 48: prepared 2026-10-03, physical melee (tested with round 47, one session)
@@ -1925,6 +1927,9 @@ upgraded guns that have bayonets."
 6. The MP40's "Dagger" upgrade is a knife in the game's left hand, not on the gun. Should your left hand get a knife?
 
 **Deployed for this round:** the shipped defaults (round 47's brass and recoil, and physical melee, all on).
+
+**Answers (2026-10-03):** "Melee is excellent." Passed. Next request: scopes you raise to your eye and look through, not a
+button and an overlay.
 
 ---
 
