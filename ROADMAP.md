@@ -125,6 +125,16 @@ cook, throw and put back behind `[OffHand] Grenade`, with the grenade drawn in t
 **Accept [S]:** a grenade taken, armed and thrown by the off hand flies from the hand, goes off at its fuse, counts down
 the HUD, and the gun in hand is untouched. **[H]:** it feels natural, and never throws or drops by accident.
 
+### M8b. Off-hand pistol ("dual wield", step 2) — [S] then [H] — **researched and spiked 2026-10-02**
+Draw the pistol into the off hand at its holster and fire it with the off trigger while the long gun stays in the gun
+hand (the player's question). *As found:* no game entry point fires an inactive weapon cleanly, but the layer below
+does: the bullets' native trace, `ProcessInstantHit` (damage, death, impacts), the AI stimuli, the stats and the report,
+all through ProcessEvent on the holstered pistol (spike S1 passes, ENGINE-NOTES 5be, `OFFPISTOL-DESIGN.md`). Phases: the
+pistol drawn in the hand (S2), the contract v21 and the host's draw / fire / holster with a second dot, then the slide,
+flash and brass; two pistols later.
+**Accept [S]:** an off-hand shot hits along the off aim line, damages and kills with the pistol's numbers and credit,
+and the gun in hand is untouched. **[H]:** drawing and firing two guns feels natural and fair.
+
 ### M9. Comfort and in-headset menu — [H]
 An in-headset menu (ImGui, with stable IDs for controller focus), snap or smooth turning, a
 vignette, and a seated offset. MOHA-specific: comfort during the parachute jump.

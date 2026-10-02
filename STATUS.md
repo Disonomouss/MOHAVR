@@ -180,6 +180,13 @@ address-space budget for D3D9On12.
    simulator (nade3-nade10) and through two adversarial reviews. **HEADSET-TESTS round 43 deployed** with it switched on;
    next: Phase 2 (the fingers' grip). Fixed alongside (ENGINE-NOTES 5bd): with Windows up 24.9-49.7 days the
    weapon-in-hand check and the desktop mirror's window finder never ran (a tick deadline starting at 0).
+   **The off-hand pistol (the player, 2026-10-02: "Is it possible to build similar system for using the pistol with the
+   off hand?"): researched and proven feasible** -- a research workflow wrote `OFFPISTOL-DESIGN.md`, and its spike S1
+   passes in the simulator: the holstered Colt fires from the off hand while the BAR stays in hand (the game's own trace,
+   damage and death, the kill recorded for the Colt, its report playing; the BAR untouched), through the layer below the
+   game's fire states (ENGINE-NOTES 5be). Test commands only (`mohavr pistol ...`); nothing changes in play. Next, if the
+   player wants it: S2 (the pistol drawn in the off hand), then OFFPISTOL-DESIGN section 8, Phase 1, behind
+   `[OffHand] Pistol=0`.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

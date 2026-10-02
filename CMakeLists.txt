@@ -32,6 +32,8 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/names.cpp
         src/mohavr/throwing.cpp
         src/mohavr/offhand.cpp
+        src/mohavr/offpistol.cpp
+        src/mohavr/script_call.cpp
         src/mohavr/arms_ik.cpp
         src/mohavr/muzzle.cpp
         src/mohavr/crash_dump.cpp

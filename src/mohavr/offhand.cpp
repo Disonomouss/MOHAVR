@@ -13,135 +13,21 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
+#include "script_call.hpp"
 #include "viewmodel.hpp"
 #include "vr_view.hpp"
 
 namespace mohavr::offhand {
+using namespace script;  // Call, Obj, Bit, ... (script_call.hpp)
 namespace {
 
 Config g_cfg;
 bool   g_bake = false;  // the arm bake is installed (it places the carrier in the off hand)
 
-// Components (the carrier) dispatch straight to UObject::ProcessEvent: pinned, its bytes checked once (standing rule 4).
-bool ObjectProcessEventOk() {
-    static int ok = -1;
-    if (ok < 0) {
-        ok = patch::BytesMatch(addr::kObjectProcessEvent, addr::kObjectProcessEventBytes, sizeof(addr::kObjectProcessEventBytes)) ? 1 : 0;
-        if (!ok) MLOG("offhand: UObject::ProcessEvent bytes differ -- no component calls");
-    }
-    return ok == 1;
-}
-
-// No C++ objects here: SEH only (as reload.cpp's).
-bool CallProcessEvent(std::uintptr_t pe, std::uintptr_t obj, std::uintptr_t fn, void* parms) {
-    __try {
-        reinterpret_cast<void(__fastcall*)(std::uintptr_t, void*, std::uintptr_t, void*, void*)>(pe)(obj, nullptr, fn, parms, nullptr);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-
-std::uint32_t ReadU32(std::uintptr_t at) {
-    __try {
-        return *reinterpret_cast<const std::uint32_t*>(at);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
-
-bool Bit(std::uintptr_t obj, const char* name) {
-    int o = -1;
-    std::uint32_t m = 0;
-    return obj && names::BoolProperty(obj, name, o, m) && (ReadU32(obj + o) & m) != 0;
-}
-
-void SetBit(std::uintptr_t obj, const char* name, bool on) {
-    int o = -1;
-    std::uint32_t m = 0;
-    if (!obj || !names::BoolProperty(obj, name, o, m)) return;
-    auto* w = reinterpret_cast<std::uint32_t*>(obj + o);
-    *w = on ? (*w | m) : (*w & ~m);
-}
-
-std::uintptr_t Obj(std::uintptr_t obj, const char* name) {
-    const int o = obj ? names::PropertyOffset(obj, name) : -1;
-    return o >= 0 ? names::ReadPointer(obj + o) : 0;
-}
-
-void SetObj(std::uintptr_t obj, const char* name, std::uintptr_t v) {
-    const int o = obj ? names::PropertyOffset(obj, name) : -1;
-    if (o >= 0) *reinterpret_cast<std::uintptr_t*>(obj + o) = v;
-}
-
-float Float(std::uintptr_t obj, const char* name, float fallback) {
-    const int o = obj ? names::PropertyOffset(obj, name) : -1;
-    if (o < 0) return fallback;
-    float v = fallback;
-    std::memcpy(&v, reinterpret_cast<const void*>(obj + o), sizeof(v));
-    return v;
-}
-
-int Int(std::uintptr_t obj, const char* name, int fallback) {
-    const int o = obj ? names::PropertyOffset(obj, name) : -1;
-    return o >= 0 ? static_cast<int>(ReadU32(obj + o)) : fallback;
-}
-
 float Dist(const float (&a)[3], const float (&b)[3]) {
     const float x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2];
     return std::sqrt(x * x + y * y + z * z);
 }
-
-// A script function of `obj`'s class, callable through its ProcessEvent (an actor's AActor::ProcessEvent, a component's
-// UObject::ProcessEvent), with its parameters' offsets; empty if anything is off. Optional parameters get no defaults
-// through ProcessEvent: every call fills every parameter (the buffer starts zeroed).
-struct Call {
-    std::uintptr_t obj = 0, fn = 0, pe = 0;
-    std::uint8_t parms[256] = {};
-    bool ok = false;
-
-    Call(std::uintptr_t o, const char* name, bool quiet = false) : obj(o) {
-        const std::uintptr_t cls = o ? names::ReadPointer(o + addr::kObjectClass) : 0;
-        fn = cls ? names::FindFieldProbe(cls, name) : 0;
-        const std::uintptr_t vt = o ? names::ReadPointer(o) : 0;
-        pe = vt ? names::ReadPointer(vt + addr::kVtProcessEvent) : 0;
-        const std::uint16_t native = fn ? static_cast<std::uint16_t>(ReadU32(fn + addr::kFunctionNative) & 0xFFFF) : 1;
-        const std::uint16_t size = fn ? static_cast<std::uint16_t>(ReadU32(fn + addr::kFunctionParmsSize) & 0xFFFF) : 0;
-        ok = fn && names::ClassName(fn) == "Function" && native == 0 && size <= sizeof(parms) &&
-             (pe == addr::kActorProcessEvent || (pe == addr::kObjectProcessEvent && ObjectProcessEventOk()));
-        if (!ok && !quiet)
-            MLOG("offhand: %s.%s can't be called (function %s, native index %u, parms %u, ProcessEvent 0x%08X)",
-                 names::Name(o).c_str(), name, fn ? names::ClassName(fn).c_str() : "none", native, size, static_cast<unsigned>(pe));
-    }
-    int Off(const char* parm) const {
-        const std::uintptr_t p = fn ? names::FindFieldProbe(fn, parm) : 0;
-        const int o = p ? static_cast<int>(names::ReadPointer(p + addr::kPropertyOffset)) : -1;
-        return o >= 0 && o < static_cast<int>(sizeof(parms)) - 16 ? o : -1;
-    }
-    bool Set(const char* parm, const void* v, size_t n) {
-        const int o = Off(parm);
-        if (o < 0) {
-            MLOG("offhand: %s has no parameter %s", names::Name(fn).c_str(), parm);
-            return false;
-        }
-        std::memcpy(parms + o, v, n);
-        return true;
-    }
-    bool Run() {
-        if (!ok) return false;
-        const bool done = CallProcessEvent(pe, obj, fn, parms);
-        if (!done) MLOG("offhand: %s.%s FAULTED", names::Name(obj).c_str(), names::Name(fn).c_str());
-        return done;
-    }
-    std::uintptr_t ReturnObject() const {
-        const int o = Off("ReturnValue");
-        return o >= 0 ? *reinterpret_cast<const std::uintptr_t*>(parms + o) : 0;
-    }
-    bool ReturnBool() const {
-        const int o = Off("ReturnValue");
-        return o >= 0 && (*reinterpret_cast<const std::uint32_t*>(parms + o) & 1u) != 0;
-    }
-};
 
 // The reserve of a grenade weapon's ammo class in the pawn's inventory manager (MOHAInventoryManager.AmmoStorage[10]:
 // AmmoClass, ReserveAmmoAmount, MaxAmmoCount), as reload.cpp's ReserveOf.

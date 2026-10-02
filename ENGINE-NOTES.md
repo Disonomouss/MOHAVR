@@ -1723,6 +1723,40 @@ finder, `HideViewModel` / `HideBody`'s re-issue, the test channels (game command
 now starts at its first use's GetTickCount(). [S] harness cycle OK; "weapon in hand: 'Attachment_Bar'" after the landing
 (`logs/modlogs/tick1-MOHAVR.log`). Not run at a real uptime past 2^31: the arithmetic is the proof.
 
+## 5be. The off-hand pistol: research and spike S1 (2026-10-02)
+
+The player: "Is it possible to build similar system for using the pistol with the off hand?" A research workflow (six
+angles -- the fire path in script, the native shot in Ghidra, the effects, drawing and the arms, the mod's integration,
+VR prior art -- a designer and two adversarial verifiers) wrote `OFFPISTOL-DESIGN.md` (notes in
+`work/research/offpistol/`).
+**Feasible: spike S1 passes.**
+- **No one-call entry point.** `StartFire`/`BeginFire` set the shared `PendingFire` (the gun's trigger);
+  `FireAmmunition` plays the gun attachment's sound, flash and brass; `InstantFire`/`PerformWeaponTrace` reach
+  `Pawn.Weapon.PlayFireEffects` and aim through the mod's GetBaseAimRotation hook. So the shot is rebuilt from the layer
+  below, on the holstered pistol P (`IM.PistolWeapon`): `EALAWeapon.CalcWeaponFireNative(TraceOwner = the pawn, Start,
+  End, Extents 0, out ImpactList)` (the bullets' own native trace 0x10F0CF10, through triggers; static, iNative 0, parms
+  0x74), aim.cpp's bullet hook standing down meanwhile (`BeginOffShot`/`EndOffShot`);
+  `EALASmallArms.ProcessInstantHit(0, Impact)` per impact (native `ApplyDamage` 0x10F0DF60 -> `TakeDamage`, then the
+  impact effects on the gun's attachment, which are weapon-agnostic) with `Pawn.Weapon` = P for the call (credit); the
+  weapon's `SpawnGunshotStimulus` / `SpawnImpactStimulus`, `Pawn.NoiseRadius`, `playerStats.OnWeaponFire(type, class,
+  1)`; `AmmoCount` written directly (SetAmmoCount drives the shared low-ammo mix); the report through `PlaySoundAt`, its
+  cue found with `Object.FindObject` (unnumbered static native, an FString parameter through ProcessEvent works).
+- **The out array through ProcessEvent:** the engine fills the `ImpactList` header in the caller's parms block; passing
+  the last header back with Num 0 reuses its allocation (the engine re-grows it past Max). A mod-made pointer is never
+  passed in.
+- [S] `logs/modlogs/pistol1-*` to `pistol5-*`: the Colt's shot from the eye / the off hand hit within 0.0 units of
+  `aim::WorldTrace`; the BAR's state, AmmoCount, FlashCount, PendingFire and `Pawn.Weapon` unchanged (only its
+  attachment's NextImpactSoundIndex +1); the BAR then fired 0 cm from its dot. Soldiers out of sight shot from 1.2 m (no
+  axis soldier is in sight at the harness checkpoint; `Summon` spawns nothing there): Health 130 -> 5 (hips), -> 0
+  (neck, dead); an elite MG42 gunner 850 -> 450 -> 50 -> 0 -- `TakeDamage -> Died` from the pre-draw, five runs, no
+  fault. The stats' `KillInfo` recorded each kill as weapon type 9 (the Colt), also without the swap (the stats seem to
+  follow the last `OnWeaponFire`). The holstered Colt was already at upgrade level 2 (the save's experience restore),
+  and the shared magnum mix was on under the BAR (`DeActivate` turned it off). The report played: a WorldInfo
+  AudioComponent with 1 wave instance, 1.00 s in (the holstered pistol's sound bank is loaded).
+- Test commands (Debug.GameCommands): `mohavr pistol` (a dump), `mohavr pistol fire <eye|hand|enemy> [head] [main]`,
+  `mohavr pistol kill [main]`, `mohavr pistol enemy`, `mohavr pistol upgrade`, `mohavr pistol refill`, `mohavr pistol
+  loop <n>`, `mohavr pistol sound`.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

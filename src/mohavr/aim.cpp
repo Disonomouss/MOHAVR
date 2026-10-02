@@ -54,6 +54,7 @@ struct ShotState {
     bool           layoutBad;
 };
 ShotState     g_shot{};
+bool          g_offShot = false;  // the off-hand pistol's trace is running (offpistol.cpp): the bullet hooks stand down
 SafetyHookMid g_bulletPre, g_bulletPost;
 
 // UWorld::SingleLineCheck through its LTCG convention (addresses.hpp): stack (this, Hit, Source, End, Start,
@@ -312,7 +313,7 @@ void TurnLike(const float (&a)[3], const float (&b)[3], float (&v)[3]) {
 // shot from the eye towards the dot's point met other things on the way) -- unless something stands between the eye
 // and the gun (a hand through a wall). Aim.ShotLog: where each shot went.
 void OnBulletTrace(SafetyHookContext& ctx) {
-    if ((!g_shot.armed && !g_shot.followOn) || g_shot.layoutBad) return;
+    if (g_offShot || (!g_shot.armed && !g_shot.followOn) || g_shot.layoutBad) return;
     const std::uintptr_t esp = ctx.esp;
     // The call's arguments as addresses.hpp has them: [esp] GWorld, [esp+8] Source (pushed from EBX).
     if (*reinterpret_cast<const std::uintptr_t*>(esp) != *reinterpret_cast<const std::uintptr_t*>(addr::kGWorld) ||
@@ -421,7 +422,7 @@ void SetLauncherStart(std::uintptr_t pawn, bool barrel) {
 
 // Right after it: where the bullet went (the Hit at esp+0x14).
 void OnBulletTraceDone(SafetyHookContext& ctx) {
-    if (!g_shot.active) return;
+    if (g_offShot || !g_shot.active) return;
     g_shot.active = false;
     const std::uintptr_t hit = ctx.esp + 0x14;
     if (hit != g_shot.hitPtr || ctx.ebx != g_shot.source) return;  // not the Hit we saw go in
@@ -453,6 +454,13 @@ void OnBulletTraceDone(SafetyHookContext& ctx) {
 }  // namespace
 
 std::uintptr_t LocalPlayerPawn() { return LocalPawn(LocalController()); }
+
+void BeginOffShot() { g_offShot = true; }
+
+void EndOffShot() {
+    g_offShot = false;
+    g_shot.armed = g_shot.followOn = g_shot.active = false;  // a stale arming can't take a later trace for the gun's shot
+}
 
 bool WorldTrace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3], std::uintptr_t* actor) {
     const unsigned triggers = g_triggers;  // (the aim's own statistic)

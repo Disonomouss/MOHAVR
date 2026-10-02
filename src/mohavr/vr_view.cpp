@@ -16,6 +16,7 @@
 #include "throwing.hpp"
 #include "muzzle.hpp"
 #include "offhand.hpp"
+#include "offpistol.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
@@ -430,6 +431,7 @@ void RunTestCommands(const std::uintptr_t* players) {
             continue;
         }
         if (offhand::TestCommand(line)) continue;  // "mohavr nade ..." (the off-hand grenade's spike)
+        if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol's spike S1)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -1431,6 +1433,7 @@ bool Install(const Config& cfg) {
     throwing::Configure(cfg);
     const bool armsOk = armsik::Install(cfg);  // M8: the arms reach from the body to the gun
     offhand::Configure(cfg, armsOk);          // (the grenade drawn in the off hand needs the bake)
+    offpistol::Configure(cfg);
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);

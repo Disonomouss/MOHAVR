@@ -25,6 +25,11 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]);
 // The local player's pawn (checked both ways, addresses.hpp), or 0. Game thread.
 std::uintptr_t LocalPlayerPawn();
 
+// The off-hand pistol's shot (offpistol.cpp): between these the bullet-trace hook (Aim.ShotFromGun / ShotLog) leaves every
+// trace alone -- the off hand's trace isn't the gun's shot -- and the end drops the gun's armed shot. Game thread.
+void BeginOffShot();
+void EndOffShot();
+
 // A world trace with the player's bullets' flags (per-poly collision), ignoring `source` and going through Triggers and
 // TriggerVolumes as the bullets do: true and `hit` = the first hit (`actor` = what was hit), or false (and `hit` = end)
 // when nothing is in the way. Game thread.
