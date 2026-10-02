@@ -1817,6 +1817,9 @@ holster", "Arming the grenade with trigger is good, add that to main hand grenad
 4. The grenade in the left hand now: does it match the right hand's?
 5. Two Colts: anything odd (the right hand's reload, its count on the HUD is the right hand's)?
 
+Known: with the second Colt out, the right-hand Colt's magazine can be dropped but a new one is taken only once the
+left-hand Colt is put back (the left hand is busy). The HUD counts only the right-hand Colt.
+
 **Deployed for this round:** the shipped defaults (the off-hand grenade and pistol, the hand grenades and two pistols all
 on).
 
