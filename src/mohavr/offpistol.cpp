@@ -407,6 +407,7 @@ bool Shot(std::uintptr_t pawn, std::uintptr_t gun, std::uintptr_t p, const float
     const std::uint8_t* rv = trace.At("ReturnValue", kImpact);
     if (!ok || !lst || !rv) {
         MLOG("offpistol: CalcWeaponFireNative failed (%s)", !trace.ok ? "not callable" : !ok ? "the call" : "its parameters");
+        if (counted && fmo >= 0 && savedMode >= 0) *reinterpret_cast<std::uint8_t*>(p + fmo) = static_cast<std::uint8_t>(savedMode);
         return false;
     }
     std::memcpy(&g_list.data, lst, 4);
@@ -826,7 +827,8 @@ bool Available(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, cons
     if (!offhand::BaseAvailable(pawn, inv, gun, why)) return false;
     if (const std::uintptr_t pending = Obj(inv, "PendingWeapon")) {
         why = "a weapon switch";
-        holdOk = pending != g_hold.p && (Int(pending, "WeaponType", 0) & 0xFF) != 23;
+        // (The twin is the gun hand's own pistol: any switch takes it away.)
+        holdOk = !g_hold.twin && pending != g_hold.p && (Int(pending, "WeaponType", 0) & 0xFF) != 23;
         return false;
     }
     holdOk = true;
@@ -1167,7 +1169,7 @@ void OnDraw(shared::Header* hdr) {
     if (g_hold.state == kHeld && pawn) {
         const std::uintptr_t p = g_hold.p;
         if (!Owned(pawn, inv, p)) End(pawn, kGone, "the pistol is gone");
-        else if (g_hold.twin && p != gun) End(pawn, kUnavailable, "the gun hand put its pistol away");
+        else if (g_hold.twin && (p != gun || Obj(inv, "PendingWeapon"))) End(pawn, kUnavailable, "the gun hand put its pistol away");
         else if (!g_hold.twin && (p == gun || p == Obj(inv, "PendingWeapon"))) End(pawn, kTaken, "a weapon switch took it to the gun hand");
         else if (!bridge::HostRunning()) End(pawn, kUnavailable, "the host is gone");
         else if (!holdOk && ++g_hold.notOk >= 2) End(pawn, kUnavailable, why);
@@ -1285,6 +1287,8 @@ bool HandOnGun(float (&rel)[16], const float*& fingers, const char* const*& name
 }
 
 bool Holding() { return g_hold.state == kHeld; }
+
+std::uintptr_t HeldPistol() { return g_hold.state == kHeld ? g_hold.p : 0; }
 
 bool SkipHeldPistol() {
     if (g_hold.state != kHeld || !g_cfg.offPistolKeep || g_hold.twin) return false;

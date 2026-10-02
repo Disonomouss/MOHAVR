@@ -46,7 +46,7 @@ bool HandOnGrenade(float (&rel)[16], const float*& fingers, const char* const*& 
 // pawn with a weapon drawn in hand (not the HellBox, not the parachute or the landing), no cinematic, weapons not held or
 // disabled by the game, no mounted gun (the script part at 4 Hz). `why` says what stands in the way ("" when nothing).
 bool BaseAvailable(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why);
-// Whether the off hand holds a grenade now (the pistol is refused meanwhile).
+// Whether the off hand holds a grenade now (the pistol is refused meanwhile) -- not the gun hand's armed grenade.
 bool Holding();
 
 }  // namespace mohavr::offhand

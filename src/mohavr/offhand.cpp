@@ -13,6 +13,7 @@
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
+#include "offpistol.hpp"
 #include "patch.hpp"
 #include "reload.hpp"
 #include "script_call.hpp"
@@ -390,7 +391,7 @@ void PullBack(std::uintptr_t pawn, const float (&headW)[3], float (&start)[3], c
 void AfterGunHandThrow(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t g) {
     if (Obj(pawn, "Weapon") != g || CountOf(inv, g) > 0) return;
     std::uintptr_t next = Obj(inv, "LastSmallArmsWeapon");
-    if (!next) next = Obj(inv, "PrimaryWeapon");
+    if (!next || next == offpistol::HeldPistol()) next = Obj(inv, "PrimaryWeapon");  // (never the off hand's pistol)
     Call set(inv, "SetCurrentWeapon");
     const std::uint32_t no = 0;
     const bool ok = next && set.Set("DesiredWeapon", &next, sizeof(next)) && set.Set("bForce", &no, sizeof(no)) && set.Run();
@@ -561,6 +562,11 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
         return;
     case shared::kNadeCook:
         if (g_hold.state != kArmed) return Refuse(type, kUnavailable, "no armed grenade");
+        if (g_hold.main && Obj(pawn, "Weapon") != g_hold.g) {
+            Refuse(type, kUnavailable, "the gun hand's grenade isn't in the hand any more");
+            SetState(kNone, "put back: the gun hand changed grenades");
+            return;
+        }
         g_hold.cookStart = GameTime(pawn);
         g_hold.nextTick = g_hold.cookStart + 0.5f;
         SetState(kCooking, "the spoon let go");
@@ -584,6 +590,10 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
 }
 
 void Publish(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, bool avail, bool holdOk, bool off) {
+    // bit5: a grenade in the gun hand may be pinned and kept (a ladder, a mounted gun, a cinematic: not).
+    const std::uintptr_t gun = pawn && !off ? Obj(pawn, "Weapon") : 0;
+    const char* mainWhy = "";
+    const bool mainOk = gun && names::IsA(gun, "EALAGrenade") && Base(pawn, inv, gun, mainWhy);
     // bit0: the throw can be done here (SpawnProjectile callable on a carried grenade: resolved once per weapon). Switched
     // off with nothing held: nothing is walked or resolved (rule 7) -- the status still goes out (the host sees us alive).
     bool installed = false, infinite = false;
@@ -606,7 +616,8 @@ void Publish(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, bool 
     ++hdr->nadeSeq;  // odd: writing
     _ReadWriteBarrier();
     hdr->nadeCaps = (installed ? 1u : 0u) | (installed && avail ? 2u : 0u) | (infinite ? 4u : 0u) |
-                    (g_cfg.offHandCarrier && g_bake && ObjectProcessEventOk() ? 8u : 0u) | (installed && holdOk ? 16u : 0u);
+                    (g_cfg.offHandCarrier && g_bake && ObjectProcessEventOk() ? 8u : 0u) | (installed && holdOk ? 16u : 0u) |
+                    (mainOk ? 32u : 0u);
     for (int t = 0; t < 3; ++t) hdr->nadeCount[t] = count[t];
     hdr->nadeNext = next >= 0 ? static_cast<std::uint32_t>(next) : shared::kNadeAny;
     hdr->nadeState = static_cast<std::uint32_t>(g_hold.state) | (g_hold.type >= 0 ? static_cast<std::uint32_t>(g_hold.type) << 2 : 0u) |
@@ -814,7 +825,7 @@ std::uintptr_t CarrierComponent() { return carrier::Component(g_carrier); }
 
 bool BaseAvailable(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why) { return Base(pawn, inv, gun, why); }
 
-bool Holding() { return g_hold.state != kNone; }
+bool Holding() { return g_hold.state != kNone && !g_hold.main; }
 
 bool CarrierFrame(float (&gw)[16]) {
     if (!CarrierComponent()) return false;

@@ -138,7 +138,7 @@ void OffHandGrenade::Poll(shared::Header* hdr, double now) {
         ticks_ = s.ticks;
         if (state_ == kCooking) Pulse(offHand_, s.fuse < 0.75f ? 0.7f : 0.2f, s.fuse < 0.75f ? 50.0f : 10.0f);
     }
-    unavailable_ = (s.caps & 16u) || main_ ? 0 : unavailable_ + 1;  // bit4: one held may stay (the off hand's; a switch to
+    unavailable_ = (s.caps & (main_ ? 32u : 16u)) ? 0 : unavailable_ + 1;  // the gun hand's: bit5  // bit4: one held may stay (the off hand's; a switch to
                                                                       // another gun doesn't end it)
     // The reconcile: the game's state differs from ours for two of its frames with nothing in flight (a refused take,
     // a grenade gone with a new pawn, the host restarted) -- the game's wins.
@@ -299,7 +299,7 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
         if (state_ == kNone && inHand) {
             type_ = in.type;
             To(kHeld, "a grenade in the gun hand");
-        } else if (state_ != kNone && !inHand) {
+        } else if (state_ != kNone && (!inHand || in.type != type_)) {  // gone, or another type now (the game's switch)
             if (state_ == kCooking) {
                 Release(in, true, "it left the gun hand while cooking", true);
             } else {
@@ -309,7 +309,12 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
                 }
                 To(kNone, "it left the gun hand");
             }
+            if (inHand) {
+                type_ = in.type;
+                To(kHeld, "another grenade in the gun hand");
+            }
         }
+        if (state_ == kHeld) unavailable_ = 0;  // (the pin in: nothing to put back)
         if (inHand) out.maskTrigger = true;  // the game's own throw never starts
     }
     if (state_ == kCooking && in.modMenu && !in.gameMenu)

@@ -1780,6 +1780,46 @@ shots, dry clicks and refills).
 
 **Verdict: round 44 [H] PASSED** (the off-hand pistol, Phase 1 as deployed, before the review's fixes).
 
+## Round 45: prepared 2026-10-02, the chest holster, the grenade requests, two pistols
+**Your requests:** "Add chest holster, add option in menu to decide what is in each holster" (round 44's questions); round
+43: "add option for grenade to either be held with grip or triggered with grip and put away with another grip to the
+holster", "Arming the grenade with trigger is good, add that to main hand grenades", cooking "add to main hand grenades",
+"can position and pose match main hand grenades for each type"; and two pistols ("Both").
+
+**Changed:**
+- **The chest holster:** a pistol holster on your chest by default, a cross-draw for the left hand.
+- **What each holster holds is yours:** the menu's Hands tab -> Holsters and pouch -> pick a Spot -> **Holds** (primary,
+  secondary, pistol, grenade, frag, Gammon, stick, reload or nothing).
+- **The off-hand grenade sits as your right hand holds it,** for each type, with the fingers closed on it.
+- **Grenade hold:** the menu's Weapons tab -> **Grenade hold** = grip (as before) or click:
+  - a click at the grenade holster takes one and it stays;
+  - the trigger pulls the pin, and a second pull cooks;
+  - squeeze the grip, swing and let go to throw;
+  - with the pin still in, a click at any holster puts it back.
+- **Grenades in your right hand work the same way** (Weapons -> Hand grenades, on): the trigger pulls the pin, a second
+  pull cooks, squeeze the grip, swing and let go to throw. Your last grenade gone, you're back on your gun.
+- **Two pistols:** with the Colt in your right hand, the left hand at a pistol holster (the chest, or the right hip)
+  draws a second Colt. It has its own 7 rounds and refills in the holster.
+- The off-hand grenade and pistol are now on by default.
+
+**How to try it:**
+1. Left hand to your chest, squeeze: the pistol. Squeeze at the chest again: back.
+2. Menu -> Hands -> Holsters and pouch: move to "chest", then Holds: set it to grenade. Take a grenade there. Put it back
+   to pistol after.
+3. Menu -> Weapons -> Grenade hold: click. Take, pin, squeeze and swing to throw.
+4. X (a grenade in the right hand): trigger, trigger, squeeze, swing, let go.
+5. Draw the Colt with the right hand at the right hip, then the left hand at the chest: two Colts.
+
+**Questions:**
+1. The chest holster's spot: right, or should it move (the Holsters page moves it)?
+2. Click or grip for the grenade, which do you prefer?
+3. Right-hand grenades: pin, cook and the grip throw -- natural? The throw strength?
+4. The grenade in the left hand now: does it match the right hand's?
+5. Two Colts: anything odd (the right hand's reload, its count on the HUD is the right hand's)?
+
+**Deployed for this round:** the shipped defaults (the off-hand grenade and pistol, the hand grenades and two pistols all
+on).
+
 ---
 
 ## Template

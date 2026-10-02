@@ -72,6 +72,7 @@ public:
     // A take can happen now (the switch on, the game's side alive and available, the hands ready).
     bool Active() const { return active_; }
     bool Holding() const { return state_ != kNone; }
+    bool Live() const { return state_ == kArmed || state_ == kCooking; }  // the pin out
     // Hands::Update at an off-hand grip press in a grenade holster: true = the press is the off-hand grenade's (a take, or
     // refused: nothing of that type left, or not now -- the landing, a weapon switch); false = it doesn't apply (switched
     // off, the game's side quiet, no gun in the other hand: the holster's own command, as before). `type`: 0 frag,

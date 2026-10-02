@@ -350,7 +350,7 @@ Hands::Output Hands::Update(const Input& in) {
             consumed_[h] = true;
             out.pulse[h] = true;
             MLOG("hands: %s hand at %ls -> '%s'", h ? "right" : "left", zones_[zone].key, out.command.c_str());
-            if (h != gunHand_ && _strnicmp(out.command.c_str(), "Switch", 6) == 0) {
+            if (h != gunHand_ && _strnicmp(out.command.c_str(), "Switch", 6) == 0 && !(gunNade_ && gunNade_->Live())) {
                 // The hand that draws holds the gun; the other one becomes the foregrip / reload hand. (Pressed
                 // this frame: the rest of this frame still works out the old gun hand's gun.) Only a draw does (a holster
                 // may run Reload).

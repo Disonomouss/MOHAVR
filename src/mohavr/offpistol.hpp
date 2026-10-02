@@ -38,6 +38,8 @@ bool TestCommand(const wchar_t* line);
 void OnDraw(shared::Header* hdr);
 // Whether the off hand holds the pistol now.
 bool Holding();
+// The pistol the off hand holds (0 none).
+std::uintptr_t HeldPistol();
 // After a NextWeapon: true when it made the held pistol the pending weapon and PistolKeep is on (run it once more).
 bool SkipHeldPistol();
 

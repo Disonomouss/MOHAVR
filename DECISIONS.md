@@ -593,3 +593,16 @@ inventory, the saves or the weapon cycle.
 - It goes back when the gun hand puts its pistol away.
 - With a Colt and a C96, the off hand still draws the other pistol (D41).
 **Why:** the player (2026-10-02), asked "Rifle plus a pistol in the off hand, or two pistols as well?": "Both".
+
+**The reviews of D44 and D45** (5 and 2 of 3 confirmed). D44 (the gun hand's grenade):
+- its hold no longer counts as "a grenade in the off hand": the off-hand pistol stays out;
+- the last grenade's switch never goes to the off hand's pistol;
+- a switch of grenade type while the pin is out puts it back (cooking: tossed), and a COOK on a grenade no longer in hand
+  is refused;
+- the game publishes whether the gun hand's grenade may stay (nadeCaps bit5: a ladder, a mounted gun, a cinematic put it
+  back or toss it);
+- no gun-hand change while it is live;
+- known: the trigger mask can lag a fresh grenade by up to 250 ms (the weapon key's check).
+
+D45 (the twin): the fire mode is put back on a failed trace too, and any weapon switch of the gun hand ends the twin at
+once. The off-hand grenade and pistol ship on (rounds 43 and 44 passed).
