@@ -113,6 +113,24 @@ None of the 23 load-bearing claims (section 13) was refuted; one list was incomp
 - **Deviations to name in the headset round:** the pawn-velocity carry (0.25, the game's); cooking from the spoon, where the
   game cooks every throw from the pin pull (AI get the full 4 s); no rate limit on grab-and-throw.
 
+### 0.3 Phase 1, built (2026-10-02, the main session)
+
+Built as sections 5-8 say, with S2's carrier on, and tested in the simulator (`logs/modlogs/nade3-*` to `nade10-*`;
+ENGINE-NOTES 5bc, D40). Where it differs from the text below, D40 is right:
+- A press at a grenade holster with the switch on, the game alive and a gun in the other hand is never the holster's own
+  draw: refused (a pulse) when a take can't happen now (nade3: the landing's fall-through put the gun in the off hand).
+- 0.2's corrections are in: tracking loss doesn't freeze (a release then throws with the last tracked velocity, under
+  0.25 s old); the MOHAVR menu tosses a cooking grenade; the toss is traced (and goes through triggers, as bullets do)
+  and never pitched below the horizon; the bake has 6 slots; the count is taken at the THROW and re-checked there.
+- A switch to another gun keeps a held grenade (`nadeCaps` bit4); the game's pause stops the fuse (measured).
+- An adversarial review (25 findings, 23 confirmed): the trigger latch at the take and after a freeze, `Pin=auto` with
+  `Cook=pin`, the RB mask held until let go, the 4 Hz gate past 2^31 ms of uptime, a destroyed weapon, the over-cook's
+  wall and retry, the carrier left out of the gun / no-gun decision, the game side idle while off.
+- A second pass on those fixes (5 confirmed): the trigger must rest (< 0.15) before a squeeze counts after a take or a
+  freeze; the MOHAVR menu doesn't toss over the game's pause; the trigger mask held until let go; a slow release's toss
+  carries the hand's velocity for the blocked fallback; the carrier only with the arm bake.
+- Not yet: `Throw=trigger`, `Estimator=peak`, `Spot`, the swing test (T3), T13 (a wall) as written; T12 passed (nade9).
+
 ---------------------------------------------------------------------------------------------------------------------
 
 ## 1. What I re-checked, and the research notes' disagreements

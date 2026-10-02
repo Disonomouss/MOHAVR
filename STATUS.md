@@ -174,6 +174,11 @@ address-space budget for D3D9On12.
    HUD count right; the gun untouched), and a clone of the grenade's first-person mesh is drawn in the off hand (ENGINE-NOTES
    5bb). Test commands only (`mohavr nade ...`); nothing changes in play. Next, if the player wants it: OFFHAND-DESIGN
    section 10, Phase 1 (the host's grab / pin / throw and the shared block v20) behind `[OffHand] Grenade=0`.
+   **Off-hand grenade Phase 1 done** (D40, ENGINE-NOTES 5bc): with `[OffHand] Grenade=1` (the menu: Weapons -> Off-hand
+   grenade) the off hand takes a grenade at the grenade holster, its trigger pulls the pin, a second squeeze cooks it, and
+   letting go throws it with the hand's speed while the gun stays in the other hand (shared block v20). Proven in the
+   simulator (nade4-nade8) and through two adversarial reviews. **HEADSET-TESTS round 43 deployed** with it switched on;
+   next: Phase 2 (the fingers' grip).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

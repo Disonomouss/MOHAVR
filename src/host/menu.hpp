@@ -63,6 +63,8 @@ public:
     bool Pacing() const { return pacing_; }  // frame pacing (the player's once toggled; default the shipped [Bridge] Pace)
     // The manual reload (D21; the player's once toggled, default the shipped [Weapon] ManualReload).
     bool ManualReloadOn() const { return manualReload_; }
+    // The off-hand grenade (OFFHAND-DESIGN; likewise the shipped [OffHand] Grenade until toggled).
+    bool OffHandGrenadeOn() const { return offHandNade_; }
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
     // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
     void LoadHolsters(const HolsterSpot (&defaults)[kSpots]);
@@ -155,6 +157,7 @@ private:
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    manualReload_ = false;
+    bool                    offHandNade_ = false;
 };
 
 }  // namespace mohavr::host

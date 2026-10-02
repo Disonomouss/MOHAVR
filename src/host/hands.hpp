@@ -10,6 +10,8 @@
 //   * Reload gesture: the other hand's grip squeezed at the gun's magazine (not while the manual reload drives the gun).
 //   * The manual reload (D21, reload.hpp): its spots (the magazine, the belt pouch) come before the holsters and the
 //     foregrip at an off-hand press; the belt pouch is the 5th body spot ([Holsters] MagPouchSpot).
+//   * The off-hand grenade (offhand.hpp): the off hand at a grenade holster takes a grenade while a gun is in the other
+//     hand (after the reload's spots); the gun hand there is refused while one is held.
 //   A grip used for any of these is kept from the pad mapping until released (Consumed). A short pulse on the
 //   controller marks a hand entering a holster spot or the foregrip.
 #pragma once
@@ -22,6 +24,7 @@
 #include <string>
 
 #include "../common/shared_frame.hpp"
+#include "offhand.hpp"
 #include "reload.hpp"
 
 namespace mohavr::host {
@@ -59,6 +62,12 @@ public:
         bool           hasView;
         bool           pouchShown;
         bool           reloadSpotsShown;  // the menu's Reload spots page: the grab rings show
+        // The off-hand grenade: which hands are really tracked (before Hands.HoldLost keeps a lost one), whose grip action
+        // is active.
+        std::uint32_t  tracked = 3u;
+        bool           gripActive[2] = {true, true};
+        bool           modMenu = false;  // the MOHAVR menu is open (it doesn't pause the game)
+        bool           gameMenu = false; // one of the game's menus is open (it does)
     };
     // Where the gesture spots are this frame (LOCAL), for the rings (markers.cpp).
     enum SpotKind { kHolster, kForegrip, kMagazine, kPouch, kMagWell };
@@ -83,11 +92,12 @@ public:
         float       pulseAmp[2]{}, pulseMs[2]{};  // ... of this strength and length (0: the default short one)
         bool        maskFace[2]{};  // the manual reload's release button kept from the pad (per physical hand)
         bool        maskTrigger[2]{};  // ... and a trigger (the flip of a held taped pair)
-        bool        targetOk[7]{};  // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore): the
-        XrVector3f  target[7]{};    // magazine, the pouch, the action, the aim point that seats a held magazine, a bolt
-                                    // lifted / back, the foregrip (GOAL A3: a pump gun's pump)
+        bool        targetOk[8]{};  // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade):
+        XrVector3f  target[8]{};    // the magazine, the pouch, the action, the aim point that seats a held magazine, a bolt
+                                    // lifted / back, the foregrip (GOAL A3: a pump gun's pump), the grenade holster
         bool        alignOk = false;  // tests: @magin with "align": the aim pose that seats the held magazine, turned too
         XrPosef     align{};
+        bool        maskSwitch = false;  // the off hand holds a grenade: the game's own grenade switch (Xbox RB) kept back
         bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };
@@ -100,6 +110,8 @@ public:
     static const wchar_t* SpotName(int i);
     // The manual reload (owned by the host's main loop; null = none).
     void SetReload(ManualReload* r) { reload_ = r; }
+    // The off-hand grenade (likewise).
+    void SetOffHand(OffHandGrenade* n) { nade_ = n; }
     // Round 31: where on each controller the hand interacts (the white dot; metres from the aim point: forward, up, in
     // toward the palm -- mirrored for the left hand), the foregrip ring's radius (m) and the reload rings' scale.
     void SetHandPoint(const float (&fwdUpIn)[3]) { for (int i = 0; i < 3; ++i) handPoint_[i] = fwdUpIn[i]; }
@@ -114,6 +126,7 @@ private:
     Zone        zones_[kHolsters];
     HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
     ManualReload* reload_ = nullptr;
+    OffHandGrenade* nade_ = nullptr;
     float handPoint_[3]{};       // forward, up, in (m)
     float foregripR_ = 0.12f;    // the foregrip ring's radius (m)
     float ringScale_ = 1.0f;     // the reload gesture's and the manual reload's grab rings

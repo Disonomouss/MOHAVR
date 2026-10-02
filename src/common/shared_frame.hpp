@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 19;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change)
+inline constexpr std::uint32_t kVersion = 20;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -242,6 +242,34 @@ struct Header {
     float                  actPathS[9];    // 1740
     std::uint32_t          actPathN;       // 1776  0 = no two-stage action
     std::uint32_t          pad18;          // 1780
+    // --- v20: the off-hand grenade ([OffHand] Grenade; src/host/offhand.cpp, src/mohavr/offhand.cpp; OFFHAND-DESIGN.md 7).
+    // game -> host, once per Draw (seqlock nadeSeq: odd while the game writes)
+    volatile std::uint32_t nadeSeq;        // 1784
+    std::uint32_t          nadeCaps;       // 1788 bit0 installed (the script functions resolved), bit1 a TAKE can happen
+                                           //      now (a gun in hand, nothing in the way), bit2 infinite ammo, bit3 the
+                                           //      grenade can be drawn in the hand, bit4 one held may stay (bit1, or only a
+                                           //      switch to another gun under way); 0 while switched off with none held
+    std::int32_t           nadeCount[3];   // 1792 frag, Gammon, stick: what a TAKE can get (-1 not carried, 99 infinite)
+    std::uint32_t          nadeNext;       // 1804 the type a TAKE of "any" gives (0 frag, 1 Gammon, 2 stick, 0xFF none)
+    std::uint32_t          nadeState;      // 1808 bits 0-1: 0 none, 1 held, 2 armed, 3 cooking; bits 2-3 the type; bits 8-15
+                                           //      the last refusal (0 none, 1 unavailable, 2 empty, 3 no weapon, 4 spawn failed)
+    float                  nadeFuse;       // 1812 seconds left while cooking (game time), else 0
+    float                  nadeFuseLen;    // 1816 the held type's FuseTime
+    volatile std::uint32_t nadeTicks;      // 1820 +1 per countdown tick while cooking (the host's haptic tick)
+    volatile std::uint32_t nadeEvtAck;     // 1824 the last event taken (applied or refused)
+    volatile std::uint32_t nadePawnSeq;    // 1828 +1 on a new local pawn
+    volatile std::uint32_t nadeBoom;       // 1832 +1 when a grenade went off in the hand
+    // host -> game, per XR frame INSIDE the view seqlock (viewSeq), read with the hands (RELOAD-DESIGN X3)
+    std::uint32_t          nadeFlags;      // 1836 bit0 on, bit1 held, bit2 pin out, bit3 cooking, bits 4-5 the type, bit6 frozen
+    Pose                   nadePose;       // 1840 the off hand's hand point (LOCAL; orientation = its aim pose)
+    float                  nadeAdj[6];     // 1868 the held type's hold: forward, up, right (cm), tilt, turn, roll (deg)
+    // host -> game events, ordered: nadeEvt[seq % 8] (and its position / velocity) written, then nadeEvtSeq bumped; the
+    // host never writes while nadeEvtSeq - nadeEvtAck >= 8
+    volatile std::uint32_t nadeEvtSeq;     // 1892
+    std::uint32_t          nadeEvt[8];     // 1896 low byte: 1 TAKE, 2 PIN, 3 COOK, 4 THROW, 5 PUTBACK; bits 8-15 the type
+                                           //      (0 frag, 1 Gammon, 2 stick, 0xFF any); bits 16-23 flags (bit16 toss)
+    float                  nadeEvtPos[8][3];  // 1928 THROW: the release point (LOCAL, m)
+    float                  nadeEvtVel[8][3];  // 2024 THROW: the release velocity (LOCAL, m/s)
 };
 #pragma pack(pop)
 
@@ -286,7 +314,19 @@ static_assert(offsetof(Header, gripAdj) == 1548, "shared::Header layout must mat
 static_assert(offsetof(Header, magLen) == 1624, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, actPath) == 1632, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, actPathN) == 1776, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 1784, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeSeq) == 1784, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeCount) == 1792, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeState) == 1808, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeEvtAck) == 1824, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeBoom) == 1832, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeFlags) == 1836, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadePose) == 1840, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeAdj) == 1868, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeEvtSeq) == 1892, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeEvt) == 1896, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeEvtPos) == 1928, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, nadeEvtVel) == 2024, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 2120, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -298,6 +338,43 @@ inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
     std::uint32_t h = 2166136261u;
     for (; s && *s; ++s) h = (h ^ static_cast<std::uint8_t>(*s)) * 16777619u;
     return h;
+}
+
+// The off-hand grenade's events (nadeEvt low byte) and types (bits 8-15); flags (bits 16-23): bit16 a toss (v20).
+enum NadeEvent : std::uint32_t { kNadeTake = 1, kNadePin = 2, kNadeCook = 3, kNadeThrow = 4, kNadePutBack = 5 };
+inline constexpr std::uint32_t kNadeFrag = 0, kNadeGammon = 1, kNadeStick = 2, kNadeAny = 0xFF;
+inline constexpr std::uint32_t kNadeToss = 1u << 16;
+
+// What the game publishes for the off-hand grenade (v20).
+struct NadeStatus {
+    std::uint32_t caps;
+    std::int32_t  count[3];
+    std::uint32_t next, state;
+    float         fuse, fuseLen;
+    std::uint32_t ticks, evtAck, pawnSeq, boom;
+};
+// Seqlock read of it; false while the game is mid-write (try next frame).
+inline bool ReadNadeStatus(const Header* h, NadeStatus& s, std::uint32_t& seq) {
+    const std::uint32_t s1 = h->nadeSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    s.caps = h->nadeCaps;
+    for (int i = 0; i < 3; ++i) s.count[i] = h->nadeCount[i];
+    s.next = h->nadeNext;
+    s.state = h->nadeState;
+    s.fuse = h->nadeFuse;
+    s.fuseLen = h->nadeFuseLen;
+    s.ticks = h->nadeTicks;
+    s.evtAck = h->nadeEvtAck;
+    s.pawnSeq = h->nadePawnSeq;
+    s.boom = h->nadeBoom;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    seq = s1;
+    return h->nadeSeq == s1;
 }
 
 // What the game publishes for the host's manual reload (v14).
@@ -463,10 +540,17 @@ struct ReloadView {
     Pose          magPose;
     float         rack;
 };
+// The host's off-hand grenade inputs (v20), from the same host frame as the hands.
+struct NadeView {
+    std::uint32_t flags;
+    Pose          pose;
+    float         adj[6];
+};
 
 // Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits. `rv` (optional):
-// the manual reload's flags, pull, held magazine and rack in the same pass (RELOAD-DESIGN X3).
-inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, ReloadView* rv = nullptr) {
+// the manual reload's flags, pull, held magazine and rack in the same pass (RELOAD-DESIGN X3); `nv` (optional) the
+// off-hand grenade's (v20).
+inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, ReloadView* rv = nullptr, NadeView* nv = nullptr) {
     for (int t = 0; t < kSeqTries; ++t) {
         const std::uint32_t s1 = h->viewSeq;
         if (s1 & 1u) {
@@ -485,6 +569,11 @@ inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, Re
             rv->magPull = h->magPull;
             rv->magPose = h->magPose;
             rv->rack = h->rack;
+        }
+        if (nv) {
+            nv->flags = h->nadeFlags;
+            nv->pose = h->nadePose;
+            for (int i = 0; i < 6; ++i) nv->adj[i] = h->nadeAdj[i];
         }
 #if defined(_MSC_VER)
         _ReadWriteBarrier();

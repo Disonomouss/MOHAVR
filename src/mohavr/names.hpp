@@ -15,6 +15,8 @@ std::string NameAt(std::uintptr_t at);
 bool IsA(std::uintptr_t object, const char* className);
 // UObject.Outer, or 0.
 std::uintptr_t Outer(std::uintptr_t object);
+// The name of the state the object is in ("(none)" in none, "?" unreadable).
+std::string StateName(std::uintptr_t object);
 
 // The byte offset of `object`'s script property `name` (searched through its class and supers; cached per class),
 // or -1 if its class has no such property. Game thread.

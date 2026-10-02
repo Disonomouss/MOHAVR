@@ -454,8 +454,11 @@ void OnBulletTraceDone(SafetyHookContext& ctx) {
 
 std::uintptr_t LocalPlayerPawn() { return LocalPawn(LocalController()); }
 
-bool WorldTrace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3]) {
-    return Trace(source, start, end, hit);
+bool WorldTrace(std::uintptr_t source, const float (&start)[3], const float (&end)[3], float (&hit)[3], std::uintptr_t* actor) {
+    const unsigned triggers = g_triggers;  // (the aim's own statistic)
+    const bool h = TraceThrough(source, start, end, hit, actor);
+    g_triggers = triggers;
+    return h;
 }
 
 bool Install(const Config& cfg) {

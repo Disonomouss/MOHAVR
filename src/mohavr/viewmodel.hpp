@@ -30,6 +30,9 @@ void OnPlayerView();
 // player view; lapses after 250 ms like the hands' move.
 void DrawWithoutHands(const float (&d)[16]);
 
+// A first-person part that isn't a weapon's is drawn (the parachute's harness) and no weapon's is: no gun in the hand.
+bool NoGunDrawn();
+
 // ViewModel=2: this frame's aim line along the gun in the hand (world: start, unit direction; the scale in use).
 // False when the gun isn't in the hand.
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter);

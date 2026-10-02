@@ -140,6 +140,14 @@ bool BoolProperty(std::uintptr_t object, const char* name, int& offset, std::uin
 
 std::uintptr_t ReadPointer(std::uintptr_t at) { return ReadPtr(at); }
 
+std::string StateName(std::uintptr_t object) {
+    const std::uintptr_t frame = object ? ReadPtr(object + addr::kObjectStateFrame) : 0;
+    const std::uintptr_t node = frame ? ReadPtr(frame + addr::kStateFrameNode) : 0;
+    if (!node) return "?";
+    if (node == ReadPtr(object + addr::kObjectClass)) return "(none)";
+    return NameAt(node + addr::kObjectName);
+}
+
 bool IsA(std::uintptr_t object, const char* className) {
     int depth = 0;
     for (std::uintptr_t c = object ? ReadPtr(object + addr::kObjectClass) : 0; c && depth < 64;

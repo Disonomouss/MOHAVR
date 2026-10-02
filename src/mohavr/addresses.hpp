@@ -287,6 +287,9 @@ inline constexpr std::uintptr_t kObjectOuter  = 0x28, kObjectName = 0x2C, kObjec
 // ElementSize +0x48, PropertyFlags +0x4C, Offset +0x64 -- verified: Actor.Location 0xE8 and Rotation 0xF4 (known),
 // Velocity 0x100, Pawn.InvManager 0x3A4, Pawn.Weapon 0x3A8.
 inline constexpr std::uintptr_t kFieldSuper = 0x3C, kFieldNext = 0x40, kStructChildren = 0x4C, kPropertyOffset = 0x64;
+// An object's state (D21, round 31: the weapon's firing states): UObject.StateFrame +0x18 -> FStateFrame.StateNode +0x2C
+// (the UState; the class itself when in no state), whose Name is at kObjectName.
+inline constexpr std::uintptr_t kObjectStateFrame = 0x18, kStateFrameNode = 0x2C;
 // UFunction (Ghidra, UObject::ProcessEvent 0x109CE980, 2026-10-02; the off-hand grenade): FunctionFlags +0x8C (DWORD),
 // iNative +0x90 (WORD; non-zero = refused by ProcessEvent), ParmsSize +0x9E (WORD) -- verified at run time on
 // EALAWeapon.SpawnProjectile: flags 0x20102, native 0, 28 bytes (two vectors and the return value).

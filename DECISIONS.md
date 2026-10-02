@@ -431,3 +431,51 @@ show no body.
 looks strange."
 **Costs:** [H] -- the arms still play the landing's brace and gear removal for ~3 s before the gun comes up;
 `LandingBody=1` gives the game's body back.
+
+### D40. The off-hand grenade, Phase 1: take, pin, cook and throw with the gun in hand -- Decided 2026-10-02
+`[OffHand] Grenade` (shipped 0; the menu's Weapons tab "Off-hand grenade" is the player's, saved in their ini): with a
+gun in the gun hand, the off hand's grip at a grenade holster (`[Holsters]` LeftHip=SwitchGrenade, or a
+SwitchFragGrenade / SwitchGammon / SwitchStick spot) takes a grenade into that hand (TAKE, the pin in; drawn there,
+`Carrier=1`); its trigger pulls the pin (PIN); a second squeeze lets the spoon go (COOK: the fuse burns -- the game
+keeps the clock in game time, so the game's pause stops it -- and the controller ticks; held to the end it goes off in
+the hand, the game's own rule); letting go of the grip throws it with the hand's speed (x `ThrowScale` 2.2, at most
+`MaxHandSpeed` 12 m/s; under `MinThrowSpeed` 1 m/s it is tossed the game's gentlest way along the view,
+`SlowRelease=toss`), or puts it back while the pin is in (PUT BACK: nothing used). `Pin=auto` pulls the pin at the take;
+`Cook=pin` starts the fuse at the pin, `off` at the throw. A grenade is counted out only when it flies. The host owns
+the interaction (src/host/offhand.cpp: none / held / armed / cooking) and sends ordered events through shared block v20;
+the game (src/mohavr/offhand.cpp) executes them through the grenade weapon's own `SpawnProjectile` (ENGINE-NOTES 5bb)
+and publishes the counts, whether a take can happen, whether one held may stay, and its own state (the host takes the
+game's after two disagreeing polls).
+- An off-hand press at a grenade holster is the off-hand grenade's whenever it is switched on, the game's side is alive
+  and a gun is in the other hand: a take, or a refusal (a 60 ms pulse) when a take can't happen now -- the landing, a
+  weapon switch, a cinematic, weapons disabled, a mounted gun, the HellBox, none left. Never the holster's own draw
+  then, which would put the gun in the off hand (nade3: a press during the landing did). Switched off, with the game's
+  side quiet or no gun in the other hand, the holster draws as before.
+- While one is held: the off trigger is kept from the game (a pin pull isn't the aim), and Xbox RB (the game's own
+  grenade switch: the controller's X) too -- each until let go, also after the hold; a trigger squeezed at all (above
+  0.15) when the hold starts or a freeze ends must be let go first (a fist closing on the grab, a finger trailing it);
+  the gun hand at a grenade holster is refused, at a gun holster it switches guns (the hold stays; a switch to a grenade
+  or the HellBox ends it); an off-grip press after a freeze is the grenade's; the foregrip's ring and pulse and the
+  reload's grab rings are hidden; the menu's Gun hand waits.
+- Frozen while a menu is open or the off hand's grip action sleeps (a sleeping controller, the dashboard); let go
+  meanwhile, it goes back with the pin in or the spoon on, and is tossed once cooking. Opening the MOHAVR menu (it
+  doesn't pause the game) tosses a cooking grenade -- not over the game's own pause menu, which stops the fuse. Let go
+  while the hand isn't tracked (a fast overhand wind-up), it flies with the last tracked velocity from the last tracked
+  point (none after 0.25 s: tossed).
+- The game making it unavailable while held (a ladder, a cinematic, death) puts it back, or tosses a cooking one -- a
+  live grenade is never silently removed (a weapon destroyed with its inventory isn't touched: the hold just ends). The
+  toss goes along the view's heading, pitched from the horizon to 45 degrees (looking down at the hand doesn't aim it at
+  the feet) plus the weapon's DirectionOffset; its first 2 m are traced (through triggers, as bullets go): blocked, 30
+  degrees higher; blocked again, the hand's own velocity (a slow release's; a forced toss has none and drops where the
+  hand is).
+- The game's side runs no script calls while the switch is off and nothing is held (rule 7). The grenade is drawn in the
+  hand only with the arm bake (`[Weapon] ArmIK=1`, `ViewModel=2`), which places it.
+**Why:** the player (2026-10-02): "Being able to grab a grenade with the off hand and throw it without unequipping your
+gun would be very immersive." `OFFHAND-DESIGN.md` (the research and the spikes S1, S2) says how; this is its Phase 1,
+with S2's carrier so the grenade is seen in the hand. An adversarial review (four reviewers, a skeptic each, a
+completeness critic: 23 of 25 findings confirmed) and a second pass on its fixes (5 more confirmed) shaped the rules
+above.
+**Costs:** [H] -- the hand stays open around the grenade (the fingers' grip: Phase 2); no pin or spoon sounds (Phase 4);
+`Throw=trigger`, `Estimator=peak`, `Spot=chest` not yet (OFFHAND-DESIGN 8, 10). `Carrier` ships on (the design had it
+off until Phase 3): S2 and nade5 show it in the simulator. The game cooks every throw of its own from the pin pull; here
+the fuse starts at the spoon (`Cook=pin` for the game's way).

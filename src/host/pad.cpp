@@ -421,10 +421,10 @@ void Pad::ReadTests(double now) {
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
                     if (v[0] && v[1] == ',' && v[2] == '@') {
                         // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
-                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback", "fore"};
+                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback", "fore", "grenade"};
                         const char* name = v + 3;
                         const size_t len = strcspn(name, ",");
-                        for (int i = 0; i < 7; ++i)
+                        for (int i = 0; i < 8; ++i)
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
@@ -539,6 +539,17 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         p.buttons &= ~0x2000;
     } else {
         allBDown_ = false;
+    }
+    // Buttons held back in gameplay (the off-hand grenade: RB, the game's own grenade switch, while one is held) -- each
+    // until it is let go, or it would reach the game as a fresh press when the mask ends.
+    const std::uint16_t mask = hdr->gameUiMenu ? 0 : static_cast<std::uint16_t>(maskedButtons_ | maskedHeld_);
+    if (mask) {
+        const std::uint16_t down = p.buttons & mask;
+        if (down & ~maskedHeld_) MLOG("pad: buttons 0x%04X kept from the game (a grenade in the off hand)", down & ~maskedHeld_);
+        maskedHeld_ = down;
+        p.buttons &= static_cast<std::uint16_t>(~mask);
+    } else {
+        maskedHeld_ = 0;
     }
 
     // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.
@@ -678,6 +689,16 @@ float Pad::TriggerValue(XrSession s, int hand) const {
     gi.action = src_[src];
     XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
     return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive ? f.currentState : 0.0f;
+}
+
+bool Pad::GripActive(XrSession s, int hand) const {
+    const Src src = hand ? kRGrip : kLGrip;
+    if (testActive_ && test_.raw) return true;
+    if (!src_[src]) return false;
+    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+    gi.action = src_[src];
+    XrActionStateFloat f{XR_TYPE_ACTION_STATE_FLOAT};
+    return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive;
 }
 
 float Pad::FaceButton(XrSession s, int hand, bool upper) const {

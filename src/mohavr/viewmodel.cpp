@@ -16,6 +16,7 @@
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
+#include "offhand.hpp"
 #include "patch.hpp"
 #include "vr_view.hpp"
 
@@ -373,6 +374,7 @@ void UpdateWeaponKey(shared::Header* hdr) {
         const std::uintptr_t comp = p.comp.load(std::memory_order_relaxed);
         const DWORD tick = p.tick.load(std::memory_order_relaxed);
         if (!comp || now - tick > 500) continue;
+        if (comp == offhand::CarrierComponent()) continue;  // the off-hand grenade: neither the gun nor "no gun drawn"
         const std::uintptr_t outer = names::Outer(comp);
         static bool armsProbed = false;
         if (g_cfg.debugReflect && outer && outer == pawn && !armsProbed) {
@@ -734,6 +736,8 @@ bool BodyMoveSinceView(float (&w)[16]) {
     std::memcpy(w, m.m, sizeof(w));
     return true;
 }
+
+bool NoGunDrawn() { return g_noGunDrawn; }
 
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter) {
     if (!g_line.valid) return false;

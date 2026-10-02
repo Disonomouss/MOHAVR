@@ -31,6 +31,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.debugCrashDumpTest = get(L"Debug", L"CrashDumpTest", c.debugCrashDumpTest);
     c.debugReloadProbe = get(L"Debug", L"ReloadProbe", c.debugReloadProbe);
     c.debugReloadTrace = get(L"Debug", L"ReloadTrace", c.debugReloadTrace);
+    c.debugOffHandTrace = get(L"Debug", L"OffHandTrace", c.debugOffHandTrace);
     c.debugMuzzleFreeze = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"MuzzleFreeze", 0, ini.c_str()));
     c.debugSwapEyes  = get(L"Debug", L"SwapEyeOrder", c.debugSwapEyes);
     c.debugSwapHalves = get(L"Debug", L"SwapHalves", c.debugSwapHalves);
@@ -117,6 +118,10 @@ Config LoadConfig(const std::wstring& dir) {
     c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);
     c.shoulderBack   = getf(L"Weapon", L"ShoulderBack", c.shoulderBack, -30.0f, 30.0f);
     c.throwScale     = getf(L"Hands", L"ThrowScale", c.throwScale, 0.2f, 5.0f);
+    c.offHandThrowScale = getf(L"OffHand", L"ThrowScale", c.offHandThrowScale, 0.2f, 5.0f);
+    c.offHandPassThrower = get(L"OffHand", L"PassThrower", c.offHandPassThrower);
+    c.offHandHudType = get(L"OffHand", L"HudType", c.offHandHudType);
+    c.offHandCarrier = get(L"OffHand", L"Carrier", c.offHandCarrier);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

@@ -1691,6 +1691,37 @@ about 3 seconds before the gun comes up.
 
 ---
 
+## Round 43: prepared 2026-10-02, the off-hand grenade (Phase 1)
+**Your request:** "Being able to grab a grenade with the off hand and throw it without unequipping your gun would be very
+immersive."
+
+**Changed:** the off-hand grenade is in, switched on for this round (the menu: Weapons -> Off-hand grenade).
+
+**How to try it** (a gun in your right hand):
+1. Reach to the grenade holster on your left hip with your LEFT hand and squeeze the grip: a grenade appears in that hand
+   (a short pulse). The pin is still in: let go now and it goes back, nothing used.
+2. Pull the left trigger: the pin comes out (a sharper pulse). Then swing and let go of the grip: it flies with your
+   hand's speed. Let go without swinging and it's lobbed gently ahead.
+3. Cooking: with the pin out, pull the trigger again -- the spoon flies and the 4 s fuse burns; the controller ticks,
+   faster near the end. Held too long, it goes off in your hand (as in the game).
+4. The gun stays in your right hand the whole time: it fires as usual, and you can switch guns with it.
+Known: the left hand stays open around the grenade (closing the fingers on it is next), and there are no pin or spoon
+sounds yet. X (the game's own grenade switch) does nothing while you hold one. Opening the MOHAVR menu while cooking lobs
+the grenade ahead (that menu doesn't pause the game; the game's own pause menu does, and stops the fuse). The game cooks
+its own throws from the pin pull; here the fuse starts when the spoon goes.
+
+**Questions:**
+1. Taking, arming and throwing: natural? The throw's strength: too weak, right, too strong? Does it go where you throw?
+2. Any throw or drop you didn't mean?
+3. Cooking (the second squeeze): found it, and safe enough?
+4. The gentle lob when you let go without swinging: good, or should it drop at your feet?
+5. The grenade in your hand: where it sits, its size?
+6. Anything odd with the gun, the reload, the foregrip, or the holsters while holding one?
+
+**Deployed for this round:** the shipped defaults with `OffHand.Grenade=1`.
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

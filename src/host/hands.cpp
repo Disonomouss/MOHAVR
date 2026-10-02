@@ -39,6 +39,16 @@ XrQuaternionf FromTo(V3 a, V3 b) {
     return {c.x / n, c.y / n, c.z / n, w / n};
 }
 
+// A holster whose command draws a grenade: the type its off-hand take gets (0 frag, 1 Gammon, 2 stick, 0xFF the game's
+// order), -1 for any other.
+int GrenadeZoneType(const std::string& cmd) {
+    std::string c;
+    for (char ch : cmd) c += static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch + 32 : ch);
+    if (c.find("grenade") == std::string::npos && c.find("gammon") == std::string::npos && c.find("stick") == std::string::npos)
+        return -1;
+    return c.find("frag") != std::string::npos ? 0 : c.find("gammon") != std::string::npos ? 1 : c.find("stick") != std::string::npos ? 2 : 0xFF;
+}
+
 }  // namespace
 
 const wchar_t* Hands::SpotName(int i) {
@@ -95,13 +105,19 @@ void Hands::Init(const std::wstring& ini) {
 Hands::Output Hands::Update(const Input& in) {
     Output out;
     // The gun hand: the menu's starting hand (applied whenever that setting changes), then whichever hand draws.
-    if (static_cast<int>(in.startLeft) != lastStart_) {
+    // (Not while the off hand holds a grenade: the change waits for the throw or the put back, OFFHAND-DESIGN 5.5.)
+    const bool nadeHeld = nade_ && nade_->Holding();
+    if (static_cast<int>(in.startLeft) != lastStart_ && !nadeHeld) {
         lastStart_ = in.startLeft ? 1 : 0;
         gunHand_ = in.startLeft ? 0 : 1;
         twoHanded_ = false;
         MLOG("hands: gun hand -> %s (the starting hand)", gunHand_ ? "right" : "left");
     }
     const int g = gunHand_, o = 1 - g;
+    if (in.testThrow) {  // kept for the next release (the gun hand's grenade, or the off hand's)
+        testThrow_ = true;
+        for (int i = 0; i < 3; ++i) testThrowVel_[i] = in.testThrowVel[i];
+    }
     // The manual reload drives the gun in hand (D21), or not (then the fixed-spot reload gesture, RELOAD-DESIGN 3.8).
     ManualReload::In rin;
     rin.gunOk = (in.valid & (1u << g)) != 0;
@@ -175,7 +191,7 @@ Hands::Output Hands::Update(const Input& in) {
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
             if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
-    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f) addSpot(kForegrip, fore, foregripR_, true);
+    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !nadeHeld) addSpot(kForegrip, fore, foregripR_, true);
     if (gunOk && reloadOk) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
     if (in.pouchShown || (reloadActive && reload_->MagazineOut())) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
@@ -183,6 +199,21 @@ Hands::Output Hands::Update(const Input& in) {
     out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
     out.offHand = {pt[o].x, pt[o].y, pt[o].z};
+    // The off-hand grenade's view of the off hand.
+    OffHandGrenade::In nin;
+    nin.offHand = o;
+    nin.offTracked = (in.tracked & (1u << o)) != 0 && offOk;
+    nin.gripActive = in.gripActive[o];
+    nin.gestures = in.gestures;
+    nin.modMenu = in.modMenu;
+    nin.gameMenu = in.gameMenu;
+    nin.hasView = in.hasView;
+    nin.gunOk = gunOk && in.weaponKind != 2;
+    nin.trigger = in.trigger[o];
+    nin.hand = {in.aim[o].orientation, {pt[o].x, pt[o].y, pt[o].z}};
+    nin.testThrow = testThrow_;
+    for (int i = 0; i < 3; ++i) nin.testVel[i] = testThrowVel_[i];
+    nin.now = in.now;
 
     for (int h = 0; h < 2; ++h) {
         const bool ok = (in.valid & (1u << h)) != 0;
@@ -211,10 +242,32 @@ Hands::Output Hands::Update(const Input& in) {
         if (!press) continue;
         held_[h] = true;
         if (!in.gestures || !ok) continue;
+        // The off hand holds a grenade (pressed again after a freeze let the grip go): the grip is the grenade's.
+        if (h == o && nade_ && nade_->Holding()) {
+            consumed_[h] = true;
+            continue;
+        }
         // The manual reload's spots first (the pouch touches the hip spots; RELOAD-DESIGN 3.4).
         if (h == o && reloadActive && reload_->TakePress({hp.x, hp.y, hp.z}, {pouch.x, pouch.y, pouch.z}, pouchR)) {
             consumed_[h] = true;
             continue;
+        }
+        // The off-hand grenade (OFFHAND-DESIGN 5.5): the off hand at a grenade holster takes one while a gun is in the
+        // other hand; the gun hand there is refused while one is held (it would make a grenade the main weapon).
+        const int nadeType = zone >= 0 ? GrenadeZoneType(zones_[zone].command) : -1;
+        if (nade_ && nadeType >= 0) {
+            if (h == o && nade_->TakePress(nin, static_cast<std::uint32_t>(nadeType))) {
+                consumed_[h] = true;
+                continue;
+            }
+            if (h == g && nade_->Holding()) {
+                consumed_[h] = true;
+                out.pulse[h] = true;
+                out.pulseAmp[h] = 0.2f;
+                out.pulseMs[h] = 60.0f;
+                MLOG("hands: the gun hand at %ls while the off hand holds a grenade -- refused", zones_[zone].key);
+                continue;
+            }
         }
         if (zone >= 0) {
             out.command = zones_[zone].command;
@@ -243,7 +296,7 @@ Hands::Output Hands::Update(const Input& in) {
         }
     }
     // A pulse on the off hand as it comes to the foregrip (not while already holding it).
-    if (gunOk && offOk && foregripOk && !twoHanded_ && in.gestures) {
+    if (gunOk && offOk && foregripOk && !twoHanded_ && in.gestures && !nadeHeld) {
         const bool atFore = Len(Sub(pt[o], fore)) < foregripR_;
         if (atFore && !nearFore_) out.pulse[o] = true;
         nearFore_ = atFore;
@@ -269,7 +322,7 @@ Hands::Output Hands::Update(const Input& in) {
             twoHanded_ = false;  // the grip now holds the magazine (it stays consumed)
             MLOG("hands: foregrip let go (the hand took the magazine)");
         }
-        for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5; ++i) {
+        for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5 && !nadeHeld; ++i) {
             Spot& sp = out.spots[out.spotCount++];
             sp = {kMagWell, rout.rings[i].pos, rout.rings[i].radius, rout.rings[i].inside, rout.rings[i].close};
         }
@@ -302,6 +355,29 @@ Hands::Output Hands::Update(const Input& in) {
         out.targetOk[6] = gunOk;
         out.target[6] = {fore.x - hpOff.x, fore.y - hpOff.y, fore.z - hpOff.z};
     }
+    // The off-hand grenade, every frame (after the reload: its masks and pulses add to the reload's).
+    if (nade_) {
+        nin.gripHeld = held_[o];
+        OffHandGrenade::Out nout;
+        nade_->Frame(nin, nout);
+        if (nout.usedTest) testThrow_ = false;
+        if (nout.maskTrigger) out.maskTrigger[o] = true;
+        out.maskSwitch = nout.maskSwitch;
+        for (int h = 0; h < 2; ++h)
+            if (nout.pulseAmp[h] > 0.0f) {
+                out.pulse[h] = true;
+                out.pulseAmp[h] = std::fmax(out.pulseAmp[h], nout.pulseAmp[h]);
+                out.pulseMs[h] = std::fmax(out.pulseMs[h], nout.pulseMs[h]);
+            }
+        // Tests (pad_cmd.txt hand=l,@grenade): the first grenade holster, moved by the hand point like the other spots.
+        const V3 hpOff = Sub(pt[o], P(in.aim[o].position));
+        for (int z = 0; z < kHolsters && holsters_; ++z)
+            if (GrenadeZoneType(zones_[z].command) >= 0) {
+                out.targetOk[7] = true;
+                out.target[7] = {centre[z].x - hpOff.x, centre[z].y - hpOff.y, centre[z].z - hpOff.z};
+                break;
+            }
+    }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;
     if (gunOk && g == gunHand_) {
@@ -326,10 +402,6 @@ Hands::Output Hands::Update(const Input& in) {
         s.p[0] = in.aim[h].position.x;
         s.p[1] = in.aim[h].position.y;
         s.p[2] = in.aim[h].position.z;
-    }
-    if (in.testThrow) {  // kept for the next release
-        testThrow_ = true;
-        for (int i = 0; i < 3; ++i) testThrowVel_[i] = in.testThrowVel[i];
     }
     const float trig = in.trigger[g];
     if (!triggerHeld_ && trig > 0.5f) triggerHeld_ = true;

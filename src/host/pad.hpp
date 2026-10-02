@@ -63,6 +63,8 @@ public:
     // from the mapping until released; a short haptic pulse.
     float GripValue(XrSession s, int hand) const;
     float TriggerValue(XrSession s, int hand) const;  // likewise, the physical hand's trigger
+    // Whether a hand's grip action is active (a sleeping or absent controller's isn't; a raw test state's always is).
+    bool  GripActive(XrSession s, int hand) const;
     // A test throw (pad_cmd.txt "throwvel=x,y,z", m/s LOCAL): used for the next grenade release instead of the hand's.
     bool  TakeTestThrow(float (&v)[3]) {
         if (!testThrow_) return false;
@@ -85,9 +87,12 @@ public:
     void  SetMaskedFace(int hand, bool upper, bool on) { maskedFace_[hand] = on ? FaceSrc(hand, upper) : kNone; }
     // Likewise a physical hand's trigger (the manual reload's flip of a held twin magazine).
     void  SetMaskedTrigger(int hand, bool on) { maskedTrig_[hand] = on; }
+    // Xbox buttons kept from the game in gameplay (XINPUT bits; the off-hand grenade holds back RB, the game's own grenade
+    // switch, while a grenade is in the off hand).
+    void  SetMaskedButtons(std::uint16_t bits) { maskedButtons_ = bits; }
     // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
-    void  SetTestTargets(const XrVector3f (&p)[7], const bool (&ok)[7], const XrPosef& align, bool alignOk) {
-        for (int i = 0; i < 7; ++i) {
+    void  SetTestTargets(const XrVector3f (&p)[8], const bool (&ok)[8], const XrPosef& align, bool alignOk) {
+        for (int i = 0; i < 8; ++i) {
             testTarget_[i] = p[i];
             testTargetOk_[i] = ok[i];
         }
@@ -141,13 +146,15 @@ private:
     XrAction    haptic_[2]{};          // left, right vibration
     struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
-    XrVector3f  testTarget_[7]{};      // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore" (LOCAL)
-    bool        testTargetOk_[7]{};
+    XrVector3f  testTarget_[8]{};      // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade"
+    bool        testTargetOk_[8]{};    // (LOCAL)
     XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
     bool        testAlignOk_ = false;
     Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
     bool        maskedDown_[2]{};
     bool        maskedTrig_[2]{};
+    std::uint16_t maskedButtons_ = 0;
+    std::uint16_t maskedHeld_ = 0;     // masked buttons still down (kept masked until let go)
     bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking
     bool        holdLost_ = true;      // [Hands] HoldLost
     XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading

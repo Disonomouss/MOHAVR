@@ -1648,7 +1648,69 @@ adversarial verifiers: none of 23 load-bearing claims refuted) wrote `OFFHAND-DE
   true 3D in both eyes at the off hand in three poses, gone after detaching (`DetachComponent`), the stick the same, the gun
   unaffected. Not done: the fingers' grip (OFFHAND-DESIGN Phase 2) and the pin/spoon bones.
 - Test commands (Debug.GameCommands): `mohavr nade` (a dump), `mohavr nade throw <frag|gammon|stick|any> <hand|eye> <vx> <vy>
-  <vz> [fuse]` (LOCAL m/s x Hands.ThrowScale), `mohavr nade carrier <frag|gammon|stick|off>`.
+  <vz> [fuse]` (LOCAL m/s x OffHand.ThrowScale since Phase 1; no pawn velocity), `mohavr nade carrier <frag|gammon|stick|off>`.
+
+## 5bc. The off-hand grenade, Phase 1 (D40, 2026-10-02)
+
+The host's state machine (src/host/offhand.cpp), shared block v20 (1784 -> 2120 bytes: the status block under `nadeSeq`,
+the off hand's pose and flags in the view seqlock, an 8-slot event ring) and the game's executor
+(src/mohavr/offhand.cpp).
+- **The checkpoint the harness loads starts with the airdrop:** for ~20 s after `to-gameplay` the game side reports "the
+  gun isn't drawn (the parachute, the landing)" (viewmodel's NoGunDrawn: a first-person part that isn't a weapon and no
+  weapon; vr_view's LandingHeld) until the landing's held view ends (`Camera.SteadyLanding`, activity 41 -> 20). Tests
+  wait for `offhand: available` (Debug.OffHandTrace) before acting.
+- **Availability, as the game's side tests it** (every Draw; the script calls at 4 Hz): a live MOHAPlayerPawn; an
+  EALAWeapon in hand that isn't an EALAGrenade nor the HellBox (WeaponType 23); the gun drawn (not the parachute or the
+  landing); not `bCinematicMode`, not `bNoWeaponFiring`; `IsWeaponDisabled()` false (a native without an index, through
+  ProcessEvent: the ladders, the airdrop and briefing states, dying); the controller's state not a mounted MG
+  (`PlayerCanSwitchWeapons`'s state override can't be reached through ProcessEvent); then no `PendingWeapon` -- a switch
+  refuses a take for ~0.3 s (`SwitchPistol`: 0.31 s, nade5) but lets a held grenade stay unless it brings a grenade or
+  the HellBox (`nadeCaps` bit4).
+- **Game time:** the fuse is `WorldInfo.TimeSeconds`, which the game's pause stops: [S] nade8, cooked, paused 2.0 s (the
+  console `Pause`, which opens the pause menu: the host froze), released 4.62 s after the spoon -> thrown with 1.40 s
+  left (2.60 s cooked). The MOHAVR menu doesn't pause the game.
+- **Traces go through triggers:** the engine's line check stops at Triggers and TriggerVolumes, which the game's bullets
+  pass (aim.cpp TraceThrough); `aim::WorldTrace` now does the same. nade7, before: a toss "blocked 146 cm ahead and
+  higher" in the open and a release point "behind something" at the hip, while the aim log counted 300-400 frames
+  "through triggers"; nade8, after: no false blocks.
+- **Death:** `Suicide` while cooking -- the pawn's inventory is destroyed (DiscardInventory) while the dead pawn stays
+  the local pawn; the host's toss came back "THROW refused -- the grenade weapon is gone" and the hold ended without
+  touching it (nade8). The pawn's Instigator survives on a destroyed weapon, so the check is the inventory manager's own
+  pointer.
+- [S] `logs/modlogs/nade4-*` (the BAR in hand; `work/research/tests/nade4.ps1`, and nade3, nade5-nade8 beside it): a
+  press during the landing refused (no SwitchGrenade, the gun stays right); TAKE / PUT BACK (the carrier attached and
+  detached; the reserve unchanged); PIN + THROW with the test velocity 8.5 m/s -> 1760 units/s ahead and 660 up (x2.2),
+  fuse 4.00 s, 16 m in the first second, gone off 4.00 s after, reserve 3 -> 2; a still hand let go with the pin out ->
+  the toss: 735 ahead, 150 up (ExplosiveSpeed 750 pitched up by DirectionOffset 2100 = 11.5 degrees), gone off 4.03 s
+  after; the gun hand at the holster refused and X (Xbox RB 0x0200) kept from the game while held; the MOHAVR menu froze
+  an armed grenade, let go meanwhile -> put back as it closed; the frags gone, "any" took a Gammon (NextType:
+  LastGrenadeWeapon's count 0, then frag, Gammon, stick); cooked 1.8 s -> thrown with 2.21 s left, gone off 2.20 s
+  after; the BAR fired after (AmmoCount 20 -> 14); cooked to the end -> gone off in the hand 4.0 s after the spoon (a
+  0.05 s launch at the hand point) and killed the player, the host back to none with both hands pulsed. The weapon in
+  hand and FlashCount unchanged at every throw.
+- [S] after the review's fixes, `nade7-*` / `nade8-*`: a trigger at 0.5 at the take rising to 1.0 pulled no pin (put
+  back); looking down 60 degrees, the toss still went up and 3.4 m ahead; X held through the put back reached nothing; a
+  pistol switch and back while armed kept the hold; the MOHAVR menu opened on a cooking Gammon -> tossed at once (3.16 s
+  left, gone off 3.17 s after); `lost=l` while armed, let go during the loss -> tossed ("the hand untracked: no
+  velocity"); ticks every 0.25 s then 0.1 s in the last 40 % (Debug.OffHandTrace); switched off in the menu -> the game
+  side "switched off" (no script calls) until on again; `Pin=auto` + `Cook=pin`: TAKE, PIN and COOK at the take, thrown
+  1 s later with 2.99 s left.
+- [S] `nade9-*`: T12 -- thrown from 30 cm behind the head with the hand's forward velocity, it went 17.1 m in the first
+  second (16.0 m from the hip): through the thrower's body (`PassThrower=1`, `bBlockedByInstigator` cleared). The
+  simulator's emulated controller keeps its actions active once the test states end (value 0), so the sleeping grip's
+  freeze is [H] only.
+- [S] after the second review, `nade10-*`: a trigger trailing the grab (0.3 at the take, then 1.0) pulled no pin (put
+  back); cooking, the game paused (the host froze), the MOHAVR menu opened and closed over the pause -- no toss;
+  unpaused, let go: tossed with 2.73 s left (1.28 s cooked in 5.30 s, the pause's 4.02 s not counted). `Weapon.ArmIK=0`:
+  "no arm bake -- the grenade isn't drawn in the hand" (harness cycle OK).
+- Each TAKE clones a new carrier (`MOHASkeletalMeshComponent_199`, `_208`, ...), detached at the end of the hold
+  (garbage after). A pooled projectile reused keeps its DrawScale 1.50 ("1.50 -> 1.50").
+- [S] `nade5-*`: the frag drawn at the off hand in both eyes while held (`logs/shots/nade5-held-sim.png`); the menu's
+  toggle saved off (`nade5-menu-off.png`), then the off hand at the holster drew the game's grenade (SwitchGrenade) and
+  the gun went to that hand, as before. `nade6-*`: left-hand mode (the menu's Gun hand left) -- the right hand took,
+  pinned and threw (16.6 m in the first second, gone off at 4.00 s); the frag drawn at the right hand
+  (`nade6-held-sim.png`).
+- `tools/harness.ps1 cycle` OK in 33 s with the shipped defaults (`Grenade=0`).
 
 ## 6. Content and UnrealScript
 

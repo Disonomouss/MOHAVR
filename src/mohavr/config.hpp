@@ -47,6 +47,11 @@ struct Config {
     bool hideViewModel  = false;  // [Weapon] HideViewModel -- hide the first-person gun (the pawn's HideWeapon exec)
     bool throwByHand    = true;   // [Hands] Throw -- grenades fly with the gun hand's velocity at the trigger release (M8)
     float throwScale    = 2.2f;   // [Hands] ThrowScale -- times the hand's speed
+    // [OffHand] (the off-hand grenade, OFFHAND-DESIGN.md; the host owns the switch and the input, the game the rest)
+    float offHandThrowScale = 2.2f;   // [OffHand] ThrowScale -- the off hand's release speed x
+    bool  offHandPassThrower = true;  // [OffHand] PassThrower -- the thrown grenade ignores the thrower's body
+    bool  offHandHudType = true;      // [OffHand] HudType -- the HUD's grenade count shows the held type
+    bool  offHandCarrier = true;      // [OffHand] Carrier -- the grenade drawn in the off hand while held
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)
@@ -70,6 +75,7 @@ struct Config {
     bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
     bool debugCrashDump = true;      // [Debug] CrashDump -- a crash in d3d9/d3d9on12/ucrtbase writes a dump (round 29)
     bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
+    bool debugOffHandTrace = false;  // [Debug] OffHandTrace -- the off-hand grenade: availability, the hold's states, ticks
     bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)

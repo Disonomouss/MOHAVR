@@ -1928,13 +1928,7 @@ void __fastcall Hook_ExecHasReserveAmmo(std::uintptr_t self, void* /*edx*/, void
     }
 }
 
-std::string StateName(std::uintptr_t obj) {
-    const std::uintptr_t frame = names::ReadPointer(obj + 0x18);
-    const std::uintptr_t node = frame ? names::ReadPointer(frame + 0x2C) : 0;
-    if (!node) return "?";
-    if (node == names::ReadPointer(obj + addr::kObjectClass)) return "(none)";
-    return names::NameAt(node + 0x2C);
-}
+std::string StateName(std::uintptr_t obj) { return names::StateName(obj); }
 
 bool Derives(std::uintptr_t c, std::uintptr_t want) {
     for (int depth = 0; c && depth < 64; c = names::ReadPointer(c + addr::kFieldSuper), ++depth)

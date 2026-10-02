@@ -31,6 +31,7 @@
 #include "pad.hpp"
 #include "hands.hpp"
 #include "reload.hpp"
+#include "offhand.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
 
@@ -394,6 +395,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     std::uint32_t handBits = 0;
     mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
     mohavr::host::ManualReload manualReload;  // D21: the manual reload's toggle, engagement and events
+    mohavr::host::OffHandGrenade offhandNade;  // the off-hand grenade (OFFHAND-DESIGN): its toggle, state and events
     mohavr::host::Hands::Output handsOut;
     mohavr::host::Markers markers;  // the gesture spots' rings
     bool markersOk = false;
@@ -401,6 +403,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         hands.Init(ExeDir() + L"\\MOHAVR.ini");
         manualReload.Init(ExeDir() + L"\\MOHAVR.ini");
         hands.SetReload(&manualReload);
+        offhandNade.Init(ExeDir() + L"\\MOHAVR.ini");
+        hands.SetOffHand(&offhandNade);
         if (menuOk) {
             mohavr::host::HolsterSpot defaults[mohavr::host::kSpots];
             for (int i = 0; i < mohavr::host::kSpots; ++i) defaults[i] = hands.DefaultSpot(i);
@@ -693,6 +697,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 headTrackedReal = posTracked && !(hq.x == 0.0f && hq.y == 0.0f && hq.z == 0.0f && hq.w == 1.0f);
                 // M7: the aim poses, at the same time and in the same space as the head.
                 handBits = handsOk ? pad.LocateHands(local, fs.predictedDisplayTime, headLoc.pose, handPose) : 0u;
+                const std::uint32_t trackedBits = handBits;  // really tracked (the off-hand grenade freezes without)
                 // A hand the runtime stops tracking (round 24: after ~10 s without moving, the Quest drops idle
                 // controllers, and the gun fell back to the game's flat-screen placement, seen double) stays put.
                 if (handsOk) handBits |= pad.HoldLost(headLoc.pose, handPose, handBits);
@@ -700,6 +705,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 const double nowS = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                 if (menuOk) manualReload.SetOn(menu.ManualReloadOn());
                 manualReload.Poll(g_hdr, nowS, handsOk && (handBits & 3u) == 3u);
+                // The off-hand grenade's game side (counts, availability, its state, the fuse's ticks), likewise.
+                if (menuOk) offhandNade.SetOn(menu.OffHandGrenadeOn());
+                if (handsOk) offhandNade.Poll(g_hdr, nowS);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -727,6 +735,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.hasView = lastMeta.hasView != 0;
                     hin.pouchShown = menuOk && menu.HolsterPageOpen();
                     hin.reloadSpotsShown = menuOk && menu.ReloadSpotsPageOpen();
+                    hin.tracked = trackedBits;
+                    for (int h = 0; h < 2; ++h) hin.gripActive[h] = pad.GripActive(session, h);
+                    hin.modMenu = menuOk && menu.Visible();
+                    hin.gameMenu = g_hdr->gameUiMenu != 0;
                     if (menuOk) {
                         float magAdj[4], boltAdj[4];
                         menu.SpotAdjust(0, magAdj);
@@ -737,6 +749,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     gunFlags = (handsOut.gunValid ? 1u : 0u) | (handsOut.twoHanded ? 2u : 0u) | (handsOut.gunHand == 0 ? 4u : 0u);
                 }
                 manualReload.Send(g_hdr, nowS);
+                if (handsOk) offhandNade.Send(g_hdr, nowS);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
                 g_hdr->viewDisplayTime = fs.predictedDisplayTime;
                 g_hdr->head = toPose(headLoc.pose);
@@ -751,6 +764,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 g_hdr->magPull = manualReload.MagPull();
                 g_hdr->magPose = manualReload.MagPose();
                 g_hdr->rack = manualReload.Rack();
+                g_hdr->nadeFlags = offhandNade.Flags();
+                g_hdr->nadePose = offhandNade.HandPose();
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
@@ -776,6 +791,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         pad.SetMaskedTrigger(h, handsOut.maskTrigger[h]);
                     }
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
+                    pad.SetMaskedButtons(handsOut.maskSwitch ? 0x0200 : 0);  // Xbox RB: the game's own grenade switch
                     pad.SetTestTargets(handsOut.target, handsOut.targetOk, handsOut.align, handsOut.alignOk);
                     pad.SetLeftHanded(handsOut.gunHand == 0);
                     if (menuOk) pad.SetSwapSticks(menu.SwapSticks());

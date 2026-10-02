@@ -46,5 +46,7 @@ bool HeadInWorld(float (&pos)[3], float& yaw, float& unitsPerMeter);
 bool VectorToWorld(const float (&xr)[3], float (&ue)[3]);
 // M8: the game's own camera of that view (before the head): location and pitch/yaw in radians.
 bool GameCamera(float (&loc)[3], float& pitch, float& yaw);
+// Camera.SteadyLanding: the parachute landing's view is held now (the hands' per-view work waits).
+bool LandingHeld();
 
 }  // namespace mohavr::view

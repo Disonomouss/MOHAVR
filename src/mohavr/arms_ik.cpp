@@ -217,11 +217,12 @@ struct Saved {
     std::uintptr_t comp = 0;
     std::vector<M4> bones;
 };
-Saved g_saved[4];
+constexpr int kBakeSlots = 6;  // the arms, the gun, a gun mid-switch, the off-hand grenade's carrier (+2 spare)
+Saved g_saved[kBakeSlots];
 
 // Render thread: which parts carry the move this frame.
-std::atomic<std::uintptr_t> g_bakedComp[4];
-std::atomic<DWORD> g_bakedTick[4];
+std::atomic<std::uintptr_t> g_bakedComp[kBakeSlots];
+std::atomic<DWORD> g_bakedTick[kBakeSlots];
 
 // Game thread: the move each part was last baked with (after CatchUp) -- what the muzzle flash and the brass are moved by
 // to sit on the drawn gun (muzzle.cpp).
@@ -245,7 +246,7 @@ void NoteBakedMove(std::uintptr_t comp, const M4& d) {
 void MarkBaked(std::uintptr_t comp) {
     const DWORD now = GetTickCount();
     int slot = 0;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < kBakeSlots; ++i) {
         if (g_bakedComp[i].load(std::memory_order_relaxed) == comp) { slot = i; break; }
         if (now - g_bakedTick[i].load(std::memory_order_relaxed) > now - g_bakedTick[slot].load(std::memory_order_relaxed)) slot = i;
     }
@@ -887,7 +888,7 @@ bool IsBaked(std::uintptr_t comp) {
     // Debug.MuzzleFreeze pauses the world, so nothing is re-baked: the last bake stays valid, else the proxy hook would
     // move the baked parts a second time after 250 ms (the frozen frame showed the gun turned ~20 deg off the flash).
     const DWORD window = g_cfg.debugMuzzleFreeze > 0 ? 0xFFFFFFFFu : 250u;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < kBakeSlots; ++i)
         if (g_bakedComp[i].load(std::memory_order_relaxed) == comp && now - g_bakedTick[i].load(std::memory_order_relaxed) < window)
             return true;
     return false;

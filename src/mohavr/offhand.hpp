@@ -8,10 +8,17 @@
 // throw path can't be used with a gun in the hand: ProjectileFire's IncrementFlashCount plays the GUN's fire effects,
 // and FireAmmunition / OnProjectileToss reach the active weapon's attachment and the shared PendingFire.
 //
-// Spike S1 (tests only, Debug.GameCommands): "mohavr nade" (a dump), "mohavr nade throw <frag|gammon|stick|any>
-// <hand|eye> <vx> <vy> <vz> [fuse s]" (velocity in the headset's LOCAL frame, m/s, times Hands.ThrowScale).
+// The host owns the interaction (src/host/offhand.cpp: take at a grenade holster, pin, cook, throw, put back) and sends
+// ordered events (shared block v20); the game executes them, keeps the fuse clock in game time, and publishes what a take
+// can get and whether it can happen now. The grenade is counted out only when it flies.
+//
+// Tests (Debug.GameCommands): "mohavr nade" (a dump), "mohavr nade throw <frag|gammon|stick|any> <hand|eye> <vx> <vy> <vz>
+// [fuse s]" (a launch without the host; velocity in the headset's LOCAL frame, m/s, times OffHand.ThrowScale), "mohavr
+// nade carrier <frag|gammon|stick|off>".
 #pragma once
 #include <cstdint>
+
+#include "../common/shared_frame.hpp"
 
 namespace mohavr {
 struct Config;
@@ -19,11 +26,12 @@ struct Config;
 
 namespace mohavr::offhand {
 
-void Configure(const Config& cfg);
+// `bake`: the arm bake is installed (armsik::Install) -- it places the grenade drawn in the hand; without it none is drawn.
+void Configure(const Config& cfg, bool bake);
 // A test-channel line (game thread): true when it was an off-hand command (handled here).
 bool TestCommand(const wchar_t* line);
-// Per Draw (game thread, after the reload): the thrown grenades followed until they go off.
-void OnDraw();
+// Per Draw (game thread, after the reload): the host's events, the fuse, the status block, the thrown grenades.
+void OnDraw(shared::Header* hdr);
 
 // Spike S2 ("mohavr nade carrier <frag|gammon|stick|off>"): the grenade drawn in the off hand -- its component (attached
 // to the arms; 0 when none), and where its mesh goes in the world (rows forward, right, up, origin; the mirror world in

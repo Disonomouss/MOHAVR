@@ -508,7 +508,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     if (arr && arr[1] >= 1 && arr[0]) muzzle::OnDraw(*reinterpret_cast<const std::uintptr_t*>(arr[0]));
     RunHostCommand(arr, hdr);
     reload::OnDraw(hdr);
-    offhand::OnDraw();
+    offhand::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1429,8 +1429,8 @@ bool Install(const Config& cfg) {
     aim::Install(cfg);        // M7: needs the view hook (PoseToWorld)
     viewmodel::Install(cfg);  // M8: likewise (GameCamera, PoseFrameToWorld)
     throwing::Configure(cfg);
-    offhand::Configure(cfg);
     const bool armsOk = armsik::Install(cfg);  // M8: the arms reach from the body to the gun
+    offhand::Configure(cfg, armsOk);          // (the grenade drawn in the off hand needs the bake)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);
@@ -1497,6 +1497,8 @@ bool VectorToWorld(const float (&xr)[3], float (&ue)[3]) {
     ue[2] = d.z * s;
     return true;
 }
+
+bool LandingHeld() { return g_landingHeld; }
 
 bool GameCamera(float (&loc)[3], float& pitch, float& yaw) {
     if (!g_world.valid) return false;

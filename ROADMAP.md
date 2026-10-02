@@ -120,7 +120,8 @@ gun stays in the gun hand (the player's request). *As found:* the game holds one
 grenade weapon can launch its own projectile through `EALAWeapon.SpawnProjectile` (ProcessEvent), and a clone of the
 grenade's first-person mesh can be drawn in the off hand; both spikes pass (ENGINE-NOTES 5bb, `OFFHAND-DESIGN.md`).
 Phases: the host's state machine and shared block v20, the hand's grip, the carrier, feedback, then a headset round; a
-second firing gun is not planned (OFFHAND-DESIGN 15).
+second firing gun is not planned (OFFHAND-DESIGN 15). **Phase 1 done 2026-10-02** (D40, ENGINE-NOTES 5bc): the take, pin,
+cook, throw and put back behind `[OffHand] Grenade`, with the grenade drawn in the open hand; headset round 43.
 **Accept [S]:** a grenade taken, armed and thrown by the off hand flies from the hand, goes off at its fuse, counts down
 the HUD, and the gun in hand is untouched. **[H]:** it feels natural, and never throws or drops by accident.
 
