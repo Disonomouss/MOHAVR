@@ -18,6 +18,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "offhand.hpp"
+#include "offpistol.hpp"
 #include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
@@ -217,7 +218,7 @@ struct Saved {
     std::uintptr_t comp = 0;
     std::vector<M4> bones;
 };
-constexpr int kBakeSlots = 6;  // the arms, the gun, a gun mid-switch, the off-hand grenade's carrier (+2 spare)
+constexpr int kBakeSlots = 8;  // the arms, the gun, a gun mid-switch, the off hand's item, one ageing out (+3 spare)
 Saved g_saved[kBakeSlots];
 
 // Render thread: which parts carry the move this frame.
@@ -482,9 +483,16 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         g_freeRel = relM;
         g_freeRelTick = GetTickCount();
         M4 target = Mul(relM, offCtrl);
-        // Round 31: the manual reload's grip (the game's reload animation's hand on the magazine / handle) takes over.
+        // The off-hand pistol (OFFPISTOL-DESIGN 3.3): the hand on the drawn pistol, the game's pistol grip mirrored --
+        // computed from the same off controller frame and catch-up as the pistol's bake, so they can't separate. Else,
+        // round 31: the manual reload's grip (the game's reload animation's hand on the magazine / handle) takes over.
         float gt[16];
-        if (reload::GripNow(gt, g_gripFingers, g_gripNames)) {
+        if (offpistol::HandOnGun(gt, g_gripFingers, g_gripNames)) {
+            M4 onGun;
+            std::memcpy(onGun.m, gt, sizeof(onGun.m));
+            target = Mul(onGun, offCtrl);
+            gripOn = true;
+        } else if (reload::GripNow(gt, g_gripFingers, g_gripNames)) {
             std::memcpy(target.m, gt, sizeof(target.m));
             gripOn = true;
         }
@@ -724,10 +732,19 @@ void BakeCarrier(std::uintptr_t comp) {
     sv->comp = comp;
     sv->bones.assign(bones, bones + num);
     float gw[16];
-    if (offhand::CarrierFrame(gw)) {
+    const bool pistol = comp == offpistol::CarrierComponent();
+    if (pistol ? offpistol::CarrierFrame(gw) : offhand::CarrierFrame(gw)) {
         M4 l2w, G;
         std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
         std::memcpy(G.m, gw, sizeof(G.m));
+        // The body's move since the view the frame comes from (Weapon.CatchUp), as the arms' hand gets it: the hand and
+        // the item in it can't separate while walking.
+        float w[16];
+        if (g_cfg.catchUp && viewmodel::BodyMoveSinceView(w)) {
+            M4 W;
+            std::memcpy(W.m, w, sizeof(W.m));
+            G = Mul(G, W);
+        }
         const M4 k = Mul(G, AffineInverse(l2w));
         for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], k);
     } else {
@@ -753,7 +770,7 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
-    if (comp == offhand::CarrierComponent()) {  // the off-hand grenade: needs no move, so before its test
+    if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent()) {  // the off hand's item: before the move test
         BakeCarrier(comp);
         return;
     }

@@ -151,6 +151,33 @@ call helper factored out of offhand.cpp into `src/mohavr/script_call.cpp/.hpp` (
   1): place it, don't collapse it.
 - `CreatePlayerKillStimulus` reads the killer's `Pawn.Weapon` (a sniper rifle differs); minor.
 
+### 0.3 Spike S2, run (2026-10-02, the main session) -- PASS
+
+Built as 7.2 says, with these differences:
+- the carrier is shared code (`src/mohavr/carrier.cpp`, the grenade's too);
+- the fit grip is read from the inis (the player's, else the shipped one) until the host publishes it in Phase 1;
+- the C96 collapse is left for Phase 1.
+
+Logs `logs/modlogs/pistol6-*` and `pistol7-*`; ENGINE-NOTES 5bf.
+- **Pass 1, the clone.** Mesh `US_M1911A1_Pistol_Rigged` / `DE_Mauser_Rigged`, Outer P, PhysicsAsset none, bAttached 1,
+  FOV 65. No gun-path bake of a clone.
+- **Pass 2, placement** (Colt fit 42 11 -11). Mesh origin (-4.41, -0.41, -1.64) and muzzle (15.19, -0.41, 5.76) in the
+  off controller's frame. The bore is along the controller's forward by construction (fit angle 0).
+- **Pass 3, the hand.** The hand bone sits at (-14.95, -2.16, -3.13). The captures (`logs/shots/pistol6-on_zoom.png`,
+  `-raised_zoom`) show the fingers closed on the grip.
+- **Pass 4, catch-up.** Walking (`pistol6-walk`), the hand and the gun stay together. The distance was not logged.
+- **Pass 5, a weapon switch.** The gun hand drew the Colt itself while the clone was attached, then went back to the
+  BAR. No empty key, no parachute path (`pistol6-akimbo`: a Colt in each hand).
+- **Pass 6, left-hand mode.** The clone is in the right hand, drawn solid (`pistol6-lefthand`).
+- **Pass 7, lifetime.** Five cycles and a `Suicide`: no fault, and the next attach is refused with no pistol.
+- **The C96** (`pistol7-pair`). `GiveWeapon` gives it at level -1. It is carried beside the Colt in the gun hand: the
+  inventory chain's other pistol.
+- **Not run:**
+  - the C96's parts at levels -1..2 (Phase 1 handles its `clip` bone and upgrade parts, 3.1);
+  - bakes per Draw;
+  - `lastTwist[1]`;
+  - the 20-cycle count.
+
 ---------------------------------------------------------------------------------------------------------------------
 
 ## 1. What I re-checked, and where the notes disagree

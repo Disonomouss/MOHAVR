@@ -2072,6 +2072,15 @@ bool GripNow(float (&target)[16], const float*& fingers, const char* const*& nam
     return true;
 }
 
+bool GripRows(const std::string& gun, const char* kind, const float*& hand, const float*& fingers, const char* const*& names) {
+    const GripData* g = FindGrip(gun, kind);
+    if (!g) return false;
+    hand = g->hand;
+    fingers = &g->fingers[0][0];
+    names = kGripFingers;
+    return true;
+}
+
 bool PumpShift(float (&d)[3]) {
     if (!g_pumpShift.on || GetTickCount() - g_pumpShift.tick > 100) return false;
     for (int i = 0; i < 3; ++i) d[i] = g_pumpShift.d[i];

@@ -9,6 +9,7 @@
 
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "carrier.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -187,82 +188,12 @@ std::uintptr_t Launch(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t g,
     return proj;
 }
 
-// --- the carrier: the grenade drawn in the off hand while it is held ------------------------------------------------
-// A clone of the grenade weapon's first-person pickup mesh (DroppedPickupMesh, the same skeletal mesh as its attachment;
-// the game never attaches it while the grenade is in the inventory), attached to the arms at their Camera bone and baked
-// at the off hand by the arms' bake (arms_ik.cpp; collapsed -- nothing drawn -- when there is no off-hand frame).
-struct Carrier {
-    std::uintptr_t comp = 0, arms = 0, pawn = 0;
-} g_carrier;
+// --- the carrier: the grenade drawn in the off hand while it is held (carrier.cpp) ------------------------------------
+carrier::Slot g_carrier;
 
-template <class T>
-void CopyField(std::uintptr_t to, std::uintptr_t from, const char* name) {
-    const int o = names::PropertyOffset(from, name), p = names::PropertyOffset(to, name);
-    if (o >= 0 && p >= 0) std::memcpy(reinterpret_cast<void*>(to + p), reinterpret_cast<const void*>(from + o), sizeof(T));
-}
+void CarrierDetach() { carrier::Detach(g_carrier, "offhand", g_cfg.debugOffHandTrace); }
 
-void CarrierDetach() {
-    if (!g_carrier.comp) return;
-    if (g_carrier.arms && g_carrier.pawn == aim::LocalPlayerPawn()) {
-        Call detach(g_carrier.arms, "DetachComponent");
-        if (detach.Set("Component", &g_carrier.comp, sizeof(g_carrier.comp)) && detach.Run() && g_cfg.debugOffHandTrace)
-            MLOG("offhand: carrier %s detached", names::Name(g_carrier.comp).c_str());
-    }
-    g_carrier = Carrier{};
-}
-
-bool CarrierAttach(std::uintptr_t pawn, std::uintptr_t g) {
-    CarrierDetach();
-    const std::uintptr_t arms = Obj(pawn, "FPArms"), tmpl = Obj(g, "DroppedPickupMesh");
-    if (!arms || !tmpl) {
-        MLOG("offhand: carrier -- arms %s, pickup mesh %s: none (nothing drawn in the hand)", names::Name(arms).c_str(),
-             names::Name(tmpl).c_str());
-        return false;
-    }
-    Call clone(tmpl, "Clone");
-    if (!clone.Set("InOuter", &g, sizeof(g)) || !clone.Run()) return false;
-    const std::uintptr_t c = clone.ReturnObject();
-    if (!c || !names::IsA(c, "MOHASkeletalMeshComponent")) {
-        MLOG("offhand: carrier -- Clone gave %s (%s)", names::Name(c).c_str(), names::ClassName(c).c_str());
-        return false;
-    }
-    // Drawn as the arms are: their depth group, light environment, LOD and first-person FOV (the proxy hook then draws it
-    // in true 3D like them, through the mirror in left-hand mode); no collision, their shadow settings.
-    CopyField<std::uint8_t>(c, arms, "DepthPriorityGroup");
-    CopyField<std::uintptr_t>(c, arms, "LightEnvironment");
-    CopyField<int>(c, arms, "ForcedLodModel");
-    CopyField<int>(c, arms, "iMinLODLevel");
-    std::memcpy(reinterpret_cast<void*>(c + addr::kMohaSkelMeshFov), reinterpret_cast<const void*>(arms + addr::kMohaSkelMeshFov), 4);
-    const int bo = names::PropertyOffset(c, "fCustomBoundsSize");
-    if (bo >= 0) *reinterpret_cast<float*>(c + bo) = 200.0f;
-    for (const char* b : {"CollideActors", "BlockActors", "BlockZeroExtent", "BlockNonZeroExtent", "BlockRigidBody"}) SetBit(c, b, false);
-    SetBit(c, "CastShadow", Bit(arms, "CastShadow"));
-    SetBit(c, "bCastDynamicShadow", Bit(arms, "bCastDynamicShadow"));
-    // The arms' 'Camera' bone's FName (8 bytes) from their skeleton.
-    const std::uintptr_t mesh = Obj(arms, "SkeletalMesh");
-    const std::uintptr_t data = mesh ? names::ReadPointer(mesh + addr::kSkelMeshRefSkeleton) : 0;
-    const int num = mesh ? static_cast<int>(ReadU32(mesh + addr::kSkelMeshRefSkeleton + 4)) : 0;
-    std::uint8_t bone[8] = {};
-    bool found = false;
-    for (int i = 0; i < num && i < 512 && data && !found; ++i)
-        if (names::NameAt(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride) == "Camera") {
-            std::memcpy(bone, reinterpret_cast<const void*>(data + static_cast<std::uintptr_t>(i) * addr::kMeshBoneStride), 8);
-            found = true;
-        }
-    Call attach(arms, "AttachComponent");
-    const float one[3] = {1.0f, 1.0f, 1.0f};  // RelativeScale: no default through ProcessEvent
-    if (!found || !attach.Set("Component", &c, sizeof(c)) || !attach.Set("BoneName", bone, 8) ||
-        !attach.Set("RelativeScale", one, sizeof(one)) || !attach.Run()) {
-        MLOG("offhand: carrier -- not attached (the Camera bone %s)", found ? "found" : "missing");
-        return false;
-    }
-    g_carrier = Carrier{c, arms, pawn};
-    if (!Bit(c, "bAttached")) MLOG("offhand: carrier %s -- AttachComponent left it unattached", names::Name(c).c_str());
-    else if (g_cfg.debugOffHandTrace)
-        MLOG("offhand: carrier %s (mesh %s) attached to the arms' Camera bone", names::Name(c).c_str(),
-             names::Name(Obj(c, "SkeletalMesh")).c_str());
-    return true;
-}
+bool CarrierAttach(std::uintptr_t pawn, std::uintptr_t g) { return carrier::Attach(g_carrier, pawn, g, "offhand", g_cfg.debugOffHandTrace); }
 
 // --- the held grenade (OFFHAND-DESIGN 6.2) ----------------------------------------------------------------------------
 enum State { kNone = 0, kHeld = 1, kArmed = 2, kCooking = 3 };
@@ -719,7 +650,7 @@ void OnDraw(shared::Header* hdr) {
     // A new local pawn (death, a level load): what was held is gone, as the game's own would be.
     if (pawn != g_pawn) {
         if (g_hold.state != kNone) MLOG("offhand: a new pawn -- the held %s is gone", kTypeName[g_hold.type]);
-        g_carrier = Carrier{};  // (attached to the old pawn's arms)
+        g_carrier = carrier::Slot{};  // (attached to the old pawn's arms)
         g_hold = Hold{};
         g_pawn = pawn;
         ++g_pawnSeq;
@@ -784,7 +715,7 @@ void OnDraw(shared::Header* hdr) {
     Publish(hdr, pawn, inv, avail, holdOk, off);
 }
 
-std::uintptr_t CarrierComponent() { return g_carrier.pawn && g_carrier.pawn == aim::LocalPlayerPawn() ? g_carrier.comp : 0; }
+std::uintptr_t CarrierComponent() { return carrier::Component(g_carrier); }
 
 bool CarrierFrame(float (&gw)[16]) {
     if (!CarrierComponent()) return false;

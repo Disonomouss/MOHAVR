@@ -27,6 +27,9 @@ bool LastGun(float (&l2w)[16], std::string& key);
 // Round 31: the off hand's reload grip this frame (from the game's reload animations): where the support hand goes
 // (world, row-major) and its 15 fingers' frames in the hand's (4x3 each, in `names` order); false = no grip now.
 bool GripNow(float (&target)[16], const float*& fingers, const char* const*& names);
+// A grip's rows from reload_grips.inc: the hand in the gripped bone's frame (4x3, row-major) and the 15 fingers in the
+// hand's (15 x 4x3, `names` order) -- e.g. the off-hand pistol's "offgun" / "offgun_pull" (OFFPISTOL-DESIGN 3.3).
+bool GripRows(const std::string& gun, const char* kind, const float*& hand, const float*& fingers, const char* const*& names);
 // GOAL A3: a pump gun's pump drawn back by the off hand -- its move in the world this frame (the bake's world: the
 // mirror world while mirrored), for the support hand riding it while two-handed; false = none now.
 bool PumpShift(float (&d)[3]);

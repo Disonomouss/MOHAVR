@@ -13,10 +13,13 @@
 #include "addresses.hpp"
 #include "aim.hpp"
 #include "bridge.hpp"
+#include "carrier.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
+#include "reload.hpp"
 #include "script_call.hpp"
+#include "viewmodel.hpp"
 #include "vr_view.hpp"
 
 namespace mohavr::offpistol {
@@ -527,9 +530,134 @@ void Fire(const wchar_t* from, bool head, bool main, int repeat) {
                  expAfter[i].points, expBefore[i].level, expAfter[i].level);
 }
 
+
+// --- spike S2: the pistol drawn in the off hand (OFFPISTOL-DESIGN 3.1-3.3) ---------------------------------------------
+// A clone of the pistol's pickup mesh (carrier.cpp) placed as the main pistol is, mirrored onto the off controller:
+// Gw_off = M_left x F_off (x W in the bake), M_left = S x M_right x M_y with M_right = the pistol mesh in the game camera's
+// frame at its idle, its origin moved back by the fit's grip -- the same axes, the origin's sideways part negated. The off
+// hand snaps onto it with the game's own pistol grip, mirrored (reload_grips.inc "offgun").
+carrier::Slot      g_carrier;
+std::uintptr_t     g_carried = 0;  // the pistol whose clone it is
+float              g_mLeft[16];    // the pistol mesh in the off controller's frame (rows X, Y, Z, origin)
+float              g_hand[16];     // the off hand in the pistol mesh's frame
+const float*       g_fingers = nullptr;
+const char* const* g_fingerNames = nullptr;
+bool               g_haveGrip = false;
+
+// out = a x b (row-major 4x4, Unreal's row vectors).
+void Mul16(const float* a, const float* b, float* out) {
+    float r[16];
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            float s = 0.0f;
+            for (int k = 0; k < 4; ++k) s += a[4 * i + k] * b[4 * k + j];
+            r[4 * i + j] = s;
+        }
+    std::memcpy(out, r, sizeof(r));
+}
+
+// The pistol mesh's origin in the game camera's frame at its idle (forward, right, up; units), its axes the camera's:
+// offline from the arms' idle (draw-hold 4.1 -- the Colt's matches viewmodel's in-game log to 0.05 units).
+bool IdleOrigin(const std::string& key, float (&o)[3]) {
+    if (key == "Attachment_Colt45") {
+        o[0] = 37.59f, o[1] = 11.41f, o[2] = -12.64f;
+        return true;
+    }
+    if (key == "Attachment_Mauser") {
+        o[0] = 38.05f, o[1] = 11.34f, o[2] = -12.94f;
+        return true;
+    }
+    return false;
+}
+
+std::wstring ModuleDir() {
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&ModuleDir), &self);
+    wchar_t path[MAX_PATH] = L"";
+    const DWORD n = GetModuleFileNameW(self, path, MAX_PATH);
+    std::wstring dir(path, n);
+    const size_t slash = dir.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? dir : dir.substr(0, slash);
+}
+
+// The pistol's fit grip ([GunFit] <key> = grip forward right up ...: the player's, else the shipped one). Spike only: in
+// Phase 1 the host publishes it.
+bool FitGrip(const std::string& key, float (&g)[3], const char*& from) {
+    const std::wstring wkey(key.begin(), key.end());
+    wchar_t v[128] = L"", local[MAX_PATH] = L"";
+    const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    if (n && n < MAX_PATH) {
+        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", v, 128, (std::wstring(local) + L"\\MOHAVR\\MOHAVR.user.ini").c_str());
+        from = "the player's";
+    }
+    if (!v[0]) {
+        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", v, 128, (ModuleDir() + L"\\MOHAVR.ini").c_str());
+        from = "the shipped";
+    }
+    return v[0] && swscanf_s(v, L"%f %f %f", &g[0], &g[1], &g[2]) == 3;
+}
+
+bool CarrierOn(std::uintptr_t pawn, std::uintptr_t p) {
+    const std::string key = names::Name(Obj(p, "AttachmentClass"));
+    float o[3], grip[3] = {34.0f, 11.0f, -17.0f};
+    const char* from = "the global default";
+    if (!IdleOrigin(key, o)) {
+        MLOG("offpistol: carrier -- no idle pose for %s", key.c_str());
+        return false;
+    }
+    if (!FitGrip(key, grip, from)) from = "the global default";
+    const float ox = o[0] - grip[0], oy = o[1] - grip[1], oz = o[2] - grip[2];
+    const float m[16] = {0, -1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, ox, -oy, oz, 1};
+    std::memcpy(g_mLeft, m, sizeof(m));
+    const float* hand = nullptr;
+    g_haveGrip = reload::GripRows(key, "offgun", hand, g_fingers, g_fingerNames);
+    if (g_haveGrip) {
+        const float h[16] = {hand[0], hand[1], hand[2], 0, hand[3], hand[4], hand[5], 0, hand[6], hand[7], hand[8], 0,
+                             hand[9], hand[10], hand[11], 1};
+        std::memcpy(g_hand, h, sizeof(h));
+    }
+    if (!carrier::Attach(g_carrier, pawn, p, "offpistol", true)) return false;
+    g_carried = p;
+    // Where it is drawn, in the off controller's frame (forward, right, up): the mesh origin, the muzzle (tag_barrell, the
+    // Colt's (0, -7.40, 19.60) / the C96's (0, -7.70, 27.26) in the mesh), the hand bone.
+    const bool colt = key == "Attachment_Colt45";
+    const float tb[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, colt ? -7.40f : -7.70f, colt ? 19.60f : 27.26f, 1};
+    float muzzle[16], rel[16];
+    Mul16(tb, g_mLeft, muzzle);
+    Mul16(g_hand, g_mLeft, rel);
+    const std::uintptr_t c = g_carrier.comp;
+    MLOG("offpistol: carrier %s -- mesh %s, Outer %s, PhysicsAsset %s, bAttached %d, FOV %.0f; %s fit grip %.1f %.1f %.1f; in the off "
+         "controller's frame: mesh origin %.2f %.2f %.2f, muzzle %.2f %.2f %.2f, the hand %.2f %.2f %.2f (grip %s)",
+         names::Name(c).c_str(), names::Name(Obj(c, "SkeletalMesh")).c_str(), names::Name(names::Outer(c)).c_str(),
+         names::Name(Obj(c, "PhysicsAsset")).c_str(), Bit(c, "bAttached") ? 1 : 0, Float(c, "FOV", -1.0f), from, grip[0], grip[1],
+         grip[2], g_mLeft[12], g_mLeft[13], g_mLeft[14], muzzle[12], muzzle[13], muzzle[14], rel[12], rel[13], rel[14],
+         g_haveGrip ? "offgun" : "none: the free hand");
+    return true;
+}
+
 }  // namespace
 
 void Configure(const Config& cfg) { g_cfg = cfg; }
+
+std::uintptr_t CarrierComponent() { return carrier::Component(g_carrier); }
+
+bool CarrierFrame(float (&gw)[16]) {
+    if (!CarrierComponent()) return false;
+    float gun[16], off[16];
+    bool offValid = false, two = false;
+    if (!viewmodel::HandFrames(gun, off, offValid, two) || !offValid) return false;
+    Mul16(g_mLeft, off, gw);
+    return true;
+}
+
+bool HandOnGun(float (&rel)[16], const float*& fingers, const char* const*& names) {
+    if (!CarrierComponent() || !g_haveGrip) return false;
+    Mul16(g_hand, g_mLeft, rel);
+    fingers = g_fingers;
+    names = g_fingerNames;
+    return true;
+}
 
 bool TestCommand(const wchar_t* line) {
     if (std::wcsncmp(line, L"mohavr pistol", 13) != 0) return false;
@@ -576,6 +704,15 @@ bool TestCommand(const wchar_t* line) {
                  wo >= 0 ? static_cast<int>(ReadU32(ac + wo + 4)) : -1, Float(ac, "PlaybackTime", -1.0f));
         }
         if (!found) MLOG("offpistol: sound -- no AudioComponent of WorldInfo plays %s", names::Name(g_cue).c_str());
+    } else if (!std::wcsncmp(line, L"mohavr pistol carrier", 21)) {
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        if (std::wcsstr(line, L"off")) {
+            carrier::Detach(g_carrier, "offpistol", true);
+            g_carried = 0;
+        } else {
+            const std::uintptr_t p = Pistol(pawn, Obj(pawn, "InvManager"), Obj(pawn, "Weapon"));
+            if (!p || !CarrierOn(pawn, p)) MLOG("offpistol: carrier -- not drawn (the pistol %s)", names::Name(p).c_str());
+        }
     } else if (!std::wcscmp(line, L"mohavr pistol refill")) {
         const std::uintptr_t pawn = aim::LocalPlayerPawn();
         const std::uintptr_t inv = Obj(pawn, "InvManager");

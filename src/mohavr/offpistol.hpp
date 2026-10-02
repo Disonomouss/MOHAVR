@@ -12,6 +12,7 @@
 // "mohavr pistol" (a dump), "mohavr pistol fire <eye|hand|enemy> [head] [main]", "mohavr pistol upgrade",
 // "mohavr pistol enemy", "mohavr pistol loop <n>".
 #pragma once
+#include <cstdint>
 
 namespace mohavr {
 struct Config;
@@ -22,5 +23,12 @@ namespace mohavr::offpistol {
 void Configure(const Config& cfg);
 // A test-channel line (game thread): true when it was an off-hand pistol command (handled here).
 bool TestCommand(const wchar_t* line);
+
+// Spike S2 ("mohavr pistol carrier on|off"): the pistol drawn in the off hand -- its clone (0 when none), where its mesh is
+// drawn (rows X, Y, Z, origin; the mirror world in left-hand mode, as viewmodel::HandFrames; before the bake's catch-up W),
+// and the off hand on it: the hand's frame in the off controller's frame and its 15 fingers (reload_grips.inc's order).
+std::uintptr_t CarrierComponent();
+bool CarrierFrame(float (&gw)[16]);
+bool HandOnGun(float (&rel)[16], const float*& fingers, const char* const*& names);
 
 }  // namespace mohavr::offpistol

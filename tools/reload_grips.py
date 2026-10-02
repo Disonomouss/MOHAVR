@@ -155,6 +155,15 @@ MIRRORED = [
     # GOAL A3: the M12's shell under the loading port, nose up, in the right hand's fingertips (the looping reload's f0).
     ('Attachment_M12CombatShotgun', 'shotgun_reload_loop', 'US_M12shotgun_AnimSet', 'shotgun_gun_reload_loop',
      'US_M12shotgun_Rigged', [('hold', 'shell', 0)], 'VM_AnimSet_NoBazooka'),
+    # The off-hand pistol (OFFPISTOL-DESIGN 3.3): the game's own one-handed pistol grip -- the right hand on the whole gun
+    # (its RootOffset, the mesh frame) at the idle's frame 0, rigid over the loop -- mirrored into the left hand; and the
+    # fire's frame 0 (the same hand, the index finger on the pulled trigger).
+    ('Attachment_Colt45', 'colt45_idle', 'US_M1911A1_AnimSet', 'colt45_gun_idle', 'US_M1911A1_Pistol_Rigged',
+     [('offgun', 'RootOffset', 0)], 'VM_AnimSet_NoBazooka'),
+    ('Attachment_Colt45', 'colt45_fire', 'US_M1911A1_AnimSet', 'colt45_gun_fire', 'US_M1911A1_Pistol_Rigged',
+     [('offgun_pull', 'RootOffset', 0)], 'VM_AnimSet_NoBazooka'),
+    ('Attachment_Mauser', 'mauser_idle', 'Mauser_AnimSet', 'mauser_gun_idle', 'DE_Mauser_Rigged',
+     [('offgun', 'RootOffset', 0)], 'VM_AnimSet_NoBazooka'),
 ]
 # GOAL A4: grips the rules above can't find, taken from the LEFT hand at an explicit frame (key, arms seq, gun AnimSet, gun
 # seq, psk, [(kind, part bone, frame)], the arms' AnimSet). The C96 below upgrade 1 (a per-level line, key@0) loads its

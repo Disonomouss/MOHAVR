@@ -1757,6 +1757,56 @@ VR prior art -- a designer and two adversarial verifiers) wrote `OFFPISTOL-DESIG
   `mohavr pistol kill [main]`, `mohavr pistol enemy`, `mohavr pistol upgrade`, `mohavr pistol refill`, `mohavr pistol
   loop <n>`, `mohavr pistol sound`.
 
+## 5bf. The off-hand pistol, spike S2: the pistol in the off hand (2026-10-02)
+
+The pistol drawn in the off hand with the hand closed on it (`OFFPISTOL-DESIGN.md` 7.2; test command `mohavr pistol
+carrier on|off`, nothing changes in play).
+- **The carrier is shared:** `src/mohavr/carrier.cpp` (`Attach` / `Detach` / `Component` on a slot) holds the grenade's
+  recipe (5bb), now used by both. New in it: the clone's `PhysicsAsset` cleared (the pistols' pickup meshes have one),
+  and the slot published before `AttachComponent` (a first update can never take the clone for the gun).
+- **The frame:** `Gw_off = M_left x F_off x W`. `M_left` has rows X (0,-1,0), Y (0,0,-1), Z (1,0,0) and origin
+  (O_idle - fit.grip) with its right component negated. O_idle (the pistol mesh's origin at the gun hand's idle, in the
+  game camera's frame) is (37.59, 11.41, -12.64) for the Colt and (38.05, 11.34, -12.94) for the C96. F_off is
+  `viewmodel::HandFrames`' off frame (the mirror world in left-hand mode). W is `BodyMoveSinceView`, now applied to the
+  grenade's carrier as well (the design's 1.1 gap).
+- **The hand on it:** `tools/reload_grips.py` MIRRORED rows `offgun` (the right hand in `colt45_idle` / `mauser_idle`
+  frame 0, mirrored, part = identity) and `offgun_pull` (`colt45_fire` frame 0). arms_ik's free-hand branch takes
+  `target = (H x M_left) x offCtrl` and the row's 15 fingers before `reload::GripNow`.
+- **Bookkeeping:** viewmodel's weapon-in-hand check skips the pistol's clone (its Outer is the pistol, not an
+  attachment); `g_parts` 8; arms_ik `kBakeSlots` 8.
+- [S] `pistol6`:
+  - the Colt beside the BAR: standing, raised and walking;
+  - the gun hand drawing the Colt itself;
+  - left-hand mode;
+  - five attach / detach cycles and a death.
+
+  [S] `pistol7`: the C96 (`GiveWeapon MOHAGameNonNative.MOHAMauser`) carried beside the Colt in the gun hand. With
+  `IM.PistolWeapon` in the hand, the pistol is the inventory chain's other one.
+
+  Results:
+  - **The clone:** a MOHASkeletalMeshComponent, mesh `US_M1911A1_Pistol_Rigged` / `DE_Mauser_Rigged`, Outer the pistol,
+    no PhysicsAsset, bAttached 1, FOV 65.
+  - **Placement**, in the off controller's frame with the shipped Colt fit (42, 11, -11), as designed:
+
+    | | Logged | Designed |
+    |---|---|---|
+    | Mesh origin | (-4.41, -0.41, -1.64) | (-4.4, -0.4, -1.6) |
+    | Muzzle | (15.19, -0.41, 5.76) | (15.2, -0.44, 5.8) |
+    | Hand bone | (-14.95, -2.16, -3.13) | (-14.94, -2.13, -3.09) |
+
+    The C96 with a (46, 10, -10) fit: origin (-7.95, -1.34, -2.94), muzzle (19.31, -1.34, 4.76), the hand (-17.47,
+    -3.09, -4.43).
+  - **The bake and the weapon key:** no gun-path bake of a clone. No `weapon in hand: ''` while it is carried; one
+    appears only after the death.
+  - **The captures:** the pistol is closed in the hand, barrel forward. This holds standing, raised, walking, beside the
+    gun hand's own Colt, and in the right hand in left-hand mode. The free hand is back after the detach.
+- **`GiveWeapon` gives the C96 at upgrade level -1** (30 damage, clip 10). `IM.PistolWeapon` stays the Colt.
+- **Open for Phase 1:**
+  - the C96's `clip` and upgrade parts on the clone (no AnimTree: the reference pose);
+  - bakes per Draw;
+  - the forearm twist against the free hand's;
+  - the hand-to-grip distance logged while strafing. The walking captures show them together.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

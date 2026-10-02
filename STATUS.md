@@ -184,8 +184,18 @@ address-space budget for D3D9On12.
    off hand?"): researched and proven feasible** -- a research workflow wrote `OFFPISTOL-DESIGN.md`, and its spike S1
    passes in the simulator: the holstered Colt fires from the off hand while the BAR stays in hand (the game's own trace,
    damage and death, the kill recorded for the Colt, its report playing; the BAR untouched), through the layer below the
-   game's fire states (ENGINE-NOTES 5be). Test commands only (`mohavr pistol ...`); nothing changes in play. Next, if the
-   player wants it: S2 (the pistol drawn in the off hand), then OFFPISTOL-DESIGN section 8, Phase 1, behind
+   game's fire states (ENGINE-NOTES 5be). Test commands only (`mohavr pistol ...`); nothing changes in play.
+   **Spike S2 passes** (ENGINE-NOTES 5bf): the Colt or the C96 is drawn in the off hand with the hand closed on its grip
+   (standing, walking, beside a Colt in the gun hand, and in left-hand mode), through a carrier now shared with the
+   grenade.
+   The player's choices:
+   - a click draws the pistol and another puts it back;
+   - it refills in its holster;
+   - a second dot;
+   - a chest holster, with a menu page to choose what each holster holds;
+   - two pistols.
+
+   ("It is unbalanced but it is fun so I don't mind.") Next: OFFPISTOL-DESIGN section 8, Phase 1, behind
    `[OffHand] Pistol=0`.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and

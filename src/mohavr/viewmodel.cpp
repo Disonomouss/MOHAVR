@@ -17,6 +17,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "offhand.hpp"
+#include "offpistol.hpp"
 #include "patch.hpp"
 #include "vr_view.hpp"
 
@@ -78,12 +79,12 @@ struct PartSeen {
     std::atomic<std::uintptr_t> comp{0};
     std::atomic<DWORD>          tick{0};
 };
-PartSeen g_parts[4];
+PartSeen g_parts[8];  // the arms, the gun, the off hand's item, a gun mid-switch, ... (OFFPISTOL-DESIGN 10)
 
 void NotePart(std::uintptr_t comp) {
     const DWORD now = GetTickCount();
     int oldest = 0;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 8; ++i) {
         if (g_parts[i].comp.load(std::memory_order_relaxed) == comp) {
             g_parts[i].tick.store(now, std::memory_order_relaxed);
             return;
@@ -374,7 +375,8 @@ void UpdateWeaponKey(shared::Header* hdr) {
         const std::uintptr_t comp = p.comp.load(std::memory_order_relaxed);
         const DWORD tick = p.tick.load(std::memory_order_relaxed);
         if (!comp || now - tick > 500) continue;
-        if (comp == offhand::CarrierComponent()) continue;  // the off-hand grenade: neither the gun nor "no gun drawn"
+        if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent()) continue;  // the off hand's item:
+                                                                                                     // neither the gun nor "no gun drawn"
         const std::uintptr_t outer = names::Outer(comp);
         static bool armsProbed = false;
         if (g_cfg.debugReflect && outer && outer == pawn && !armsProbed) {
