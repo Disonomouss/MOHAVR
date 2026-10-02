@@ -66,7 +66,8 @@ public:
     // The off-hand grenade (OFFHAND-DESIGN; likewise the shipped [OffHand] Grenade until toggled).
     bool OffHandGrenadeOn() const { return offHandNade_; }
     bool GrenadeClick() const { return nadeClick_; }
-    bool GunGrenadePin() const { return gunNadePin_; }  // [Weapon] GrenadePin (the player's once toggled)  // [OffHand] GrenadeHold=click (the player's once toggled)
+    bool GunGrenadePin() const { return gunNadePin_; }
+    bool PouchReload() const { return pouchReload_; }  // [Hands] PouchReload (the player's once toggled)  // [Weapon] GrenadePin (the player's once toggled)  // [OffHand] GrenadeHold=click (the player's once toggled)
     // The off-hand pistol (OFFPISTOL-DESIGN; likewise the shipped [OffHand] Pistol until toggled).
     bool OffHandPistolOn() const { return offHandPistol_; }
     // The fit of any weapon by its class (the off-hand pistol's): the player's saved one, else the shipped one, else the
@@ -170,6 +171,7 @@ private:
     bool                    offHandNade_ = false;
     bool                    nadeClick_ = false;
     bool                    gunNadePin_ = false;
+    bool                    pouchReload_ = false;
     bool                    offHandPistol_ = false;
     std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
     shared::GunFit          fitForFit_{};

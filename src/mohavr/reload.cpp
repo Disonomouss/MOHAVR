@@ -22,6 +22,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
+#include "script_call.hpp"
 #include "viewmodel.hpp"
 
 namespace mohavr::reload {
@@ -2030,6 +2031,39 @@ void ProbeDraw(std::uintptr_t pawn) {
 }
 
 }  // namespace
+
+bool InstantReload(std::uintptr_t pawn) {
+    const std::uintptr_t w = PawnWeapon(pawn);
+    if (!w || !names::IsA(w, "EALASmallArms") || names::IsA(w, "EALAGrenade")) {
+        MLOG("reload: pouch reload -- no gun in hand (%s)", names::Name(w).c_str());
+        return false;
+    }
+    int* clipP = Field(w, "AmmoCount");
+    const int* maxP = Field(w, "MaxAmmoCount");
+    if (!clipP || !maxP) return false;
+    const int c0 = *clipP, max = maxP[0];
+    if (c0 >= max) {
+        MLOG("reload: pouch reload -- %s is full (%d)", AttachKey(w).c_str(), c0);
+        return false;
+    }
+    const int got = FromReserve(pawn, w, max - c0);
+    if (got <= 0) {
+        MLOG("reload: pouch reload -- %s has no reserve left", AttachKey(w).c_str());
+        return false;
+    }
+    *clipP = c0 + got;  // a direct write: the manual reload sees its clip rise (magazine in, ready)
+    // The low-ammo mix follows the new count, as the game's own reload does (SetAmmoCount -> UpdateLowAmmoMix).
+    script::Call low(w, "UpdateLowAmmoMix", true);
+    const std::uint8_t mode = static_cast<std::uint8_t>(script::Int(w, "CurrentFireMode", 0) & 0xFF);
+    if (low.ok && low.Set("FireModeNum", &mode, 1)) low.Run();
+    // The magazine-in click of a converted gun.
+    if (const GunLine* l = Converted(w)) {
+        const int v = VariantOf(l->key);
+        if (!l->sndIn.empty()) PlayCue(pawn, w, l->sndIn[v < static_cast<int>(l->sndIn.size()) ? v : 0], "the pouch reload");
+    }
+    MLOG("reload: pouch reload -- %s %d -> %d (instant)", AttachKey(w).c_str(), c0, *clipP);
+    return true;
+}
 
 bool Install(const Config& cfg, bool pipelineHooked) {
     g_cfg = cfg;

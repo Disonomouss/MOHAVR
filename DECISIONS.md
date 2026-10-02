@@ -606,3 +606,17 @@ inventory, the saves or the weapon cycle.
 
 D45 (the twin): the fire mode is put back on a failed trace too, and any weapon switch of the gun hand ends the twin at
 once. The off-hand grenade and pistol ship on (rounds 43 and 44 passed).
+
+### D46. The pouch reload: a hand holding a gun grips the ammo pouch -- Decided 2026-10-02
+`[Hands] PouchReload=1` (shipped on, proven in the simulator; the menu's Weapons tab "Pouch reload", the player's). A grip at
+the ammo pouch (`[Holsters] MagPouchSpot`, the middle of the belt) reloads at once, with no animation:
+- by the gun hand with a gun (not a grenade), the gun's clip is topped up from its reserve (owed rounds first) by a direct
+  write, the low-ammo mix follows, and a converted gun plays its magazine-in cue. The manual reload sees its clip rise
+  without it (magazine in, ready: also after a dropped magazine, a bolt or a pump);
+- by the off hand holding the pistol (or its twin), the pistol is refilled and stays in the hand.
+
+The pouch ring shows near a hand while a gun is in the gun hand. A press there comes before every other use of that hand's
+grip. Round 45's answers: the chest spot is right; the click hold is the player's choice (`GrenadeHold=click` now ships);
+hand grenades and the grenade pose pass; the off-hand pistol lacks its flash and slide.
+**Why:** the player (2026-10-02): "when a hand with a gun equipped grips the ammo holster, it automatically reloads. No
+animation, just an instant reload." -- "Make it a toggle option in menu."

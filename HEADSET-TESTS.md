@@ -1823,6 +1823,11 @@ left-hand Colt is put back (the left hand is busy). The HUD counts only the righ
 **Deployed for this round:** the shipped defaults (the off-hand grenade and pistol, the hand grenades and two pistols all
 on).
 
+**Answers (2026-10-02):** "1. Yes 2. Click 3. Yes 4. Yes 5. No, just the lack of flash and slide back on the off hand
+pistol." And a new request: the pouch reload (D46).
+
+**Verdict: round 45 [H] PASSED;** `GrenadeHold=click` ships; next: the off-hand pistol's slide and flash.
+
 ---
 
 ## Template

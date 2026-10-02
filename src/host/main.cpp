@@ -741,6 +741,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         hands.SetHandPoint(menu.HandPoint());
                         hands.SetForegripRadius(menu.ForegripRadius());
                         hands.SetRingScale(menu.RingScale());
+                        hands.SetPouchReload(menu.PouchReload());
                     }
                     hin.gestures = !(menuOk && menu.Visible()) && !g_hdr->gameUiMenu;
                     for (int h = 0; h < 2; ++h) hin.trigger[h] = pad.TriggerValue(session, h);

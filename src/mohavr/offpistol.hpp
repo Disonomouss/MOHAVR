@@ -40,6 +40,8 @@ void OnDraw(shared::Header* hdr);
 bool Holding();
 // The pistol the off hand holds (0 none).
 std::uintptr_t HeldPistol();
+// The pouch reload: the pistol the off hand holds (or its twin) refilled at once. False when none is held or it is full.
+bool PouchRefill();
 // After a NextWeapon: true when it made the held pistol the pending weapon and PistolKeep is on (run it once more).
 bool SkipHeldPistol();
 

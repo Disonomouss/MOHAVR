@@ -494,6 +494,15 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
         MLOG("hands: give all weapons -- %d of %d classes handled; the pawn carries %d: %s", given, listed, carriedN, carried.c_str());
         return;
     }
+    // The pouch reload (Hands.PouchReload): the gun hand's gun, or the pistol the off hand holds, reloaded at once.
+    if (!wcscmp(cmd, L"mohavr pouchreload gun")) {
+        reload::InstantReload(aim::LocalPlayerPawn());
+        return;
+    }
+    if (!wcscmp(cmd, L"mohavr pouchreload off")) {
+        offpistol::PouchRefill();
+        return;
+    }
     const bool ok = gexec::Run(player, cmd);
     MLOG("hands: game command '%ls' -> %s", cmd, ok ? "handled" : "not handled");
     // After "Give all weapons" switch weapon is the engine's NextWeapon, which walks the whole inventory: it never takes the

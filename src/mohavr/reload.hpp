@@ -22,6 +22,11 @@ namespace mohavr::reload {
 bool Install(const Config& cfg, bool pipelineHooked);
 // Game thread, once per Draw (vr_view Hook_Draw).
 void OnDraw(shared::Header* hdr);
+// The pouch reload (the player, 2026-10-02: "when a hand with a gun equipped grips the ammo holster, it automatically
+// reloads. No animation, just an instant reload"): the weapon in hand's clip topped up from its reserve at once (the
+// manual reload's state follows: its clip rose without it -- magazine in, ready). Game thread. False when nothing was
+// loaded (no gun, a grenade, full, no reserve).
+bool InstantReload(std::uintptr_t pawn);
 // The last first-person gun update's LocalToWorld (the game's) and its attachment class (for the arms' bake).
 bool LastGun(float (&l2w)[16], std::string& key);
 // Round 31: the off hand's reload grip this frame (from the game's reload animations): where the support hand goes

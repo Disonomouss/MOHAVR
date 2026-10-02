@@ -106,6 +106,7 @@ void Hands::Init(const std::wstring& ini) {
     holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
     foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
+    pouchReload_ = GetPrivateProfileIntW(L"Hands", L"PouchReload", 0, ini.c_str()) != 0;
     mirrorLeft_ = GetPrivateProfileIntW(L"Weapon", L"LeftHandMirror", 1, ini.c_str()) != 0;
     MLOG("hands: holsters %d (%s / %s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
          zones_[0].command.c_str(), zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(),
@@ -214,6 +215,7 @@ Hands::Output Hands::Update(const Input& in) {
     if (gunOk && reloadOk && !offBusy) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
     if (in.pouchShown || (reloadActive && reload_->MagazineOut() && !offBusy)) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
+    else if (pouchReload_ && gunOk && in.weaponKind != 2) addSpot(kPouch, pouch, pouchR, false);  // (the pouch reload)
     out.targetOk[1] = true;
     out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
@@ -289,6 +291,21 @@ Hands::Output Hands::Update(const Input& in) {
         if (!press) continue;
         held_[h] = true;
         if (!in.gestures || !ok) continue;
+        // The pouch reload (the player, 2026-10-02): a hand holding a gun grips the ammo pouch -- reloaded at once, no
+        // animation. The gun hand's gun (not a grenade), or the pistol the off hand holds.
+        if (pouchReload_ && Len(Sub(hp, pouch)) < pouchR) {
+            const bool gunHand = h == g && gunOk && in.weaponKind != 2 && !(gunNade_ && gunNade_->Live());
+            const bool offPistol = h == o && pistol_ && pistol_->Holding();
+            if (gunHand || offPistol) {
+                out.command = gunHand ? "mohavr pouchreload gun" : "mohavr pouchreload off";
+                consumed_[h] = true;
+                out.pulse[h] = true;
+                out.pulseAmp[h] = 0.4f;
+                out.pulseMs[h] = 25.0f;
+                MLOG("hands: %s hand at the pouch -- %s", h ? "right" : "left", gunHand ? "the gun reloaded" : "the pistol refilled");
+                continue;
+            }
+        }
         // The off hand holds a grenade (pressed again after a freeze let the grip go): the grip is the grenade's.
         if (h == o && nade_ && nade_->Holding()) {
             nade_->HeldPress(nin, zone >= 0);

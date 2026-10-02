@@ -134,6 +134,8 @@ public:
     void SetHandPoint(const float (&fwdUpIn)[3]) { for (int i = 0; i < 3; ++i) handPoint_[i] = fwdUpIn[i]; }
     void SetForegripRadius(float r) { foregripR_ = r; }
     void SetRingScale(float s) { ringScale_ = s; }
+    // The pouch reload (the menu's Weapons tab "Pouch reload"; the shipped [Hands] PouchReload until the player toggles it).
+    void SetPouchReload(bool on) { pouchReload_ = on; }
 
 private:
     struct Zone {
@@ -149,6 +151,7 @@ private:
     OffHandPistol* pistol_ = nullptr;
     float handPoint_[3]{};       // forward, up, in (m)
     float foregripR_ = 0.12f;    // the foregrip ring's radius (m)
+    bool  pouchReload_ = true;   // [Hands] PouchReload: a hand holding a gun grips the pouch -> reloaded at once
     float ringScale_ = 1.0f;     // the reload gesture's and the manual reload's grab rings
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;
     bool  mirrorLeft_ = true;  // the game draws the left hand's gun mirrored ([Weapon] LeftHandMirror): so is the aim line

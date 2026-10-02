@@ -1290,6 +1290,22 @@ bool Holding() { return g_hold.state == kHeld; }
 
 std::uintptr_t HeldPistol() { return g_hold.state == kHeld ? g_hold.p : 0; }
 
+bool PouchRefill() {
+    if (g_hold.state != kHeld) return false;
+    const std::uintptr_t p = g_hold.p;
+    const int max = Int(p, "MaxAmmoCount", -1);
+    if (g_hold.twin) {
+        if (g_twin.clip >= max) return false;
+        MLOG("offpistol: pouch reload -- the twin of %s %d -> %d (instant)", names::Name(p).c_str(), g_twin.clip, max);
+        g_twin.clip = max;
+    } else {
+        if (Int(p, "AmmoCount", max) >= max) return false;
+        RefillNow(p, "the pouch reload, instant");
+    }
+    ++g_refillsN;
+    return true;
+}
+
 bool SkipHeldPistol() {
     if (g_hold.state != kHeld || !g_cfg.offPistolKeep || g_hold.twin) return false;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
