@@ -180,7 +180,7 @@ void __fastcall Hook_ViewModelTransform(std::uint8_t* proxy, void* /*edx*/, void
     *outW2L = mirrorNow ? Mul(Mul(s.mirror, s.dInv), w2l) : Mul(s.dInv, w2l);
 
     // Calibration: where the first-person parts sit in the game camera's frame (Weapon.GripX/Y/Z).
-    static DWORD nextLog = 0;
+    static DWORD nextLog = GetTickCount();
     static int partsThisLog = 0;
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - nextLog) >= 0) {
@@ -357,7 +357,7 @@ void ProbeArms(std::uintptr_t comp) {
 // is). Its Outer is the weapon actor; the key is that actor's class name. Published to the host when it changes.
 void UpdateWeaponKey(shared::Header* hdr) {
     static std::string current;
-    static DWORD nextCheck = 0;
+    static DWORD nextCheck = GetTickCount();  // (not 0: past 2^31 ms of uptime the check would never run)
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - nextCheck) < 0) return;
     nextCheck = now + 250;

@@ -598,7 +598,7 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     if (g_cfg.aimShotFromGun && g_cfg.aimLauncherFromGun) SetLauncherStart(pawn, barrel);
     const float dx = point[0] - pos[0], dy = point[1] - pos[1], dz = point[2] - pos[2];
     Publish(std::sqrt(dx * dx + dy * dy + dz * dz) / upm, static_cast<std::uint32_t>(g_cfg.aimMode));
-    static DWORD nextLog = 0;
+    static DWORD nextLog = GetTickCount();
     if (static_cast<LONG>(g_frame.tick - nextLog) >= 0) {
         nextLog = g_frame.tick + 5000;
         MLOG("aim: ray from %.0f %.0f %.0f dir %.2f %.2f %.2f -> %s at %.0f %.0f %.0f (%.1f m; %s; %u of %u frames torn, %u started inside, %u through triggers)",

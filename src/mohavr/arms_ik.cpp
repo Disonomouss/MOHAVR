@@ -507,7 +507,7 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     float pumpD[3] = {0, 0, 0};
     const bool pumpRide = framesOk && twoHanded && !freeHand && reload::PumpShift(pumpD);
     if (g_cfg.debugReloadTrace) {  // Debug.ReloadTrace: how far the hand rides, now and then
-        static DWORD nextRideLog = 0;
+        static DWORD nextRideLog = GetTickCount();
         const float moved = std::sqrt(pumpD[0] * pumpD[0] + pumpD[1] * pumpD[1] + pumpD[2] * pumpD[2]);
         if (pumpRide && moved > 0.5f && static_cast<LONG>(GetTickCount() - nextRideLog) >= 0) {
             nextRideLog = GetTickCount() + 1000;

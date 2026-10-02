@@ -1889,7 +1889,7 @@ std::uintptr_t   g_bakeMesh = 0;
 int              g_bakeCount = 0;
 int              g_bakesThisDraw = 0;
 struct BakeStats { long draws = 0, bakes = 0; int max = 0; } g_still, g_moving;
-DWORD            g_nextStats = 0, g_nextWeaponLog = 0;
+DWORD            g_nextStats = GetTickCount(), g_nextWeaponLog = GetTickCount();
 std::uintptr_t   g_lastWeapon = 0;
 long             g_callsWeapon = 0, g_callsOther = 0, g_resultTrue = 0, g_blocks = 0;
 std::uintptr_t   g_otherClasses[8] = {};
@@ -2339,7 +2339,7 @@ void OnDraw(shared::Header* hdr) {
     _ReadWriteBarrier();
     ++hdr->reloadGeoSeq;
     // Blocks, now and then.
-    static DWORD nextLog = 0;
+    static DWORD nextLog = GetTickCount();
     const DWORD now = GetTickCount();
     if (g_blocks && static_cast<LONG>(now - nextLog) >= 0) {
         nextLog = now + 10000;

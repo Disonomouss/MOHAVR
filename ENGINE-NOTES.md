@@ -1712,6 +1712,17 @@ the off hand's pose and flags in the view seqlock, an 8-slot event ring) and the
   (`nade6-held-sim.png`).
 - `tools/harness.ps1 cycle` OK in 33 s with the shipped defaults (`Grenade=0`).
 
+## 5bd. Tick deadlines past 2^31 ms of uptime (2026-10-02)
+
+The mod's periodic gates compare `static_cast<LONG>(now - deadline) < 0` with `now = GetTickCount()`. A deadline that
+starts at 0 is never reached while GetTickCount() is between 2^31 and 2^32 ms -- Windows up 24.9 to 49.7 days, and Fast
+Startup keeps that count across shutdowns -- because `now - 0` is then negative as a LONG. Found by the off-hand
+grenade's review (its own 4 Hz gate, fixed with Phase 1); the same start was in viewmodel's weapon-in-hand check
+(`UpdateWeaponKey`: the gun fit, the gun kind and NoGunDrawn would never have updated), the host's desktop-mirror window
+finder, `HideViewModel` / `HideBody`'s re-issue, the test channels (game commands, the view state) and five logs. Each
+now starts at its first use's GetTickCount(). [S] harness cycle OK; "weapon in hand: 'Attachment_Bar'" after the landing
+(`logs/modlogs/tick1-MOHAVR.log`). Not run at a real uptime past 2^31: the arithmetic is the proof.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

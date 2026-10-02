@@ -36,7 +36,7 @@ private:
     UINT             bufW_ = 0, bufH_ = 0;
     RECT             placed_{};
     bool             shown_ = false;
-    DWORD            nextFind_ = 0;
+    DWORD            nextFind_ = GetTickCount();  // (not 0: past 2^31 ms of uptime the window would never be found)
     unsigned         presents_ = 0;
 };
 

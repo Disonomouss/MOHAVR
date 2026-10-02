@@ -320,7 +320,7 @@ void PaceAfterDraw() {
 // new pawn (death, level load) gets them too. HideWeapon's flag survives weapon switches.
 void ApplyWeaponCommands(const std::uintptr_t* players) {
     if (!(g_cfg.hideViewModel || g_cfg.hideBody) || !players || players[1] != 1 || !players[0]) return;
-    static DWORD next = 0;
+    static DWORD next = GetTickCount();
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - next) < 0) return;
     next = now + 3000;
@@ -383,7 +383,7 @@ void ApplyLandingBody(const std::uintptr_t* players) {
 // one per line in %TEMP%\MOHAVR\game_cmd.txt, read and deleted twice a second on the game thread.
 void RunTestCommands(const std::uintptr_t* players) {
     if (!g_cfg.debugGameCommands || !players || players[1] < 1 || !players[0]) return;
-    static DWORD next = 0;
+    static DWORD next = GetTickCount();
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - next) < 0) return;
     next = now + 500;
@@ -589,7 +589,7 @@ void OnCalcSceneViewEntry(SafetyHookContext& ctx) {
 // Debug.ViewState: the game's own camera (before the head is applied) for scripted tests --
 // %TEMP%\MOHAVR\view_state.txt = "x y z yaw pitch" (Unreal units / rotator units), 5 times a second.
 void WriteViewState(const float* loc, const int* rot, std::uintptr_t localPlayer) {
-    static DWORD next = 0;
+    static DWORD next = GetTickCount();
     const DWORD now = GetTickCount();
     if (static_cast<LONG>(now - next) < 0) return;
     next = now + 200;
@@ -801,7 +801,7 @@ void TrackEyeFloor(const float* eye, const float* cam, float upm, bool players) 
     const bool walking = physics == 1;  // PHYS_Walking
     if (!l.on && walking) {
         // On the ground: every 2 s, how high the eye is above the feet (standing, crouched).
-        static DWORD next = 0;
+        static DWORD next = GetTickCount();
         const DWORD nowMs = GetTickCount();
         if (static_cast<LONG>(nowMs - next) >= 0) {
             next = nowMs + 2000;
