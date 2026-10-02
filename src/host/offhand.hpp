@@ -29,6 +29,12 @@ class OffHandGrenade {
 public:
     // The shipped ini's [OffHand] (Grenade is the default; the menu's toggle is the player's).
     void Init(const std::wstring& ini);
+    // The gun hand's grenade instead ([Weapon] GrenadePin; the player, round 43: "Arming the grenade with trigger is good,
+    // add that to main hand grenades" -- and cooking, and the grip throw): with a grenade the weapon in the gun hand, its
+    // trigger pulls the pin and a second pull cooks; squeeze the grip, swing and let go to throw. The game's own throw never
+    // starts (its trigger is kept from the game). In: the gun hand (offHand = the gun hand, gunOk = a grenade in it).
+    void InitMain(const std::wstring& ini);
+    bool Main() const { return main_; }
     void SetOn(bool on);
     bool On() const { return on_; }
     // [OffHand] GrenadeHold (the menu's "Grenade hold"; the player, round 43): grip = held while the grip is, let go throws
@@ -51,6 +57,7 @@ public:
         bool    gunOk = false;        // the gun hand holds a gun (not a grenade)
         bool    gripHeld = false;     // the off grip held (hands.cpp's hysteresis)
         float   trigger = 0.0f;       // the off trigger
+        std::uint32_t type = 0;       // (the gun hand's) the grenade in hand: 0 frag, 1 Gammon, 2 stick
         XrPosef hand{};               // the off hand's hand point (position) and aim orientation, LOCAL
         bool    testThrow = false;    // a test velocity (pad_cmd.txt "throwvel=") for the next release
         float   testVel[3]{};
@@ -70,9 +77,10 @@ public:
     // off, the game's side quiet, no gun in the other hand: the holster's own command, as before). `type`: 0 frag,
     // 1 Gammon, 2 stick, 0xFF any.
     bool TakePress(const In& in, std::uint32_t type);
-    // Hands::Update at an off-hand grip press while one is held (always the grenade's). Click mode: at a holster with the
-    // pin in, it goes back; with the pin out, the squeeze starts the throw (let go to throw).
-    void HeldPress(const In& in, bool atHolster);
+    // Hands::Update at a grip press of this grenade's hand while one is held: true = the press is the grenade's. The off
+    // hand's always is (click mode: at a holster with the pin in it goes back; with the pin out the squeeze starts the
+    // throw); the gun hand's only once the pin is out (the squeeze starts the throw).
+    bool HeldPress(const In& in, bool atHolster);
     // Hands::Update, every frame after the presses.
     void Frame(const In& in, Out& out);
     // After Hands::Update: the queued events to the game (never more than the ring holds unread).
@@ -92,6 +100,7 @@ private:
 
     bool          on_ = false;
     bool          click_ = false;        // GrenadeHold=click
+    bool          main_ = false;         // the gun hand's grenade (InitMain)
     bool          throwGrip_ = false;    // (click) the grip squeezed to throw: letting go throws
     // [OffHand]
     bool          pinAuto_ = false;      // Pin=auto: the take arms it

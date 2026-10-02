@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 21;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol
+inline constexpr std::uint32_t kVersion = 22;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -389,6 +389,9 @@ inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
 enum NadeEvent : std::uint32_t { kNadeTake = 1, kNadePin = 2, kNadeCook = 3, kNadeThrow = 4, kNadePutBack = 5 };
 inline constexpr std::uint32_t kNadeFrag = 0, kNadeGammon = 1, kNadeStick = 2, kNadeAny = 0xFF;
 inline constexpr std::uint32_t kNadeToss = 1u << 16;
+// v22: the gun hand's grenade ([Weapon] GrenadePin): its events carry kNadeMain (the grenade in the gun hand, not one taken
+// from a holster: a PIN starts the hold); nadeState bit4 says the hold is the gun hand's; nadeFlags bit7 likewise.
+inline constexpr std::uint32_t kNadeMain = 1u << 17;
 
 // What the game publishes for the off-hand grenade (v20).
 struct NadeStatus {

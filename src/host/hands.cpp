@@ -233,6 +233,15 @@ Hands::Output Hands::Update(const Input& in) {
     nin.testThrow = testThrow_;
     for (int i = 0; i < 3; ++i) nin.testVel[i] = testThrowVel_[i];
     nin.now = in.now;
+    // The gun hand's grenade's view of the gun hand.
+    OffHandGrenade::In gin = nin;
+    gin.offHand = g;
+    gin.offTracked = (in.tracked & (1u << g)) != 0 && gunOk;
+    gin.gripActive = in.gripActive[g];
+    gin.gunOk = gunOk && in.grenadeType >= 0;
+    gin.type = in.grenadeType >= 0 ? static_cast<std::uint32_t>(in.grenadeType) : 0u;
+    gin.trigger = in.trigger[g];
+    gin.hand = {in.aim[g].orientation, {pt[g].x, pt[g].y, pt[g].z}};
     // The off-hand pistol's view of it.
     OffHandPistol::In pin;
     pin.offHand = o;
@@ -261,7 +270,7 @@ Hands::Output Hands::Update(const Input& in) {
         }
         // The off hand at the foregrip and a holster at once (the chest spot, a long gun at low ready): whichever centre the
         // hand is closer to (the review: a squeeze meant for the foregrip drew a weapon).
-        if (zone >= 0 && h == 1 - gunHand_ && foregrip_ && in.weaponKind == 0 && in.fit.foreFwd >= 15.0f && (in.valid & (1u << gunHand_)) &&
+        if (zone >= 0 && !offBusy && h == 1 - gunHand_ && foregrip_ && in.weaponKind == 0 && in.fit.foreFwd >= 15.0f && (in.valid & (1u << gunHand_)) &&
             Len(Sub(hp, fore)) < foregripR_ && Len(Sub(hp, fore)) < Len(Sub(hp, centre[zone])))
             zone = -1;
         if (zone >= 0 && zone != inZone_[h] && in.gestures) out.pulse[h] = true;
@@ -283,6 +292,11 @@ Hands::Output Hands::Update(const Input& in) {
         // The off hand holds a grenade (pressed again after a freeze let the grip go): the grip is the grenade's.
         if (h == o && nade_ && nade_->Holding()) {
             nade_->HeldPress(nin, zone >= 0);
+            consumed_[h] = true;
+            continue;
+        }
+        // The gun hand's grenade with its pin out: the squeeze starts the throw (let go to throw).
+        if (h == g && gunNade_ && gunNade_->HeldPress(gin, zone >= 0)) {
             consumed_[h] = true;
             continue;
         }
@@ -441,6 +455,21 @@ Hands::Output Hands::Update(const Input& in) {
                 break;
             }
     }
+    // The gun hand's grenade, every frame.
+    if (gunNade_) {
+        gin.gripHeld = held_[g];
+        gin.testThrow = testThrow_;
+        OffHandGrenade::Out gout;
+        gunNade_->Frame(gin, gout);
+        if (gout.usedTest) testThrow_ = false;
+        if (gout.maskTrigger) out.maskTrigger[g] = true;
+        for (int h = 0; h < 2; ++h)
+            if (gout.pulseAmp[h] > 0.0f) {
+                out.pulse[h] = true;
+                out.pulseAmp[h] = std::fmax(out.pulseAmp[h], gout.pulseAmp[h]);
+                out.pulseMs[h] = std::fmax(out.pulseMs[h], gout.pulseMs[h]);
+            }
+    }
     // The off-hand pistol, every frame (after the grenade: its masks and pulses add to the others').
     if (pistol_) {
         pin.gripHeld = held_[o];
@@ -496,7 +525,7 @@ Hands::Output Hands::Update(const Input& in) {
     if (!triggerHeld_ && trig > 0.5f) triggerHeld_ = true;
     if (triggerHeld_ && trig < 0.3f) {
         triggerHeld_ = false;
-        if (in.grenade && gunOk) {
+        if (in.grenade && gunOk && !(gunNade_ && gunNade_->On())) {  // (GrenadePin: the gun hand's grenade throws by its grip)
             float v[3] = {0.0f, 0.0f, 0.0f};
             if (testThrow_) {
                 testThrow_ = false;

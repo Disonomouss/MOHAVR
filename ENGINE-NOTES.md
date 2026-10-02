@@ -1925,6 +1925,20 @@ events carry the off line at the pull. Measured in the simulator, BAR in hand, C
     - a squeeze-and-release threw it (the test velocity, 8.5 m/s);
     - a click at the holster put the next one back.
 
+## 5bi. The gun hand's grenade by pin, cook and grip (D44, 2026-10-02)
+
+[S] gunnade1 / gunnade2 (Weapon.GrenadePin=1, frags in the gun hand via SwitchFragGrenade):
+- The right trigger pulled the pin (game: PIN, the gun hand's). Armed for 2 s, nothing happened: the game's own throw never
+  started.
+- A second pull cooked it. A squeeze-and-release threw it (the test velocity, 8.5 m/s), the fuse left 2.54 s.
+- Pinned, then SwitchPrimary: it was put back, nothing used.
+- Pinned, cooked, then switched away: it was tossed along the view (fuse 3.06 s).
+- Pinned and cooked, it went off in the hand after 4.0 s.
+- That was the last frag. The gun hand switched to MOHABar_1 (InvManager.SetCurrentWeapon(LastSmallArmsWeapon) through
+  ProcessEvent: the event's bForce passed 0).
+
+nadepose2 (the click hold after the review's fixes) and the harness cycle passed.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

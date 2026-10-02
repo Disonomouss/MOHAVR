@@ -44,22 +44,40 @@ void OffHandGrenade::Init(const std::wstring& ini) {
 void OffHandGrenade::SetClick(bool on) {
     if (on == click_) return;
     click_ = on;
+    throwGrip_ = false;
     MLOG("offhand: grenade hold -> %s", on ? "click (a click takes it; squeeze and let go to throw)" : "grip (held while gripped)");
 }
 
-void OffHandGrenade::HeldPress(const In& in, bool atHolster) {
-    if (state_ == kNone || !click_ || frozen_) return;
+void OffHandGrenade::InitMain(const std::wstring& ini) {
+    Init(ini);
+    main_ = true;
+    on_ = GetPrivateProfileIntW(L"Weapon", L"GrenadePin", 0, ini.c_str()) != 0;
+    MLOG("offhand: Weapon.GrenadePin=%d (the default; the menu's toggle is the player's): the gun hand's grenade by its trigger "
+         "(pin, cook) and its grip (squeeze, swing, let go)", on_ ? 1 : 0);
+}
+
+bool OffHandGrenade::HeldPress(const In& in, bool atHolster) {
+    if (main_) {
+        if (state_ != kArmed && state_ != kCooking) return false;  // the pin in: the grip is the gun hand's as ever
+        if (!frozen_) {
+            throwGrip_ = true;
+            Pulse(offHand_, 0.3f, 15.0f);
+        }
+        return true;
+    }
+    if (state_ == kNone || !click_ || frozen_) return true;
     offHand_ = in.offHand;
     if (state_ == kHeld) {
-        if (!atHolster) return;  // the pin in: only a holster takes it back
+        if (!atHolster) return true;  // the pin in: only a holster takes it back
         const float pos[3] = {in.hand.position.x, in.hand.position.y, in.hand.position.z}, zero[3] = {0, 0, 0};
         Queue(shared::kNadePutBack, type_, pos, zero, in.now);
         Pulse(offHand_, 0.2f, 20.0f);
         To(kNone, "put back at a holster (click)");
-        return;
+        return true;
     }
     throwGrip_ = true;  // armed or cooking: the throw starts -- let go to throw
     Pulse(offHand_, 0.3f, 15.0f);
+    return true;
 }
 
 void OffHandGrenade::SetOn(bool on) {
@@ -86,7 +104,7 @@ void OffHandGrenade::To(State s, const char* why) {
 }
 
 void OffHandGrenade::Queue(std::uint32_t event, std::uint32_t type, const float (&pos)[3], const float (&vel)[3], double now) {
-    Pending p{event, type, {pos[0], pos[1], pos[2]}, {vel[0], vel[1], vel[2]}, now};
+    Pending p{event | (main_ ? shared::kNadeMain : 0u), type, {pos[0], pos[1], pos[2]}, {vel[0], vel[1], vel[2]}, now};
     pending_.push_back(p);
 }
 
@@ -120,11 +138,14 @@ void OffHandGrenade::Poll(shared::Header* hdr, double now) {
         ticks_ = s.ticks;
         if (state_ == kCooking) Pulse(offHand_, s.fuse < 0.75f ? 0.7f : 0.2f, s.fuse < 0.75f ? 50.0f : 10.0f);
     }
-    unavailable_ = (s.caps & 16u) ? 0 : unavailable_ + 1;  // bit4: one held may stay (a switch to another gun doesn't end it)
+    unavailable_ = (s.caps & 16u) || main_ ? 0 : unavailable_ + 1;  // bit4: one held may stay (the off hand's; a switch to
+                                                                      // another gun doesn't end it)
     // The reconcile: the game's state differs from ours for two of its frames with nothing in flight (a refused take,
     // a grenade gone with a new pawn, the host restarted) -- the game's wins.
-    const State game = static_cast<State>(s.state & 3u);
-    if (acksDone_ && game != state_) {
+    const bool gameMain = (s.state & 16u) != 0;
+    const State game = gameMain == main_ ? static_cast<State>(s.state & 3u) : kNone;
+    const State mine = main_ && state_ == kHeld ? kNone : state_;  // (the gun hand's pin in: no event, the game holds nothing)
+    if (acksDone_ && game != mine) {
         if (++disagree_ >= 2) {
             disagree_ = 0;
             static const char* kWhy[] = {"", "unavailable", "none left", "not carried", "the launch failed"};
@@ -146,6 +167,11 @@ void OffHandGrenade::Poll(shared::Header* hdr, double now) {
 // on, the game's side alive, a gun in the other hand (nade3: a press during the parachute's landing fell through to the
 // holster's SwitchGrenade, which the game ignored, and the gun went to the off hand).
 const char* OffHandGrenade::UpdateActive(const In& in, bool* applies) {
+    if (main_) {  // (the gun hand's: no take -- the grenade in hand is held)
+        active_ = on_ && in.gunOk;
+        if (applies) *applies = false;
+        return "";
+    }
     const bool alive = statusAt_ >= 0.0 && in.now - statusAt_ < 0.25;
     // (Ours through a short stall of the game too: the holster's own draw would put the gun in the off hand.)
     const bool seen = statusAt_ >= 0.0 && in.now - statusAt_ < 3.0;
@@ -268,11 +294,29 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
         s.p[2] = in.hand.position.z;
     }
     const char* why = UpdateActive(in);
+    if (main_) {
+        const bool inHand = on_ && in.gunOk;
+        if (state_ == kNone && inHand) {
+            type_ = in.type;
+            To(kHeld, "a grenade in the gun hand");
+        } else if (state_ != kNone && !inHand) {
+            if (state_ == kCooking) {
+                Release(in, true, "it left the gun hand while cooking", true);
+            } else {
+                if (state_ == kArmed) {
+                    const float p[3] = {in.hand.position.x, in.hand.position.y, in.hand.position.z}, z[3] = {0, 0, 0};
+                    Queue(shared::kNadePutBack, type_, p, z, in.now);
+                }
+                To(kNone, "it left the gun hand");
+            }
+        }
+        if (inHand) out.maskTrigger = true;  // the game's own throw never starts
+    }
     if (state_ == kCooking && in.modMenu && !in.gameMenu)
         Release(in, true, "the MOHAVR menu opened while cooking: the game runs on", true);
     if (state_ != kNone) {
         out.maskTrigger = true;  // a pin pull isn't the game's aim
-        out.maskSwitch = true;   // nor its own grenade switch
+        out.maskSwitch = !main_; // nor its own grenade switch (the gun hand's grenade may switch to another type)
         trigMaskHeld_ = true;
         // Frozen while a menu is open or the grip action sleeps (not for lost tracking: a release then throws with the
         // last good velocity, OFFHAND-DESIGN 0.2).
@@ -281,6 +325,9 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
         if (frozen != frozen_) {
             frozen_ = frozen;
             MLOG("offhand: %s (%s)", frozen ? "frozen" : "carries on", frozen ? why : "the hand and grip are back");
+            // (Click or the gun hand: a throw squeeze under way ends with the freeze -- the armed grenade stays in the hand,
+            // a new squeeze-and-release throws it; review: let go during the freeze, it was tossed. Cooking keeps its toss.)
+            if (frozen && state_ != kCooking) throwGrip_ = false;
         }
         // The trigger's squeezes (>= 0.6 after < 0.4): none while frozen, and one already under way when the hold starts or
         // a freeze ends must be let go first (a fist closing on the grab; a trigger held through a menu or the dashboard).
@@ -306,8 +353,8 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
                     Queue(shared::kNadePutBack, type_, pos, zero, in.now);
                     To(kNone, "put back: the game made it unavailable");
                 }
-            } else if (click_ ? (throwGrip_ && !in.gripHeld) : !in.gripHeld) {
-                if (state_ == kHeld || (state_ == kArmed && wasFrozen && !click_)) {
+            } else if (click_ || main_ ? (throwGrip_ && !in.gripHeld) : !in.gripHeld) {
+                if (state_ == kHeld || (state_ == kArmed && wasFrozen && !click_ && !main_)) {
                     // Let go with the pin in -- or found let go after a freeze, the pin out but the spoon still on.
                     const Sample& last = hist_[(histNext_ + 23) % 24];
                     float at[3] = {pos[0], pos[1], pos[2]};
@@ -377,7 +424,7 @@ void OffHandGrenade::Send(shared::Header* hdr, double now) {
 
 std::uint32_t OffHandGrenade::Flags() const {
     return (on_ ? 1u : 0u) | (state_ >= kHeld ? 2u : 0u) | (state_ >= kArmed ? 4u : 0u) | (state_ == kCooking ? 8u : 0u) |
-           ((type_ & 3u) << 4) | (frozen_ ? 64u : 0u);
+           ((type_ & 3u) << 4) | (frozen_ ? 64u : 0u) | (main_ && state_ != kNone ? 128u : 0u);
 }
 
 shared::Pose OffHandGrenade::HandPose() const {

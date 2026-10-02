@@ -555,3 +555,29 @@ follow the contents (a pistol holster draws the off-hand pistol, a grenade holst
 **Why:** the player (round 43): "add option for grenade to either be held with grip or triggered with grip and put away
 with another grip to the holster", "The grenade appears above left hand, can position and pose match main hand grenades
 for each type." The throw by squeeze-and-release was their choice.
+
+### D44. The gun hand's grenades by pin, cook and grip -- Decided 2026-10-02 (round 43)
+`[Weapon] GrenadePin=1` (shipped on, proven in the simulator; the menu's Weapons tab "Hand grenades", the player's). A
+grenade in the gun hand works as the off hand's does:
+- its trigger pulls the pin and a second pull cooks;
+- squeeze the gun hand's grip, swing and let go to throw it with the hand's speed (a slow release is lobbed);
+- the game's own throw never starts (that trigger is kept from the game while a grenade is in the gun hand).
+
+What happens if it leaves the hand:
+
+| It leaves the hand... | Result |
+|---|---|
+| with the pin in | nothing |
+| armed (pin out, not cooking) | goes back unused |
+| cooking | tossed |
+| held to the end of the fuse | goes off in the hand |
+
+After the last one the gun hand switches to the last gun, as the game's own throw does.
+
+The host runs a second grenade state machine on the gun hand (OffHandGrenade's main mode: no take, the hold comes with the
+weapon in hand); its events carry kNadeMain (shared block v22, no layout change), and the game launches from the weapon in
+hand through the same SpawnProjectile path.
+**Why:** the player (round 43): "Arming the grenade with trigger is good, add that to main hand grenades", "[cooking] Works add
+to main hand grenades"; the grip throw was their choice. The review of D43 also set: a click or gun-hand throw squeeze under
+way ends with a freeze (the armed grenade stays; cooking keeps its toss), and the foregrip-versus-holster rule only while the
+foregrip can be taken.

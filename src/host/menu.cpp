@@ -19,14 +19,14 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
 const int kTabItems[kTabCount][12] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage, kGiveAll, kClose, -1},
+    {kGunFit, kReload, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
@@ -223,6 +223,9 @@ void Menu::ApplySavedSettings() {
         GetPrivateProfileStringW(L"OffHand", L"GrenadeHold", d, u, 16, iniPath_.c_str());
         nadeClick_ = !_wcsicmp(u, L"click");
         MLOG("menu: grenade hold %s", nadeClick_ ? "click" : "grip");
+        const int defPin = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"GrenadePin", 0, shipped.c_str()));
+        gunNadePin_ = GetPrivateProfileIntW(L"Weapon", L"GrenadePin", defPin, iniPath_.c_str()) != 0;
+        MLOG("menu: the gun hand's grenade %s", gunNadePin_ ? "by pin, cook and grip" : "the game's own");
     }
     // The off-hand pistol: likewise the shipped [OffHand] Pistol until the player toggles it.
     const int defPistol = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Pistol", 0, shipped.c_str()));
@@ -800,6 +803,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"OffHand", L"Grenade", offHandNade_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: off-hand grenade -> %s", offHandNade_ ? "on" : "off (the grenade holster draws the game's grenade)");
+        } else if (item == kGunNade) {
+            gunNadePin_ = !gunNadePin_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"GrenadePin", gunNadePin_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: the gun hand's grenade -> %s", gunNadePin_ ? "pin, cook and grip" : "the game's own");
         } else if (item == kNadeHold) {
             nadeClick_ = !nadeClick_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"OffHand", L"GrenadeHold", nadeClick_ ? L"click" : L"grip", iniPath_.c_str());
@@ -971,6 +978,11 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Off-hand grenade <  %s  >", offHandNade_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
                 note("the free hand takes a grenade at the grenade holster: the gun stays in hand");
+                break;
+            case kGunNade:
+                snprintf(label, sizeof(label), "Hand grenades    <  %s  >", gunNadePin_ ? "pin & grip" : "game");
+                ImGui::Selectable(label, sel);
+                note("in the gun hand: trigger pulls the pin, again cooks; squeeze, swing and let go to throw");
                 break;
             case kNadeHold:
                 snprintf(label, sizeof(label), "  Grenade hold   <  %s  >", nadeClick_ ? "click" : "grip");

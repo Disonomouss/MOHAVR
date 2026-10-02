@@ -74,6 +74,7 @@ public:
         bool           modMenu = false;  // the MOHAVR menu is open (it doesn't pause the game)
         bool           gameMenu = false; // one of the game's menus is open (it does)
         shared::GunFit pistolFit{};      // the off-hand pistol's fit (the menu's, for its key)
+        int            grenadeType = -1; // the grenade in the gun hand: 0 frag, 1 Gammon, 2 stick (-1 none)
     };
     // Where the gesture spots are this frame (LOCAL), for the rings (markers.cpp).
     enum SpotKind { kHolster, kForegrip, kMagazine, kPouch, kMagWell };
@@ -124,6 +125,8 @@ public:
     void SetReload(ManualReload* r) { reload_ = r; }
     // The off-hand grenade (likewise).
     void SetOffHand(OffHandGrenade* n) { nade_ = n; }
+    // The gun hand's grenade (an OffHandGrenade in its InitMain mode; likewise).
+    void SetGunNade(OffHandGrenade* n) { gunNade_ = n; }
     // The off-hand pistol (likewise).
     void SetOffPistol(OffHandPistol* p) { pistol_ = p; }
     // Round 31: where on each controller the hand interacts (the white dot; metres from the aim point: forward, up, in
@@ -142,6 +145,7 @@ private:
     HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
     ManualReload* reload_ = nullptr;
     OffHandGrenade* nade_ = nullptr;
+    OffHandGrenade* gunNade_ = nullptr;
     OffHandPistol* pistol_ = nullptr;
     float handPoint_[3]{};       // forward, up, in (m)
     float foregripR_ = 0.12f;    // the foregrip ring's radius (m)

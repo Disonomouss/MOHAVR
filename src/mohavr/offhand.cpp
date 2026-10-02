@@ -244,7 +244,15 @@ struct Hold {
     int            state = kNone, type = -1;
     std::uintptr_t g = 0;
     float          fuseLen = 4.0f, cookStart = 0.0f, nextTick = 0.0f;
+    bool           main = false;  // the gun hand's grenade ([Weapon] GrenadePin): the weapon in hand, pinned by its trigger
 } g_hold;
+
+// The grenade type of a weapon (-1 not one of the three).
+int TypeOf(std::uintptr_t g) {
+    for (int t = 0; t < 3; ++t)
+        if (g && names::ClassName(g) == kTypeClass[t]) return t;
+    return -1;
+}
 std::uintptr_t g_pawn = 0;
 std::uint32_t  g_seen = 0, g_pawnSeq = 0, g_boom = 0, g_ticks = 0, g_refusal = kOk;
 bool           g_seenInit = false;
@@ -377,6 +385,19 @@ void PullBack(std::uintptr_t pawn, const float (&headW)[3], float (&start)[3], c
     MLOG("offhand: the %s point is behind %s (blocked) -- started on the player's side", what, names::Name(by).c_str());
 }
 
+// The gun hand's last grenade gone: the weapon it threw is put away for the last small arm, as the game's own throw does
+// (MOHAInventoryManager: SetCurrentWeapon(LastSmallArmsWeapon)).
+void AfterGunHandThrow(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t g) {
+    if (Obj(pawn, "Weapon") != g || CountOf(inv, g) > 0) return;
+    std::uintptr_t next = Obj(inv, "LastSmallArmsWeapon");
+    if (!next) next = Obj(inv, "PrimaryWeapon");
+    Call set(inv, "SetCurrentWeapon");
+    const std::uint32_t no = 0;
+    const bool ok = next && set.Set("DesiredWeapon", &next, sizeof(next)) && set.Set("bForce", &no, sizeof(no)) && set.Run();
+    MLOG("offhand: the last %s thrown from the gun hand -- %s %s", kTypeName[TypeOf(g) >= 0 ? TypeOf(g) : 0],
+         ok ? "switching to" : "could not switch to", names::Name(next).c_str());
+}
+
 // The throw (OFFHAND-DESIGN 3.5): from the release point (LOCAL), with the release velocity (LOCAL) or tossed.
 void ThrowHeld(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, const float (&posL)[3], const float (&velL)[3], bool toss,
                const char* what) {
@@ -460,7 +481,9 @@ void ThrowHeld(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, con
         MLOG("offhand: after the throw -- the weapon in hand %s -> %s, FlashCount %u -> %u (expected unchanged)", names::Name(gun).c_str(),
              names::Name(gunAfter).c_str(), flashBefore, flashAfter);
     if (!proj) Refuse(shared::kNadeThrow, kSpawnFailed, "no projectile (the grenade stays counted)");
+    const bool main = g_hold.main;
     SetState(kNone, proj ? "thrown" : "the launch failed");
+    if (proj && main) AfterGunHandThrow(pawn, inv, g);
 }
 
 // The fuse ran out in the hand: the game's own over-cook, at the hand (a launch with no velocity of its own and a fuse
@@ -483,15 +506,21 @@ void Boom(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv) {
     if (pvo >= 0) names::ReadVector(pawn + pvo, pawnVel);
     MLOG("offhand: the %s went off in the hand (cooked %.1f s)", kTypeName[g_hold.type], g_hold.fuseLen);
     const std::uintptr_t proj = Launch(pawn, inv, g_hold.g, start, pawnVel, 0.05f, haveEye ? eyeW : nullptr);
+    const bool main = g_hold.main;
+    const std::uintptr_t g = g_hold.g;
     if (proj) ++g_boom;
     else Refuse(shared::kNadeCook, kSpawnFailed, "the over-cooked grenade could not be launched (it stays counted)");
     SetState(kNone, proj ? "went off in the hand" : "the over-cook's launch failed");
+    if (proj && main) AfterGunHandThrow(pawn, inv, g);
 }
 
 void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uint32_t e, const float (&pos)[3], const float (&vel)[3],
            bool avail, const char* why) {
     const std::uint32_t type = e & 0xFFu, want = (e >> 8) & 0xFFu;
     const bool toss = (e & shared::kNadeToss) != 0;
+    const bool main = (e & shared::kNadeMain) != 0;
+    if (main != g_hold.main && g_hold.state != kNone)
+        return Refuse(type, kUnavailable, main ? "a grenade is held in the off hand" : "the gun hand holds an armed grenade");
     switch (type) {
     case shared::kNadeTake: {
         if (g_hold.state != kNone) return Refuse(type, kUnavailable, "a grenade is already held");
@@ -513,6 +542,19 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
         return;
     }
     case shared::kNadePin:
+        if (main && g_hold.state == kNone) {
+            // The gun hand's grenade: the weapon in hand, pinned (the game's own throw never starts: its trigger is the mod's).
+            const std::uintptr_t g = Obj(pawn, "Weapon");
+            const int t = TypeOf(g);
+            const char* baseWhy = "";
+            if (t < 0 || GrenadeOf(pawn, inv, t) != g) return Refuse(type, kNoWeapon, "no grenade in the gun hand");
+            if (!Base(pawn, inv, g, baseWhy)) return Refuse(type, kUnavailable, baseWhy);
+            if (CountOf(inv, g) <= 0) return Refuse(type, kEmpty, "none left");
+            g_hold = Hold{kArmed, t, g, Float(g, "FuseTime", 4.0f), 0.0f, 0.0f, true};
+            g_refusal = kOk;
+            MLOG("offhand: PIN (%s, the gun hand's) -- %d left", kTypeName[t], CountOf(inv, g));
+            return;
+        }
         if (g_hold.state != kHeld) return Refuse(type, kUnavailable, "nothing held with the pin in");
         SetState(kArmed, "the pin pulled");
         MLOG("offhand: PIN (%s)", kTypeName[g_hold.type]);
@@ -568,6 +610,7 @@ void Publish(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, bool 
     for (int t = 0; t < 3; ++t) hdr->nadeCount[t] = count[t];
     hdr->nadeNext = next >= 0 ? static_cast<std::uint32_t>(next) : shared::kNadeAny;
     hdr->nadeState = static_cast<std::uint32_t>(g_hold.state) | (g_hold.type >= 0 ? static_cast<std::uint32_t>(g_hold.type) << 2 : 0u) |
+                     (g_hold.main && g_hold.state != kNone ? 16u : 0u) |
                      (g_refusal << 8);
     hdr->nadeFuse = fuse;
     hdr->nadeFuseLen = g_hold.state != kNone ? g_hold.fuseLen : 0.0f;

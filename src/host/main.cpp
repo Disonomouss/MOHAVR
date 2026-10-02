@@ -400,6 +400,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     mohavr::host::ManualReload manualReload;  // D21: the manual reload's toggle, engagement and events
     mohavr::host::OffHandGrenade offhandNade;  // the off-hand grenade (OFFHAND-DESIGN): its toggle, state and events
     mohavr::host::OffHandPistol offhandPistol;  // the off-hand pistol (OFFPISTOL-DESIGN): likewise
+    mohavr::host::OffHandGrenade gunNade;       // the gun hand's grenade by pin, cook and grip ([Weapon] GrenadePin)
     mohavr::host::Hands::Output handsOut;
     mohavr::host::Markers markers;  // the gesture spots' rings
     bool markersOk = false;
@@ -411,6 +412,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         hands.SetOffHand(&offhandNade);
         offhandPistol.Init(ExeDir() + L"\\MOHAVR.ini");
         hands.SetOffPistol(&offhandPistol);
+        gunNade.InitMain(ExeDir() + L"\\MOHAVR.ini");
+        hands.SetGunNade(&gunNade);
         if (menuOk) {
             mohavr::host::HolsterSpot defaults[mohavr::host::kSpots];
             for (int i = 0; i < mohavr::host::kSpots; ++i) defaults[i] = hands.DefaultSpot(i);
@@ -716,6 +719,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // The off-hand grenade's game side (counts, availability, its state, the fuse's ticks), likewise.
                 if (menuOk) offhandNade.SetOn(menu.OffHandGrenadeOn());
                 if (menuOk) offhandNade.SetClick(menu.GrenadeClick());
+                if (menuOk) gunNade.SetOn(menu.GunGrenadePin());
+                if (handsOk) gunNade.Poll(g_hdr, nowS);
                 if (handsOk) offhandNade.Poll(g_hdr, nowS);
                 // The off-hand pistol's game side (the pistol a draw gets, availability, its state, shots and refills).
                 if (menuOk) offhandPistol.SetOn(menu.OffHandPistolOn());
@@ -753,6 +758,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.modMenu = menuOk && menu.Visible();
                     hin.gameMenu = g_hdr->gameUiMenu != 0;
                     hin.pistolFit = menuOk ? menu.FitFor(offhandPistol.Key()) : hands.DefaultFit();
+                    if (hin.weaponKind == 2 && menuOk) {
+                        const std::string& wk = menu.WeaponKey();
+                        hin.grenadeType = wk.find("MKIIFrag") != std::string::npos ? 0 : wk.find("Gammon") != std::string::npos ? 1 :
+                                          wk.find("Stick") != std::string::npos ? 2 : -1;
+                    }
                     if (menuOk) {
                         float magAdj[4], boltAdj[4];
                         menu.SpotAdjust(0, magAdj);
@@ -764,6 +774,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
                 manualReload.Send(g_hdr, nowS);
                 if (handsOk) offhandNade.Send(g_hdr, nowS);
+                if (handsOk) gunNade.Send(g_hdr, nowS);
                 if (handsOk) offhandPistol.Send(g_hdr, nowS);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
                 g_hdr->viewDisplayTime = fs.predictedDisplayTime;
@@ -779,8 +790,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 g_hdr->magPull = manualReload.MagPull();
                 g_hdr->magPose = manualReload.MagPose();
                 g_hdr->rack = manualReload.Rack();
-                g_hdr->nadeFlags = offhandNade.Flags();
-                g_hdr->nadePose = offhandNade.HandPose();
+                {
+                    // One grenade hold at a time: the gun hand's (bit7) or the off hand's; bit0 = either switch on.
+                    const bool gunHeld = gunNade.Holding();
+                    g_hdr->nadeFlags = (gunHeld ? gunNade.Flags() : offhandNade.Flags()) | (offhandNade.On() || gunNade.On() ? 1u : 0u);
+                    g_hdr->nadePose = gunHeld ? gunNade.HandPose() : offhandNade.HandPose();
+                }
                 g_hdr->pistolFlags = offhandPistol.Flags();
                 g_hdr->pistolTrigger = offhandPistol.Trigger();
                 g_hdr->offAimRay = offhandPistol.AimRay();
