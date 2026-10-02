@@ -108,6 +108,9 @@ public:
         bool        maskSwitch = false;  // the off hand holds a grenade: the game's own grenade switch (Xbox RB) kept back
         bool        maskSwitchB = false; // the off hand holds the pistol the game's switch weapon (Xbox B) would take
         bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
+        bool        meleeBusy = false;  // physical melee holds off: the gun hand just pressed at a holster or the pouch (0.4 s),
+                                        // the manual reload working the gun, a menu open (and 0.15 s after)
+        bool        turned = false;     // the gun pose is turned onto the off hand this frame (two-handed, past 12 cm)
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };
     Output Update(const Input& in);
@@ -170,6 +173,8 @@ private:
     float  testThrowVel_[3]{};
     float  minThrowSpeed_ = 1.0f;  // m/s: slower releases keep the game's own trigger-strength throw
     int   gunHand_ = 1;
+    double gunPressAt_ = -1.0;  // when the gun hand last pressed at a holster or the pouch (physical melee holds off after)
+    double gesturesOffAt_ = -1.0;  // when the gestures were last off (a menu): physical melee holds off a little after
     int   lastStart_ = -1;       // the start setting last applied
     shared::GunFit defaultFit_{};
 };

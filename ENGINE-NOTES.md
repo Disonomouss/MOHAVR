@@ -2022,6 +2022,47 @@ The harness cycle with the shipped defaults (PistolPair 1, GrenadePin 1) passed.
   - the casing came out behind the breech, mirrored as the drawn gun is (the brass frame's Y (0.34, -0.94, 0) against
     (-0.34, -0.94, 0) right-handed).
 
+## 5bm. Physical melee (D49, 2026-10-03)
+
+The research is in work/research/melee/ and the design in MELEE-DESIGN.md. Measured in the simulator
+(work/research/tests/melee1-9.ps1):
+- **The game's melee, step by step:** EALAWeapon.uc:1542-1615 (PerformMeleeTrace).
+  - `InstantHitDamage[2]` is 50 for every single-player gun, copied from `InstantHitDamageThird_TUNE`. The M12's
+    level-2 bayonet makes it 200, the MP40's "Dagger" 150.
+  - The impulse is 30000, or 75000 at GroundSpeed 490.
+  - The damage type `InstantHitDamageTypes[2]` is MOHAMeleeDamageType on every gun.
+  - Calling `TakeDamage` directly with the player's controller, the hit bone and that type works as the game's melee does:
+    the bone multiplier (50 on the arm gave 37), the kill, the limp ragdoll, the melee-kill credit (PRI +0x734: 61 -> 62).
+- **The impact effects:** `PlayImpactEffectsWithImpactInfo(Impact, 24|25)`, called through script::Call on the
+  SmallArmsAttachment (its script override), plays the material's melee sound.
+- **Strike points:** in the gun mesh frame. tools/melee_points.py generates melee_points.inc from the psk exports, and the
+  points are static through the guns' own animations. The levers in the gun pose's frame, as taken in the game:
+
+  | Strike | Right, up, back (m) |
+  |---|---|
+  | BAR butt | 0.01, -0.11, 0.38 (left-hand mode -0.01: mirrored) |
+  | Kar98k butt | 0.02, -0.13, 0.37 |
+  | M12 butt | 0.02, -0.14, 0.49 |
+  | M12 bayonet tip | 0.02, -0.06, -1.28 |
+
+- **Zero-extent traces of 3-10 units** from the drawn butt or tip hit the AI's per-bone bodies (Spine1, LeftShoulder,
+  LeftArm). The AI's collision cylinder is BlockZeroExtent=false.
+- **Test placement:**
+  - `Pawn.ClientSetLocation` (a script function) moves an AI pawn without a Base.
+  - Closer than 0.8 m centre to centre the move fails: an AI pawn encroaches on the player.
+  - At this checkpoint only the first placement in a run sticks. Later moves are undone within a second, back to that
+    spot; the Panzerschreck soldier goes back to his post.
+  - A pawn in `bStasis` doesn't tick, so his mesh and its collision stay where he stood; clear it.
+  - The Elite's Health written to 1000 drops to his 200 at the next hit: the game clamps to the class default.
+- **A bolt or pump gun waiting for the manual reload stays Active.** With `[Weapon] ManualReload=1` the Kar98k after a
+  shot (its bolt not worked) and the M12 after a shot (its pump not worked) sit in the weapon state `Active`, because the
+  mod sets their `WeaponRechamberAnim` to None. Physical melee strikes with them then. The M1 Garand fired empty is
+  `Active` too, its clip thrown and its action locked back; the host's magazine goes "out" by the reconcile.
+- **The host's samples as the game sees them:** ~80 Draws a second for the host's 90 frames. One game frame can span 2-3
+  host frames, so per-sample jumps must be judged as speeds (a 10 m/s swing moved 0.27 m between two samples 27 ms apart).
+  A one-host-frame jump can therefore reach the game spread over ~22 ms: a 30 cm step of the foregrip hand read as under
+  20 m/s. A step is told from a swing by its newest sample, which is still.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

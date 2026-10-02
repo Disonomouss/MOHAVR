@@ -290,6 +290,8 @@ Hands::Output Hands::Update(const Input& in) {
         }
         if (!press) continue;
         held_[h] = true;
+        // (Physical melee: a draw, a holster or the pouch is a fast move of the gun hand, not a strike.)
+        if (h == g && (zone >= 0 || Len(Sub(hp, pouch)) < pouchR)) gunPressAt_ = in.now;
         if (!in.gestures || !ok) continue;
         // The pouch reload (the player, 2026-10-02): a hand holding a gun grips the ammo pouch -- reloaded at once, no
         // animation. The gun hand's gun (not a grenade), or the pistol the off hand holds.
@@ -373,6 +375,7 @@ Hands::Output Hands::Update(const Input& in) {
                 // may run Reload).
                 gunHand_ = h;
                 twoHanded_ = false;
+                gunPressAt_ = in.now;  // (physical melee: the draw is the new gun hand's fast move, not a strike)
                 MLOG("hands: gun hand -> %s (drew)", h ? "right" : "left");
             }
         } else if (h == o && gunOk) {
@@ -401,7 +404,10 @@ Hands::Output Hands::Update(const Input& in) {
     if (gunOk && offOk && twoHanded_ && in.fit.foreFwd >= 15.0f) {
         const V3 want = Sub(pt[o], gunPos);
         const V3 have = Rotate(gun.orientation, foreOff);
-        if (Len(want) > 0.12f) gun.orientation = Mul(FromTo(have, want), gun.orientation);
+        if (Len(want) > 0.12f) {
+            gun.orientation = Mul(FromTo(have, want), gun.orientation);
+            out.turned = true;
+        }
     }
     // The manual reload, with the gun's final pose.
     if (reload_) {
@@ -515,6 +521,9 @@ Hands::Output Hands::Update(const Input& in) {
     }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;
+    if (!in.gestures) gesturesOffAt_ = in.now;
+    out.meleeBusy = (gunPressAt_ >= 0.0 && in.now - gunPressAt_ < 0.4) || (reload_ && reload_->GunHandBusy()) ||
+                    (gesturesOffAt_ >= 0.0 && in.now - gesturesOffAt_ < 0.15);
     if (gunOk && g == gunHand_) {
         out.gunValid = true;
         out.gun = gun;

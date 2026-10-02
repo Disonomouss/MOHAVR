@@ -19,14 +19,14 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
-const int kTabItems[kTabCount][12] = {
+const int kTabItems[kTabCount][13] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kPouchReload, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage, kGiveAll, kClose, -1},
+    {kGunFit, kReload, kPouchReload, kMelee, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
@@ -34,7 +34,7 @@ bool g_giveAllMenu = false;
 bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
 // Tab t's i-th shown item (-1 past the end), and how many it shows.
 int ItemAt(int t, int i) {
-    for (int k = 0; k < 12 && kTabItems[t][k] >= 0; ++k)
+    for (int k = 0; k < 13 && kTabItems[t][k] >= 0; ++k)
         if (Shown(kTabItems[t][k]) && i-- == 0) return kTabItems[t][k];
     return -1;
 }
@@ -229,6 +229,9 @@ void Menu::ApplySavedSettings() {
         const int defPouch = static_cast<int>(GetPrivateProfileIntW(L"Hands", L"PouchReload", 0, shipped.c_str()));
         pouchReload_ = GetPrivateProfileIntW(L"Hands", L"PouchReload", defPouch, iniPath_.c_str()) != 0;
         MLOG("menu: pouch reload %s", pouchReload_ ? "on" : "off");
+        const int defMelee = static_cast<int>(GetPrivateProfileIntW(L"Melee", L"Physical", 0, shipped.c_str()));
+        physicalMelee_ = GetPrivateProfileIntW(L"Melee", L"Physical", defMelee, iniPath_.c_str()) != 0;
+        MLOG("menu: physical melee %s", physicalMelee_ ? "on" : "off");
     }
     // The off-hand pistol: likewise the shipped [OffHand] Pistol until the player toggles it.
     const int defPistol = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Pistol", 0, shipped.c_str()));
@@ -810,6 +813,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             pouchReload_ = !pouchReload_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Hands", L"PouchReload", pouchReload_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: pouch reload -> %s", pouchReload_ ? "on (a hand with a gun grips the pouch: reloaded at once)" : "off");
+        } else if (item == kMelee) {
+            physicalMelee_ = !physicalMelee_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Melee", L"Physical", physicalMelee_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: physical melee -> %s", physicalMelee_ ? "on (a swing of the gun's butt strikes)" : "off (the right stick's melee only)");
         } else if (item == kGunNade) {
             gunNadePin_ = !gunNadePin_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"GrenadePin", gunNadePin_ ? L"1" : L"0", iniPath_.c_str());
@@ -991,6 +998,11 @@ void Menu::Render() {
                 ImGui::Selectable(label, sel);
                 note("a hand holding a gun grips the ammo pouch on your belt: reloaded at once");
                 break;
+            case kMelee:
+                snprintf(label, sizeof(label), "Physical melee   <  %s  >", physicalMelee_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("swing the butt of your gun into an enemy (a bayonet: thrust or slash): the game's melee");
+                break;
             case kGunNade:
                 snprintf(label, sizeof(label), "Hand grenades    <  %s  >", gunNadePin_ ? "pin & grip" : "game");
                 ImGui::Selectable(label, sel);
@@ -1045,6 +1057,7 @@ void Menu::Render() {
             case kClose: ImGui::Selectable("Close", sel); break;
             default: break;
         }
+        if (sel) ImGui::SetScrollHereY(0.5f);  // (a tab longer than the panel scrolls with the selection)
     }
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);

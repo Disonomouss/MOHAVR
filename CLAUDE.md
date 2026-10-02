@@ -78,6 +78,12 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   Bolt actions: `@boltup`, `@boltback` (and `@bolt` = the knob closed), `reload=boltup|boltback|boltfwd|boltdown`; the
   game command `mohavr upgradelevel <type> <level>` (before `GiveWeapon`) gives a lower upgrade level.
   The M12's pump: `@fore` (the foregrip point; the grip there is the pump, drawn back along the gun), `reload=pumpback|pumpfwd`.
+- Physical melee tests (MELEE-DESIGN 3): a `hand=` line with `dur=S` is a keyframe the host moves the hand to over S
+  seconds (a swing at a known speed); `handframe=room` keeps the test hands still in the room while `tools/sim_pose.py`
+  moves the head (`handframe=head` follows it again); `hand=l,@fore,0,0,0,0,0,0,pin` keeps the hand where the spot is
+  now (the host logs "pinned at"); `mohavr melee enemy [dist] [ally]` puts the nearest axis (allied) soldier in front
+  (only the first placement in a run sticks), `mohavr melee enemy at butt|bayonet [depth]`, `where`, `status` (his
+  Health, the melee-kill count), `hit` (the executor alone); `Debug.MeleeTrace=1` logs each armed swing.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

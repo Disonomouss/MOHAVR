@@ -366,7 +366,9 @@ void Pad::ReadTests(double now) {
             t.dur = 0.5;
             float lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
             std::string buttons, press;
-            bool aimLine = false;
+            bool aimLine = false, durSet = false, smooth = false;
+            int pendH = -1;  // a plain "hand=" line: applied at once, or a keyframe with dur=
+            TestPose pendTp{};
             char* ctx = nullptr;
             for (char* tok = strtok_s(line, " \t\r\n", &ctx); tok; tok = strtok_s(nullptr, " \t\r\n", &ctx)) {
                 char* eq = strchr(tok, '=');
@@ -377,11 +379,17 @@ void Pad::ReadTests(double now) {
                     // "aim=yaw,pitch" (degrees) or "aim=off": a test right-hand aim pose, until changed.
                     aimLine = true;
                     float y = 0.0f, p = 0.0f;
+                    // (A keyframe playing or queued for that hand would turn its pose back on: they end.)
                     if (strcmp(v, "off") != 0 && sscanf_s(v, "%f,%f", &y, &p) >= 1) {
                         testPose_[1] = {true, 0.2f, -0.3f, 0.3f, y, p, 0.0f};
+                        handKeys_[1].clear();
+                        segStart_[1] = -1.0;
                         MLOG("pad: test aim yaw %.1f pitch %.1f deg (right hand)", y, p);
                     } else {
                         testPose_[0].on = testPose_[1].on = false;
+                        handKeys_[0].clear();
+                        handKeys_[1].clear();
+                        segStart_[0] = segStart_[1] = -1.0;
                         MLOG("pad: test poses off");
                     }
                 } else if (!strcmp(tok, "lost")) {
@@ -407,6 +415,13 @@ void Pad::ReadTests(double now) {
                             testReload_.push_back(e);
                             MLOG("pad: test reload event %s", v);
                         }
+                } else if (!strcmp(tok, "handframe")) {
+                    // "handframe=room|head": the test hands kept in the room as the head is now (a glance, a duck with the
+                    // gun still: the melee tests), or following the head again.
+                    aimLine = true;
+                    testRoom_ = !strcmp(v, "room");
+                    testRoomSet_ = false;
+                    MLOG("pad: test hands %s", testRoom_ ? "kept in the room (the head's frame now)" : "following the head");
                 } else if (!strcmp(tok, "throwvel")) {
                     aimLine = true;
                     if (sscanf_s(v, "%f,%f,%f", &testThrowVel_[0], &testThrowVel_[1], &testThrowVel_[2]) == 3) {
@@ -431,15 +446,18 @@ void Pad::ReadTests(double now) {
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
                         // "...,align" (only @magin): the hand turned so the held magazine sits as seated (any grip).
                         tp.align = tp.target == 3 && strstr(name, ",align") != nullptr;
+                        // "...,pin": where the spot is when it applies, kept (the melee tests' foregrip hand: the spot moves
+                        // with the gun the hand turns).
+                        tp.pin = strstr(name, ",pin") != nullptr;
                         const int h = (v[0] == 'l' || v[0] == 'L') ? 0 : 1;
                         testPose_[h] = tp;
+                        handKeys_[h].clear();
+                        segStart_[h] = -1.0;
                         MLOG("pad: test %s hand at @%.*s %+.2f %+.2f %+.2f m, yaw %.1f pitch %.1f%s", h ? "right" : "left",
                              static_cast<int>(len), name, tp.x, tp.y, tp.z, tp.yaw, tp.pitch, tp.target < 0 ? " (unknown spot)" : "");
                     } else if (sscanf_s(v, "%c,%f,%f,%f,%f,%f,%f", &which, 1, &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll) >= 4) {
-                        const int h = (which == 'l' || which == 'L') ? 0 : 1;
-                        testPose_[h] = tp;
-                        MLOG("pad: test %s hand at %.2f %.2f %.2f m, yaw %.1f pitch %.1f", h ? "right" : "left", tp.x, tp.y,
-                             tp.z, tp.yaw, tp.pitch);
+                        pendH = (which == 'l' || which == 'L') ? 0 : 1;
+                        pendTp = tp;
                     }
                 }
                 else if (!strcmp(tok, "lx")) lx = static_cast<float>(atof(v));
@@ -448,10 +466,23 @@ void Pad::ReadTests(double now) {
                 else if (!strcmp(tok, "ry")) ry = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "lt")) lt = static_cast<float>(atof(v));
                 else if (!strcmp(tok, "rt")) rt = static_cast<float>(atof(v));
-                else if (!strcmp(tok, "dur")) t.dur = atof(v);
+                else if (!strcmp(tok, "dur")) t.dur = atof(v), durSet = true;
+                else if (!strcmp(tok, "ease")) smooth = !strcmp(v, "smooth");
                 else if (!strcmp(tok, "raw")) t.raw = atoi(v) != 0;
                 else if (!strcmp(tok, "buttons")) buttons = v;
                 else if (!strcmp(tok, "press")) press = v;
+            }
+            if (pendH >= 0) {
+                const TestPose& tp = pendTp;
+                if (durSet) {
+                    handKeys_[pendH].push_back({tp, t.dur, smooth});
+                } else {
+                    handKeys_[pendH].clear();
+                    segStart_[pendH] = -1.0;
+                    testPose_[pendH] = tp;
+                    MLOG("pad: test %s hand at %.2f %.2f %.2f m, yaw %.1f pitch %.1f", pendH ? "right" : "left", tp.x, tp.y, tp.z,
+                         tp.yaw, tp.pitch);
+                }
             }
             if (aimLine) continue;  // an aim line sets the test pose only; it is not a pad state
             auto each = [](const std::string& list, auto fn) {
@@ -491,9 +522,46 @@ void Pad::ReadTests(double now) {
     (void)now;
 }
 
+// The hands' keyframes ("hand=... dur=S"): each moves the hand's test pose from where it is to the key over S seconds
+// (linear, or smoothstep with ease=smooth: peak speed 1.5x), once per XR frame; the last one stays.
+void Pad::StepHandKeys(double now) {
+    for (int h = 0; h < 2; ++h) {
+        if (segStart_[h] < 0.0 && !handKeys_[h].empty()) {
+            const HandKey k = handKeys_[h].front();
+            handKeys_[h].pop_front();
+            segFrom_[h] = testPose_[h].on && testPose_[h].target < 0 ? testPose_[h] : k.to;
+            segTo_[h] = k.to;
+            segDur_[h] = k.dur > 0.001 ? k.dur : 0.001;
+            segSmooth_[h] = k.smooth;
+            segStart_[h] = now;
+            segFrames_[h] = 0;
+            MLOG("pad: test %s hand -> %.2f %.2f %.2f m, yaw %.1f pitch %.1f roll %.1f over %.3f s%s", h ? "right" : "left", k.to.x,
+                 k.to.y, k.to.z, k.to.yaw, k.to.pitch, k.to.roll, k.dur, k.smooth ? " (smooth)" : "");
+        }
+        if (segStart_[h] < 0.0) continue;
+        const double a = std::clamp((now - segStart_[h]) / segDur_[h], 0.0, 1.0);
+        const float e = static_cast<float>(segSmooth_[h] ? a * a * (3.0 - 2.0 * a) : a);
+        const TestPose& f = segFrom_[h];
+        TestPose p = segTo_[h];
+        p.x = f.x + (p.x - f.x) * e;
+        p.y = f.y + (p.y - f.y) * e;
+        p.z = f.z + (p.z - f.z) * e;
+        p.yaw = f.yaw + (p.yaw - f.yaw) * e;
+        p.pitch = f.pitch + (p.pitch - f.pitch) * e;
+        p.roll = f.roll + (p.roll - f.roll) * e;
+        testPose_[h] = p;
+        ++segFrames_[h];
+        if (a >= 1.0) {
+            MLOG("pad: test %s hand arrived -- %d frame(s) in %.3f s", h ? "right" : "left", segFrames_[h], now - segStart_[h]);
+            segStart_[h] = -1.0;
+        }
+    }
+}
+
 void Pad::BeginFrame(double now) {
     now_ = now;
     ReadTests(now);
+    StepHandKeys(now);
     if (testActive_ && now >= testUntil_) testActive_ = false;
     if (!testActive_ && !tests_.empty()) {
         test_ = tests_.front();
@@ -615,26 +683,35 @@ bool Pad::CreateSpaces(XrSession session) {
 
 std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const {
     std::uint32_t valid = 0;
+    trackedReal_ = 0;
     for (int h = 0; h < 2; ++h) {
         out[h] = XrPosef{{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
         if (!aimSpace_[h]) continue;
         XrSpaceLocation loc{XR_TYPE_SPACE_LOCATION};
         constexpr XrSpaceLocationFlags need = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT;
+        constexpr XrSpaceLocationFlags real = XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
         if (XR_SUCCEEDED(xrLocateSpace(aimSpace_[h], space, t, &loc)) && (loc.locationFlags & need) == need) {
             out[h] = loc.pose;
             valid |= 1u << h;
+            if ((loc.locationFlags & real) == real) trackedReal_ |= 1u << h;
         }
     }
     for (int h = 0; h < 2; ++h) {
-        const TestPose& tp = testPose_[h];
+        TestPose& tp = testPose_[h];
         if (!tp.on) continue;
-        // The head's heading (yaw only), then the test pose in that frame.
+        // The head's heading (yaw only), then the test pose in that frame (with handframe=room, the frame it had then).
         const auto& q = head.orientation;
         const float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
-        const float heading = std::atan2(-fx, -fz);  // R_y(heading) * (0,0,-1) = (fx, 0, fz)
+        float heading = std::atan2(-fx, -fz);  // R_y(heading) * (0,0,-1) = (fx, 0, fz)
+        XrVector3f base = head.position;
+        if (testRoom_) {
+            if (!testRoomSet_) testRoomSet_ = true, testRoomBase_ = head.position, testRoomHeading_ = heading;
+            base = testRoomBase_;
+            heading = testRoomHeading_;
+        }
         const float sh = std::sin(heading), ch = std::cos(heading);
         // right = (cos, 0, -sin), forward = (-sin, 0, -cos)
-        XrVector3f base = head.position;
+        const XrVector3f headBase = base;
         if (tp.target >= 0) {
             if (!testTargetOk_[tp.target]) continue;  // not known yet: the hand as tracked
             base = testTarget_[tp.target];
@@ -644,9 +721,19 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
             out[h].position = {a.x + tp.x * ch - tp.z * sh, a.y + tp.y, a.z - tp.x * sh - tp.z * ch};
             out[h].orientation = testAlign_.orientation;
             valid |= 1u << h;
+            trackedReal_ |= 1u << h;
             continue;
         }
         out[h].position = {base.x + tp.x * ch - tp.z * sh, base.y + tp.y, base.z - tp.x * sh - tp.z * ch};
+        if (tp.pin && tp.target >= 0) {  // pinned: from now on this point as a plain pose (the same heading frame)
+            const float dx = out[h].position.x - headBase.x, dz = out[h].position.z - headBase.z;
+            tp.x = dx * ch - dz * sh;
+            tp.y = out[h].position.y - headBase.y;
+            tp.z = -(dx * sh + dz * ch);
+            tp.target = -1;
+            tp.pin = false;
+            MLOG("pad: test %s hand pinned at %.3f %.3f %.3f m", h ? "right" : "left", tp.x, tp.y, tp.z);
+        }
         const float yaw = heading - tp.yaw * 0.0174533f;  // positive test yaw = to the right
         const float pitch = tp.pitch * 0.0174533f;        // positive = up
         const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cx = std::cos(pitch * 0.5f),
@@ -655,9 +742,13 @@ std::uint32_t Pad::LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrP
         const float rz = -tp.roll * 0.0174533f * 0.5f, sz = std::sin(rz), cz = std::cos(rz);  // + roll = clockwise
         out[h].orientation = {yp.x * cz + yp.y * sz, yp.y * cz - yp.x * sz, yp.z * cz + yp.w * sz, yp.w * cz - yp.z * sz};
         valid |= 1u << h;
+        trackedReal_ |= 1u << h;
     }
     for (int h = 0; h < 2; ++h)
-        if (testLost_[h]) valid &= ~(1u << h);
+        if (testLost_[h]) {
+            valid &= ~(1u << h);
+            trackedReal_ &= ~(1u << h);
+        }
     return valid;
 }
 

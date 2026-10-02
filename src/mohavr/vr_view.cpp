@@ -16,6 +16,7 @@
 #include "throwing.hpp"
 #include "muzzle.hpp"
 #include "offhand.hpp"
+#include "melee.hpp"
 #include "offpistol.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
@@ -432,6 +433,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         }
         if (offhand::TestCommand(line)) continue;  // "mohavr nade ..." (the off-hand grenade's spike)
         if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol)
+        if (melee::TestCommand(line)) continue;      // "mohavr melee ..." (physical melee)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -527,6 +529,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     reload::OnDraw(hdr);
     offhand::OnDraw(hdr);
     offpistol::OnDraw(hdr);
+    melee::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1450,6 +1453,7 @@ bool Install(const Config& cfg) {
     const bool armsOk = armsik::Install(cfg);  // M8: the arms reach from the body to the gun
     offhand::Configure(cfg, armsOk);          // (the grenade drawn in the off hand needs the bake)
     offpistol::Configure(cfg, armsOk);       // (likewise the pistol)
+    melee::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (physical melee: the drawn gun)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);

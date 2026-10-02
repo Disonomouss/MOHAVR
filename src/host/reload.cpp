@@ -133,6 +133,9 @@ void ManualReload::Poll(shared::Header* hdr, double now, bool handsOk) {
             stateKey_ = geo_.key;
             disagree_ = 0;
             boltHeld_ = false;
+            actHeld_ = false;  // (the review of D49: the old gun's bolt and pump holds posed the new gun's action)
+            pumpHeld_ = pumpByFore_ = rackArmed_ = false;
+            rack_ = 0.0f;
             SetMag(gameIn ? kInGun : kOut, "another gun in hand");
         } else if (acksDone && (geo_.caps & 1u)) {
             // Reconcile (3.2): the game's magazine differs from ours for two of its frames with nothing in flight.

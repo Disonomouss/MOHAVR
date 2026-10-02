@@ -62,6 +62,25 @@ struct Config {
     bool  offPistolFlash = false;     // [OffHand] PistolFlash -- its own muzzle flash at the muzzle on each shot
     bool  offPistolBrass = false;     // [OffHand] PistolBrass -- its own brass out of its ejection port on each shot
     float offPistolKick = 0.0f;       // [OffHand] PistolKick -- its kick, the game's own pistol fire's (0 none .. 1 the game's)
+    // [Melee] (MELEE-DESIGN): a swing of the drawn gun's butt (a pistol's grip; the M12's bayonet) does the game's melee.
+    bool  meleePhysical = false;      // [Melee] Physical -- the shipped default (the host's menu switch is the player's)
+    float meleeHandSpeed = 1.5f;      // [Melee] HandSpeed -- m/s: the gun hand itself (no wrist flick or re-aim strikes)
+    float meleeButtSpeed = 3.0f;      // [Melee] ButtSpeed -- m/s at the butt or the grip
+    float meleeBladeHandSpeed = 2.5f; // [Melee] BladeHandSpeed -- m/s: the hand itself for a bayonet (or front) slash
+    float meleeSlashSpeed = 8.0f;     // [Melee] SlashSpeed -- m/s at the front or the bayonet, across the blade
+    float meleeSlashCos = 0.6f;       // [Melee] SlashCos -- a slash moves at least this much across the blade (|cos| at most)
+    float meleeThrustSpeed = 2.5f;    // [Melee] ThrustSpeed -- m/s: the hand along the barrel, a bayonet thrust
+    float meleeThrustCos = 0.8f;      // [Melee] ThrustCos -- how straight along the barrel a thrust is (cos)
+    float meleeThrustTravel = 0.15f;  // [Melee] ThrustTravel -- m forward along the barrel in 0.25 s
+    float meleeMaxTurn = 3.0f;        // [Melee] MaxTurn -- rad/s: a thrust moves straight (a re-aim turns)
+    float meleeTravel = 0.12f;        // [Melee] Travel -- m the strike point moved in the last 0.25 s
+    float meleeHold = 0.12f;          // [Melee] Hold -- s a strike stays armed after its speed
+    float meleeTargetCooldown = 0.5f; // [Melee] TargetCooldown -- s before the same soldier can be struck again
+    bool  meleeMuzzle = false;        // [Melee] Muzzle -- the front strikes too (a jab or a barrel swing)
+    bool  meleeWorld = true;          // [Melee] World -- props and the world: impact effects (the game's damage to props meant for it)
+    bool  meleeProps = false;         // [Melee] Props -- the game's damage to every prop struck (fuel barrels, radios...)
+    bool  meleeLOS = true;            // [Melee] LineOfSight -- no strike the eye can't see (through a wall)
+    bool  meleeChargeKill = true;     // [Melee] ChargeKill -- the game's rule: struck while sprinting, the soldier dies
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)
@@ -86,6 +105,7 @@ struct Config {
     bool debugCrashDump = true;      // [Debug] CrashDump -- a crash in d3d9/d3d9on12/ucrtbase writes a dump (round 29)
     bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
     bool debugOffHandTrace = false;  // [Debug] OffHandTrace -- the off-hand grenade: availability, the hold's states, ticks
+    bool debugMeleeTrace = false;    // [Debug] MeleeTrace -- physical melee: each armed swing, its speeds, contacts, refusals
     bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)

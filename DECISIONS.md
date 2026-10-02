@@ -668,3 +668,54 @@ where it is, so the C96's full auto doesn't snap it forward.
 
 **Why:** round 46, answer 4: "It has no brass or recoil." Round 46's other answers: the pouch reload works with both
 hands and the pouch is where they reach; the slide and the flash are good.
+
+### D49. Physical melee: the swing of the gun does the game's melee -- Decided 2026-10-03
+`[Melee] Physical=1` (shipped on, proven in the simulator; the menu's Weapons tab "Physical melee", the player's).
+- **What strikes:**
+  - a long gun's butt plate;
+  - a pistol's grip bottom, or the C96's shoulder stock;
+  - the M12's bayonet at level 2, thrust or slash.
+  The strike does the game's own melee: `TakeDamage` with the weapon's melee damage type, impulse and the hit bone's
+  multiplier, then the attachment's melee impact effects. The weapon never enters its melee state: no animation, no
+  lockout.
+- **Damage:**
+  - butt and grip: the weapon's base melee damage (50: three torso hits, a head hit kills);
+  - the bayonet: the upgrade's 200;
+  - sprinting: the game's charge kill.
+  A kill is a melee kill for the gun in hand (the stats, the XP).
+- **Speed** is measured on the host's gun pose in the room and against the head's heading, through levers taken while
+  the gun is quiet. A stroke counts only when it is one in both frames. Walking, turning, a glance or a duck, the game's
+  kick and tracking jumps never count as a swing.
+  - Butt or grip: 3 m/s with the hand at 1.5.
+  - A bayonet thrust: the hand along the barrel at 2.5 m/s, 15 cm, not turning.
+  - A bayonet slash: the tip at 8 m/s across the blade, the hand at 2.5.
+- **Contact** is the drawn gun's strike points swept through the world with the bullets' collision. The game's eye must
+  see the hand and the hand the contact.
+- **Who and what takes it:**
+  - allies (the game's own team rule), the dead and the invincible are left alone;
+  - props take the game's damage only if meant for melee (the Flakturm's vent covers, physics props);
+  - the rest of the world shows the impact effect and a short pulse, and doesn't spend the swing.
+- **Rate:** one hit per swing; the weapon's re-melee interval after a hit; 0.5 s per soldier.
+- **Feedback:** the host pulses the gun hand (both hands two-handed) per strike, through shared block v23 (meleeOn,
+  meleeHits, meleePower, meleeKind).
+- **What stays:** the right stick click stays the game's melee (the launchers have only it; the MP40's "Dagger" is a knife
+  in the game's left hand, not on the gun, so it stays on the button).
+- **The design and the critique:** MELEE-DESIGN.md. A three-lens critique of the first draft found 13 defects, all fixed
+  before the tests: the levers, the bayonet gates, props, the world, body motion, spikes, tracking, the clocks, entry from
+  inside a body, snap turns, effects after a kill, the menu's room and the pulse merge.
+- **Two code reviews** (4 of 6, then 7 of 8 confirmed; all fixed; MELEE-DESIGN 5). The first:
+  - the busy bit was the pouch's "magazine out", which is a bolt gun's resting state, so the Kar98k, the Springfield and
+    a fired M12 never struck. It is now the manual reload working the gun (`Reload::GunHandBusy`);
+  - a glance or a duck with the gun still could arm a strike. Each gate now passes in both frames;
+  - the levers were taken from the raise's first frame. They now come only from a quiet gun;
+  - physics props now count only with their impulse on, and destructible props don't.
+
+  The second:
+  - busy is now only the reload under way: not a clip the game threw out, an empty reserve, a hold left from the last
+    gun, or a foregrip just held (`PumpTrigger=0`);
+  - a draw by the other hand gets the 0.4 s hold-off;
+  - a tracking step arms nothing: the newest sample alone must move at half the gate too. The jump test now covers the
+    foregrip hand and the gun's turn.
+**Why:** the player (2026-10-03): "In game with most weapons clicking right stick whacks enemies with the butt of the gun.
+Can the motion of hitting with the butt of the gun do the melee damage? If this system can be worked out, apply it for
+special cases, such as upgraded guns that have bayonets." 

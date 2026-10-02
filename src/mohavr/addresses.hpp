@@ -54,6 +54,10 @@ inline constexpr std::uintptr_t kLocalPlayerActor = 0x40;
 inline constexpr std::uintptr_t kLocalPlayerFExec = 0x3C;
 inline constexpr std::uintptr_t kLocalPlayerExec  = 0x10C1A220;
 inline constexpr std::uintptr_t kActorRotation    = 0xF4;
+// MOHAPlayerReplicationInfo's single-player melee-kill count (SPStatsGlobal.iMeleeKills): the native
+// MOHAPlayerStatsComponent::OnMeleeKill (0x10EE06C0, vtable 0x1158E8F8 + 0x180) adds 1 at [PRI + 0x734] per melee kill
+// (disassembled in the melee research, MELEE-DESIGN; 'add [eax+0x734]'). Read by the physical melee's test status only.
+inline constexpr std::uintptr_t kPriMeleeKills    = 0x734;
 
 // InitD3D9Device: the CreateDevice call site, CALL EAX with EAX = IDirect3D9 vtbl[0x40]
 // (ENGINE-NOTES 5b). Checked now as a build fingerprint; hooked in M2.

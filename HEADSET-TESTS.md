@@ -1891,6 +1891,43 @@ pistol."
 
 ---
 
+## Round 48: prepared 2026-10-03, physical melee (tested with round 47, one session)
+**Your request:** "In game with most weapons clicking right stick whacks enemies with the butt of the gun. Can the motion of
+hitting with the butt of the gun do the melee damage? If this system can be worked out, apply it for special cases, such as
+upgraded guns that have bayonets."
+
+**Changed:**
+- **Physical melee:** swing the butt of your gun into an enemy and it does the game's own melee.
+  - Damage: 50, three body hits; a hit to the head kills. While sprinting, one hit kills, as in the game.
+  - Every rifle strikes, the Kar98k and the Springfield too, also before you work the bolt.
+  - A pistol strikes with the bottom of its grip, and the C96 with its shoulder stock when fitted.
+  - Your hand buzzes on each hit, and a quick tap when the gun hits a wall.
+  - Your squadmates are left alone.
+- **The M12's bayonet** (level 2): thrust it straight into an enemy, or slash across him: 200, one hit.
+- **Turn it off:** menu -> Weapons -> **Physical melee**. The right stick click still does the game's own melee.
+
+**How to try it:**
+1. Get close to an enemy and drive the butt of your rifle into him (a short hard push, butt first). Three hits, or one
+   to the head.
+2. With a pistol, whip him with the bottom of the grip.
+3. M12 with the bayonet: a straight thrust, then a sideways slash.
+4. Swing the gun into a wall: a tap in your hand, and the swing still counts if an enemy is behind a low wall.
+5. Holster, reload and aim as usual near an enemy: nothing should strike by itself.
+6. Near an enemy, hold the gun still and look around quickly, duck, and turn on the spot: nothing should strike.
+
+**Questions:**
+1. Did every strike you meant count? Did anything strike that you didn't mean (re-aiming, holstering, reloading,
+   turning, looking around)?
+2. Three body hits per soldier, one to the head: right? Should a hard swing do more?
+3. The bayonet: do the thrust and the slash both feel natural?
+4. Should the muzzle or the barrel count too (a jab or a club swing)? The ini's `[Melee] Muzzle=1` turns that on.
+5. Keep the right stick's melee? Does its animation pull the gun out of your hand?
+6. The MP40's "Dagger" upgrade is a knife in the game's left hand, not on the gun. Should your left hand get a knife?
+
+**Deployed for this round:** the shipped defaults (round 47's brass and recoil, and physical melee, all on).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

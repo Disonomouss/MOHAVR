@@ -52,8 +52,13 @@ public:
     // replace a hand: "aim=yaw,pitch" (degrees) = the right hand 20 cm right, 30 cm below and 30 cm ahead of `head`,
     // turned by yaw/pitch from the head's heading; "hand=l|r,x,y,z,yaw,pitch[,roll]" = that hand at x right, y up, z ahead
     // (metres, heading frame); "hand=l|r,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]" = that hand at a manual-reload
-    // spot (SetTestTargets), offset in the heading frame; "aim=off" = both real again.
+    // spot (SetTestTargets), offset in the heading frame (",pin" at the end: where the spot is when it applies, kept as a
+    // plain pose -- the hand stays put as the spot moves); "aim=off" = both real again. "handframe=room" = the test poses in
+    // the head's frame as it is then, kept (the hands stay put in the room while the head moves: tools/sim_pose.py);
+    // "handframe=head" = following the head again.
     std::uint32_t LocateHands(XrSpace space, XrTime t, const XrPosef& head, XrPosef (&out)[2]) const;
+    // The hands LocateHands last found POSITION_ and ORIENTATION_TRACKED (not inferred; test poses count as tracked).
+    std::uint32_t TrackedBits() const { return trackedReal_; }
     // Hands.HoldLost: a hand that lost tracking keeps its last pose relative to the head's position and heading (not its
     // pitch: a held gun doesn't swing when you look up or down) until it's tracked again. Returns the held bits (OR them
     // into the valid bits). "lost=l|r|both|none" in pad_cmd.txt makes a hand lose tracking, for tests.
@@ -142,6 +147,7 @@ private:
     void  ReadRaw(XrSession s, Raw& r) const;
     shared::PadState Map(const Raw& r, bool menuLayout);
     void  ReadTests(double now);
+    void  StepHandKeys(double now);
 
     XrActionSet set_ = XR_NULL_HANDLE;
     XrAction    stick_[2]{};           // left, right thumbstick
@@ -149,18 +155,31 @@ private:
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
     XrAction    haptic_[2]{};          // left, right vibration
-    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
-    TestPose    testPose_[2]{};
+    struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false, pin = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
+    mutable TestPose testPose_[2]{};   // (mutable: LocateHands turns a pinned spot into a plain pose)
+    // pad_cmd.txt "hand=l|r,x,y,z,yaw,pitch[,roll] dur=S [ease=smooth]": a keyframe the hand's test pose moves to over S
+    // seconds, stepped once per XR frame (the melee tests' swings at a known speed); keyframes play in order.
+    struct HandKey { TestPose to; double dur; bool smooth; };
+    std::deque<HandKey> handKeys_[2];
+    TestPose    segFrom_[2]{}, segTo_[2]{};
+    double      segStart_[2] = {-1.0, -1.0}, segDur_[2]{};
+    bool        segSmooth_[2]{};
+    int         segFrames_[2]{};
     XrVector3f  testTarget_[10]{};     // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade",
     bool        testTargetOk_[10]{};   // "@pistol", "@chest" (LOCAL)
     XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
     bool        testAlignOk_ = false;
+    bool        testRoom_ = false;     // "handframe=room": the test poses in the head's frame when it came (taken next frame)
+    mutable bool       testRoomSet_ = false;
+    mutable XrVector3f testRoomBase_{};
+    mutable float      testRoomHeading_ = 0.0f;
     Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
     bool        maskedDown_[2]{};
     bool        maskedTrig_[2]{};
     std::uint16_t maskedButtons_ = 0;
     std::uint16_t maskedHeld_ = 0;     // masked buttons still down (kept masked until let go)
     bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking
+    mutable std::uint32_t trackedReal_ = 0;  // LocateHands' really-tracked bits (physical melee)
     bool        holdLost_ = true;      // [Hands] HoldLost
     XrPosef     heldRel_[2]{};         // the last tracked pose relative to the head's position and heading
     bool        haveRel_[2]{}, heldNow_[2]{};

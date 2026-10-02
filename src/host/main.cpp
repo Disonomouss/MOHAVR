@@ -806,6 +806,26 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     for (int i = 0; i < 4; ++i) g_hdr->offFit[i] = fit[i];
                 }
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
+                // Physical melee (MELEE-DESIGN): the switch; the gun hand -- and the off hand on the foregrip -- really tracked
+                // (not held by HoldLost, not inferred); busy; the gun pose's epoch (+1 on a jump: no speed across it).
+                {
+                    static std::uint32_t epoch = 0, seenHeld = 0xFFFFFFFFu, seenRecenter = 0;
+                    static int seenHand = -1;
+                    static bool seenTurned = false;
+                    const std::uint32_t real = pad.TrackedBits(), held = handBits & ~trackedBits;
+                    if (handsOk && (held != seenHeld || handsOut.gunHand != seenHand || handsOut.turned != seenTurned ||
+                                    g_hdr->recenterSeq != seenRecenter)) {
+                        seenHeld = held;
+                        seenHand = handsOut.gunHand;
+                        seenTurned = handsOut.turned;
+                        seenRecenter = g_hdr->recenterSeq;
+                        ++epoch;
+                    }
+                    const int gh = handsOut.gunHand;
+                    const bool tracked = handsOk && (real & (1u << gh)) && (!handsOut.twoHanded || (real & (1u << (1 - gh))));
+                    g_hdr->meleeOn = (menuOk && menu.PhysicalMelee() ? 1u : 0u) | (tracked ? 2u : 0u) |
+                                     (handsOk && handsOut.meleeBusy ? 4u : 0u) | ((epoch & 0xFFu) << 8);
+                }
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
                     g_hdr->gunPose = toPose(handsOut.gun);
@@ -822,6 +842,25 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     if (handsOut.thrown) {
                         for (int i = 0; i < 3; ++i) g_hdr->throwVel[i] = handsOut.throwVel[i];
                         InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->throwSeq));
+                    }
+                    // A melee strike (the game's count): the gun hand, and the off hand on the foregrip; a soldier or a prop
+                    // 50 ms at 0.6..1 by the strike's speed, the world 25 ms at 0.35 -- merged with this frame's other pulses
+                    // (a second pulse on the same hand would cut the first short).
+                    static std::uint32_t meleeSeen = g_hdr->meleeHits;
+                    if (g_hdr->meleeHits != meleeSeen) {
+                        meleeSeen = g_hdr->meleeHits;
+                        const bool world = g_hdr->meleeKind == 3u;
+                        const float amp = world ? 0.35f : 0.6f + 0.4f * g_hdr->meleePower, ms = world ? 25.0f : 50.0f;
+                        for (int h = 0; h < 2; ++h) {
+                            if (h != handsOut.gunHand && !handsOut.twoHanded) continue;
+                            const float a = h == handsOut.gunHand ? amp : amp * 0.8f;
+                            handsOut.pulse[h] = true;
+                            handsOut.pulseAmp[h] = std::fmax(handsOut.pulseAmp[h], a);
+                            handsOut.pulseMs[h] = std::fmax(handsOut.pulseMs[h], ms);
+                        }
+                        MLOG("host: melee strike %u (%s) -- pulse %.2f for %.0f ms%s", meleeSeen,
+                             g_hdr->meleeKind == 1u ? "a soldier" : g_hdr->meleeKind == 2u ? "an actor" : "the world", amp, ms,
+                             handsOut.twoHanded ? ", both hands" : "");
                     }
                     for (int h = 0; h < 2; ++h) {
                         if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);

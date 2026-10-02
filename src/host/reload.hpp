@@ -100,6 +100,14 @@ public:
     bool Active() const { return active_; }
     // (GOAL A3: a pump gun's pouch only while its tube has room.)
     bool MagazineOut() const { return mag_ == kOut && (!(geo_.caps & 2048u) || (geo_.state & 512u)); }
+    // Physical melee holds off while the reload works the gun: a magazine grabbed or in the hand; the action held; the pump
+    // taken by its grip or stroked on the foregrip; a box magazine out with one to fetch. Not a gun waiting for the player
+    // (the reviews of D49): a bolt or pump gun's "out", a clip the game threw out (NoGrab), an empty reserve.
+    bool GunHandBusy() const {
+        const bool pumping = pumpHeld_ && (geo_.caps & 2048u) && (pumpTrigger_ || !pumpByFore_ || rackArmed_ || rack_ >= 0.15f);
+        const bool boxOut = mag_ == kOut && !(geo_.caps & (512u | 2048u | 4096u)) && (geo_.reserve > 0 || (geo_.state & 64u));
+        return active_ && (mag_ == kGrabbed || mag_ == kInHand || boltHeld_ || pumping || (actHeld_ && (geo_.caps & 4096u)) || boxOut);
+    }
     // Hands::Update, at an off-hand grip press, before the holsters and the foregrip: true = a reload spot took it (the
     // pouch while the magazine is out, the magazine while in; the nearest by distance / radius; 3.4).
     bool TakePress(const XrVector3f& hand, const XrVector3f& pouch, float pouchR);

@@ -9,6 +9,12 @@
     python tools/pad_cmd.py --seq "ly=1 dur=1" "dur=0.5" "buttons=y dur=0.2"   # several states in order
     python tools/pad_cmd.py --aim 10,-5                    # test RIGHT-HAND aim pose: 10 deg right, 5 down (Aim.Mode)
     python tools/pad_cmd.py --aim off                      # back to the real controllers
+    python tools/pad_cmd.py --seq "hand=r,0,-0.1,0.55,180,0,0 dur=0.1"   # a hand KEYFRAME: moves there over 0.1 s
+                                                           # (interpolated per XR frame; ease=smooth for smoothstep)
+    python tools/pad_cmd.py --seq "hand=l,@fore,0,0,0,0,0,0,pin"   # at a reload spot as it is now, then kept there (the
+                                                           # host logs "pinned at x y z": plain hand= lines from there)
+    python tools/pad_cmd.py --seq "handframe=room"         # the test hands stay put in the room while the head moves
+                                                           # (tools/sim_pose.py); handframe=head follows the head again
 
 The host reads and deletes %TEMP%\\MOHAVR\\pad_cmd.txt and plays each line for its duration; while a test
 state plays it replaces the controllers entirely. Without --raw the values are an Xbox pad state (buttons: a b x

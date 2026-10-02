@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 22;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change)
+inline constexpr std::uint32_t kVersion = 23;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -302,6 +302,16 @@ struct Header {
     volatile std::uint32_t pistolEvtSeq;      // 2268
     std::uint32_t          pistolEvt[8];      // 2272 low byte: 1 DRAW, 2 SHOT, 3 HOLSTER
     Pose                   pistolEvtRay[8];   // 2304 SHOT: the off aim line at the trigger pull (LOCAL)
+    // v23: physical melee (MELEE-DESIGN 2.10).
+    std::uint32_t          meleeOn;           // 2528 host -> game, per XR frame INSIDE the view seqlock: bit0 the switch, bit1 the
+                                              //      gun hand (and the off hand on the foregrip) really tracked (POSITION_ and
+                                              //      ORIENTATION_TRACKED: not HoldLost, not inferred), bit2 the gun hand busy (a
+                                              //      holster or the pouch just pressed, the magazine out, a menu), bits 8-15 the gun
+                                              //      pose's epoch (+1 on a jump: the foregrip's turn on / off, a hand held / back,
+                                              //      the gun hand changed, a recentre)
+    volatile std::uint32_t meleeHits;         // 2532 game -> host: +1 per strike that hit (the host's pulse)
+    volatile float         meleePower;        // 2536 game -> host: that strike's speed over its gate, 0..1 (written before meleeHits)
+    volatile std::uint32_t meleeKind;         // 2540 game -> host: 1 a soldier, 2 an actor, 3 the world (written before meleeHits)
 };
 #pragma pack(pop)
 
@@ -371,7 +381,11 @@ static_assert(offsetof(Header, offFit) == 2252, "shared::Header layout must matc
 static_assert(offsetof(Header, pistolEvtSeq) == 2268, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolEvt) == 2272, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolEvtRay) == 2304, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 2528, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, meleeOn) == 2528, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, meleeHits) == 2532, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, meleePower) == 2536, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, meleeKind) == 2540, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 2544, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -549,7 +563,9 @@ struct GunFit {
 inline constexpr int kSeqTries = 64;
 
 // Seqlock read of the host's gun (v9); false if no gun pose this frame, or (flags = 0xFFFFFFFF) still mid-write.
-inline bool ReadGun(const Header* h, Pose& gun, Pose& aim, std::uint32_t& flags) {
+// v23: optionally the frame's display time (XrTime, ns), the melee bits, the head and both hands, from the same frame.
+inline bool ReadGun(const Header* h, Pose& gun, Pose& aim, std::uint32_t& flags, std::int64_t* displayTime = nullptr,
+                    std::uint32_t* meleeOn = nullptr, Pose* head = nullptr, Pose* hands = nullptr) {
     for (int t = 0; t < kSeqTries; ++t) {
         const std::uint32_t s1 = h->viewSeq;
         if (s1 & 1u) {
@@ -562,11 +578,20 @@ inline bool ReadGun(const Header* h, Pose& gun, Pose& aim, std::uint32_t& flags)
         const std::uint32_t f = h->gunFlags;
         gun = h->gunPose;
         aim = h->aimRay;
+        const std::int64_t dt = h->viewDisplayTime;
+        const std::uint32_t mo = h->meleeOn;
+        if (head) *head = h->head;
+        if (hands) {
+            hands[0] = h->hand[0];
+            hands[1] = h->hand[1];
+        }
 #if defined(_MSC_VER)
         _ReadWriteBarrier();
 #endif
         if (h->viewSeq != s1) continue;
         flags = f;
+        if (displayTime) *displayTime = dt;
+        if (meleeOn) *meleeOn = mo;
         return (f & 1u) != 0;
     }
     flags = 0xFFFFFFFFu;
