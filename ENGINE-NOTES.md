@@ -1987,6 +1987,41 @@ The harness cycle with the shipped defaults (PistolPair 1, GrenadePin 1) passed.
   (ParticleSystemComponent_360 on Attachment_Bar_1, _376 on Attachment_M12CombatShotgun_1, _381 on Attachment_Bar_8).
   An 8-round C96 burst (712) followed.
 
+## 5bl. The off-hand pistol's kick and brass (D48, 2026-10-02)
+
+- **The gun hand's kick is the arms' fire animation.** viewmodel draws the gun through `d = camInv x gunFrame`: the whole
+  camera-frame gun, animation and all, moved onto the controller. The pistols' gun AnimSets keep `RootOffset` still through
+  `colt45_gun_fire` / `mauser_gun_fire` (only the slide, hammer and bolt move). So the kick is the arms' RightProp (the gun
+  mesh's frame) against the camera, `K(f) = RightProp(f) x inv(RightProp(0))`:
+
+  | Sequence | Peak | At | Back (units) | Settled |
+  |---|---|---|---|---|
+  | `colt45_fire` | 21.8 deg | f2, 0.067 s | 4.3 back, 3.3 up | ~3 deg by f10 (held to the end) |
+  | `mauser_fire` (one-handed) | 26.0 deg | f2 | 4.5 back, 3.0 up | ~5-7 deg by f10 |
+  | `mauser_fire_2` (the stock) | 3.0 deg | f2 | 4.2 back | -- |
+  | `mauser_fire_3` (the 712, 4 frames) | 0.8 deg | f2 | 4.5 back | -- |
+
+  The tails' few degrees are where the game blends back to the idle, so the replay fades them out (0.30-0.45 s).
+- **The eject socket:** DE_Mauser_Rigged `SkeletalMeshSocket_16` on `tag_eject` (#3) at (0, 0, -10), turned (16384, 0,
+  -16384). The game's sockets are `ShellEject_Player` / `_NPC` / `ShellEject` (SmallArmsAttachment defaults), and the
+  pistols' templates are `HUS_VFX_1911a_pistol_muzzle.ShellEject` / `HUS_VFX_Mauser_muzzle.ShellEject` (DefaultWeapon.ini).
+- **[S] kick1** (Debug.MuzzleFreeze=5, side-on C96):
+  - frozen near the peak, the pistol's muzzle is flipped up with the hand turned on it and the bolt back;
+  - a casing (dark, as the game's own sometimes are: `r26-mz-slobarrel-muzzle.png`) sits just up and behind the breech;
+  - the brass's frame starts 25 units behind the drawn muzzle, its Y (out of the port) on the gun's right side.
+- **[S] kick2:**
+  - one shot, 1.2 s later: back exactly at rest;
+  - a held 712 burst: the gun held up through it, at rest after, with the bolt locked back (20 of 20 fired).
+- **[S] kick1b** (the flash from the drawn muzzle, Debug.MuzzleFreeze=1): the flash at 7589.42 -8929.93 -4577.57, 0.3 units
+  from the off line's placement (7589.47 -8929.78 -4577.28): the drawn bore and the off line agree.
+- **[S] kick3, left-hand mode:** the gun hand was switched in the menu and switched back in the same run; the player's
+  user ini and freehand file were compared after the run and were byte-identical. The C96 was in the right hand,
+  pointing left:
+  - frozen, it is kicked up with the hand on it;
+  - its flash is at the muzzle, its X (0.94, 0.34, 0) along the barrel;
+  - the casing came out behind the breech, mirrored as the drawn gun is (the brass frame's Y (0.34, -0.94, 0) against
+    (-0.34, -0.94, 0) right-handed).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

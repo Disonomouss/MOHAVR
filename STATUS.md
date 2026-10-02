@@ -213,7 +213,8 @@ address-space budget for D3D9On12.
    **The gun hand's grenades by pin, cook and grip** (D44, shipped on).
    **Two pistols** (D45, shipped on): with a pistol in the gun hand, the off hand draws its twin.
    **HEADSET-TESTS round 45 passed.** **The pouch reload** (D46, shipped on).
-   **The off-hand pistol's slide and muzzle flash** (D47, shipped on, proven in the simulator). Next: HEADSET-TESTS round 46.
+   **The off-hand pistol's slide and muzzle flash** (D47, shipped on). **HEADSET-TESTS round 46 passed.**
+   **The off-hand pistol's brass and kick** (D48, shipped on, proven in the simulator). Next: HEADSET-TESTS round 47.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

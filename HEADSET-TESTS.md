@@ -1860,6 +1860,35 @@ pistol."
 
 **Deployed for this round:** the shipped defaults (all of the above on).
 
+**Answers (2026-10-02):** "1. Yes and yes. 2. It is good. 3. It is good. 4. It has no brass or recoil."
+
+**Log received:** yes, `logs/modlogs/20261002-182519-MOHAVR.log` (pouch reloads by both hands, the twin and the Colt).
+
+**Verdict: round 46 [H] PASSED;** next: the off-hand pistol's brass and recoil.
+
+---
+
+## Round 47: prepared 2026-10-02, the off-hand pistol's brass and recoil
+**Your request:** round 46: "It has no brass or recoil."
+
+**Changed:**
+- **Recoil:** the left-hand pistol now kicks as your right-hand pistol does. It is the game's own pistol firing
+  animation, mirrored. The muzzle flips up and back and your hand goes with it; the aim dot doesn't move. The C96 on full
+  auto stays kicked up while you hold the trigger.
+- **Brass:** each shot throws the pistol's own casing out of its ejection port.
+
+**How to try it:**
+1. Draw the left-hand pistol at your chest and fire single shots: watch the kick and the casings.
+2. Fire the right-hand pistol too: do the two hands kick alike?
+3. With the C96 upgraded to full auto, hold the trigger.
+
+**Questions:**
+1. The recoil: right amount, too much or too little? (The ini's `[OffHand] PistolKick` scales it, 0 to 1.)
+2. The brass: out of the right place, flying the right way?
+3. Anything else?
+
+**Deployed for this round:** the shipped defaults.
+
 ---
 
 ## Template

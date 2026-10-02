@@ -642,3 +642,29 @@ animation, just an instant reload." -- "Make it a toggle option in menu."
 
 Also fixed, though rated harmless: the slide bone is forgotten with the carrier, and a new shot starts the slide from
 where it is, so the C96's full auto doesn't snap it forward.
+
+### D48. The off-hand pistol's brass and kick -- Decided 2026-10-02 (round 46)
+`[OffHand] PistolBrass=1` and `PistolKick=1` (both shipped on, proven in the simulator).
+- **The kick** is the game's own pistol fire animation replayed: the arms' `colt45_fire` / `mauser_fire` move the gun mesh
+  (RightProp) against the camera, which is exactly the kick the gun hand's drawn pistol shows (viewmodel moves the whole
+  camera frame onto the controller).
+  - `tools/pistol_kick.py` bakes it per frame, mirrored into the left hand as the hold is, into `pistol_kick.inc`: the
+    Colt flips 21.8 deg, the one-handed C96 26 deg, both at 67 ms, and back about 6 units.
+  - It moves the drawn pistol and the hand on it together; the aim line and its dot don't move.
+  - It fades out from 0.30 to 0.45 s (the game blends the fire back into its idle). A shot while the gun is still
+    rising leaves it; a later one rejoins the rise at the same angle, so the 712's full auto holds the gun up.
+  - `PistolKick` scales it (0 none .. 1 the game's).
+- **The brass:** the pistol's own `ShellEject` template (DefaultWeapon.ini's `ShellEjectParticleTemplate`) at the mesh's
+  eject socket (`ShellEject` on `tag_eject`), on a second component minted like the flash's. The hold is two reflections
+  (the mesh's and the controller's), so the drawn pistol is not mirrored and the casings leave its right side, as from
+  the gun hand.
+**The review** (4 of 5 confirmed):
+- The flash is now at the drawn, kicked muzzle along the drawn barrel (it was on the un-kicked off line, off the gun on
+  follow-up shots). The off line is still used when the pistol isn't drawn in the hand.
+- In left-hand mode the brass, and now the flash, go through the draw mirror as the drawn pistol does (they were at its
+  mirror-world spot).
+- A shot that comes while the gun is still up blends the whole pose (rotation and move) into the rise. Before, it matched
+  the angle alone: a 4-unit, 7-deg snap.
+
+**Why:** round 46, answer 4: "It has no brass or recoil." Round 46's other answers: the pouch reload works with both
+hands and the pouch is where they reach; the slide and the flash are good.

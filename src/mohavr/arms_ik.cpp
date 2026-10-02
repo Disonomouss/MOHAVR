@@ -754,7 +754,7 @@ void BakeCarrier(std::uintptr_t comp) {
             // where the game's idle holds it): collapsed, or put at their place in the mesh.
             bool collapse = false;
             float at[3];
-            if (pistol && offpistol::CarrierBone(i, collapse, at)) {
+            if (pistol && offpistol::CarrierBone(i, &b.m[0][0], collapse, at)) {
                 if (collapse)
                     for (int r = 0; r < 3; ++r)
                         for (int c = 0; c < 3; ++c) b.m[r][c] = 0.0f;

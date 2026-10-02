@@ -52,6 +52,6 @@ bool SkipHeldPistol();
 std::uintptr_t CarrierComponent();
 bool CarrierFrame(float (&gw)[16]);
 bool HandOnGun(float (&rel)[16], const float*& fingers, const char* const*& names);
-bool CarrierBone(int index, bool& collapse, float (&pos)[3]);
+bool CarrierBone(int index, const float* bone, bool& collapse, float (&pos)[3]);  // (bone: its pose in the mesh, 4x4)
 
 }  // namespace mohavr::offpistol

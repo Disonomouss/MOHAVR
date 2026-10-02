@@ -60,6 +60,8 @@ struct Config {
     bool  offPistolPair = false;      // [OffHand] PistolPair -- the gun hand's own pistol drawn a second time (two pistols)
     bool  offPistolSlide = false;     // [OffHand] PistolSlide -- its slide (the C96's bolt) back on each shot, locked back empty
     bool  offPistolFlash = false;     // [OffHand] PistolFlash -- its own muzzle flash at the muzzle on each shot
+    bool  offPistolBrass = false;     // [OffHand] PistolBrass -- its own brass out of its ejection port on each shot
+    float offPistolKick = 0.0f;       // [OffHand] PistolKick -- its kick, the game's own pistol fire's (0 none .. 1 the game's)
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)
