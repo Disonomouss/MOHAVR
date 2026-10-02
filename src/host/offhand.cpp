@@ -19,6 +19,8 @@ const char* TypeName(std::uint32_t t) { return t < 3 ? kTypeName[t] : "any"; }
 void OffHandGrenade::Init(const std::wstring& ini) {
     on_ = GetPrivateProfileIntW(L"OffHand", L"Grenade", 0, ini.c_str()) != 0;
     wchar_t b[32] = L"";
+    GetPrivateProfileStringW(L"OffHand", L"GrenadeHold", L"grip", b, 32, ini.c_str());
+    click_ = !_wcsicmp(b, L"click");
     GetPrivateProfileStringW(L"OffHand", L"Pin", L"trigger", b, 32, ini.c_str());
     pinAuto_ = !_wcsicmp(b, L"auto");
     GetPrivateProfileStringW(L"OffHand", L"Cook", L"spoon", b, 32, ini.c_str());
@@ -37,6 +39,27 @@ void OffHandGrenade::Init(const std::wstring& ini) {
     MLOG("offhand: OffHand.Grenade=%d (the default; the menu's toggle is the player's); pin by %s, cooking %s, a release under "
          "%.1f m/s is %s, hand speed at most %.0f m/s, haptics %d", on_ ? 1 : 0, pinAuto_ ? "the take (auto)" : "the trigger",
          kCook[cook_], minThrow_, slowToss_ ? "tossed along the view" : "dropped with the hand's own velocity", maxHand_, haptics_ ? 1 : 0);
+}
+
+void OffHandGrenade::SetClick(bool on) {
+    if (on == click_) return;
+    click_ = on;
+    MLOG("offhand: grenade hold -> %s", on ? "click (a click takes it; squeeze and let go to throw)" : "grip (held while gripped)");
+}
+
+void OffHandGrenade::HeldPress(const In& in, bool atHolster) {
+    if (state_ == kNone || !click_ || frozen_) return;
+    offHand_ = in.offHand;
+    if (state_ == kHeld) {
+        if (!atHolster) return;  // the pin in: only a holster takes it back
+        const float pos[3] = {in.hand.position.x, in.hand.position.y, in.hand.position.z}, zero[3] = {0, 0, 0};
+        Queue(shared::kNadePutBack, type_, pos, zero, in.now);
+        Pulse(offHand_, 0.2f, 20.0f);
+        To(kNone, "put back at a holster (click)");
+        return;
+    }
+    throwGrip_ = true;  // armed or cooking: the throw starts -- let go to throw
+    Pulse(offHand_, 0.3f, 15.0f);
 }
 
 void OffHandGrenade::SetOn(bool on) {
@@ -58,6 +81,7 @@ void OffHandGrenade::To(State s, const char* why) {
     if (s == kNone) {
         frozen_ = false;
         relatch_ = true;
+        throwGrip_ = false;
     }
 }
 
@@ -282,8 +306,8 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
                     Queue(shared::kNadePutBack, type_, pos, zero, in.now);
                     To(kNone, "put back: the game made it unavailable");
                 }
-            } else if (!in.gripHeld) {
-                if (state_ == kHeld || (state_ == kArmed && wasFrozen)) {
+            } else if (click_ ? (throwGrip_ && !in.gripHeld) : !in.gripHeld) {
+                if (state_ == kHeld || (state_ == kArmed && wasFrozen && !click_)) {
                     // Let go with the pin in -- or found let go after a freeze, the pin out but the spoon still on.
                     const Sample& last = hist_[(histNext_ + 23) % 24];
                     float at[3] = {pos[0], pos[1], pos[2]};

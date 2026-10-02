@@ -164,6 +164,12 @@ MIRRORED = [
      [('offgun_pull', 'RootOffset', 0)], 'VM_AnimSet_NoBazooka'),
     ('Attachment_Mauser', 'mauser_idle', 'Mauser_AnimSet', 'mauser_gun_idle', 'DE_Mauser_Rigged',
      [('offgun', 'RootOffset', 0)], 'VM_AnimSet_NoBazooka'),
+    # The off-hand grenade (the player, round 43: "can position and pose match main hand grenades for each type"): the
+    # right hand on the grenade at each type's idle, frame 0, mirrored into the left hand. A grenade has no animation of its
+    # own here: its mesh is the arms' RightProp frame (part = identity: no gun AnimSet / mesh).
+    ('Attachment_MKIIFragGrenade', 'grenademkiia_idle', None, None, None, [('offnade', 'RightProp', 0)], 'VM_AnimSet_NoBazooka'),
+    ('Attachment_GammonGrenade', 'gammongrenade_idle', None, None, None, [('offnade', 'RightProp', 0)], 'VM_AnimSet_NoBazooka'),
+    ('Attachment_StickGrenade', 'stickgrenade_idle', None, None, None, [('offnade', 'RightProp', 0)], 'VM_AnimSet_NoBazooka'),
 ]
 # GOAL A4: grips the rules above can't find, taken from the LEFT hand at an explicit frame (key, arms seq, gun AnimSet, gun
 # seq, psk, [(kind, part bone, frame)], the arms' AnimSet). The C96 below upgrade 1 (a per-level line, key@0) loads its
@@ -307,11 +313,12 @@ def main(root):
             armsBy[aset] = read_psa(os.path.join(root, 'psa', 'MOHAGame', 'AnimSet', aset + '.psa'))
         arms = armsBy[aset]
         a = arms['seqs'][aseq]
-        gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
-        sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))
-        g = gp['seqs'][gseq]
+        if gset:
+            gp = read_psa(os.path.join(root, 'psa', 'Var_Flk_P', 'AnimSet', gset + '.psa'))
+            sk = read_psk(os.path.join(root, 'psk', 'Var_Flk_P', 'SkeletalMesh3', psk + '.psk'))
+            g = gp['seqs'][gseq]
         for kind, bone, f in grips:
-            part = gun_cs(gp, sk, g, bone, f)
+            part = gun_cs(gp, sk, g, bone, f) if gset else [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
             right = mmul(key_local(arms, a, 'RightHand', f), inv(key_local(arms, a, 'RightProp', f)))
             d = math.dist(right[3][:3], part[3][:3])
             hand = mmul(mmul(MIRROR_D, mmul(right, inv(part))), MIRROR_S)

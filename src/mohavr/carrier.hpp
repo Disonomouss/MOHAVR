@@ -21,4 +21,15 @@ void Detach(Slot& slot, const char* who, bool trace);
 // The slot's clone while its pawn is the local pawn, else 0.
 std::uintptr_t Component(const Slot& slot);
 
+// A weapon's fit ([GunFit] <attachment class> = grip forward right up, angle ...): the player's ini, else the shipped one,
+// else [Weapon] GripX/Y/Z and 0 deg. `from` says which.
+void FitFromIni(const char* key, float (&fit)[4], const char*& from);
+// The off hand's hold of a weapon, mirrored from the gun hand's: the weapon's mesh in the off controller's frame (rows X, Y,
+// Z, origin; Unreal row vectors), from its mesh in the game camera's frame at the gun hand's idle (`camRows`: X, Y, Z,
+// origin; forward, right, up) and the fit: M_left = S x M_right x M_y (S the mesh's X mirror, M_y the controller's), M_right
+// = the camera pose with its origin moved back by the fit's grip, then pitched by the fit's angle as the host's gunPose.
+void MirroredHold(const float (&camRows)[12], const float (&fit)[4], float (&out)[16]);
+// out = a x b (row-major 4x4).
+void Mul16(const float* a, const float* b, float* out);
+
 }  // namespace mohavr::carrier

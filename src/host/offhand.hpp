@@ -31,6 +31,11 @@ public:
     void Init(const std::wstring& ini);
     void SetOn(bool on);
     bool On() const { return on_; }
+    // [OffHand] GrenadeHold (the menu's "Grenade hold"; the player, round 43): grip = held while the grip is, let go throws
+    // (or puts back with the pin in); click = a click takes it and it stays, a squeeze-and-release throws once the pin is
+    // out, a click at a holster puts it back with the pin in.
+    void SetClick(bool on);
+    bool Click() const { return click_; }
     // Start of the XR frame, before Hands::Update: the game's status (caps, counts, its state, acknowledgements, the
     // countdown ticks, a grenade gone off in the hand, a new pawn) and the reconcile.
     void Poll(shared::Header* hdr, double now);
@@ -65,6 +70,9 @@ public:
     // off, the game's side quiet, no gun in the other hand: the holster's own command, as before). `type`: 0 frag,
     // 1 Gammon, 2 stick, 0xFF any.
     bool TakePress(const In& in, std::uint32_t type);
+    // Hands::Update at an off-hand grip press while one is held (always the grenade's). Click mode: at a holster with the
+    // pin in, it goes back; with the pin out, the squeeze starts the throw (let go to throw).
+    void HeldPress(const In& in, bool atHolster);
     // Hands::Update, every frame after the presses.
     void Frame(const In& in, Out& out);
     // After Hands::Update: the queued events to the game (never more than the ring holds unread).
@@ -83,6 +91,8 @@ private:
     const char* UpdateActive(const In& in, bool* applies = nullptr);  // Active() from this frame's input; why not ("" if so)
 
     bool          on_ = false;
+    bool          click_ = false;        // GrenadeHold=click
+    bool          throwGrip_ = false;    // (click) the grip squeezed to throw: letting go throws
     // [OffHand]
     bool          pinAuto_ = false;      // Pin=auto: the take arms it
     int           cook_ = 1;             // Cook: 0 off, 1 spoon (a 2nd trigger squeeze), 2 pin (the fuse starts at the pin)

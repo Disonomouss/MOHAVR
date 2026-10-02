@@ -378,7 +378,8 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     bool offValid = false, twoHanded = false;
     const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
     // (The off-hand pistol drawn: the hand holds it whatever FreeOffHand says.)
-    const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent()) && framesOk && offValid && !twoHanded;
+    const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent() || offhand::CarrierComponent()) && framesOk && offValid &&
+                          !twoHanded;
     M4 supportDrawn{};  // saved support-side bone -> world
     const shared::Header* hdrK = bridge::SharedHeader();
     // How long the weapon has been in hand: its hold is taken only once it has settled (round 35: a still moment of the
@@ -488,7 +489,7 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         // computed from the same off controller frame and catch-up as the pistol's bake, so they can't separate. Else,
         // round 31: the manual reload's grip (the game's reload animation's hand on the magazine / handle) takes over.
         float gt[16];
-        if (offpistol::HandOnGun(gt, g_gripFingers, g_gripNames)) {
+        if (offpistol::HandOnGun(gt, g_gripFingers, g_gripNames) || offhand::HandOnGrenade(gt, g_gripFingers, g_gripNames)) {
             M4 onGun;
             std::memcpy(onGun.m, gt, sizeof(onGun.m));
             target = Mul(onGun, offCtrl);

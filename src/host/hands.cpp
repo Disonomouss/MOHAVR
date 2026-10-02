@@ -282,6 +282,7 @@ Hands::Output Hands::Update(const Input& in) {
         if (!in.gestures || !ok) continue;
         // The off hand holds a grenade (pressed again after a freeze let the grip go): the grip is the grenade's.
         if (h == o && nade_ && nade_->Holding()) {
+            nade_->HeldPress(nin, zone >= 0);
             consumed_[h] = true;
             continue;
         }

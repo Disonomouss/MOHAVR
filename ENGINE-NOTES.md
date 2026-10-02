@@ -1891,6 +1891,40 @@ events carry the off line at the pull. Measured in the simulator, BAR in hand, C
   [S] pistol8b, pistol9b, nade13: as before; the report now plays with a grenade in hand.
 - **[H] round 44 passed** (the player: "1. Works 2. Works 3. Works 4. Works 5. Works").
 
+## 5bh. The off-hand grenade held as the gun hand holds each type; the click hold (D43, 2026-10-02)
+
+- **The gun hand's grenade meshes in the game camera's frame at idle** (viewmodel's once-per-weapon log, the same over
+  many sessions):
+
+  | Type | X row | Y row | Z row | Origin |
+  |---|---|---|---|---|
+  | Frag | 0.896 0.329 0.297 | 0.425 -0.446 -0.788 | -0.126 0.832 -0.540 | 42.7 12.0 -9.9 |
+  | Gammon | 0.721 0.538 0.438 | 0.633 -0.252 -0.732 | -0.283 0.805 -0.522 | 42.7 12.0 -9.4 |
+  | Stick | 0.489 0.861 -0.140 | 0.505 -0.410 -0.760 | -0.711 0.301 -0.635 | 51.3 13.8 -12.4 |
+
+  Mirrored with the fit: `M_left = S x M_right x M_y`, then pitched by the fit's angle, then `x F_off x W`. A grenade's
+  mesh is the arms' RightProp frame.
+- **The arms' idle hold.** The right hand at each type's idle (grenademkiia_idle, gammongrenade_idle,
+  stickgrenade_idle), frame 0, is 9.9 / 9.0 / 11.9 units from the grenade's origin. It is mirrored by reload_grips.py
+  (part = identity) into `offnade`.
+- **[S] nadepose1, with the player's fits** (frag 47 11 -3 at -69 deg, Gammon 40 13 0 at -64, stick 54 10 -10 at -42):
+  - **Where it is drawn:**
+
+    | Type | Mesh origin | The hand |
+    |---|---|---|
+    | Frag | (-8.0, -1.0, 1.5) | (-13.9, -6.1, -4.6) |
+    | Gammon | (-7.3, 1.0, -6.5) | (-12.2, -6.4, -7.5) |
+    | Stick | (-3.6, -3.8, 0.0) | (-12.7, -2.0, -7.5) |
+
+    Positions are in the off controller's frame (forward, right, up).
+  - **The captures**, each type in the gun hand beside its clone in the off hand at the mirrored pose, show mirror
+    images, the fingers closed on each.
+  - **`GrenadeHold=click`:**
+    - a click took a stick grenade and it stayed with the grip let go;
+    - the trigger pulled the pin;
+    - a squeeze-and-release threw it (the test velocity, 8.5 m/s);
+    - a click at the holster put the next one back.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

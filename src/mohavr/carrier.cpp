@@ -1,6 +1,11 @@
 #include "carrier.hpp"
 
+#include <windows.h>
+
+#include <cmath>
 #include <cstring>
+#include <cwchar>
+#include <string>
 
 #include "addresses.hpp"
 #include "aim.hpp"
@@ -21,6 +26,64 @@ void CopyField(std::uintptr_t to, std::uintptr_t from, const char* name) {
 }  // namespace
 
 std::uintptr_t Component(const Slot& slot) { return slot.pawn && slot.pawn == aim::LocalPlayerPawn() ? slot.comp : 0; }
+
+void Mul16(const float* a, const float* b, float* out) {
+    float r[16];
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            float s = 0.0f;
+            for (int k = 0; k < 4; ++k) s += a[4 * i + k] * b[4 * k + j];
+            r[4 * i + j] = s;
+        }
+    std::memcpy(out, r, sizeof(r));
+}
+
+namespace {
+std::wstring ModuleDir() {
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&ModuleDir), &self);
+    wchar_t path[MAX_PATH] = L"";
+    const DWORD n = GetModuleFileNameW(self, path, MAX_PATH);
+    std::wstring dir(path, n);
+    const size_t slash = dir.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? dir : dir.substr(0, slash);
+}
+}  // namespace
+
+void FitFromIni(const char* key, float (&fit)[4], const char*& from) {
+    const std::string k(key ? key : "");
+    const std::wstring wkey(k.begin(), k.end());
+    const std::wstring shipped = ModuleDir() + L"\\MOHAVR.ini";
+    wchar_t v[128] = L"", local[MAX_PATH] = L"";
+    const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    from = "the player's ini";
+    if (n && n < MAX_PATH && !k.empty())
+        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", v, 128, (std::wstring(local) + L"\\MOHAVR\\MOHAVR.user.ini").c_str());
+    if (!v[0] && !k.empty()) {
+        GetPrivateProfileStringW(L"GunFit", wkey.c_str(), L"", v, 128, shipped.c_str());
+        from = "the shipped ini";
+    }
+    fit[3] = 0.0f;
+    if (v[0] && swscanf_s(v, L"%f %f %f %f", &fit[0], &fit[1], &fit[2], &fit[3]) >= 3) return;
+    auto num = [&](const wchar_t* name, float def) {
+        wchar_t b[32] = L"";
+        GetPrivateProfileStringW(L"Weapon", name, L"", b, 32, shipped.c_str());
+        return b[0] ? static_cast<float>(_wtof(b)) : def;
+    };
+    fit[0] = num(L"GripX", 34.0f), fit[1] = num(L"GripY", 11.0f), fit[2] = num(L"GripZ", -17.0f), fit[3] = 0.0f;
+    from = "the default";
+}
+
+void MirroredHold(const float (&c)[12], const float (&fit)[4], float (&out)[16]) {
+    // M_right: the camera pose, origin moved back by the grip. x M_y: every row's right component negated. S x: the X row
+    // negated.
+    const float m[16] = {-c[0], c[1], -c[2], 0, c[3], -c[4], c[5], 0, c[6], -c[7], c[8], 0,
+                         c[9] - fit[0], -(c[10] - fit[1]), c[11] - fit[2], 1};
+    const float a = fit[3] * 0.0174533f, cs = std::cos(a), sn = std::sin(a);
+    const float pitch[16] = {cs, 0, sn, 0, 0, 1, 0, 0, -sn, 0, cs, 0, 0, 0, 0, 1};
+    Mul16(m, pitch, out);
+}
 
 void Detach(Slot& slot, const char* who, bool trace) {
     if (!slot.comp) return;

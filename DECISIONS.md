@@ -539,3 +539,19 @@ follow the contents (a pistol holster draws the off-hand pistol, a grenade holst
   "primary".
 **Why:** the player (2026-10-02): "Add chest holster, add option in menu to decide what is in each holster." A review
 (one reviewer, a skeptic: 3 of 3 confirmed) set the three rules above.
+
+### D43. The off-hand grenade held as the gun hand holds it, and a click hold -- Decided 2026-10-02 (round 43)
+- **Where and how it is held.** The grenade in the off hand is placed and posed as the gun hand holds that type, mirrored.
+  Each type's mesh pose at the gun hand's idle (viewmodel's camera-frame log) and the type's fit (the player's
+  `[GunFit]`, as the gun hand uses) give its place on the off controller: `carrier::MirroredHold`, the pistol's rule
+  generalised. The hand closes on it with the game's own grip from each type's idle (grenademkiia / gammongrenade /
+  stickgrenade_idle frame 0), mirrored by tools/reload_grips.py into the rows `offnade`. While one is drawn the arms take
+  the free hand, whatever FreeOffHand says.
+- **`[OffHand] GrenadeHold`** (shipped `grip`; the menu's Weapons tab "Grenade hold", the player's):
+  - `grip` is as before;
+  - `click`: a click at a grenade holster takes it and it stays in the hand. The trigger pulls the pin and a second pull
+    cooks. Squeeze the grip, swing and let go to throw (a slow release is lobbed). A click at any holster puts it back
+    while the pin is in.
+**Why:** the player (round 43): "add option for grenade to either be held with grip or triggered with grip and put away
+with another grip to the holster", "The grenade appears above left hand, can position and pose match main hand grenades
+for each type." The throw by squeeze-and-release was their choice.

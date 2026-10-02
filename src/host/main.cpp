@@ -715,6 +715,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 manualReload.Poll(g_hdr, nowS, handsOk && (handBits & 3u) == 3u);
                 // The off-hand grenade's game side (counts, availability, its state, the fuse's ticks), likewise.
                 if (menuOk) offhandNade.SetOn(menu.OffHandGrenadeOn());
+                if (menuOk) offhandNade.SetClick(menu.GrenadeClick());
                 if (handsOk) offhandNade.Poll(g_hdr, nowS);
                 // The off-hand pistol's game side (the pistol a draw gets, availability, its state, shots and refills).
                 if (menuOk) offhandPistol.SetOn(menu.OffHandPistolOn());

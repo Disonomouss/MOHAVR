@@ -38,6 +38,9 @@ void OnDraw(shared::Header* hdr);
 // left-hand mode, as viewmodel::HandFrames); false when there is no off-hand frame (then it is collapsed).
 std::uintptr_t CarrierComponent();
 bool CarrierFrame(float (&gw)[16]);
+// The off hand on the held grenade (as the gun hand holds that type, mirrored): its frame in the off controller's frame and
+// its 15 fingers (reload_grips.inc's order); false when it isn't drawn.
+bool HandOnGrenade(float (&rel)[16], const float*& fingers, const char* const*& names);
 
 // Whether the off hand may take something now, as far as the game goes (shared with the off-hand pistol): a live player
 // pawn with a weapon drawn in hand (not the HellBox, not the parachute or the landing), no cinematic, weapons not held or

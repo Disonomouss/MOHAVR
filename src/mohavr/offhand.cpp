@@ -14,6 +14,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
+#include "reload.hpp"
 #include "script_call.hpp"
 #include "viewmodel.hpp"
 #include "vr_view.hpp"
@@ -190,6 +191,44 @@ std::uintptr_t Launch(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t g,
 
 // --- the carrier: the grenade drawn in the off hand while it is held (carrier.cpp) ------------------------------------
 carrier::Slot g_carrier;
+// Where the grenade is drawn (round 43: "can position and pose match main hand grenades for each type"): each type's mesh
+// as the gun hand holds it at its idle, in the game camera's frame (viewmodel's once-per-weapon log, rows X, Y, Z,
+// origin), mirrored onto the off controller with that type's fit (carrier::MirroredHold); the off hand closes on it with
+// the game's own grip, mirrored (reload_grips.inc "offnade").
+const char* const kTypeKey[3] = {"Attachment_MKIIFragGrenade", "Attachment_GammonGrenade", "Attachment_StickGrenade"};
+const float kTypeCam[3][12] = {
+    {0.896f, 0.329f, 0.297f, 0.425f, -0.446f, -0.788f, -0.126f, 0.832f, -0.540f, 42.7f, 12.0f, -9.9f},
+    {0.721f, 0.538f, 0.438f, 0.633f, -0.252f, -0.732f, -0.283f, 0.805f, -0.522f, 42.7f, 12.0f, -9.4f},
+    {0.489f, 0.861f, -0.140f, 0.505f, -0.410f, -0.760f, -0.711f, 0.301f, -0.635f, 51.3f, 13.8f, -12.4f}};
+float              g_hold16[16];       // the grenade mesh in the off controller's frame
+float              g_handOn[16];       // the off hand in the grenade mesh's frame
+const float*       g_nadeFingers = nullptr;
+const char* const* g_nadeFingerNames = nullptr;
+bool               g_nadeGrip = false, g_nadePlaced = false;
+
+void PlaceGrenade(int type) {
+    g_nadePlaced = g_nadeGrip = false;
+    if (type < 0 || type > 2) return;
+    float fit[4];
+    const char* from = "";
+    carrier::FitFromIni(kTypeKey[type], fit, from);
+    carrier::MirroredHold(kTypeCam[type], fit, g_hold16);
+    g_nadePlaced = true;
+    const float* hand = nullptr;
+    g_nadeGrip = reload::GripRows(kTypeKey[type], "offnade", hand, g_nadeFingers, g_nadeFingerNames);
+    if (g_nadeGrip) {
+        const float h[16] = {hand[0], hand[1], hand[2], 0, hand[3], hand[4], hand[5], 0, hand[6], hand[7], hand[8], 0,
+                             hand[9], hand[10], hand[11], 1};
+        std::memcpy(g_handOn, h, sizeof(h));
+    }
+    if (g_cfg.debugOffHandTrace) {
+        float rel[16];
+        carrier::Mul16(g_handOn, g_hold16, rel);
+        MLOG("offhand: the %s held as the gun hand holds it (%s fit %.0f %.0f %.0f, %.0f deg): mesh origin %.1f %.1f %.1f in the "
+             "off controller's frame, the hand %.1f %.1f %.1f (grip %s)", kTypeName[type], from, fit[0], fit[1], fit[2], fit[3],
+             g_hold16[12], g_hold16[13], g_hold16[14], rel[12], rel[13], rel[14], g_nadeGrip ? "offnade" : "none");
+    }
+}
 
 void CarrierDetach() { carrier::Detach(g_carrier, "offhand", g_cfg.debugOffHandTrace); }
 
@@ -467,6 +506,7 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
         // [OffHand] HudType: the HUD's grenade count shows the held type (GetHUDGrenade reads LastGrenadeWeapon), and the
         // game's own grenade switch later takes the type last used -- what its equip does.
         if (g_cfg.offHandHudType) SetObj(inv, "LastGrenadeWeapon", g);
+        PlaceGrenade(t);
         const bool drawn = g_cfg.offHandCarrier && g_bake && !g_cfg.hideViewModel && CarrierAttach(pawn, g);
         MLOG("offhand: TAKE %s -- %d left (counted out at the throw), fuse %.1f s%s", kTypeName[t], count, g_hold.fuseLen,
              drawn ? ", drawn in the hand" : "");
@@ -624,7 +664,10 @@ bool TestCommand(const wchar_t* line) {
             const std::uintptr_t pawn = aim::LocalPlayerPawn();
             const std::uintptr_t inv = Obj(pawn, "InvManager");
             const int t = !wcscmp(what, L"gammon") ? 1 : !wcscmp(what, L"stick") ? 2 : 0;
-            if (const std::uintptr_t g = GrenadeOf(pawn, inv, t)) CarrierAttach(pawn, g);
+            if (const std::uintptr_t g = GrenadeOf(pawn, inv, t)) {
+                PlaceGrenade(t);
+                CarrierAttach(pawn, g);
+            }
         }
     } else {
         Dump();
@@ -736,10 +779,22 @@ bool CarrierFrame(float (&gw)[16]) {
     bool offValid = false, two = false;
     if (!viewmodel::HandFrames(gun, off, offValid, two) || !offValid) return false;
     // The off controller's frame (rows forward, right, up, origin; the mirror world in left-hand mode, drawn back through
-    // the mirror like the arms), the grenade a little ahead of and below the controller: in the palm (the next phase puts
-    // the game's own grenade grip here).
+    // the mirror like the arms), the grenade held as the gun hand holds its type -- or, unplaced, a little ahead of and
+    // below the controller.
+    if (g_nadePlaced) {
+        carrier::Mul16(g_hold16, off, gw);
+        return true;
+    }
     std::memcpy(gw, off, sizeof(gw));
     for (int j = 0; j < 3; ++j) gw[12 + j] += off[j] * 6.0f - off[8 + j] * 2.0f;
+    return true;
+}
+
+bool HandOnGrenade(float (&rel)[16], const float*& fingers, const char* const*& names) {
+    if (!CarrierComponent() || !g_nadePlaced || !g_nadeGrip) return false;
+    carrier::Mul16(g_handOn, g_hold16, rel);
+    fingers = g_nadeFingers;
+    names = g_nadeFingerNames;
     return true;
 }
 

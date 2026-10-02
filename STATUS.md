@@ -209,8 +209,9 @@ address-space budget for D3D9On12.
    the gun hand's grenades with a grip throw, and the grenade held as the main hand holds each type.
    **The chest holster and the per-holster menu done** (D42): `[Holsters] Chest=SwitchPistol`, and the Holsters page's
    Holds chooses what each holster draws (saved for the player).
+   **The off-hand grenade held as the gun hand holds each type, and a click hold** (D43; round 43's requests).
    Next:
-   - those grenade requests;
+   - the main-hand grenades' trigger pin, cook and grip throw;
    - two pistols.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
