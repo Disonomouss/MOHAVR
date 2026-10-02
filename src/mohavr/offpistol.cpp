@@ -368,20 +368,24 @@ std::uintptr_t NearestEnemy(std::uintptr_t pawn, const float (&eye)[3], float up
 // One shot of the holstered pistol P along start -> dir (world), DESIGN 2.2. `credit`: Pawn.Weapon = P for the damage calls.
 // `soundAt`: where the report plays (the muzzle). `log`: the shot's line; `dot` (with log): the off dot's point, to say how
 // far from it the shot landed.
+// `counted` (the twin): the rounds are this count, not the pistol's AmmoCount (the gun hand's), and the pistol's fire mode
+// (it is the weapon in hand) is put back after.
 bool Shot(std::uintptr_t pawn, std::uintptr_t gun, std::uintptr_t p, const float (&start)[3], const float (&dir)[3],
-          const float (&soundAt)[3], float upm, bool credit, bool log, const float* dot = nullptr, std::uintptr_t* hitOut = nullptr) {
+          const float (&soundAt)[3], float upm, bool credit, bool log, const float* dot = nullptr, std::uintptr_t* hitOut = nullptr,
+          int* counted = nullptr) {
     // 0: the gate (the caller's part too: P live and the pawn's, the pawn alive, a round in the clip).
     if (!p || Bit(p, "bDeleteMe") || Obj(p, "Instigator") != pawn || Int(pawn, "Health", 0) <= 0) {
         MLOG("offpistol: no shot -- the pistol %s, its instigator %s, the pawn's health %d", names::Name(p).c_str(),
              names::Name(Obj(p, "Instigator")).c_str(), Int(pawn, "Health", 0));
         return false;
     }
-    const int ao = names::PropertyOffset(p, "AmmoCount");
-    const int clip = ao >= 0 ? static_cast<int>(ReadU32(p + ao)) : -1;
+    const int ao = counted ? -1 : names::PropertyOffset(p, "AmmoCount");
+    const int clip = counted ? *counted : ao >= 0 ? static_cast<int>(ReadU32(p + ao)) : -1;
     if (clip == 0) {
         MLOG("offpistol: the clip is empty -- a dry click");
         return false;
     }
+    const int savedMode = Byte(p, "CurrentFireMode");
     // 1: the line, the pistol's own range.
     float range = Float(p, "WeaponRange", 0.0f);
     if (range < 100.0f) range = 16384.0f;
@@ -423,6 +427,7 @@ bool Shot(std::uintptr_t pawn, std::uintptr_t gun, std::uintptr_t p, const float
     // the game's upgrade sequence runs ("magic bullets").
     const bool magic = names::StateName(Obj(pawn, "WeaponUpgradeManager")) == "UpgradeSequence";
     if (ao >= 0 && clip > 0 && !magic) *reinterpret_cast<int*>(p + ao) = clip - 1;
+    if (counted && clip > 0 && !magic) *counted = clip - 1;
     // 7-9: the damage, with Pawn.Weapon = P for the calls (its hits, kills and experience), restored unless something
     // changed it meanwhile.
     const int wo = names::PropertyOffset(pawn, "Weapon");
@@ -450,6 +455,8 @@ bool Shot(std::uintptr_t pawn, std::uintptr_t gun, std::uintptr_t p, const float
     } else if (credit && wo >= 0) {
         MLOG("offpistol: the shot changed the weapon in hand (%s) -- left as it is", names::Name(names::ReadPointer(pawn + wo)).c_str());
     }
+    // 10: the twin's fire mode back (it is the weapon in hand: a melee or the alt mode may be under way).
+    if (counted && fmo >= 0 && savedMode >= 0) *reinterpret_cast<std::uint8_t*>(p + fmo) = static_cast<std::uint8_t>(savedMode);
     // 11: the noise and the stats.
     Call nr(pawn, "NoiseRadius");
     const float radius = Float(p, "WeaponFireNoiseRadius", 5500.0f);
@@ -467,8 +474,8 @@ bool Shot(std::uintptr_t pawn, std::uintptr_t gun, std::uintptr_t p, const float
         if (dot && hitActor) sprintf_s(fromDot, "; %.0f cm from the off dot", Dist(hitLoc, *reinterpret_cast<const float(*)[3]>(dot)) * 100.0f / upm);
         MLOG("offpistol: shot %u -- %s: hit %s at %.1f m%s; %d damage call(s):%s; Pawn.Weapon %s; clip %d -> %d; report %s", g_shots,
              names::Name(p).c_str(), hitActor ? names::Name(hitActor).c_str() : "nothing", (hitActor ? Dist(start, hitLoc) : range) / upm,
-             fromDot, damaged, bones.c_str(), !credit ? "untouched (PistolCredit=main)" : restored ? "the pistol for the damage, the gun again after" : "NOT restored",
-             clip, ao >= 0 ? static_cast<int>(ReadU32(p + ao)) : -1, played ? "played" : "none");
+             fromDot, damaged, bones.c_str(), !credit ? (counted ? "already the pistol (the twin)" : "untouched (PistolCredit=main)") : restored ? "the pistol for the damage, the gun again after" : "NOT restored",
+             clip, counted ? *counted : ao >= 0 ? static_cast<int>(ReadU32(p + ao)) : -1, played ? "played" : "none");
     }
     return true;
 }
@@ -756,7 +763,26 @@ struct Hold {
     std::uintptr_t p = 0;
     float          lastShot = -1e9f;  // game time
     int            notOk = 0;         // Draws in a row the game wouldn't let it stay
+    bool           twin = false;      // the gun hand's own pistol drawn a second time ([OffHand] PistolPair)
 } g_hold;
+// The twin's clip (the player, 2026-10-02: "Both" -- two pistols): the same object as the gun hand's pistol, so its rounds
+// are a count the mod keeps (the object's AmmoCount is the gun hand's: its HUD, its reload); refilled in the holster too.
+struct Twin {
+    std::uintptr_t p = 0;
+    int            clip = -1;
+    float          due = 0.0f;  // game time; 0 none
+} g_twin;
+
+// The pistol a DRAW gets: the holstered one, else -- with PistolPair -- the gun hand's own, twinned.
+std::uintptr_t DrawCandidate(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, bool& twin) {
+    twin = false;
+    if (const std::uintptr_t p = Pistol(pawn, inv, gun)) return p;
+    if (g_cfg.offPistolPair && gun && names::IsA(gun, "MOHAPistol") && Obj(gun, "Instigator") == pawn && !Bit(gun, "bDeleteMe")) {
+        twin = true;
+        return gun;
+    }
+    return 0;
+}
 struct Refill {
     std::uintptr_t p = 0;
     float          due = 0.0f;  // game time
@@ -837,6 +863,27 @@ void RefillNow(std::uintptr_t p, const char* when) {
 void Holster(std::uintptr_t pawn, const char* what) {
     const std::uintptr_t p = g_hold.p;
     CarrierOff();
+    if (g_hold.twin) {
+        const int max = Int(p, "MaxAmmoCount", -1);
+        char refill[64] = "full";
+        if (g_twin.clip < max) {
+            float t = ArrayFloat0(p, "ReloadInterval");
+            if (!(t > 0.0f && t < 10.0f)) t = 1.5f;
+            if (g_cfg.offPistolRefill == 2) {
+                g_twin.clip = max;
+                ++g_refillsN;
+                sprintf_s(refill, "refilled at once");
+            } else if (g_cfg.offPistolRefill == 1) {
+                g_twin.due = GameTime(pawn) + t;
+                sprintf_s(refill, "refilled in %.2f s", t);
+            } else {
+                sprintf_s(refill, "not refilled (PistolRefill=off)");
+            }
+        }
+        MLOG("offpistol: %s -- the twin of %s, clip %d/%d, %s", what, names::Name(p).c_str(), g_twin.clip, max, refill);
+        g_hold = Hold{};
+        return;
+    }
     const int clip = Int(p, "AmmoCount", -1), max = Int(p, "MaxAmmoCount", -1);
     char refill[64] = "full";
     if (clip >= 0 && max > 0 && clip < max) {
@@ -873,7 +920,22 @@ void End(std::uintptr_t pawn, std::uint32_t code, const char* why) {
     g_hold = Hold{};
 }
 
-void Draw(std::uintptr_t pawn, std::uintptr_t p) {
+void Draw(std::uintptr_t pawn, std::uintptr_t p, bool twin) {
+    if (twin) {
+        const int max = Int(p, "MaxAmmoCount", 7);
+        if (g_twin.p != p) g_twin = Twin{p, max, 0.0f};  // a new pistol in the gun hand: its twin full
+        if (g_twin.due > 0.0f) {
+            if (GameTime(pawn) >= g_twin.due) g_twin.clip = max;
+            else MLOG("offpistol: the twin drawn %.2f s before its refill -- it keeps its count", g_twin.due - GameTime(pawn));
+            g_twin.due = 0.0f;
+        }
+        g_hold = Hold{kHeld, p, -1e9f, 0, true};
+        g_refusal = kOk;
+        const bool drawn = g_cfg.offHandCarrier && g_bake && !g_cfg.hideViewModel && CarrierOn(pawn, p, g_view.fit, g_cfg.debugOffHandTrace || g_logged < 3);
+        MLOG("offpistol: DRAW the twin of %s (the gun hand's) -- clip %d/%d%s", names::Name(p).c_str(), g_twin.clip, max,
+             drawn ? ", drawn in the hand" : "");
+        return;
+    }
     // A refill due is done now; one not yet due is called off -- drawn sooner, it keeps its count.
     if (Refill* r = RefillOf(p)) {
         if (GameTime(pawn) >= r->due) RefillNow(p, "due at the draw");
@@ -933,7 +995,7 @@ void Pull(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uin
     const std::uintptr_t p = g_hold.p;
     const char* why = "";
     if (!Owned(pawn, inv, p)) why = "the pistol is gone";
-    else if (p == gun || p == Obj(inv, "PendingWeapon")) why = "it is going to the gun hand";
+    else if (g_hold.twin ? p != gun : (p == gun || p == Obj(inv, "PendingWeapon"))) why = g_hold.twin ? "the gun hand put its pistol away" : "it is going to the gun hand";
     else if (!holdOk) why = notOk;
     else if (Int(pawn, "Health", 0) <= 0) why = "the player is dead";
     else if (Bit(pawn, "bNoWeaponFiring")) why = "weapons held by the game";
@@ -955,7 +1017,7 @@ void Pull(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uin
         }
         return;
     }
-    const int clip = Int(p, "AmmoCount", 0);
+    const int clip = g_hold.twin ? g_twin.clip : Int(p, "AmmoCount", 0);
     if (clip <= 0 && autoFire) return;  // one click per pull
     float start[3], dir[3], muzzle[3], point[3], upm = 100.0f, dist = 0.0f;
     bool fromEye = false;
@@ -973,7 +1035,8 @@ void Pull(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uin
     const bool log = g_cfg.debugOffHandTrace || g_logged < 200;
     if (log) ++g_logged;
     if (log && fromEye) MLOG("offpistol: something stands between the eye and the off gun -- the shot goes from the eye");
-    if (!Shot(pawn, gun, p, start, dir, muzzle, upm, g_cfg.offPistolCredit, log, point)) {
+    if (!Shot(pawn, gun, p, start, dir, muzzle, upm, g_cfg.offPistolCredit && !g_hold.twin, log, point, nullptr,
+              g_hold.twin ? &g_twin.clip : nullptr)) {
         Refuse(shared::kPistolShot, kShotFailed, "the shot failed");
         return;
     }
@@ -987,13 +1050,14 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
     case shared::kPistolDraw: {
         if (g_hold.state != kNone) return Refuse(type, kUnavailable, "a pistol is already held");
         if (!avail) return Refuse(type, kUnavailable, why);
-        const std::uintptr_t p = Pistol(pawn, inv, gun);
+        bool twin = false;
+        const std::uintptr_t p = DrawCandidate(pawn, inv, gun, twin);
         if (!p) {
             const bool inHand = gun && names::IsA(gun, "MOHAPistol");
             return Refuse(type, inHand ? kInGunHand : kNoneCarried, inHand ? "the only pistol is in the gun hand" : "no pistol carried");
         }
         if (Obj(inv, "PendingWeapon") == p) return Refuse(type, kInGunHand, "a switch is bringing it to the gun hand");
-        return Draw(pawn, p);
+        return Draw(pawn, p, twin);
     }
     case shared::kPistolShot:
         if (g_hold.state != kHeld) return Refuse(type, kUnavailable, "no pistol held");
@@ -1009,7 +1073,8 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
 void Publish(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, bool avail, bool holdOk, bool off) {
     // The pistol a DRAW gets (or the held one). Switched off with nothing held: nothing is walked or resolved (rule 7) -- the
     // status still goes out (the host sees us alive).
-    const std::uintptr_t p = g_hold.state == kHeld ? g_hold.p : (pawn && !off ? Pistol(pawn, inv, gun) : 0);
+    bool twin = g_hold.state == kHeld && g_hold.twin;
+    const std::uintptr_t p = g_hold.state == kHeld ? g_hold.p : (pawn && !off ? DrawCandidate(pawn, inv, gun, twin) : 0);
     if (p && p != g_resolvedFor) {
         g_resolvedFor = p;
         g_resolvedOk = Call(p, "CalcWeaponFireNative", true).ok && Call(p, "ProcessInstantHit", true).ok;
@@ -1019,19 +1084,21 @@ void Publish(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::
     const bool onlyInHand = !off && !p && gun && names::IsA(gun, "MOHAPistol");
     const bool held = g_hold.state == kHeld;
     const std::string key = p ? names::Name(Obj(p, "AttachmentClass")) : std::string();
-    const int clip = p ? Int(p, "AmmoCount", 0) : 0, max = p ? Int(p, "MaxAmmoCount", 0) : 0;
+    const int max = p ? Int(p, "MaxAmmoCount", 0) : 0;
+    const int clip = !p ? 0 : !twin ? Int(p, "AmmoCount", 0) : g_twin.p == p && g_twin.clip >= 0 ? g_twin.clip : max;
     const bool autoFire = held && ArrayName0(p, "FiringStatesArray") == "WeaponBurstFire";
     ++hdr->pistolSeq;  // odd: writing
     _ReadWriteBarrier();
     hdr->pistolCaps = (installed ? 1u : 0u) | (installed && avail ? 2u : 0u) | (p && Bit(p, "bInfiniteAmmo") ? 4u : 0u) |
                       (g_cfg.offHandCarrier && g_bake && ObjectProcessEventOk() ? 8u : 0u) | (installed && holdOk ? 16u : 0u) |
-                      (onlyInHand ? 32u : 0u) | (held && SwitchTakes(inv, gun, p) ? 64u : 0u) | (autoFire ? 128u : 0u);
+                      (onlyInHand ? 32u : 0u) | (held && !twin && SwitchTakes(inv, gun, p) ? 64u : 0u) | (autoFire ? 128u : 0u);
     const size_t n = key.size() < 47 ? key.size() : 47;
     std::memcpy(hdr->pistolKey, key.c_str(), n);
     hdr->pistolKey[n] = 0;
     hdr->pistolClip = clip;
     hdr->pistolMax = max;
-    hdr->pistolState = static_cast<std::uint32_t>(g_hold.state) | (p && clip <= 0 ? 4u : 0u) | (RefillPending() ? 8u : 0u) | (g_refusal << 8);
+    hdr->pistolState = static_cast<std::uint32_t>(g_hold.state) | (p && clip <= 0 ? 4u : 0u) | (RefillPending() || g_twin.due > 0.0f ? 8u : 0u) |
+                       (g_refusal << 8);
     hdr->pistolShots = g_shotsN;
     hdr->pistolDry = g_dryN;
     hdr->pistolEvtAck = g_seen;
@@ -1063,6 +1130,7 @@ void OnDraw(shared::Header* hdr) {
         g_fixN = 0;
         g_hold = Hold{};
         g_refill[0] = g_refill[1] = Refill{};
+        g_twin = Twin{};
         g_resolvedFor = 0;
         g_cueFor = g_cue = g_dryFor = g_dry = 0;  // (a new pistol may get an old one's address)
         g_levelFor = 0;
@@ -1099,7 +1167,8 @@ void OnDraw(shared::Header* hdr) {
     if (g_hold.state == kHeld && pawn) {
         const std::uintptr_t p = g_hold.p;
         if (!Owned(pawn, inv, p)) End(pawn, kGone, "the pistol is gone");
-        else if (p == gun || p == Obj(inv, "PendingWeapon")) End(pawn, kTaken, "a weapon switch took it to the gun hand");
+        else if (g_hold.twin && p != gun) End(pawn, kUnavailable, "the gun hand put its pistol away");
+        else if (!g_hold.twin && (p == gun || p == Obj(inv, "PendingWeapon"))) End(pawn, kTaken, "a weapon switch took it to the gun hand");
         else if (!bridge::HostRunning()) End(pawn, kUnavailable, "the host is gone");
         else if (!holdOk && ++g_hold.notOk >= 2) End(pawn, kUnavailable, why);
         else if (holdOk) g_hold.notOk = 0;
@@ -1129,6 +1198,16 @@ void OnDraw(shared::Header* hdr) {
     if (g_hold.state == kHeld && pawn && (g_view.flags & 8u) && !(g_view.flags & 4u) &&
         ArrayName0(g_hold.p, "FiringStatesArray") == "WeaponBurstFire")
         Pull(hdr, pawn, inv, gun, g_view.ray, true, holdOk, why);
+    // The twin's refill in the holster (its own count).
+    if (g_twin.due > 0.0f && pawn && !(g_hold.state == kHeld && g_hold.twin) && GameTime(pawn) >= g_twin.due) {
+        const int max = Int(g_twin.p, "MaxAmmoCount", -1);
+        if (Owned(pawn, inv, g_twin.p) && max > 0) {
+            MLOG("offpistol: the twin of %s refilled %d -> %d (in the holster)", names::Name(g_twin.p).c_str(), g_twin.clip, max);
+            g_twin.clip = max;
+            ++g_refillsN;
+        }
+        g_twin.due = 0.0f;
+    }
     // The refills in the holster.
     for (Refill& r : g_refill) {
         if (!r.p || !pawn || g_hold.p == r.p) continue;
@@ -1208,7 +1287,7 @@ bool HandOnGun(float (&rel)[16], const float*& fingers, const char* const*& name
 bool Holding() { return g_hold.state == kHeld; }
 
 bool SkipHeldPistol() {
-    if (g_hold.state != kHeld || !g_cfg.offPistolKeep) return false;
+    if (g_hold.state != kHeld || !g_cfg.offPistolKeep || g_hold.twin) return false;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     return pawn && Obj(Obj(pawn, "InvManager"), "PendingWeapon") == g_hold.p;
 }

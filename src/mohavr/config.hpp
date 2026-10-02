@@ -57,6 +57,7 @@ struct Config {
     int   offPistolRefill = 1;        // [OffHand] PistolRefill -- in the holster: 1 game (after its reload time), 2 instant, 0 off
     bool  offPistolUpgrades = true;   // [OffHand] PistolUpgrades -- the save's upgrade level applied at the draw if behind
     bool  offPistolKeep = true;       // [OffHand] PistolKeep -- the game's weapon switches never take the held pistol
+    bool  offPistolPair = false;      // [OffHand] PistolPair -- the gun hand's own pistol drawn a second time (two pistols)
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)

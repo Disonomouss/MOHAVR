@@ -1939,6 +1939,19 @@ events carry the off line at the pull. Measured in the simulator, BAR in hand, C
 
 nadepose2 (the click hold after the review's fixes) and the harness cycle passed.
 
+## 5bj. Two pistols: the twin (D45, 2026-10-02)
+
+[S] twin1 (OffHand.PistolPair=1; the gun hand draws the Colt at RightHip, the off hand the twin at the chest):
+- DRAW the twin of MOHAColt45_0, clip 7/7, drawn in the hand.
+- Three off pulls, each 0 cm from the off dot: the twin's count 7 -> 6 -> 5 -> 4. The gun hand's shot, 0 cm from its own
+  dot, took the object's AmmoCount 7 -> 6.
+- Put back, the twin was refilled 4 -> 7 after 1.50 s.
+- Drawn again, then B: the gun hand went to the BAR, and the twin was put back ("the gun hand put its pistol away").
+- The off hand at the chest then drew the holstered Colt as usual, with 6/7: the gun hand's count, untouched by the twin.
+- The capture shows a Colt in each hand.
+
+The harness cycle with the shipped defaults (PistolPair 1, GrenadePin 1) passed.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

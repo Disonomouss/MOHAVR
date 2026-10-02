@@ -581,3 +581,15 @@ hand through the same SpawnProjectile path.
 to main hand grenades"; the grip throw was their choice. The review of D43 also set: a click or gun-hand throw squeeze under
 way ends with a freeze (the armed grenade stays; cooking keeps its toss), and the foregrip-versus-holster rule only while the
 foregrip can be taken.
+
+### D45. Two pistols: the gun hand's own pistol twinned -- Decided 2026-10-02
+`[OffHand] PistolPair=1` (shipped on, proven in the simulator). With a pistol in the gun hand and no other one carried, the
+off hand at a pistol holster draws its twin. It is the same object as the gun hand's pistol, so nothing new enters the
+inventory, the saves or the weapon cycle.
+- The twin's rounds are a count the mod keeps; the object's AmmoCount stays the gun hand's (its HUD, its reload). The twin
+  starts full and refills in the holster after the reload time.
+- It fires through the same path: no credit swap is needed (it is already the weapon in hand), and the pistol's fire mode
+  is put back after each shot.
+- It goes back when the gun hand puts its pistol away.
+- With a Colt and a C96, the off hand still draws the other pistol (D41).
+**Why:** the player (2026-10-02), asked "Rifle plus a pistol in the off hand, or two pistols as well?": "Both".
