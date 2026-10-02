@@ -51,7 +51,12 @@ struct Config {
     float offHandThrowScale = 2.2f;   // [OffHand] ThrowScale -- the off hand's release speed x
     bool  offHandPassThrower = true;  // [OffHand] PassThrower -- the thrown grenade ignores the thrower's body
     bool  offHandHudType = true;      // [OffHand] HudType -- the HUD's grenade count shows the held type
-    bool  offHandCarrier = true;      // [OffHand] Carrier -- the grenade drawn in the off hand while held
+    bool  offHandCarrier = true;      // [OffHand] Carrier -- the grenade (and the pistol) drawn in the off hand while held
+    // [OffHand] the off-hand pistol (OFFPISTOL-DESIGN.md; the switch and the input are the host's)
+    bool  offPistolCredit = true;     // [OffHand] PistolCredit -- pistol: its hits and kills count for it; main: the gun in hand
+    int   offPistolRefill = 1;        // [OffHand] PistolRefill -- in the holster: 1 game (after its reload time), 2 instant, 0 off
+    bool  offPistolUpgrades = true;   // [OffHand] PistolUpgrades -- the save's upgrade level applied at the draw if behind
+    bool  offPistolKeep = true;       // [OffHand] PistolKeep -- the game's weapon switches never take the held pistol
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)

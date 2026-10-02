@@ -1807,6 +1807,90 @@ carrier on|off`, nothing changes in play).
   - the forearm twist against the free hand's;
   - the hand-to-grip distance logged while strafing. The walking captures show them together.
 
+## 5bg. The off-hand pistol, Phase 1 (D41, 2026-10-02)
+
+With `[OffHand] Pistol=1`, the off hand's grip at a pistol holster draws the holstered pistol, and its trigger fires it.
+The host's state machine is src/host/offpistol.cpp and the game's executor src/mohavr/offpistol.cpp. Shared block v21
+is 2528 bytes: the status (seqlock `pistolSeq`), the per-frame inputs (view seqlock) and an 8-event ring, whose SHOT
+events carry the off line at the pull. Measured in the simulator, BAR in hand, Colt holstered:
+- **Draw / holster (pistol8).** A click during the landing is refused (the game's side says not now). After it, a click
+  draws the Colt (clip 7/7, level 2, 100 damage, refire 0.06 s). No SwitchPistol is sent and the BAR stays in the right
+  hand. The shared magnum mix the save's restore left on under the BAR is turned off at the draw.
+- **The shot.** Each pull fires: 0 cm from the off dot (the game's per-Draw trace of the same line), the report played,
+  `Pawn.Weapon` the pistol for the damage and the BAR again after. Two pulls 0.13 s apart both fire (the save's level-2
+  Colt: 0.06 s). The BAR then fires 0 cm from its own dot.
+- **Empty and refill.** The last round, then a dry click (`Aud_GCm_FakeWAV.COLT.WpnDryFire_PC_Colt`, played). Put back,
+  the refill is due in 1.50 s (ReloadInterval[0]). Drawn 0.87 s early, it keeps 0. Put back again, it is refilled
+  0 -> 7 1.5 s later.
+- **Switch weapon (Xbox B) with it out.**
+
+  | From | Result | Why |
+  |---|---|---|
+  | Primary | -> the G43 | the game's own switch; the pistol stays held through the PendingWeapon switch: holdOk |
+  | Secondary | -> the BAR | the switch would have taken the pistol (caps bit6), so the host sent SwitchPrimary |
+
+- **Freezes.** The MOHAVR menu open, or the off hand untracked (`lost=l`): a pull meanwhile fires nothing; after, it
+  fires.
+- **pistol9:**
+  - **The gun hand at the pistol holster** while it is out is refused.
+  - **X with it out:** the frag became the main weapon, the pistol stayed, and a pull fired 0 cm from the off dot.
+    The first report was silent (5bg's fix: the SoundCue class is now taken from the pawn's own cues; a grenade's
+    attachment has no dry-fire cue).
+  - **The pair.** `GiveWeapon MOHAMauser`, then the gun hand draws the Colt and the off hand the C96 (the inventory
+    chain's other pistol). The C96 is upgraded at the draw, -1 -> 2: clip 20, WeaponBurstFire, refire 0.06 s,
+    ReloadInterval 1.75 s. Its clip bone is placed at its idle spot.
+  - **The 712.** A 0.6 s trigger fires 10 rounds at 0.06-0.07 s, each 0 cm from its dot. Then the Colt in the gun hand
+    fires 0 cm from its own.
+  - **Left-hand mode:** the right hand draws at the right hip and the right trigger fires.
+  - **A death with it out:** "the hold ended -- the pistol is gone"; the host reconciles.
+  - **Switched off in the menu:** nothing is published, and the game's side is idle (`harness.ps1 cycle` OK with
+    Pistol 0 and 1; the Pistol=0 log has no pistol reflection at all).
+- **Layout (v21):**
+
+  | Field | Offset |
+  |---|---|
+  | pistolSeq | 2120 |
+  | pistolKey | 2128 |
+  | pistolClip | 2176 |
+  | pistolState | 2184 |
+  | pistolEvtAck | 2196 |
+  | pistolAimDistance | 2204 |
+  | pistolRefills | 2208 |
+  | pistolFlags | 2216 |
+  | offAimRay | 2224 |
+  | offFit | 2252 |
+  | pistolEvtSeq | 2268 |
+  | pistolEvt | 2272 |
+  | pistolEvtRay | 2304 |
+
+  sizeof is 2528. The design's `offGunPose` was dropped: the game pitches the off controller's frame by the fit's angle
+  itself (`offFit[3]`), so the pistol, the hand on it and the IK share one frame.
+- **The adversarial review** (five reviewers, a skeptic each: 24 of 26 findings confirmed, none high) changed:
+  - **Switch weapon:** it never takes the held pistol. MOHA's switch is tested against the pending weapon (a double-tap
+    mid-switch). In Give-all mode a NextWeapon that lands on the pistol is run once more. A B already down when the
+    redirect turns on is the game's.
+  - **The shot:** the round is taken before the damage (an off-hand level-up's refill stands), and none during the
+    upgrade sequence. A SHOT or auto round is refused once the game won't let it stay or it is going to the gun hand
+    (the hold check now runs before the events). The level-up's magnum and low-ammo mixes are put right for the weapon
+    in
+    hand when it ends.
+  - **The host:** stale or gone, it means no held trigger (no auto fire) and the hold ends. A press at a pistol or
+    grenade
+    holster stays the mod's through a stall of up to 3 s.
+  - **Smaller fixes:**
+    - each pistol has its own refill slot;
+    - the pouch and magazine rings are hidden while the off hand holds something;
+    - the cue caches are reset with a new pawn;
+    - the C96's clip sits at mauser_gun_idle's (0, -3.58, 9.92);
+    - HideViewModel hides the off-hand items;
+    - a drawn pistol always has the free hand on it.
+  - **Known:** in left-hand mode without the mirror (`LeftHandMirror=0`, not shipped) the off line sits 1-3 cm to the
+    side
+    of the drawn bore.
+
+  [S] pistol8b, pistol9b, nade13: as before; the report now plays with a grenade in hand.
+- **[H] round 44 passed** (the player: "1. Works 2. Works 3. Works 4. Works 5. Works").
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

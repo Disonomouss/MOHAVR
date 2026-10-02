@@ -123,7 +123,9 @@ void OffHandGrenade::Poll(shared::Header* hdr, double now) {
 // holster's SwitchGrenade, which the game ignored, and the gun went to the off hand).
 const char* OffHandGrenade::UpdateActive(const In& in, bool* applies) {
     const bool alive = statusAt_ >= 0.0 && in.now - statusAt_ < 0.25;
-    if (applies) *applies = on_ && alive && in.gunOk;
+    // (Ours through a short stall of the game too: the holster's own draw would put the gun in the off hand.)
+    const bool seen = statusAt_ >= 0.0 && in.now - statusAt_ < 3.0;
+    if (applies) *applies = on_ && seen && in.gunOk;
     const char* why = !on_ ? "switched off" : !alive ? "the game's side is quiet" : !(status_.caps & 1u) ? "no grenades the game can throw" :
                       !(status_.caps & 2u) ? "not now in the game" : !in.gunOk ? "no gun in the other hand" :
                       !in.offTracked ? "the off hand isn't tracked" : !in.gripActive ? "the off hand's grip is asleep" :

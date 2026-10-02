@@ -377,7 +377,8 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     float gunF[16], offF[16];
     bool offValid = false, twoHanded = false;
     const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
-    const bool freeHand = g_cfg.freeOffHand && framesOk && offValid && !twoHanded;
+    // (The off-hand pistol drawn: the hand holds it whatever FreeOffHand says.)
+    const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent()) && framesOk && offValid && !twoHanded;
     M4 supportDrawn{};  // saved support-side bone -> world
     const shared::Header* hdrK = bridge::SharedHeader();
     // How long the weapon has been in hand: its hold is taken only once it has settled (round 35: a still moment of the
@@ -746,7 +747,21 @@ void BakeCarrier(std::uintptr_t comp) {
             G = Mul(G, W);
         }
         const M4 k = Mul(G, AffineInverse(l2w));
-        for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], k);
+        for (int i = 0; i < num; ++i) {
+            M4 b = sv->bones[i];
+            // The pistol's parts off their reference pose (the C96's stock and box magazine by its upgrade level, its clip
+            // where the game's idle holds it): collapsed, or put at their place in the mesh.
+            bool collapse = false;
+            float at[3];
+            if (pistol && offpistol::CarrierBone(i, collapse, at)) {
+                if (collapse)
+                    for (int r = 0; r < 3; ++r)
+                        for (int c = 0; c < 3; ++c) b.m[r][c] = 0.0f;
+                else
+                    for (int c = 0; c < 3; ++c) b.m[3][c] = at[c];
+            }
+            bones[i] = Mul(b, k);
+        }
     } else {
         for (int i = 0; i < num; ++i)
             for (int r = 0; r < 3; ++r)

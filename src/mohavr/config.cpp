@@ -122,6 +122,15 @@ Config LoadConfig(const std::wstring& dir) {
     c.offHandPassThrower = get(L"OffHand", L"PassThrower", c.offHandPassThrower);
     c.offHandHudType = get(L"OffHand", L"HudType", c.offHandHudType);
     c.offHandCarrier = get(L"OffHand", L"Carrier", c.offHandCarrier);
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"OffHand", L"PistolCredit", L"pistol", v, 16, ini.c_str());
+        c.offPistolCredit = _wcsicmp(v, L"main") != 0;
+        GetPrivateProfileStringW(L"OffHand", L"PistolRefill", L"game", v, 16, ini.c_str());
+        c.offPistolRefill = !_wcsicmp(v, L"instant") ? 2 : !_wcsicmp(v, L"off") ? 0 : 1;
+    }
+    c.offPistolUpgrades = get(L"OffHand", L"PistolUpgrades", c.offPistolUpgrades);
+    c.offPistolKeep = get(L"OffHand", L"PistolKeep", c.offPistolKeep);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

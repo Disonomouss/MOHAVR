@@ -431,7 +431,7 @@ void RunTestCommands(const std::uintptr_t* players) {
             continue;
         }
         if (offhand::TestCommand(line)) continue;  // "mohavr nade ..." (the off-hand grenade's spike)
-        if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol's spike S1)
+        if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -496,6 +496,12 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
     }
     const bool ok = gexec::Run(player, cmd);
     MLOG("hands: game command '%ls' -> %s", cmd, ok ? "handled" : "not handled");
+    // After "Give all weapons" switch weapon is the engine's NextWeapon, which walks the whole inventory: it never takes the
+    // pistol the off hand holds ([OffHand] PistolKeep) -- one more step past it.
+    if (ok && !wcscmp(cmd, L"NextWeapon") && offpistol::SkipHeldPistol()) {
+        const bool again = gexec::Run(player, cmd);
+        MLOG("hands: NextWeapon landed on the pistol in the off hand -- once more (%s)", again ? "handled" : "not handled");
+    }
 }
 
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
@@ -511,6 +517,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     RunHostCommand(arr, hdr);
     reload::OnDraw(hdr);
     offhand::OnDraw(hdr);
+    offpistol::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1433,7 +1440,7 @@ bool Install(const Config& cfg) {
     throwing::Configure(cfg);
     const bool armsOk = armsik::Install(cfg);  // M8: the arms reach from the body to the gun
     offhand::Configure(cfg, armsOk);          // (the grenade drawn in the off hand needs the bake)
-    offpistol::Configure(cfg);
+    offpistol::Configure(cfg, armsOk);       // (likewise the pistol)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);

@@ -32,6 +32,7 @@
 #include "hands.hpp"
 #include "reload.hpp"
 #include "offhand.hpp"
+#include "offpistol.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
 
@@ -381,21 +382,24 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // M7: the aim poses (for the game's aim) and the reticle (ReticleSize in degrees; shown per the menu's Red dot,
     // whose default is the shipped [Aim] Reticle).
     const bool handsOk = controllers && pad.CreateSpaces(session);
-    mohavr::host::Reticle reticle;
-    bool reticleOk = false;
+    mohavr::host::Reticle reticle, reticleOff;  // the main dot; the off-hand pistol's ([OffHand] PistolDot)
+    bool reticleOk = false, reticleOffOk = false;
     {
         const std::wstring ini = ExeDir() + L"\\MOHAVR.ini";
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"Aim", L"ReticleSize", L"0.8", v, 16, ini.c_str());
         const float deg = static_cast<float>(_wtof(v));
-        if (handsOk)
+        if (handsOk) {
             reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
+            reticleOffOk = reticleOff.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
+        }
     }
     XrPosef handPose[2] = {};
     std::uint32_t handBits = 0;
     mohavr::host::Hands hands;  // M8: gun hand, foregrip, holsters, reload gesture
     mohavr::host::ManualReload manualReload;  // D21: the manual reload's toggle, engagement and events
     mohavr::host::OffHandGrenade offhandNade;  // the off-hand grenade (OFFHAND-DESIGN): its toggle, state and events
+    mohavr::host::OffHandPistol offhandPistol;  // the off-hand pistol (OFFPISTOL-DESIGN): likewise
     mohavr::host::Hands::Output handsOut;
     mohavr::host::Markers markers;  // the gesture spots' rings
     bool markersOk = false;
@@ -405,6 +409,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         hands.SetReload(&manualReload);
         offhandNade.Init(ExeDir() + L"\\MOHAVR.ini");
         hands.SetOffHand(&offhandNade);
+        offhandPistol.Init(ExeDir() + L"\\MOHAVR.ini");
+        hands.SetOffPistol(&offhandPistol);
         if (menuOk) {
             mohavr::host::HolsterSpot defaults[mohavr::host::kSpots];
             for (int i = 0; i < mohavr::host::kSpots; ++i) defaults[i] = hands.DefaultSpot(i);
@@ -708,6 +714,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // The off-hand grenade's game side (counts, availability, its state, the fuse's ticks), likewise.
                 if (menuOk) offhandNade.SetOn(menu.OffHandGrenadeOn());
                 if (handsOk) offhandNade.Poll(g_hdr, nowS);
+                // The off-hand pistol's game side (the pistol a draw gets, availability, its state, shots and refills).
+                if (menuOk) offhandPistol.SetOn(menu.OffHandPistolOn());
+                if (handsOk) offhandPistol.Poll(g_hdr, nowS);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -739,6 +748,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     for (int h = 0; h < 2; ++h) hin.gripActive[h] = pad.GripActive(session, h);
                     hin.modMenu = menuOk && menu.Visible();
                     hin.gameMenu = g_hdr->gameUiMenu != 0;
+                    hin.pistolFit = menuOk ? menu.FitFor(offhandPistol.Key()) : hands.DefaultFit();
                     if (menuOk) {
                         float magAdj[4], boltAdj[4];
                         menu.SpotAdjust(0, magAdj);
@@ -750,6 +760,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 }
                 manualReload.Send(g_hdr, nowS);
                 if (handsOk) offhandNade.Send(g_hdr, nowS);
+                if (handsOk) offhandPistol.Send(g_hdr, nowS);
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->viewSeq));  // odd: writing
                 g_hdr->viewDisplayTime = fs.predictedDisplayTime;
                 g_hdr->head = toPose(headLoc.pose);
@@ -766,6 +777,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 g_hdr->rack = manualReload.Rack();
                 g_hdr->nadeFlags = offhandNade.Flags();
                 g_hdr->nadePose = offhandNade.HandPose();
+                g_hdr->pistolFlags = offhandPistol.Flags();
+                g_hdr->pistolTrigger = offhandPistol.Trigger();
+                g_hdr->offAimRay = offhandPistol.AimRay();
+                {
+                    float fit[4];
+                    offhandPistol.Fit(fit);
+                    for (int i = 0; i < 4; ++i) g_hdr->offFit[i] = fit[i];
+                }
                 for (int h = 0; h < 2; ++h) g_hdr->hand[h] = toPose(handPose[h]);
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
@@ -792,6 +811,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     }
                     pad.SetConsumed(handsOut.consumed[0], handsOut.consumed[1]);
                     pad.SetMaskedButtons(handsOut.maskSwitch ? 0x0200 : 0);  // Xbox RB: the game's own grenade switch
+                    pad.SetRedirectB(handsOut.maskSwitchB);  // Xbox B: the switch weapon that would take the off-hand pistol
                     pad.SetTestTargets(handsOut.target, handsOut.targetOk, handsOut.align, handsOut.alignOk);
                     pad.SetLeftHanded(handsOut.gunHand == 0);
                     if (menuOk) pad.SetSwapSticks(menu.SwapSticks());
@@ -852,6 +872,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (pad.TakeNextWeapon() && g_hdr) {
             static const char kNext[] = "NextWeapon";
             std::memcpy(g_hdr->cmd, kNext, sizeof(kNext));
+            InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
+        }
+        if (pad.TakeRedirectB() && g_hdr) {  // the off-hand pistol kept: the long gun changes instead (PistolKeep)
+            static const char kPrimary[] = "SwitchPrimary";
+            std::memcpy(g_hdr->cmd, kPrimary, sizeof(kPrimary));
             InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
         }
         if (menuOk && menu.TakeRecenterRequest()) {
@@ -1052,6 +1077,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         if (const XrCompositionLayerBaseHeader* rl = reticle.Layer(local, ray, menuHead, d))
                             layers[layerCount++] = rl;
                 }
+                // The off-hand pistol's dot (OFFPISTOL-DESIGN 4.10): along this frame's off line, as far as the game's trace of
+                // that line went -- the shots land on it.
+                XrPosef offRay{};
+                if (reticleOffOk && handsOk && offhandPistol.DotRay(offRay))
+                    if (const XrCompositionLayerBaseHeader* rl = reticleOff.Layer(local, offRay, menuHead, g_hdr->pistolAimDistance))
+                        layers[layerCount++] = rl;
             }            // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
             if (markersOk && lastMeta.hasView && menuHeadOk && handsOk)
                 layerCount += static_cast<uint32_t>(markers.Layers(

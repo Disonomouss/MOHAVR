@@ -90,9 +90,14 @@ public:
     // Xbox buttons kept from the game in gameplay (XINPUT bits; the off-hand grenade holds back RB, the game's own grenade
     // switch, while a grenade is in the off hand).
     void  SetMaskedButtons(std::uint16_t bits) { maskedButtons_ = bits; }
+    // The off-hand pistol ([OffHand] PistolKeep): while the game's switch weapon (Xbox B) would take the pistol the off hand
+    // holds, B is kept from the game and a press is taken here instead (main.cpp sends SwitchPrimary: the long gun changes,
+    // the pistol stays).
+    void  SetRedirectB(bool on) { redirectB_ = on; }
+    bool  TakeRedirectB() { const bool r = redirectReq_; redirectReq_ = false; return r; }
     // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
-    void  SetTestTargets(const XrVector3f (&p)[8], const bool (&ok)[8], const XrPosef& align, bool alignOk) {
-        for (int i = 0; i < 8; ++i) {
+    void  SetTestTargets(const XrVector3f (&p)[9], const bool (&ok)[9], const XrPosef& align, bool alignOk) {
+        for (int i = 0; i < 9; ++i) {
             testTarget_[i] = p[i];
             testTargetOk_[i] = ok[i];
         }
@@ -146,8 +151,8 @@ private:
     XrAction    haptic_[2]{};          // left, right vibration
     struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     TestPose    testPose_[2]{};
-    XrVector3f  testTarget_[8]{};      // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade"
-    bool        testTargetOk_[8]{};    // (LOCAL)
+    XrVector3f  testTarget_[9]{};      // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade",
+    bool        testTargetOk_[9]{};    // "@pistol" (LOCAL)
     XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
     bool        testAlignOk_ = false;
     Src         maskedFace_[2] = {kNone, kNone};  // the manual reload's release button, per physical hand
@@ -162,6 +167,7 @@ private:
     bool        consumed_[2]{};        // grips used by a gesture (hands.cpp)
     bool        wasNeutral_ = false;          // last frame the menu held the game's pad still
     bool        allWeapons_ = false, allBDown_ = false, nextWeaponReq_ = false;
+    bool        redirectB_ = false, redirectBDown_ = false, redirectReq_ = false, redirectWas_ = false;
     bool        heldOverMenu_[kSrcCount]{};   // held as the menu closed: kept from the game until let go
     bool        testThrow_ = false;
     std::vector<std::uint32_t> testReload_;

@@ -39,4 +39,11 @@ void OnDraw(shared::Header* hdr);
 std::uintptr_t CarrierComponent();
 bool CarrierFrame(float (&gw)[16]);
 
+// Whether the off hand may take something now, as far as the game goes (shared with the off-hand pistol): a live player
+// pawn with a weapon drawn in hand (not the HellBox, not the parachute or the landing), no cinematic, weapons not held or
+// disabled by the game, no mounted gun (the script part at 4 Hz). `why` says what stands in the way ("" when nothing).
+bool BaseAvailable(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why);
+// Whether the off hand holds a grenade now (the pistol is refused meanwhile).
+bool Holding();
+
 }  // namespace mohavr::offhand

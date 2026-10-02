@@ -1689,6 +1689,10 @@ about 3 seconds before the gun comes up.
 
 **Deployed for this round:** the shipped defaults.
 
+**Answers (2026-10-02, played with rounds 43 and 44):** "42 - Looks good".
+
+**Verdict: round 42 [H] PASSED** (the parachuting body hidden once landed, D39).
+
 ---
 
 ## Round 43: prepared 2026-10-02, the off-hand grenade (Phase 1)
@@ -1719,6 +1723,62 @@ its own throws from the pin pull; here the fuse starts when the spoon goes.
 6. Anything odd with the gun, the reload, the foregrip, or the holsters while holding one?
 
 **Deployed for this round:** the shipped defaults with `OffHand.Grenade=1`.
+
+**Answers (2026-10-02):** "1. Grenade appears, add option for grenade to either be held with grip or triggered
+with grip and put away with another grip to the holster. 2. Arming the grenade with trigger is good, add that to main
+hand grenades. 3. Works add to main hand grenades. The grenade appears above left hand, can position and pose match
+main hand grenades for each type."
+
+**Log received:** yes, `logs/modlogs/20261002-163756-MOHAVR.log` and `-MOHAVR-host.log` (all three types taken and
+thrown, no refusal or fault).
+
+**Verdict: round 43 [H] PASSED, with requests:** a click-to-take hold option (put back with a grip at a holster),
+the trigger pin and cook for the gun hand's grenades too, and the grenade held where and as the main hand holds
+each type.
+
+## Round 44: prepared 2026-10-02, the off-hand pistol (Phase 1)
+**Your request:** "Is it possible to build similar system for using the pistol with the off hand?" -- then "1. Both 2.
+Add
+chest holster, add option in menu to decide what is in each holster. 3. Click 4. Yes and yes 5. It is unbalanced but it
+is
+fun so I don't mind."
+
+**Changed:** the off-hand pistol is in, switched on for this round (the menu: Weapons -> Off-hand pistol). The off-hand
+grenade (round 43) stays on.
+
+**How to try it** (a long gun in your right hand):
+1. Reach to the pistol holster on your RIGHT hip with your LEFT hand and squeeze the grip once: the pistol appears in
+   that
+   hand (a short pulse). Let go of the grip -- it stays (click to draw).
+2. Pull the left trigger: one shot per pull, at the pistol's own rate, aimed by its own red dot. The rifle stays in your
+   right hand and fires as usual.
+3. Empty, it clicks. Put it back with a squeeze at any holster: in the holster it refills after 1.5 s (drawn sooner, it
+   keeps what it had).
+4. While it's out the rifle is one-handed: no foregrip, no rifle reload, no off-hand grenade. The switch-weapon button
+   changes the long gun and never takes the pistol from your hand. X still puts a grenade in your right hand.
+5. If you carry a C96 too (or draw the Colt into your right hand), the left hand draws the other pistol. A fully
+   upgraded
+   C96 fires while the trigger is held.
+Known: no slide movement, muzzle flash or brass on the off-hand pistol yet; the chest holster with a menu to choose what
+each holster holds, and two of the same pistol, come next. The left hand reaching across to the right hip is the
+design's
+first spot -- the chest holster will be the better one.
+
+**Questions:**
+1. Drawing and putting it back by click: natural? Any draw or put-back you didn't mean?
+2. Does it shoot where its red dot is? The two dots: clear which is which?
+3. The pistol in your left hand: where it sits, the hand's grip on it?
+4. The refill in the holster: right, or should it be instant?
+5. Anything odd with the rifle, the reload, the foregrip, the grenades or the holsters while it's out?
+
+**Deployed for this round:** the shipped defaults with `OffHand.Grenade=1` and `OffHand.Pistol=1`.
+
+**Answers (2026-10-02):** "1. Works 2. Works 3. Works 4. Works 5. Works".
+
+**Log received:** yes, `logs/modlogs/20261002-163756-MOHAVR.log` and `-MOHAVR-host.log` (the Colt drawn four times,
+shots, dry clicks and refills).
+
+**Verdict: round 44 [H] PASSED** (the off-hand pistol, Phase 1 as deployed, before the review's fixes).
 
 ---
 

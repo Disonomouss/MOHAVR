@@ -65,6 +65,11 @@ public:
     bool ManualReloadOn() const { return manualReload_; }
     // The off-hand grenade (OFFHAND-DESIGN; likewise the shipped [OffHand] Grenade until toggled).
     bool OffHandGrenadeOn() const { return offHandNade_; }
+    // The off-hand pistol (OFFPISTOL-DESIGN; likewise the shipped [OffHand] Pistol until toggled).
+    bool OffHandPistolOn() const { return offHandPistol_; }
+    // The fit of any weapon by its class (the off-hand pistol's): the player's saved one, else the shipped one, else the
+    // defaults. Read once per key.
+    shared::GunFit FitFor(const std::string& key);
     const std::string& WeaponKey() const { return weaponKey_; }  // the weapon in hand's class ("" none)
     // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres), then the current ones.
     void LoadHolsters(const HolsterSpot (&defaults)[kSpots]);
@@ -158,6 +163,9 @@ private:
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    manualReload_ = false;
     bool                    offHandNade_ = false;
+    bool                    offHandPistol_ = false;
+    std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
+    shared::GunFit          fitForFit_{};
 };
 
 }  // namespace mohavr::host

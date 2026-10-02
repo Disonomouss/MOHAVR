@@ -221,17 +221,14 @@ std::string    g_lastWhy;
 
 float GameTime(std::uintptr_t pawn) { return Float(Obj(pawn, "WorldInfo"), "TimeSeconds", 0.0f); }
 
-// Whether a TAKE can happen now; when not, `holdOk` says whether a grenade already held may stay (only a switch to another
-// gun is under way: the gun hand may change guns while the off hand holds one).
-bool Available(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why, bool& holdOk) {
+// The game's side of availability, shared with the off-hand pistol (offhand.hpp BaseAvailable): the cheap tests, then the
+// script ones at 4 Hz.
+bool Base(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why) {
     why = "";
-    holdOk = false;
     if (!pawn || !inv || !names::IsA(pawn, "MOHAPlayerPawn") || Bit(pawn, "bDeleteMe") || Int(pawn, "Health", 0) <= 0)
         why = "no live player pawn";
     else if (!gun || !names::IsA(gun, "EALAWeapon"))
         why = "no weapon in hand";
-    else if (names::IsA(gun, "EALAGrenade"))
-        why = "a grenade is the weapon in hand";
     else if ((Int(gun, "WeaponType", 0) & 0xFF) == 23)
         why = "the HellBox in hand";
     else if (viewmodel::NoGunDrawn() || view::LandingHeld())
@@ -265,6 +262,18 @@ bool Available(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, cons
         why = g_slowWhy;
         return false;
     }
+    return true;
+}
+
+// Whether a TAKE can happen now; when not, `holdOk` says whether a grenade already held may stay (only a switch to another
+// gun is under way: the gun hand may change guns while the off hand holds one).
+bool Available(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why, bool& holdOk) {
+    holdOk = false;
+    if (gun && names::IsA(gun, "EALAGrenade")) {
+        why = "a grenade is the weapon in hand";
+        return false;
+    }
+    if (!Base(pawn, inv, gun, why)) return false;
     // A weapon switch: no take now; one held stays unless the switch brings a grenade (or the HellBox) to the hand.
     if (const std::uintptr_t pending = Obj(inv, "PendingWeapon")) {
         why = "a weapon switch";
@@ -458,7 +467,7 @@ void Apply(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t inv, std::ui
         // [OffHand] HudType: the HUD's grenade count shows the held type (GetHUDGrenade reads LastGrenadeWeapon), and the
         // game's own grenade switch later takes the type last used -- what its equip does.
         if (g_cfg.offHandHudType) SetObj(inv, "LastGrenadeWeapon", g);
-        const bool drawn = g_cfg.offHandCarrier && g_bake && CarrierAttach(pawn, g);
+        const bool drawn = g_cfg.offHandCarrier && g_bake && !g_cfg.hideViewModel && CarrierAttach(pawn, g);
         MLOG("offhand: TAKE %s -- %d left (counted out at the throw), fuse %.1f s%s", kTypeName[t], count, g_hold.fuseLen,
              drawn ? ", drawn in the hand" : "");
         return;
@@ -716,6 +725,10 @@ void OnDraw(shared::Header* hdr) {
 }
 
 std::uintptr_t CarrierComponent() { return carrier::Component(g_carrier); }
+
+bool BaseAvailable(std::uintptr_t pawn, std::uintptr_t inv, std::uintptr_t gun, const char*& why) { return Base(pawn, inv, gun, why); }
+
+bool Holding() { return g_hold.state != kNone; }
 
 bool CarrierFrame(float (&gw)[16]) {
     if (!CarrierComponent()) return false;

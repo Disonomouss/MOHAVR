@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 20;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade
+inline constexpr std::uint32_t kVersion = 21;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -270,6 +270,38 @@ struct Header {
                                            //      (0 frag, 1 Gammon, 2 stick, 0xFF any); bits 16-23 flags (bit16 toss)
     float                  nadeEvtPos[8][3];  // 1928 THROW: the release point (LOCAL, m)
     float                  nadeEvtVel[8][3];  // 2024 THROW: the release velocity (LOCAL, m/s)
+    // --- v21: the off-hand pistol ([OffHand] Pistol; src/host/offpistol.cpp, src/mohavr/offpistol.cpp; OFFPISTOL-DESIGN.md 5).
+    // game -> host, once per Draw (seqlock pistolSeq: odd while the game writes)
+    volatile std::uint32_t pistolSeq;         // 2120
+    std::uint32_t          pistolCaps;        // 2124 bit0 installed (the shot's functions resolved on the pistol a DRAW gets),
+                                              //      bit1 a DRAW can happen now, bit2 infinite reserve, bit3 drawn in the hand
+                                              //      (the arm bake), bit4 one held may stay, bit5 the only pistol is in the gun
+                                              //      hand, bit6 the game's switch weapon would take the held pistol (Xbox B is
+                                              //      kept back: PistolKeep), bit7 the held pistol fires while held (the C96's 712)
+    char                   pistolKey[48];     // 2128 the pistol a DRAW gets / the held one: its attachment class (the fit's key)
+    std::int32_t           pistolClip;        // 2176 its rounds
+    std::int32_t           pistolMax;         // 2180 its magazine
+    std::uint32_t          pistolState;       // 2184 bits 0-1: 0 none, 1 held; bit2 empty; bit3 a refill pending; bits 8-15 the
+                                              //      last refusal (1 unavailable, 2 none carried, 3 in the gun hand, 4 too soon,
+                                              //      5 the shot failed, 6 taken by a switch, 7 gone)
+    volatile std::uint32_t pistolShots;       // 2188 +1 per round fired (the host's recoil pulse)
+    volatile std::uint32_t pistolDry;         // 2192 +1 per dry click
+    volatile std::uint32_t pistolEvtAck;      // 2196 the last event taken (applied or refused)
+    volatile std::uint32_t pistolPawnSeq;     // 2200 +1 on a new local pawn
+    volatile float         pistolAimDistance; // 2204 per Draw while held: metres along offAimRay to what it hits; 0 none
+    volatile std::uint32_t pistolRefills;     // 2208 +1 per refill in the holster (the host's click)
+    std::uint32_t          pistolSpare;       // 2212
+    // host -> game, per XR frame INSIDE the view seqlock (viewSeq), read with the hands
+    std::uint32_t          pistolFlags;       // 2216 bit0 on, bit1 held, bit2 frozen, bit3 the trigger held (past the latch)
+    float                  pistolTrigger;     // 2220 the off trigger 0..1
+    Pose                   offAimRay;         // 2224 the off pistol's aim line (LOCAL: position = start, -Z = direction)
+    float                  offFit[4];         // 2252 the pistol's fit (the host's, for pistolKey): grip forward, right, up
+                                              //      (units, camera frame), angle (deg, + = muzzle up)
+    // host -> game events, ordered: pistolEvt[seq % 8] (and its ray) written, then pistolEvtSeq bumped; the host never
+    // writes while pistolEvtSeq - pistolEvtAck >= 8
+    volatile std::uint32_t pistolEvtSeq;      // 2268
+    std::uint32_t          pistolEvt[8];      // 2272 low byte: 1 DRAW, 2 SHOT, 3 HOLSTER
+    Pose                   pistolEvtRay[8];   // 2304 SHOT: the off aim line at the trigger pull (LOCAL)
 };
 #pragma pack(pop)
 
@@ -326,7 +358,20 @@ static_assert(offsetof(Header, nadeEvtSeq) == 1892, "shared::Header layout must 
 static_assert(offsetof(Header, nadeEvt) == 1896, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, nadeEvtPos) == 1928, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, nadeEvtVel) == 2024, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 2120, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolSeq) == 2120, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolKey) == 2128, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolClip) == 2176, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolState) == 2184, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolEvtAck) == 2196, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolAimDistance) == 2204, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolRefills) == 2208, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolFlags) == 2216, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, offAimRay) == 2224, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, offFit) == 2252, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolEvtSeq) == 2268, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolEvt) == 2272, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pistolEvtRay) == 2304, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 2528, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -375,6 +420,43 @@ inline bool ReadNadeStatus(const Header* h, NadeStatus& s, std::uint32_t& seq) {
 #endif
     seq = s1;
     return h->nadeSeq == s1;
+}
+
+// The off-hand pistol's events (pistolEvt low byte, v21).
+enum PistolEvent : std::uint32_t { kPistolDraw = 1, kPistolShot = 2, kPistolHolster = 3 };
+
+// What the game publishes for the off-hand pistol (v21).
+struct PistolStatus {
+    std::uint32_t caps;
+    char          key[48];
+    std::int32_t  clip, max;
+    std::uint32_t state, shots, dry, evtAck, pawnSeq, refills;
+    float         aimDistance;
+};
+// Seqlock read of it; false while the game is mid-write (try next frame).
+inline bool ReadPistolStatus(const Header* h, PistolStatus& s, std::uint32_t& seq) {
+    const std::uint32_t s1 = h->pistolSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    s.caps = h->pistolCaps;
+    for (int i = 0; i < 48; ++i) s.key[i] = h->pistolKey[i];
+    s.key[47] = 0;
+    s.clip = h->pistolClip;
+    s.max = h->pistolMax;
+    s.state = h->pistolState;
+    s.shots = h->pistolShots;
+    s.dry = h->pistolDry;
+    s.evtAck = h->pistolEvtAck;
+    s.pawnSeq = h->pistolPawnSeq;
+    s.refills = h->pistolRefills;
+    s.aimDistance = h->pistolAimDistance;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    seq = s1;
+    return h->pistolSeq == s1;
 }
 
 // What the game publishes for the host's manual reload (v14).
@@ -546,11 +628,19 @@ struct NadeView {
     Pose          pose;
     float         adj[6];
 };
+// The host's off-hand pistol inputs (v21), likewise.
+struct PistolView {
+    std::uint32_t flags;
+    float         trigger;
+    Pose          ray;
+    float         fit[4];
+};
 
 // Seqlock read of the aim poses (v7); false if the host is mid-write. `valid` = hdr->handValid bits. `rv` (optional):
 // the manual reload's flags, pull, held magazine and rack in the same pass (RELOAD-DESIGN X3); `nv` (optional) the
-// off-hand grenade's (v20).
-inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, ReloadView* rv = nullptr, NadeView* nv = nullptr) {
+// off-hand grenade's (v20); `pv` (optional) the off-hand pistol's (v21).
+inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, ReloadView* rv = nullptr, NadeView* nv = nullptr,
+                      PistolView* pv = nullptr) {
     for (int t = 0; t < kSeqTries; ++t) {
         const std::uint32_t s1 = h->viewSeq;
         if (s1 & 1u) {
@@ -574,6 +664,12 @@ inline bool ReadHands(const Header* h, Pose (&hand)[2], std::uint32_t& valid, Re
             nv->flags = h->nadeFlags;
             nv->pose = h->nadePose;
             for (int i = 0; i < 6; ++i) nv->adj[i] = h->nadeAdj[i];
+        }
+        if (pv) {
+            pv->flags = h->pistolFlags;
+            pv->trigger = h->pistolTrigger;
+            pv->ray = h->offAimRay;
+            for (int i = 0; i < 4; ++i) pv->fit[i] = h->offFit[i];
         }
 #if defined(_MSC_VER)
         _ReadWriteBarrier();

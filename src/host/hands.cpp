@@ -49,6 +49,13 @@ int GrenadeZoneType(const std::string& cmd) {
     return c.find("frag") != std::string::npos ? 0 : c.find("gammon") != std::string::npos ? 1 : c.find("stick") != std::string::npos ? 2 : 0xFF;
 }
 
+// A holster whose command draws the pistol (the off-hand pistol's draw spot).
+bool PistolZone(const std::string& cmd) {
+    std::string c;
+    for (char ch : cmd) c += static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch + 32 : ch);
+    return c == "switchpistol";
+}
+
 }  // namespace
 
 const wchar_t* Hands::SpotName(int i) {
@@ -105,9 +112,12 @@ void Hands::Init(const std::wstring& ini) {
 Hands::Output Hands::Update(const Input& in) {
     Output out;
     // The gun hand: the menu's starting hand (applied whenever that setting changes), then whichever hand draws.
-    // (Not while the off hand holds a grenade: the change waits for the throw or the put back, OFFHAND-DESIGN 5.5.)
+    // (Not while the off hand holds a grenade or the pistol: the change waits for the throw or the put back, OFFHAND-DESIGN
+    // 5.5.)
     const bool nadeHeld = nade_ && nade_->Holding();
-    if (static_cast<int>(in.startLeft) != lastStart_ && !nadeHeld) {
+    const bool pistolHeld = pistol_ && pistol_->Holding();
+    const bool offBusy = nadeHeld || pistolHeld;  // the off hand holds something: no foregrip, no reload spots
+    if (static_cast<int>(in.startLeft) != lastStart_ && !offBusy) {
         lastStart_ = in.startLeft ? 1 : 0;
         gunHand_ = in.startLeft ? 0 : 1;
         twoHanded_ = false;
@@ -191,10 +201,10 @@ Hands::Output Hands::Update(const Input& in) {
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
             if (!zones_[z].command.empty()) addSpot(kHolster, centre[z], spots_[z].r, false);
-    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !nadeHeld) addSpot(kForegrip, fore, foregripR_, true);
-    if (gunOk && reloadOk) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
+    if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !offBusy) addSpot(kForegrip, fore, foregripR_, true);
+    if (gunOk && reloadOk && !offBusy) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
-    if (in.pouchShown || (reloadActive && reload_->MagazineOut())) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
+    if (in.pouchShown || (reloadActive && reload_->MagazineOut() && !offBusy)) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
     out.targetOk[1] = true;
     out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
@@ -214,6 +224,20 @@ Hands::Output Hands::Update(const Input& in) {
     nin.testThrow = testThrow_;
     for (int i = 0; i < 3; ++i) nin.testVel[i] = testThrowVel_[i];
     nin.now = in.now;
+    // The off-hand pistol's view of it.
+    OffHandPistol::In pin;
+    pin.offHand = o;
+    pin.offValid = offOk;
+    pin.offTracked = nin.offTracked;
+    pin.gripActive = in.gripActive[o];
+    pin.gestures = in.gestures;
+    pin.hasView = in.hasView;
+    pin.gunOk = gunOk;
+    pin.nadeHeld = nadeHeld;
+    pin.trigger = in.trigger[o];
+    pin.offAim = in.aim[o];
+    pin.fit = in.pistolFit;
+    pin.now = in.now;
 
     for (int h = 0; h < 2; ++h) {
         const bool ok = (in.valid & (1u << h)) != 0;
@@ -247,6 +271,13 @@ Hands::Output Hands::Update(const Input& in) {
             consumed_[h] = true;
             continue;
         }
+        // The off hand holds the pistol: its presses are the pistol's (with PistolHold=toggle a click at any holster puts it
+        // back), out of reach of the reload's spots, the grenade and the foregrip.
+        if (h == o && pistol_ && pistol_->Holding()) {
+            pistol_->HeldPress(pin, zone >= 0);
+            consumed_[h] = true;
+            continue;
+        }
         // The manual reload's spots first (the pouch touches the hip spots; RELOAD-DESIGN 3.4).
         if (h == o && reloadActive && reload_->TakePress({hp.x, hp.y, hp.z}, {pouch.x, pouch.y, pouch.z}, pouchR)) {
             consumed_[h] = true;
@@ -266,6 +297,22 @@ Hands::Output Hands::Update(const Input& in) {
                 out.pulseAmp[h] = 0.2f;
                 out.pulseMs[h] = 60.0f;
                 MLOG("hands: the gun hand at %ls while the off hand holds a grenade -- refused", zones_[zone].key);
+                continue;
+            }
+        }
+        // The off-hand pistol (OFFPISTOL-DESIGN 4.1): the off hand at a pistol holster draws it while a gun is in the other
+        // hand; the gun hand there is refused while it is held (SwitchPistol would equip the pistol the off hand holds).
+        if (pistol_ && zone >= 0 && PistolZone(zones_[zone].command)) {
+            if (h == o && pistol_->DrawPress(pin)) {
+                consumed_[h] = true;
+                continue;
+            }
+            if (h == g && pistol_->Holding()) {
+                consumed_[h] = true;
+                out.pulse[h] = true;
+                out.pulseAmp[h] = 0.2f;
+                out.pulseMs[h] = 60.0f;
+                MLOG("hands: the gun hand at %ls while the off hand holds the pistol -- refused", zones_[zone].key);
                 continue;
             }
         }
@@ -296,7 +343,7 @@ Hands::Output Hands::Update(const Input& in) {
         }
     }
     // A pulse on the off hand as it comes to the foregrip (not while already holding it).
-    if (gunOk && offOk && foregripOk && !twoHanded_ && in.gestures && !nadeHeld) {
+    if (gunOk && offOk && foregripOk && !twoHanded_ && in.gestures && !offBusy) {
         const bool atFore = Len(Sub(pt[o], fore)) < foregripR_;
         if (atFore && !nearFore_) out.pulse[o] = true;
         nearFore_ = atFore;
@@ -322,7 +369,7 @@ Hands::Output Hands::Update(const Input& in) {
             twoHanded_ = false;  // the grip now holds the magazine (it stays consumed)
             MLOG("hands: foregrip let go (the hand took the magazine)");
         }
-        for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5 && !nadeHeld; ++i) {
+        for (int i = 0; i < rout.ringCount && out.spotCount < kHolsters + 5 && !offBusy; ++i) {
             Spot& sp = out.spots[out.spotCount++];
             sp = {kMagWell, rout.rings[i].pos, rout.rings[i].radius, rout.rings[i].inside, rout.rings[i].close};
         }
@@ -375,6 +422,29 @@ Hands::Output Hands::Update(const Input& in) {
             if (GrenadeZoneType(zones_[z].command) >= 0) {
                 out.targetOk[7] = true;
                 out.target[7] = {centre[z].x - hpOff.x, centre[z].y - hpOff.y, centre[z].z - hpOff.z};
+                break;
+            }
+    }
+    // The off-hand pistol, every frame (after the grenade: its masks and pulses add to the others').
+    if (pistol_) {
+        pin.gripHeld = held_[o];
+        pin.nadeHeld = nade_ && nade_->Holding();
+        OffHandPistol::Out pout;
+        pistol_->Frame(pin, pout);
+        if (pout.maskTrigger) out.maskTrigger[o] = true;
+        out.maskSwitchB = pout.maskSwitch;
+        for (int h = 0; h < 2; ++h)
+            if (pout.pulseAmp[h] > 0.0f) {
+                out.pulse[h] = true;
+                out.pulseAmp[h] = std::fmax(out.pulseAmp[h], pout.pulseAmp[h]);
+                out.pulseMs[h] = std::fmax(out.pulseMs[h], pout.pulseMs[h]);
+            }
+        // Tests (pad_cmd.txt hand=l,@pistol): the first pistol holster, moved by the hand point like the other spots.
+        const V3 hpOff = Sub(pt[o], P(in.aim[o].position));
+        for (int z = 0; z < kHolsters && holsters_; ++z)
+            if (PistolZone(zones_[z].command)) {
+                out.targetOk[8] = true;
+                out.target[8] = {centre[z].x - hpOff.x, centre[z].y - hpOff.y, centre[z].z - hpOff.z};
                 break;
             }
     }

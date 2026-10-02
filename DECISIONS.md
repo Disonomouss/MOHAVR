@@ -479,3 +479,49 @@ above.
 `Throw=trigger`, `Estimator=peak`, `Spot=chest` not yet (OFFHAND-DESIGN 8, 10). `Carrier` ships on (the design had it
 off until Phase 3): S2 and nade5 show it in the simulator. The game cooks every throw of its own from the pin pull; here
 the fuse starts at the spoon (`Cook=pin` for the game's way).
+
+### D41. The off-hand pistol, Phase 1: draw, fire and holster with the gun in hand -- Decided 2026-10-02
+`[OffHand] Pistol` (shipped 0; the menu's Weapons tab "Off-hand pistol" is the player's, saved in their ini). With a
+weapon in the gun hand, the off hand's grip at a pistol holster (a holster whose command is SwitchPistol: the shipped
+RightHip) draws the holstered pistol into that hand (DRAW); `PistolHold=toggle` (shipped; the player chose "click")
+keeps it out without the grip, and a squeeze at any holster puts it back (HOLSTER); `grip` holds it while the grip is
+held. Its trigger fires one round per pull (SHOT, with the off line of that moment; the game drops a pull sooner than
+the pistol's own RefireCheckTime, in game time), the C96 at its 712 level fires while the trigger stays held, an empty
+pistol clicks. Back in the holster it refills after the pistol's own ReloadInterval[0] in game time
+(`PistolRefill=game`; Colt 1.5 s, C96 1.75 s at level 2); drawn sooner, it keeps its count (`instant`, `off`). A second
+red dot sits on its line (`PistolDot=1`, with the menu's Red dot). The pistol is the inventory manager's PistolWeapon,
+or the other pistol of a Colt + C96 pair when one of them is in the gun hand. The host owns the interaction
+(src/host/offpistol.cpp: none / held) and sends ordered events through shared block v21 (the SHOT carries the off line
+at the pull); the game (src/mohavr/offpistol.cpp) executes them through the layer below the game's fire states
+(ENGINE-NOTES 5be), draws the pistol in the off hand (5bf), and publishes the pistol a draw gets, whether a draw can
+happen, whether one held may stay, its clip and its state (the host takes the game's after two disagreeing polls).
+- The shot: the bullets' own native trace from the off line's start (past anything it starts inside; from the eye at the
+  line's aim point when something stands between the eye and the gun: D12's rule), ProcessInstantHit per impact with
+  Pawn.Weapon the pistol for the damage (its kills and experience: `PistolCredit=pistol`), the stimuli, the stats, a
+  direct AmmoCount write, the report at the muzzle. The gun in hand, its state, PendingFire, FlashCount and ammo are
+  never written. At the draw the save's upgrade level is applied if the pistol is behind (`PistolUpgrades=1`: a C96
+  given at level -1 fires as the save's level 2), and the shared magnum mix is put right for the weapon in hand.
+- An off-hand press at a pistol holster is the off-hand pistol's whenever it is switched on, the game's side is alive
+  and the gun hand is tracked: a draw, or a refusal (a 60 ms pulse) when a draw can't happen now -- the landing, a
+  weapon switch, a cinematic, weapons disabled, a mounted gun, the HellBox, a grenade in the off hand, the only pistol
+  in the gun hand. Never the holster's own SwitchPistol then (nade3's rule).
+- While it is out: the off trigger is kept from the game (until let go); the off grip's presses are the pistol's (a
+  click at a holster puts it back, elsewhere nothing); the foregrip and the reload's spots are out of reach and their
+  rings and pulses hidden; the gun hand at a pistol holster is refused; the menu's Gun hand waits; the game's switch
+  weapon (Xbox B: the controller's Y), when it would take the held pistol (from the secondary; from the primary with no
+  secondary; from a grenade back to it), is turned into SwitchPrimary (`PistolKeep=1`) -- the long gun changes, the
+  pistol stays. X (the game's grenade switch) works: a grenade in the gun hand, the pistol kept.
+- Frozen (no shots) while a menu is open, the off hand's grip action sleeps or the off hand isn't really tracked (a shot
+  from a held pose would aim wrong); a pull already under way when it is drawn or a freeze ends must be let go first.
+- The game ends the hold when the pistol is gone (a death), when a switch takes it to the gun hand, or when it won't let
+  it stay for two frames (put back, with its refill). A new pawn drops everything. Switched off with nothing held or
+  due, the game's side makes no script calls (rule 7).
+**Why:** the player (2026-10-02): "Is it possible to build similar system for using the pistol with the off hand?", then
+"1. Both 2. Add chest holster, add option in menu to decide what is in each holster. 3. Click 4. Yes and yes 5. It is
+unbalanced but it is fun so I don't mind." `OFFPISTOL-DESIGN.md` (the research and the spikes S1, S2) says how; this is
+its Phase 1 with the player's choices (click, refill, a second dot). The review's rules (ENGINE-NOTES 5bg) are part of
+it. [H] round 44 passed.
+**Costs:** [H] -- no slide, hammer, flash, brass or kick yet (Phase 2); the C96's buttstock and box magazine follow its
+upgrade level only as far as the bone names go (a capture of the main C96 at each level is still to compare); two
+pistols (the same pistol twinned) and the chest holster with the per-holster menu are the next steps. The long gun is
+one-handed while it is out (the physical trade every dual-wield game makes).

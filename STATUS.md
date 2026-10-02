@@ -195,8 +195,22 @@ address-space budget for D3D9On12.
    - a chest holster, with a menu page to choose what each holster holds;
    - two pistols.
 
-   ("It is unbalanced but it is fun so I don't mind.") Next: OFFPISTOL-DESIGN section 8, Phase 1, behind
-   `[OffHand] Pistol=0`.
+   ("It is unbalanced but it is fun so I don't mind.")
+   **Off-hand pistol Phase 1 done** (D41, ENGINE-NOTES 5bg):
+   - with `[OffHand] Pistol=1` (the menu: Weapons -> Off-hand pistol), a click at the pistol holster draws it into the
+     off
+     hand and a click at any holster puts it back;
+   - its trigger fires it through the layer below the game's fire states, 0 cm from its own second red dot;
+   - it refills in the holster, and the switch weapon never takes it (shared block v21).
+
+   Proven in the simulator (pistol8, pistol9) and through an adversarial review. **HEADSET-TESTS rounds 42, 43 and 44
+   passed** (2026-10-02). Round 43 brought requests: a click-to-take option for the grenade, the trigger pin and cook
+   for
+   the gun hand's grenades with a grip throw, and the grenade held as the main hand holds each type.
+   Next:
+   - the chest holster and the per-holster menu;
+   - those grenade requests;
+   - two pistols.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

@@ -151,6 +151,20 @@ call helper factored out of offhand.cpp into `src/mohavr/script_call.cpp/.hpp` (
   1): place it, don't collapse it.
 - `CreatePlayerKillStimulus` reads the killer's `Pawn.Weapon` (a sniper rifle differs); minor.
 
+### 0.4 Phase 1, built (2026-10-02) -- [S] and [H] passed
+
+As section 8 says, with the player's choices:
+- `PistolHold=toggle` (click) ships;
+- `PistolRefill=game`;
+- `PistolDot=1`;
+- `PistolKeep` turns the blocked switch into SwitchPrimary rather than nothing.
+
+Contract changes from 5.1: `offGunPose` is dropped for `offFit[4]` (the game pitches the off frame itself, one frame for
+the pistol, the hand and the IK), and `pistolRefills` is added. sizeof is 2528. Also:
+- the trigger finger takes `offgun_pull` past half a pull (the Colt);
+- the C96's buttstock and box magazine follow its level by bone name, and its clip sits at its idle;
+- the review's rules are in ENGINE-NOTES 5bg and D41.
+
 ### 0.3 Spike S2, run (2026-10-02, the main session) -- PASS
 
 Built as 7.2 says, with these differences:

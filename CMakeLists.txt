@@ -66,6 +66,7 @@ else()
         src/host/markers.cpp
         src/host/reload.cpp
         src/host/offhand.cpp
+        src/host/offpistol.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).

@@ -421,10 +421,11 @@ void Pad::ReadTests(double now) {
                     TestPose tp{true, 0, 0, 0, 0, 0, 0};
                     if (v[0] && v[1] == ',' && v[2] == '@') {
                         // "hand=l,@mag|@pouch|@bolt[,dx,dy,dz[,yaw,pitch,roll]]": at a manual-reload spot, offset.
-                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback", "fore", "grenade"};
+                        static const char* kTargets[] = {"mag", "pouch", "bolt", "magin", "boltup", "boltback", "fore", "grenade",
+                                                         "pistol"};
                         const char* name = v + 3;
                         const size_t len = strcspn(name, ",");
-                        for (int i = 0; i < 8; ++i)
+                        for (int i = 0; i < 9; ++i)
                             if (strlen(kTargets[i]) == len && !strncmp(name, kTargets[i], len)) tp.target = i;
                         if (name[len] == ',')
                             sscanf_s(name + len + 1, "%f,%f,%f,%f,%f,%f", &tp.x, &tp.y, &tp.z, &tp.yaw, &tp.pitch, &tp.roll);
@@ -539,6 +540,22 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         p.buttons &= ~0x2000;
     } else {
         allBDown_ = false;
+    }
+    // The off-hand pistol (PistolKeep): B would take the held pistol to the gun hand -- the press is taken here instead.
+    if (redirectB_ && !redirectWas_) redirectBDown_ = (p.buttons & 0x2000) != 0;  // down already: the game's press
+    redirectWas_ = redirectB_;
+    if (redirectB_ && !hdr->gameUiMenu) {
+        const bool down = (p.buttons & 0x2000) != 0;
+        if (down && !redirectBDown_) {
+            redirectReq_ = true;
+            MLOG("pad: switch weapon kept from the pistol in the off hand -- the primary instead");
+        }
+        redirectBDown_ = down;
+        p.buttons &= ~0x2000;
+    } else if (redirectBDown_ && (p.buttons & 0x2000)) {
+        p.buttons &= ~0x2000;  // still down from then: kept until let go
+    } else {
+        redirectBDown_ = false;
     }
     // Buttons held back in gameplay (the off-hand grenade: RB, the game's own grenade switch, while one is held) -- each
     // until it is let go, or it would reach the game as a fresh press when the mask ends.

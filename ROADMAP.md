@@ -130,7 +130,8 @@ Draw the pistol into the off hand at its holster and fire it with the off trigge
 hand (the player's question). *As found:* no game entry point fires an inactive weapon cleanly, but the layer below
 does: the bullets' native trace, `ProcessInstantHit` (damage, death, impacts), the AI stimuli, the stats and the report,
 all through ProcessEvent on the holstered pistol (spike S1 passes, ENGINE-NOTES 5be, `OFFPISTOL-DESIGN.md`); the pistol
-is drawn in the off hand with the hand closed on it (spike S2 passes, 5bf). Phases: the contract v21 and the host's
+is drawn in the off hand with the hand closed on it (spike S2 passes, 5bf). Phase 1 done and passed in the headset
+(round 44; D41, 5bg). Phases: the contract v21 and the host's
 draw / fire / holster with a second dot; a chest holster and a menu page to choose what each holster holds; two pistols;
 then the slide, flash and brass. The player's choices: a click draws and puts back, the pistol refills in its holster, a
 second dot, a chest holster, two pistols; balance is not a concern.
