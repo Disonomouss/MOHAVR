@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 25;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife
+inline constexpr std::uint32_t kVersion = 26;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -361,6 +361,9 @@ struct Header {
     volatile std::uint32_t knifeKind;         // 2964 1 a soldier, 2 an actor, 3 the world
     volatile float         knifePower;        // 2968
     std::uint32_t          pad25;             // 2972
+    // --- v26: the knife's hold, adjusted (the menu's Knife grip page; host -> game, written as it changes): forward, right,
+    // up (cm, the off controller's frame), tilt, turn, roll (deg, about the handle's middle)
+    float                  knifeAdj[6];       // 2976
 };
 #pragma pack(pop)
 
@@ -445,7 +448,8 @@ static_assert(offsetof(Header, knifeSeq) == 2936, "shared::Header layout must ma
 static_assert(offsetof(Header, knifePawnSeq) == 2952, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, knifeFlags) == 2956, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, knifeHits) == 2960, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 2976, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, knifeAdj) == 2976, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 3000, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).

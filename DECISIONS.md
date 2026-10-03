@@ -768,3 +768,16 @@ LowerBack=Knife`, `LowerBackSpot=0 -58 -22 16`. OFFKNIFE-DESIGN.md.
   after the host's let-go, every squeeze holding strikes off, a shared pulse slot, the test command undone.
 **Why:** the player (2026-10-03): "The mp40 has an upgrade that is a knife for its melee attack, can we make the knife an
 off hand equip with melee functionality? Add a holster to lower back for it."
+
+
+### D52. Round 50's follow-ups: the knife always available and adjustable, no button melee, each holster's ring -- Decided 2026-10-03
+- **The knife is always available:** `[Knife] Require=any` (the new default; `earned` / `carried` stay as choices).
+- **The knife's hold is the player's:** the menu's Weapons tab "Knife grip" sets the grip (forward or icepick) and moves
+  (cm along the controller) and turns (degrees about the handle) the knife in the hand, saved in their ini ([OffHand]
+  KnifeGrip, KnifeAdj). Shared block v26 (`knifeAdj[6]` at 2976, 3000 bytes).
+- **The game's button melee is unmapped** (`[Controls] RS=none`): a swing is physical melee, the knife the off hand's.
+- **Each holster's ring shows or hides on its own** (the Holsters page "Ring shown", [Holsters] <Name>Ring); every ring
+  still shows while that page is open, so a hidden one can be found and moved.
+**Why:** the player (round 50): "Crouch is good. Unbind melee from flick stick down, no longer needed. Knife needs hand
+position adjustment. Make the knife always available, not gated behind mp40 upgrade." "Holsters need to be able to be
+toggled visible individually."

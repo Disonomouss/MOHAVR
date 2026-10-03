@@ -165,8 +165,8 @@ Config LoadConfig(const std::wstring& dir) {
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"OffHand", L"KnifeGrip", L"forward", v, 16, ini.c_str());
         c.offKnifeForward = _wcsicmp(v, L"icepick") != 0;
-        GetPrivateProfileStringW(L"Knife", L"Require", L"earned", v, 16, ini.c_str());
-        c.knifeRequireEarned = _wcsicmp(v, L"carried") != 0;
+        GetPrivateProfileStringW(L"Knife", L"Require", L"any", v, 16, ini.c_str());
+        c.knifeRequire = !_wcsicmp(v, L"carried") ? 2 : !_wcsicmp(v, L"earned") ? 1 : 0;
     }
     c.offKnifeTilt = getf(L"OffHand", L"KnifeTilt", c.offKnifeTilt, -90.0f, 90.0f);
     c.knifeDamage = getf(L"Knife", L"Damage", c.knifeDamage, 1.0f, 10000.0f);

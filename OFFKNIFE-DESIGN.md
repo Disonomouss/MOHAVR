@@ -34,6 +34,14 @@ knife-host.txt are the code readers' reports). This document is what was built.
   - The Holsters page can move it, and any holster can be set to hold the knife ("knife (off hand)").
   - A knife holster with the knife switched off counts as empty: no ring, no pulse.
 
+## 1a. After round 50 (D52)
+- `[Knife] Require=any` is the default: the knife needs no MP40 upgrade.
+- The menu's Weapons tab "Knife grip": the grip (forward / icepick), and the knife moved (forward, right, up: cm in the off
+  controller's frame) and turned (tilt, turn, roll: degrees about the handle's middle), saved in the player's ini
+  ([OffHand] KnifeGrip, KnifeAdj). The host publishes `knifeAdj[6]` (shared block v26); the game applies it to the placed
+  knife as it changes. The same numbers give the mirror image in left-hand mode. [S] r51a: +2 cm and tilt +20 applied (the
+  captures), the knife drawn with the MP40 at upgrade level 0.
+
 ## 2. How
 ### 2.1 The knife in the hand (game: src/mohavr/knife.cpp)
 - **The template:** `Object.FindObject("MOHAGameNonNative.Default__Attachment_MP40.KnifeMeshComponent")` finds the class

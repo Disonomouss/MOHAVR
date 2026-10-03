@@ -226,7 +226,10 @@ address-space budget for D3D9On12.
    Crouch on the right stick click (round 50; the game's button melee on the down flick).
    **The off-hand knife** (D51, shipped on, proven in the simulator; OFFKNIFE-DESIGN.md): once the MP40's Dagger is earned,
    the off hand draws it from a lower-back holster and stabs or slashes with it (150; physical melee's second channel).
-   Next: HEADSET-TESTS round 50; then the StG44's scope attached by hand (design B in work/research/knife-scope).
+   **HEADSET-TESTS round 50 passed** (crouch on the click good; the knife worked: 5 hits on soldiers). Its follow-ups (D52):
+   the knife always available and its hold adjustable (Knife grip page, shared block v26), the button melee unmapped, each
+   holster's ring on its own. Next (researched in work/research/wristhud, rackeject, m18scope): the HUD on the off hand's
+   wrist, a racked round ejected and spent, the M18's scope; then the StG44's scope attached by hand.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

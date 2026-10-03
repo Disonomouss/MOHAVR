@@ -87,6 +87,7 @@ public:
         float      radius;
         bool       inside;   // a hand is in it (a squeeze would act)
         bool       close;    // a hand is within twice its radius
+        bool       hidden = false;  // its ring hidden by the player (a holster's or the pouch's: the Holsters page)
     };
     struct Output {
         Spot        spots[kHolsters + 5]{};
@@ -124,6 +125,8 @@ public:
     // The holster spots: the shipped ones ([Holsters] RightShoulderSpot=x y z r, cm), and the player's (the menu).
     const HolsterSpot& DefaultSpot(int i) const { return defaultSpots_[i]; }
     void SetSpot(int i, const HolsterSpot& s) { spots_[i] = s; }
+    // Whether a holster's (or the pouch's) ring shows (the Holsters page: "Ring shown"; [Holsters] <Name>Ring).
+    void SetSpotShown(int i, bool on) { if (i >= 0 && i < kSpots) shown_[i] = on; }
     static const wchar_t* SpotName(int i);
     // What each holster holds: the game command it runs ("" none) -- the shipped ones ([Holsters] RightHip=SwitchPistol),
     // and the player's (the menu's Holsters page: Holds).
@@ -155,6 +158,7 @@ private:
     Zone        zones_[kHolsters];
     std::string defaultCommands_[kHolsters];
     HolsterSpot spots_[kSpots]{}, defaultSpots_[kSpots]{};
+    bool        shown_[kSpots] = {true, true, true, true, true, true, true};
     ManualReload* reload_ = nullptr;
     OffHandGrenade* nade_ = nullptr;
     OffHandGrenade* gunNade_ = nullptr;

@@ -19,7 +19,7 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
@@ -27,7 +27,7 @@ const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
 constexpr int kTabMax = 20;
 const int kTabItems[kTabCount][kTabMax] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kGripPage,
+    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
      kSpotPage, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
@@ -61,7 +61,7 @@ constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (
 // The Holsters page: pick a holster, choose what it holds (the player, 2026-10-02: "add option in menu to decide what is
 // in each holster"; saved in the player's ini [Holsters] <Name> = a game command or none), move it and size it (cm; [Holsters]
 // <Name>Spot = x y z r); the rings' visibility ([Hands] Rings = never / near / always).
-enum HolsterItem { hWhich, hHolds, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
+enum HolsterItem { hWhich, hHolds, hRight, hUp, hForward, hSize, hShown, hRings, hReset, hBack, hCount };
 // What a holster can hold: the game's commands, in the menu's order, with their names.
 const char* const kHoldCommands[] = {"SwitchPrimary", "SwitchSecondary", "SwitchPistol", "SwitchGrenade", "SwitchFragGrenade",
                                      "SwitchGammon", "SwitchStick", "Knife", "Reload", ""};
@@ -76,6 +76,9 @@ int HoldIndex(const std::string& c) {
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
+// The Knife grip page (after round 50: "Knife needs hand position adjustment"): the grip, and the knife moved and turned in
+// the hand, saved in the player's ini [OffHand] KnifeGrip = forward | icepick, KnifeAdj = fwd right up tilt turn roll.
+enum KnifeItem { kgGrip, kgFwd, kgRight, kgUp, kgTilt, kgTurn, kgRoll, kgReset, kgBack, kgCount };
 const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "lower back", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
@@ -281,6 +284,15 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string
             spots_[i] = {cm.x / 100.0f, cm.y / 100.0f, cm.z / 100.0f, cm.r / 100.0f};
         MLOG("menu: holster %ls at %.0f %.0f %.0f cm, %.0f cm across (%s)", Hands::SpotName(i), spots_[i].x * 100.0f,
              spots_[i].y * 100.0f, spots_[i].z * 100.0f, spots_[i].r * 200.0f, b[0] ? "player's" : "default");
+        // Its ring shown: the player's [Holsters] <Name>Ring, else the shipped one (1).
+        const std::wstring rkey = std::wstring(Hands::SpotName(i)) + L"Ring";
+        wchar_t exe0[MAX_PATH] = L"";
+        GetModuleFileNameW(nullptr, exe0, MAX_PATH);
+        std::wstring shipped0(exe0);
+        shipped0 = shipped0.substr(0, shipped0.find_last_of(L'\\')) + L"\\MOHAVR.ini";
+        spotShownDef_[i] = GetPrivateProfileIntW(L"Holsters", rkey.c_str(), 1, shipped0.c_str()) != 0;
+        spotShown_[i] = GetPrivateProfileIntW(L"Holsters", rkey.c_str(), spotShownDef_[i] ? 1 : 0, iniPath_.c_str()) != 0;
+        if (!spotShown_[i]) MLOG("menu: holster %ls's ring hidden", Hands::SpotName(i));
     }
     // Rings: the player's, else the shipped default.
     wchar_t exe[MAX_PATH] = L"";
@@ -328,6 +340,23 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string
     swscanf_s(fhDef, L"%f %f %f %f", &freeHandDef_[0], &freeHandDef_[1], &freeHandDef_[2], &freeHandDef_[3]);
     swscanf_s(fh, L"%f %f %f %f", &freeHand_[0], &freeHand_[1], &freeHand_[2], &freeHand_[3]);
     PublishFreeHand(false);
+    // The knife's hold: the player's, else the shipped [OffHand] KnifeGrip / KnifeAdj.
+    {
+        wchar_t d[64] = L"", u[64] = L"";
+        GetPrivateProfileStringW(L"OffHand", L"KnifeGrip", L"forward", d, 64, shipped.c_str());
+        knifeIcepickDef_ = !_wcsicmp(d, L"icepick") || !_wcsicmp(d, L"reverse");
+        GetPrivateProfileStringW(L"OffHand", L"KnifeGrip", d, u, 64, iniPath_.c_str());
+        knifeIcepick_ = !_wcsicmp(u, L"icepick") || !_wcsicmp(u, L"reverse");
+        GetPrivateProfileStringW(L"OffHand", L"KnifeAdj", L"0 0 0 0 0 0", d, 64, shipped.c_str());
+        GetPrivateProfileStringW(L"OffHand", L"KnifeAdj", d, u, 64, iniPath_.c_str());
+        float* a = knifeAdjDef_;
+        swscanf_s(d, L"%f %f %f %f %f %f", &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]);
+        a = knifeAdj_;
+        swscanf_s(u, L"%f %f %f %f %f %f", &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]);
+        PublishKnife(false);
+        MLOG("menu: knife grip %s, hold %.1f %.1f %.1f cm, tilt %.0f turn %.0f roll %.0f", knifeIcepick_ ? "icepick" : "forward", knifeAdj_[0],
+             knifeAdj_[1], knifeAdj_[2], knifeAdj_[3], knifeAdj_[4], knifeAdj_[5]);
+    }
     MLOG("menu: free hand pitch %.0f yaw %.0f roll %.0f, forward %.0f cm", freeHand_[0], freeHand_[1], freeHand_[2], freeHand_[3]);
 }
 
@@ -580,10 +609,12 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                                            (page_ == 2 && (in.back || (in.select && selected_ == hBack))) ||
                                            (page_ == 3 && (in.back || (in.select && selected_ == eqBack))) ||
                                            (page_ == 4 && (in.back || (in.select && selected_ == gBack))) ||
-                                           (page_ == 5 && (in.back || (in.select && selected_ == pBack))));
+                                           (page_ == 5 && (in.back || (in.select && selected_ == pBack))) ||
+                                           (page_ == 6 && (in.back || (in.select && selected_ == kgBack))));
     if (backFromPage) {
         // Back on the item that opened it, in its tab.
-        const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : page_ == 4 ? kGripPage : kSpotPage;
+        const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : page_ == 4 ? kGripPage
+                         : page_ == 5 ? kSpotPage : kKnifePage;
         for (int t = 0; t < kTabCount; ++t)
             for (int i = 0; i < TabCount(t); ++i)
                 if (ItemAt(t, i) == opener) {
@@ -690,6 +721,33 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
         Render();
         return;
     }
+    if (page_ == 6) {
+        if (in.up) selected_ = (selected_ + kgCount - 1) % kgCount;
+        if (in.down) selected_ = (selected_ + 1) % kgCount;
+        if ((in.left || in.right) && selected_ == kgGrip) {
+            knifeIcepick_ = !knifeIcepick_;
+            PublishKnife(true);
+            MLOG("menu: knife grip -> %s", knifeIcepick_ ? "icepick" : "forward");
+        } else if ((in.left || in.right) && selected_ >= kgFwd && selected_ <= kgRoll) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            float& v = knifeAdj_[selected_ - kgFwd];
+            v = selected_ <= kgUp ? std::fmax(-20.0f, std::fmin(20.0f, v + dir * 0.5f)) : std::fmax(-180.0f, std::fmin(180.0f, v + dir * 5.0f));
+            PublishKnife(true);
+            MLOG("menu: knife hold -> %.1f %.1f %.1f cm, tilt %.0f turn %.0f roll %.0f", knifeAdj_[0], knifeAdj_[1], knifeAdj_[2],
+                 knifeAdj_[3], knifeAdj_[4], knifeAdj_[5]);
+        }
+        if (in.select && selected_ == kgReset) {
+            for (int i = 0; i < 6; ++i) knifeAdj_[i] = knifeAdjDef_[i];  // the shipped defaults
+            knifeIcepick_ = knifeIcepickDef_;
+            PublishKnife(false);
+            WritePrivateProfileStringW(L"OffHand", L"KnifeAdj", nullptr, iniPath_.c_str());
+            WritePrivateProfileStringW(L"OffHand", L"KnifeGrip", nullptr, iniPath_.c_str());
+            MLOG("menu: knife hold reset");
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
     if (page_ == 3) {
         if (in.up) selected_ = (selected_ + eqCount - 1) % eqCount;
         if (in.down) selected_ = (selected_ + 1) % eqCount;
@@ -737,6 +795,15 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                 case hUp: s.y = std::fmax(-1.2f, std::fmin(0.4f, s.y + dir * 0.01f)); break;
                 case hForward: s.z = std::fmax(-0.6f, std::fmin(0.6f, s.z + dir * 0.01f)); break;
                 case hSize: s.r = std::fmax(0.05f, std::fmin(0.40f, s.r + dir * 0.005f)); break;
+                case hShown: {
+                    moved = false;
+                    spotShown_[holsterSel_] = !spotShown_[holsterSel_];
+                    const std::wstring key = std::wstring(Hands::SpotName(holsterSel_)) + L"Ring";
+                    if (!iniPath_.empty())
+                        WritePrivateProfileStringW(L"Holsters", key.c_str(), spotShown_[holsterSel_] ? L"1" : L"0", iniPath_.c_str());
+                    MLOG("menu: holster %ls's ring -> %s", Hands::SpotName(holsterSel_), spotShown_[holsterSel_] ? "shown" : "hidden");
+                    break;
+                }
                 case hRings:
                     ringsMode_ = (ringsMode_ + (in.right ? 1 : 2)) % 3;
                     Save();
@@ -755,6 +822,9 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             spots_[holsterSel_] = spotDefaults_[holsterSel_];
             const std::wstring key = std::wstring(Hands::SpotName(holsterSel_)) + L"Spot";
             WritePrivateProfileStringW(L"Holsters", key.c_str(), nullptr, iniPath_.c_str());
+            spotShown_[holsterSel_] = spotShownDef_[holsterSel_];
+            const std::wstring rkey = std::wstring(Hands::SpotName(holsterSel_)) + L"Ring";
+            WritePrivateProfileStringW(L"Holsters", rkey.c_str(), nullptr, iniPath_.c_str());
             if (holsterSel_ < kHolsters) {  // and what it holds
                 commands_[holsterSel_] = commandDefaults_[holsterSel_];
                 WritePrivateProfileStringW(L"Holsters", Hands::SpotName(holsterSel_), nullptr, iniPath_.c_str());
@@ -886,6 +956,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 3;
             selected_ = 0;
             MLOG("menu: free hand page");
+        } else if (item == kKnifePage) {
+            page_ = 6;
+            selected_ = 0;
+            MLOG("menu: knife grip page");
         } else if (item == kGripPage) {
             page_ = 4;
             selected_ = 0;
@@ -934,6 +1008,8 @@ void Menu::Render() {
         RenderGripPage();
     } else if (page_ == 5) {
         RenderSpotPage();
+    } else if (page_ == 6) {
+        RenderKnifePage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     // The tab row: the current tab lit; framed while the row itself is selected (left / right switch).
@@ -1059,7 +1135,10 @@ void Menu::Render() {
             case kOffKnife:
                 snprintf(label, sizeof(label), "Off-hand knife   <  %s  >", offHandKnife_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
-                note("the MP40's dagger (its 2nd upgrade): the free hand draws it at the lower back; stab or slash");
+                note("the MP40's dagger: the free hand draws it at the lower back; stab or slash");
+                break;
+            case kKnifePage:
+                ImGui::Selectable("Knife grip  (how the knife sits in your hand)", sel);
                 break;
             case kGripPage:
                 snprintf(label, sizeof(label), "Reload grip  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
@@ -1194,14 +1273,17 @@ void Menu::RenderHolsterPage() {
     ImGui::Selectable(label, selected_ == hForward);
     snprintf(label, sizeof(label), "Size                  <  %.0f across  >", s.r * 200.0f);
     ImGui::Selectable(label, selected_ == hSize);
-    snprintf(label, sizeof(label), "Rings                 <  %ls  >", kRingModes[ringsMode_]);
+    snprintf(label, sizeof(label), "Ring shown            <  %s  >", spotShown_[holsterSel_] ? "yes" : "no");
+    ImGui::Selectable(label, selected_ == hShown);
+    snprintf(label, sizeof(label), "Rings (all)           <  %ls  >", kRingModes[ringsMode_]);
     ImGui::Selectable(label, selected_ == hRings);
     ImGui::Selectable("Reset this spot", selected_ == hReset);
     ImGui::Selectable("Back", selected_ == hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
-    ImGui::TextDisabled("Rings: near = when a hand comes close. Saved for you.   B: back");
+    ImGui::TextDisabled("Ring shown: this spot's ring, on its own. Rings: near = when a hand comes close.");
+    ImGui::TextDisabled("Saved for you.   B: back");
     ImGui::PopFont();
 }
 
@@ -1275,6 +1357,41 @@ void Menu::RenderGripPage() {
     ImGui::TextDisabled("a held magazine moves the other way in your hand.");
     ImGui::TextDisabled("Hold the part to see it. Saved for this gun.   B: back");
     ImGui::PopFont();
+}
+
+// The off-hand knife in the hand: the grip, moved and turned (about its handle) in the controller's frame.
+void Menu::RenderKnifePage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Knife grip");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  the knife in your other hand");
+    ImGui::Separator();
+    char label[128];
+    snprintf(label, sizeof(label), "Grip                  <  %s  >", knifeIcepick_ ? "icepick (blade down)" : "forward");
+    ImGui::Selectable(label, selected_ == kgGrip);
+    const char* names[6] = {"Forward / back", "Right / left", "Up / down", "Tilt (up / down)", "Turn (left / right)", "Roll"};
+    for (int i = 0; i < 6; ++i) {
+        if (i < 3) snprintf(label, sizeof(label), "%-22s<  %+.1f cm  >", names[i], knifeAdj_[i]);
+        else snprintf(label, sizeof(label), "%-22s<  %+.0f\xC2\xB0  >", names[i], knifeAdj_[i]);
+        ImGui::Selectable(label, selected_ == kgFwd + i);
+    }
+    ImGui::Selectable("Reset", selected_ == kgReset);
+    ImGui::Selectable("Back", selected_ == kgBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Draw the knife and hold it in view, then adjust. Saved for you.");
+    ImGui::TextDisabled("B: back");
+    ImGui::PopFont();
+}
+
+void Menu::PublishKnife(bool save) {
+    if (hdr_)
+        for (int i = 0; i < 6; ++i) hdr_->knifeAdj[i] = knifeAdj_[i];
+    if (save && !iniPath_.empty()) {
+        wchar_t b[96];
+        swprintf_s(b, L"%.1f %.1f %.1f %.0f %.0f %.0f", knifeAdj_[0], knifeAdj_[1], knifeAdj_[2], knifeAdj_[3], knifeAdj_[4], knifeAdj_[5]);
+        WritePrivateProfileStringW(L"OffHand", L"KnifeAdj", b, iniPath_.c_str());
+        WritePrivateProfileStringW(L"OffHand", L"KnifeGrip", knifeIcepick_ ? L"icepick" : L"forward", iniPath_.c_str());
+    }
 }
 
 // The free support hand (off the foregrip) on its controller: turned about the wrist, moved forward/back.

@@ -738,6 +738,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 if (handsOk) offhandPistol.Poll(g_hdr, nowS);
                 // The off-hand knife's game side (whether a draw can happen, a held one may stay).
                 if (menuOk) offhandKnife.SetOn(menu.OffHandKnifeOn());
+                if (menuOk) offhandKnife.SetIcepick(menu.KnifeIcepick());
                 if (handsOk) offhandKnife.Poll(g_hdr, nowS);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
@@ -750,7 +751,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     hin.fit = menuOk ? menu.Fit() : hands.DefaultFit();
                     hin.startLeft = menuOk && menu.StartLeft();
                     if (menuOk) {
-                        for (int i = 0; i < mohavr::host::kSpots; ++i) hands.SetSpot(i, menu.Spot(i));
+                        for (int i = 0; i < mohavr::host::kSpots; ++i) {
+                            hands.SetSpot(i, menu.Spot(i));
+                            hands.SetSpotShown(i, menu.SpotShown(i));
+                        }
                         for (int i = 0; i < mohavr::host::kHolsters; ++i) hands.SetCommand(i, menu.HolsterCommand(i));
                         hands.SetHandPoint(menu.HandPoint());
                         hands.SetForegripRadius(menu.ForegripRadius());

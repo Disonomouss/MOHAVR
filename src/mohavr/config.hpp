@@ -87,7 +87,8 @@ int   scopeColumn = 512;          // [Scope] Column -- px at the backbuffer's ri
 // The off-hand knife (OFFKNIFE-DESIGN): the MP40's Dagger in the off hand from the lower back, with physical melee.
 bool  offKnifeForward = true;     // [OffHand] KnifeGrip -- forward (the blade along the controller) or icepick (the game's)
 float offKnifeTilt = 10.0f;       // [OffHand] KnifeTilt -- deg the forward blade points up from the controller's forward
-bool  knifeRequireEarned = true;  // [Knife] Require -- earned (the Dagger upgrade) or carried (an MP40 with it in the inventory)
+int   knifeRequire = 0;           // [Knife] Require -- 0 any (always: the player after round 50), 1 earned (the MP40's Dagger
+                                  // upgrade), 2 carried (and an MP40 in the inventory)
 float knifeDamage = 150.0f;       // [Knife] Damage -- every knife hit's (the game's Dagger: 150); <= 0: the gun in hand's melee
 float knifeThrustSpeed = 2.0f;    // [Knife] ThrustSpeed -- m/s: the hand along the blade, a stab
 float knifeThrustCos = 0.8f;      // [Knife] ThrustCos

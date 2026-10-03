@@ -203,9 +203,10 @@ Hands::Output Hands::Update(const Input& in) {
     const float pouchR = spots_[kHolsters].r;
 
     // The spots, for the rings: each holster, and the off hand's foregrip / magazine spots on the gun.
-    auto addSpot = [&](SpotKind kind, V3 c, float r, bool onlyOffHand) {
+    auto addSpot = [&](SpotKind kind, V3 c, float r, bool onlyOffHand, int spot = -1) {
         Spot& s = out.spots[out.spotCount++];
         s.kind = kind;
+        s.hidden = spot >= 0 && !shown_[spot];
         s.pos = {c.x, c.y, c.z};
         s.radius = r;
         for (int h = 0; h < 2; ++h) {
@@ -217,12 +218,12 @@ Hands::Output Hands::Update(const Input& in) {
     };
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
-            if (zoneLive(z) || in.pouchShown) addSpot(kHolster, centre[z], spots_[z].r, false);
+            if (zoneLive(z) || in.pouchShown) addSpot(kHolster, centre[z], spots_[z].r, false, z);
     if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !offBusy) addSpot(kForegrip, fore, foregripR_, true);
     if (gunOk && reloadOk && !offBusy) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
-    if (in.pouchShown || (reloadActive && reload_->MagazineOut() && !offBusy)) addSpot(kPouch, pouch, pouchR, !in.pouchShown);
-    else if (pouchReload_ && gunOk && in.weaponKind != 2) addSpot(kPouch, pouch, pouchR, false);  // (the pouch reload)
+    if (in.pouchShown || (reloadActive && reload_->MagazineOut() && !offBusy)) addSpot(kPouch, pouch, pouchR, !in.pouchShown, kHolsters);
+    else if (pouchReload_ && gunOk && in.weaponKind != 2) addSpot(kPouch, pouch, pouchR, false, kHolsters);  // (the pouch reload)
     out.targetOk[1] = true;
     out.target[1] = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;

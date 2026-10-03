@@ -91,6 +91,7 @@ int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, 
     bool anyNear = false;
     for (int i = 0; i < h.spotCount; ++i) {
         const Hands::Spot& s = h.spots[i];
+        if (s.hidden && !showAll) continue;  // (the player hid this one; the Holsters page shows them all)
         const bool show = mode == kAlways || (showAll && (s.kind == Hands::kHolster || s.kind == Hands::kPouch || s.kind == Hands::kMagWell)) ||
                           (mode == kNear && s.close);
         if (!show) continue;

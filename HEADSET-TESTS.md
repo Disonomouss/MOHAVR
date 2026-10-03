@@ -2004,6 +2004,8 @@ we make the knife an off hand equip with melee functionality? Add a holster to l
 
 **Deployed for this round:** the shipped defaults (the knife on).
 
+**Answers (2026-10-03):** "Crouch is good." The knife: "Knife needs hand position adjustment." "Make the knife always available, not gated behind mp40 upgrade." (The log: drawn and put back 9 times, 5 hits on soldiers, the off hand pulsed.) New requests: unbind the melee from the right stick's down flick; the HUD on the off hand's wrist (health and the minimap on the wrist's left with the palm flat face down, the weapon and grenade info on its right), adjustable in position and size, wrist or screen as an option; racking a bolt, slide or pump ejects a visible round that counts as spent (only where real); the M18's scope; each holster's ring shown or hidden on its own.
+
 ---
 
 ## Template

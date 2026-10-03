@@ -21,6 +21,9 @@ public:
     // The switch (the menu's Weapons tab "Off-hand knife"; the shipped [OffHand] Knife until the player toggles it).
     void SetOn(bool on);
     bool On() const { return on_; }
+    // The grip (the menu's Knife grip page: the player's [OffHand] KnifeGrip): a change while held places it again.
+    void SetIcepick(bool icepick) { icepick_ = icepick; }
+    bool Icepick() const { return icepick_; }
     // Per XR frame, before the hands: the game's caps (a held knife is let go of when it may not stay).
     void Poll(const shared::Header* hdr, double now);
     bool Holding() const { return held_; }

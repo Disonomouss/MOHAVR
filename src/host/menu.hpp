@@ -76,6 +76,8 @@ public:
     bool OffHandPistolOn() const { return offHandPistol_; }
     // The off-hand knife (OFFKNIFE-DESIGN; likewise the shipped [OffHand] Knife until toggled).
     bool OffHandKnifeOn() const { return offHandKnife_; }
+    // The knife's grip (the Knife grip page; the player's [OffHand] KnifeGrip).
+    bool KnifeIcepick() const { return knifeIcepick_; }
     // The fit of any weapon by its class (the off-hand pistol's): the player's saved one, else the shipped one, else the
     // defaults. Read once per key.
     shared::GunFit FitFor(const std::string& key);
@@ -83,6 +85,7 @@ public:
     // Holsters (the Holsters page; the player's, saved): load with the shipped spots (metres) and what each holster holds
     // (its game command, "" none), then the current ones.
     void LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string (&commands)[kHolsters]);
+    bool SpotShown(int i) const { return i >= 0 && i < kSpots ? spotShown_[i] : true; }
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
     const std::string& HolsterCommand(int i) const { return commands_[i]; }
     int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
@@ -109,6 +112,8 @@ private:
     void RenderHolsterPage();
     void SaveHolster(int i);
     void RenderFreeHandPage();
+    void RenderKnifePage();
+    void PublishKnife(bool save);
     void RenderGripPage();
     // Round 32, the Reload grip page: the player's adjustments of the weapon in hand's three grips, [ReloadGrip]
     // <weapon>.<mag|hold|bolt> = forward up right tilt turn roll, published to the game (hdr->gripAdj).
@@ -162,6 +167,8 @@ private:
     float                   freeHand_[4] = {0, 0, 0, 0};  // pitch, yaw, roll (degrees), forward (cm)
     float                   freeHandDef_[4] = {0, 0, 0, 0};  // the shipped [Hands] FreeHand
     HolsterSpot             spots_[kSpots]{}, spotDefaults_[kSpots]{};  // metres (the last: the magazine pouch)
+    bool                    spotShown_[kSpots] = {true, true, true, true, true, true, true};  // each ring shown (Ring shown)
+    bool                    spotShownDef_[kSpots] = {true, true, true, true, true, true, true};
     std::string             commands_[kHolsters], commandDefaults_[kHolsters];  // what each holster holds (game commands)
     int                     holsterSel_ = 0;
     int                     ringsMode_ = 1;
@@ -182,6 +189,8 @@ private:
     bool                    scope_ = false, scopeZoomGame_ = false;
     bool                    offHandPistol_ = false;
     bool                    offHandKnife_ = false;
+    bool                    knifeIcepick_ = false, knifeIcepickDef_ = false;
+    float                   knifeAdj_[6] = {}, knifeAdjDef_[6] = {};  // fwd right up (cm), tilt turn roll (deg)
     std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
     shared::GunFit          fitForFit_{};
 };

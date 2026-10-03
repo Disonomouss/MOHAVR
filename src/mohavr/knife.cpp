@@ -27,7 +27,10 @@ bool          g_bake = false;
 carrier::Slot g_carrier;
 std::uintptr_t g_pawn = 0;
 bool          g_forward = true;          // the grip: blade forward (out of the thumb side), else the game's icepick
-float         g_knifeInCtrl[16];         // the knife mesh in the off controller's frame
+float         g_knifeInCtrl[16];         // the knife mesh in the off controller's frame (adjusted)
+float         g_knifeBase[16];           // ... as placed, before the player's adjustment (the menu's Knife grip page)
+float         g_adj[6] = {};             // the adjustment applied (hdr->knifeAdj)
+float         g_adjUpm = 0.0f;
 float         g_handInCtrl[16];          // the off hand (its bone frame) in the off controller's frame
 bool          g_placed = false;
 const float*  g_fingers = nullptr;
@@ -143,6 +146,8 @@ bool Place() {
         }
         std::memcpy(g_knifeInCtrl, best, sizeof(best));
     }
+    std::memcpy(g_knifeBase, g_knifeInCtrl, sizeof(g_knifeBase));
+    g_adjUpm = 0.0f;  // (applied again on the next Draw)
     const float* hand = nullptr;
     g_grip = reload::GripRows("Attachment_StickGrenade", "offnade", hand, g_fingers, g_fingerNames);
     g_placed = true;
@@ -151,6 +156,29 @@ bool Place() {
          g_knifeInCtrl[12], g_knifeInCtrl[13], g_knifeInCtrl[14], g_knifeInCtrl[8], g_knifeInCtrl[9], g_knifeInCtrl[10],
          g_grip ? "the stick grenade's" : "open");
     return true;
+}
+
+// The player's adjustment of the hold (the menu's Knife grip page): the knife moved in the off controller's frame (x
+// forward, y right, z up: cm), turned about its handle's middle (tilt about y, turn about z, roll about x). The same numbers
+// in left-hand mode give the mirror image (the frame is the mirror world's).
+void ApplyAdj(const float (&adj)[6], float upm) {
+    std::memcpy(g_adj, adj, sizeof(g_adj));
+    g_adjUpm = upm;
+    const float k = 65536.0f / 360.0f, s = upm / 100.0f;
+    float pivot[3];
+    const float mid[3] = {0.0f, 0.0f, -2.0f};
+    for (int j = 0; j < 3; ++j) pivot[j] = mid[0] * g_knifeBase[j] + mid[1] * g_knifeBase[4 + j] + mid[2] * g_knifeBase[8 + j] + g_knifeBase[12 + j];
+    float r[16];
+    const float zero[3] = {0, 0, 0};
+    Rotator(static_cast<int>(adj[3] * k), static_cast<int>(adj[4] * k), static_cast<int>(adj[5] * k), zero, r);
+    // M = T(-pivot) x R x T(pivot + t)
+    float m[16];
+    std::memcpy(m, r, sizeof(m));
+    for (int j = 0; j < 3; ++j) {
+        const float rp = -(pivot[0] * r[j] + pivot[1] * r[4 + j] + pivot[2] * r[8 + j]);
+        m[12 + j] = rp + pivot[j] + adj[j] * s;
+    }
+    Mul(g_knifeBase, m, g_knifeInCtrl);
 }
 
 // 1 drawn, 0 no free hand frame yet (try again soon), -1 failed.
@@ -166,17 +194,19 @@ void Sheathe() {
     g_placed = false;
 }
 
-// The Dagger earned: the save's applied upgrade level for the MP40 (WeaponType 3) is 2 or more -- what the game gives the MP40
-// it hands out. [Knife] Require=carried also wants an MP40 in the inventory.
+// The knife allowed: always ([Knife] Require=any, the player after round 50: "Make the knife always available, not gated
+// behind mp40 upgrade"), or the Dagger earned -- the save's applied upgrade level for the MP40 (WeaponType 3) is 2 or more,
+// what the game gives the MP40 it hands out; Require=carried also wants an MP40 in the inventory.
 bool Earned(std::uintptr_t pawn, int& level) {
     level = -9;
+    if (g_cfg.knifeRequire == 0) return true;
     const std::uintptr_t mgr = Obj(pawn, "WeaponUpgradeManager");
     if (!mgr) return false;
     Call get(mgr, "GetAppliedUpgradeLevel");
     const std::uint8_t type = 3;
     level = get.Set("WeaponType", &type, 1) && get.Run() ? get.ReturnInt() : -9;
     if (level < 2) return false;
-    if (g_cfg.knifeRequireEarned) return true;
+    if (g_cfg.knifeRequire == 1) return true;
     const std::uintptr_t inv = Obj(pawn, "InvManager");
     std::uintptr_t item = Obj(inv, "InventoryChain");
     for (int n = 0; item && n < 64; item = Obj(item, "Inventory"), ++n)
@@ -267,8 +297,9 @@ void OnDraw(shared::Header* hdr) {
         }
         int level = -9;
         const bool earned = Earned(pawn, level);
-        if (earned != g_earned) MLOG("knife: the Dagger %s (the MP40's upgrade level %d%s)", earned ? "earned" : "not earned", level,
-                                     g_cfg.knifeRequireEarned ? "" : ", an MP40 carried");
+        if (earned != g_earned)
+            MLOG("knife: the Dagger %s (%s)", earned ? "earned" : "not earned",
+                 g_cfg.knifeRequire == 0 ? "always available" : g_cfg.knifeRequire == 1 ? "the MP40's upgrade level" : "the MP40's upgrade level, an MP40 carried");
         g_earned = earned;
     }
     const bool installed = g_template && g_bake && ObjectProcessEventOk();
@@ -304,6 +335,19 @@ void OnDraw(shared::Header* hdr) {
         Place();
     }
     g_pending = want && !Holding();
+    // The player's adjustment of the hold, as it changes (and after each placing).
+    if (g_placed) {
+        const float upm = hdr->unitsPerMeter > 1.0f && hdr->unitsPerMeter < 1000.0f ? hdr->unitsPerMeter : 100.0f;
+        float adj[6];
+        for (int i = 0; i < 6; ++i) {
+            const float v = hdr->knifeAdj[i];
+            adj[i] = std::isfinite(v) ? (i < 3 ? (v < -20.0f ? -20.0f : v > 20.0f ? 20.0f : v) : (v < -180.0f ? -180.0f : v > 180.0f ? 180.0f : v)) : 0.0f;
+        }
+        if (upm != g_adjUpm || std::memcmp(adj, g_adj, sizeof(adj)) != 0) {
+            ApplyAdj(adj, upm);
+            MLOG("knife: the hold adjusted -- %.0f %.0f %.0f cm, tilt %.0f turn %.0f roll %.0f", adj[0], adj[1], adj[2], adj[3], adj[4], adj[5]);
+        }
+    }
     // Why a draw can't happen now (the host's log on a refused press); a failed draw stands until one succeeds.
     if (!g_template && g_templateTried) g_refusal = kNoTemplate;
     else if (!g_earned) g_refusal = kNotEarned;
