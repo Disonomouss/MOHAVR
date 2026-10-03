@@ -2169,6 +2169,51 @@ every gun at upgrade level 2 (the harness save):
   RACK BACK 7 -> 6, EJECT 6 -> 0; brought forward: nothing chambered; a magazine in, racked: 7). `reloadState` bit16 is
   clear for a Step 1 gun held back after its round was thrown.
 
+## 5br. The HUD pass: the canvas flush, FlushCommand, alpha, the layout (D55, 2026-10-03)
+
+Research: work/research/wristhud/design.md (disassembled with its disasm_va.py); measured by the W0 spike and the shipped
+code in the simulator (work/research/tests/wristhud0-6.ps1, 1920x1080, the harness level Var_Flk_P). Addresses in
+addresses.hpp (`kCanvasFlush`, `kFlushCommandExecute`, `kFlushCommandVtable`, `kHudClosingFlushDone`, all prologue-checked;
+the build check verifies 39 signatures).
+- **FCanvas::Flush** `0x10B17930` (stdcall, the FCanvas at [esp+4]; `55 8B EC 83 E4 F0 64 A1 00 00 00 00`). FCanvas: +0x04
+  the FRenderTarget* (vtable slot 0 GetSizeX, 1 GetSizeY, 2 the display gamma), +0x0C / +0x10 the transform stack (64-byte
+  matrices), +0x1C the pending FBatchedElements* (null: Flush returns at once). Threaded rendering ([0x116DC5C8], called off
+  the render thread [0x116DC5D8]): it allocates 0x70 bytes in the render command ring (0x116F577C, 0x10912970) with vtable
+  `0x114E457C` and copies in +0x10 the batch, +0x20 the transform, +0x60 / +0x64 the render target's SizeX / SizeY (by
+  value), +0x68 hit testing, +0x6C gamma; otherwise it calls Execute directly (0x10B17ACA).
+- **FlushCommand** vtable `0x114E457C` = {0x10988DE0, Execute `0x10B17B00`, DescribeCommand 0x10B17B70 (L"FlushCommand"),
+  0x10988DE0}; slot 1 checked at run time. Execute (thiscall; `51 56 8B F1 D9 46 6C 8B 46 68`) calls FBatchedElements::Draw
+  0x10A137C0 (batch, &transform, SizeX, SizeY, hit & 1, 1/gamma; ret 0x18), deletes the batch, returns 0x70. **It never
+  binds a render target:** the HUD lands on whatever D3D9 target is bound. Measured: each HUD batch carries the
+  backbuffer's size (1920x1080) and draws onto the backbuffer with no depth surface, viewport (0,0) 1920x1080, scissor off.
+  Swapping FCanvas+0x04 changes only the pixel-to-clip size, not where the pixels go.
+- **The HUD loop** (in UGameViewportClient::Draw): the opening flush 0x10C1543B, the matrix push 0x10C15440, PostRender,
+  the closing flush at 0x10C154BC (`mov ecx,[ebp+0Ch]; push ecx; call FCanvas::Flush`); `0x10C154C5` right after it
+  (`8D 94 24 F0 01 00 00 52 8B D7`, the transform pop) is reached on every pass that ran the matrix push. Batches flushed
+  between the two (PostRender's own flushes included) are the HUD's: 4-6 a pass in gameplay, 900 passes / 10 s at 90 Hz;
+  the game-thread order of the flushes always matched the render thread's order of their Executes (0 skipped in every run).
+- **The canvas blend writes no alpha:** colour SRCALPHA / INVSRCALPHA with separate alpha on and SRCBLENDALPHA ZERO /
+  DESTBLENDALPHA ONE, ~26 SetRenderState calls per batch (the RHI doesn't cache them). Forced to ONE / INVSRCALPHA inside the
+  redirected batches (IDirect3DDevice9 vtable slot 57 swapped; restored around them), the texture is premultiplied RGBA:
+  ~40,000 covered px, none with colour above alpha, the dark backing plates translucent. **A device Reset restores slot
+  57** (the same vtable address): re-checked every Present (logged "hooking again" after each of two Resets).
+- **The layout:** a normalized position n lands at (0.05 + 0.9 n) x the canvas size; `MOHAHUDObj` PosX / PosY are already
+  the top-left corner (hud_health Pos (98,604), Size 256x60, justify 0/2 at 1280x720), SizeX / SizeY the scaled size. The
+  resolution bucket is an exact match on the canvas size: 1280x720 -> bucket 5 (SCREEN_RESOLUTION_1280x720), resolutionScale
+  1.000; 1920x1080 and 1040x585 -> bucket 0 (UNKNOWN), also 1.000. The exp bars' (hud_weaponExperience /
+  hud_grenadeExperience) Pos / Size are the **current icon's tile** (the StG44's 96 x 256 at 1039,369 = (0.93, 0.91)
+  right / bottom; the frag's 64 x 95 at 915,530), the icon drawn 27 px (ExperienceIconOffset) to its left. The ammo count
+  (MOHAHUDRichText) and the grenade count (MOHAHUDStr) are left-justified at their positions (glyphs +1..+93 / +12..+32 px
+  and +1..+25 / +4..+19). The level badges (`ExperienceLevelBg`, 128 x 320) at 1092..1220 / 941..1069 x 326..646.
+- **The canvas's matrix** at the push is identity plus the view's translation; scaling M00 / M11 by backbuffer / texture
+  (1.5 at 1920x1080) maps canvas px 1:1 onto a 1280x720 target bound as the viewport. Never seen otherwise (a mismatch now
+  falls back to the screen panel).
+- **Flat frames** (the pause menu, cinematics, death cams) run no stereo Draw: the HUD draws as the game does, the texture
+  stays clear. `ToggleShowHUD` (an exec on the HUD, reachable by the console) leaves the pass with no batches.
+- **Test hooks:** `MOHAHUD.NotifyHitIndicator(Rotator)` and `SetObjectiveText(NewText, newTitle, in, hold, out)` called
+  through ProcessEvent show a hit indicator and an objective message (the FString parameters are the caller's: ProcessEvent
+  destroys only locals); `Suicide` kills the player (the HUD pass stops; the pawn's Health <= 0).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

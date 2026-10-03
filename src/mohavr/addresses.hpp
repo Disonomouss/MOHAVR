@@ -137,6 +137,27 @@ inline constexpr std::uintptr_t kHudMatrixStackOffset = 0x130;
 // here, so it gets no HUD. Verified by disassembly of the unpacked exe (2026-10-03).
 inline constexpr std::uintptr_t kHudLoopStart = 0x10C1526F;
 inline constexpr std::uint8_t   kHudLoopStartBytes[] = {0x8B, 0x15, 0x64, 0xD9, 0x6D, 0x11, 0x8B, 0x82, 0xA8, 0x02, 0x00, 0x00};
+// The wrist HUD (hudtex.cpp, WRISTHUD-DESIGN; work/research/wristhud/design.md 1.4, disassembled 2026-10-03, measured by the
+// W0 spike -- ENGINE-NOTES 5br):
+// - the HUD loop's closing flush is `mov ecx,[ebp+0Ch]; push ecx; call FCanvas::Flush` at 0x10C154BC; right after it,
+//   `lea edx,[esp+1F0h]; push edx; mov edx,edi` (the transform pop) -- reached on every pass that ran the matrix push
+//   (the only branch between them, 0x10C1546C, jumps to the closing flush itself).
+inline constexpr std::uintptr_t kHudClosingFlushDone = 0x10C154C5;
+inline constexpr std::uint8_t   kHudClosingFlushDoneBytes[] = {0x8D, 0x94, 0x24, 0xF0, 0x01, 0x00, 0x00, 0x52, 0x8B, 0xD7};
+// - FCanvas::Flush (stdcall, the FCanvas at [esp+4]): `push ebp; mov ebp,esp; and esp,-16; mov eax,fs:[0]`. It returns
+//   at once when the pending batch (canvas+0x1C) is null; otherwise it queues a FlushCommand (threaded rendering) or calls
+//   its Execute directly. FCanvas: +0x04 FRenderTarget*, +0x0C/+0x10 the transform stack, +0x1C the pending batch.
+inline constexpr std::uintptr_t kCanvasFlush = 0x10B17930;
+inline constexpr std::uint8_t   kCanvasFlushBytes[] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0, 0x64, 0xA1, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uintptr_t kCanvasBatch = 0x1C;
+// - FlushCommand::Execute (thiscall, the command in ECX; vtable 0x114E457C slot 1, DescribeCommand L"FlushCommand"):
+//   `push ecx; push esi; mov esi,ecx; fld [esi+6Ch]; mov eax,[esi+68h]` -> FBatchedElements::Draw(batch +0x10,
+//   &transform +0x20, SizeX +0x60, SizeY +0x64, hit testing +0x68 & 1, 1/gamma +0x6C); deletes the batch; returns 0x70.
+//   It never binds a render target: the HUD lands on whatever D3D9 target is bound on the render thread.
+inline constexpr std::uintptr_t kFlushCommandExecute = 0x10B17B00;
+inline constexpr std::uint8_t   kFlushCommandExecuteBytes[] = {0x51, 0x56, 0x8B, 0xF1, 0xD9, 0x46, 0x6C, 0x8B, 0x46, 0x68};
+inline constexpr std::uintptr_t kFlushCommandVtable = 0x114E457C;  // slot 1 = kFlushCommandExecute (checked at install)
+inline constexpr std::uintptr_t kFlushCmdBatch = 0x10, kFlushCmdSizeX = 0x60, kFlushCmdSizeY = 0x64;
 
 // A decal's screen box (ENGINE-NOTES 5r): stdcall (EAX = an input, stack: ?, FSceneView*, float* min,
 // float* max), RET 0x10, returns nonzero if the box is on screen. It projects to ABSOLUTE pixels (it adds
@@ -322,6 +343,9 @@ inline constexpr Signature kSignatures[] = {
     {"Draw HUD loop view read",            kHudViewRead, kHudViewReadBytes, sizeof(kHudViewReadBytes)},
     {"Draw HUD matrix push",               kHudMatrixPush, kHudMatrixPushBytes, sizeof(kHudMatrixPushBytes)},
     {"Draw HUD loop start",                kHudLoopStart, kHudLoopStartBytes, sizeof(kHudLoopStartBytes)},
+    {"Draw HUD closing flush done",        kHudClosingFlushDone, kHudClosingFlushDoneBytes, sizeof(kHudClosingFlushDoneBytes)},
+    {"FCanvas::Flush",                     kCanvasFlush, kCanvasFlushBytes, sizeof(kCanvasFlushBytes)},
+    {"FlushCommand::Execute",              kFlushCommandExecute, kFlushCommandExecuteBytes, sizeof(kFlushCommandExecuteBytes)},
     {"decal screen box",                   kDecalScreenBox, kDecalScreenBoxBytes, sizeof(kDecalScreenBoxBytes)},
     {"execGetBaseAimRotation",             kExecGetBaseAimRotation, kExecGetBaseAimRotationBytes, sizeof(kExecGetBaseAimRotationBytes)},
     {"UWorld::SingleLineCheck",            kSingleLineCheck, kSingleLineCheckBytes, sizeof(kSingleLineCheckBytes)},

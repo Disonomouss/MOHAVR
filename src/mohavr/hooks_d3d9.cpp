@@ -11,6 +11,7 @@
 #include "bridge.hpp"
 #include "config.hpp"
 #include "frame_capture.hpp"
+#include "hudtex.hpp"
 #include "log.hpp"
 #include "patch.hpp"
 #include "vr_view.hpp"
@@ -75,6 +76,7 @@ std::atomic<int> g_resets{0};
 
 HRESULT STDMETHODCALLTYPE Hook_Reset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp) {
     bridge::OnBeforeReset();
+    hudtex::OnBeforeReset();  // (the wrist HUD's render target, D3DPOOL_DEFAULT too)
     const HRESULT hr = g_realReset(dev, pp);
     const int n = ++g_resets;
     if (n <= 5 || FAILED(hr))
@@ -122,7 +124,9 @@ HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, c
     }
     // Before Present: the finished frame is still in the backbuffer.
     capture::OnPresent(dev);
+    hudtex::OnPresent(dev);
     bridge::OnPresent(dev);
+    hudtex::EndFrame(dev);  // (after the publish: the HUD texture cleared for the next frame's pass)
     const HRESULT hr = g_realPresent(dev, src, dst, wnd, dirty);
     LogPresent("device Present", ++g_presents, hr);
     return hr;

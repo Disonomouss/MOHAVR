@@ -2046,6 +2046,56 @@ round spent. Only for guns in which this would be accurate for."
 
 **Deployed for this round:** the shipped defaults (the rack eject on, an ejected round lost).
 
+## Round 52: prepared 2026-10-03, the HUD on your wrist
+**Your request:** "Move the hud to the off hand wrist. Health and minimap should appear on left of wrist when palm is flat
+face down, weapon and grenade info on the right. Hud should be adjustable, position and size. Option between on wrist and on
+screen."
+
+**Changed:**
+- **The HUD is on your other wrist** (the hand not holding the gun: in left-hand mode the right wrist, and if you draw
+  from a holster with the other hand the panels move to the free wrist). Turn the wrist
+  palm down toward you and look at it: two panels fade in on the back of the forearm -- **health and the compass** (the
+  game's "minimap" is its radar compass with the squad and objective dots; there is no other map in the campaign) and the
+  stance icon on your **left**, **the weapon and grenade info** (the icons, ammo, grenade count, the experience bars, the
+  level badges and kill medals while they show) on your **right**. They fade out when you look away or turn the palm up.
+- **What must stay in view stays in front of you**: hit indicators, the grenade warning, objectives and notifications,
+  prompts, the stopwatch, the black fade -- where the HUD panel used to be.
+- **Menu -> HUD** (a new tab, after Hands): **HUD** wrist / screen (screen = the old panel in front of you), **Wrist shows**
+  when looked at / always (always: while the panels face you, but not while your hand is on the foregrip unless you look
+  at it), **Wrist layout**
+  forearm across chest / arm forward, **Wrist backing** none / dim / dark, **Wrist panels** (move each panel along / across /
+  out from the arm, its size and tilt; the panels show while this page is open), **Screen HUD** (the front panel's distance,
+  size and height). All saved for you.
+
+**How to try it:**
+1. In gameplay, bring your other forearm across your chest, palm down, as if checking a watch, and look at it. Read your
+   health, the compass, the ammo count.
+2. Turn the palm up, then look away: the panels should fade out. Look back: in again.
+3. Try **Menu -> HUD -> Wrist layout -> arm forward** with the arm pointing forward, palm down.
+4. **Menu -> HUD -> Wrist panels**: make them bigger or smaller, move them along your arm (+ is toward the hand, in either
+   layout), tilt them.
+5. Take a hit or pick up an objective: the indicator / message should appear in front of you, not on the wrist.
+6. Reload, hold the foregrip, throw a grenade, hold the knife or the pistol in that hand: do the panels get in the way?
+7. Switch **Menu -> HUD -> HUD -> screen** and back a few times.
+
+**Questions:**
+1. Left and right: is health + compass where you meant ("left of wrist when palm is flat face down")? Forearm across the
+   chest or arm forward -- which do you use?
+2. Can you read the ammo digits and the health pills at the default size (the digits are about 5 mm tall)? What Size %
+   suits you?
+3. The gate: do the panels appear when you want them, and stay away while you reload, hold the foregrip or throw? Or should
+   they always show?
+4. The backing plate behind them: none, dim or dark?
+5. Do the panels sit on the drawn sleeve (they follow the arm the game draws), also when you swing the arm fast?
+6. They draw over the gun or the other arm when those pass in front (no depth). Acceptable?
+7. Should objectives and notifications also go on the wrist, or stay in front?
+8. The things that stay in front are drawn about a fifth larger than on the old screen panel. Too big?
+9. Should the compass keep turning with your body as the game does?
+10. Left-handed (Gun hand left, the panels on the right wrist): health stays on your left, which with the forearm across the
+   chest puts it toward the hand and the weapon info toward the elbow. Is that right, or should the panels swap ends?
+
+**Deployed for this round:** the shipped defaults (the HUD on the wrist, shown when looked at, forearm layout, dim backing).
+
 ---
 
 ## Template

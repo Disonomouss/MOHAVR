@@ -37,6 +37,7 @@
 #include "markers.hpp"
 #include "reticle.hpp"
 #include "scope.hpp"
+#include "wristhud.hpp"
 
 using mohavr::shared::Header;
 using mohavr::shared::HostState;
@@ -399,6 +400,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // Scopes (SCOPE-DESIGN): the scope raised to an eye -- the lens and the scope view the game renders for it.
     mohavr::host::Scope scope;
     const bool scopeOk = handsOk && scope.Init(dev, ctx, session, fmt, ExeDir() + L"\\MOHAVR.ini");
+    // The wrist HUD (WRISTHUD-DESIGN): the game's HUD pass on the off hand's wrist, the rest head-locked.
+    mohavr::host::WristHud wrist;
+    const bool wristOk = wrist.Init(dev, ctx, session, fmt, g_hdr, game, ExeDir() + L"\\MOHAVR.ini");
+    if (menuOk) menu.SetWristAvailable(wristOk);  // (the wrist only once the host can show it)
     XrPosef eyeNow[2] = {};  // this XR frame's eye poses (the lens is drawn for the looking eye's)
     bool eyesNowOk = false;
     XrPosef handPose[2] = {};
@@ -1048,6 +1053,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             const UINT slot = static_cast<UINT>(f % kRing);
             lastMeta = g_hdr->slotMeta[slot];  // written by the game before it published f
             lastScope = g_hdr->slotScope[slot];
+            const mohavr::shared::SlotHud lastHud = g_hdr->slotHud[slot];  // (likewise, before the ack lets the game reuse the slot)
             lastViewQpc = g_hdr->slotViewQpc[slot];
             {
                 // Diagnostics (headset round 8): log whenever what we submit changes kind or FOV.
@@ -1070,6 +1076,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), static_cast<LONG64>(f));
             ctx->Wait(gameFence, f);
             ctx->CopyResource(last, shared[slot % kRing]);
+            if (wristOk) wrist.TakeFrame(slot, lastHud);  // (its HUD texture, under the same fence)
             ctx->Signal(hostFence, f);
             shown = f;
             if (lastMeta.hasView && !loggedProjection) {
@@ -1093,6 +1100,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             }
             if (captureEvent && WaitForSingleObject(captureEvent, 0) == WAIT_OBJECT_0) {
                 Inspect(dev, ctx, last, "on request", capturePath.c_str());
+                if (wristOk) {  // (the wrist HUD: the HUD texture received and the atlas last composed)
+                    const std::wstring dir = capturePath.substr(0, capturePath.find_last_of(L'\\'));
+                    Inspect(dev, ctx, wrist.HudTexture(), "the HUD texture", (dir + L"\\host_capture_hud.bmp").c_str());
+                    Inspect(dev, ctx, wrist.Atlas(), "the wrist HUD's atlas", (dir + L"\\host_capture_wrist.bmp").c_str());
+                }
             }
             repeatRun = 0;
         } else if (shown) {
@@ -1113,6 +1125,25 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         }
         // This frame's poses are written and the last game frame is taken: a paced game starts its next Draw now.
         if (frameEvent) SetEvent(frameEvent);
+
+        // The wrist HUD's gate and placement (every XR frame): the off hand = the opposite of the hand holding the gun (the
+        // live gun hand: a cross-draw moves the panels to the other wrist), the menu's Gun hand until the hands run.
+        if (wristOk) {
+            mohavr::host::WristHud::In win{};
+            win.hasView = lastMeta.hasView != 0;
+            win.gameMenu = g_hdr->gameUiMenu != 0;
+            win.modMenu = menuOk && menu.Visible();
+            win.wristPage = menuOk && menu.WristPageOpen();
+            win.offHand = handsOk ? 1 - handsOut.gunHand : (menuOk && menu.StartLeft() ? 1 : 0);
+            win.offPose = handPose[win.offHand];
+            win.offTracked = handsOk && (pad.TrackedBits() & (1u << win.offHand)) != 0;
+            win.foregrip = handsOk && handsOut.twoHanded && handsOut.gunHand != win.offHand;
+            win.head = menuHead;
+            win.headOk = menuHeadOk;
+            win.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
+            if (menuOk) win.set = menu.Hud();
+            wrist.Update(win);
+        }
 
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};
         XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
@@ -1220,6 +1251,12 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (scopeOk && lastMeta.hasView && !(prevLocal != XR_NULL_HANDLE && shown <= prevLocalUntil))  // (not mid-recentre)
                 if (const XrCompositionLayerBaseHeader* sl = scope.Layer(local, last, shown, lastScope, eyeNow, eyesNowOk))
                     layers[layerCount++] = sl;
+            // The wrist HUD: the rest quad (head-locked) and the two wrist panels -- counted before the markers (they take what
+            // is left; the menu always fits in the last slot).
+            // Mid-recentre only the LOCAL panels are dropped; the head-locked rest (hits, objectives, the fade) stays.
+            if (wristOk)
+                layerCount += static_cast<uint32_t>(wrist.Layers(local, viewSpace, layers + layerCount, 15 - static_cast<int>(layerCount),
+                                                                 !(prevLocal != XR_NULL_HANDLE && shown <= prevLocalUntil)));
             // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
             if (markersOk && lastMeta.hasView && menuHeadOk && handsOk)
                 layerCount += static_cast<uint32_t>(markers.Layers(

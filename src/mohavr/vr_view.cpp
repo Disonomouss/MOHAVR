@@ -22,6 +22,7 @@
 #include "knife.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
+#include "hudtex.hpp"
 #include "config.hpp"
 #include "crash_dump.hpp"
 #include "reload.hpp"
@@ -80,6 +81,8 @@ struct AppliedFrame {
     float        scopeTan;
     shared::Pose gunPose;        // the host's gun pose this frame was drawn with (the lens stays on the drawn scope)
     bool         gunValid;
+    shared::Pose hands[2];       // v28: the controller poses this frame's arms were drawn with (the wrist HUD sits on them)
+    std::uint32_t handsValid;    //      bit0 left, bit1 right
     DWORD        thread;
     bool         valid;
     bool         cinema;   // rendered as a flat full-screen image (menu/cutscene): no view, show on the quad
@@ -154,6 +157,7 @@ DWORD g_cinemaFlipSince = 0;      // when the wanted mode first differed from g_
 float g_ipd = 0.064f;             // metres, from the eye poses (HUD placement)
 SafetyHookMid g_hudHook, g_hudMatrixHook;
 float g_hudScalePending = 0.0f;   // set per eye by OnHudView, applied to that eye's canvas matrix
+bool  g_hudWristPending = false;  // the wrist HUD: eye 0's canvas is the HUD texture (OnHudView -> OnHudMatrix)
 
 long g_views = 0;
 bool g_loggedProj[2] = {false, false};
@@ -461,6 +465,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (knife::TestCommand(line)) continue;      // "mohavr knife ..." (the off-hand knife)
         if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol)
         if (melee::TestCommand(line)) continue;      // "mohavr melee ..." (physical melee)
+        if (hudtex::TestCommand(player, line)) continue;  // "mohavr hud ..." (the wrist HUD)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -612,6 +617,8 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     g_drawHook.thiscall<void>(self, viewport, canvas);
 
     g_inStereoDraw = false;
+    hudtex::EndDraw();
+    g_hudWristPending = false;
     arr[0] = savedData;
     arr[1] = 1;
     if (!g_committed && g_eyeCounter >= 2) CommitBuilding();  // (a view the engine skipped: the frame is still the eyes')
@@ -1261,6 +1268,13 @@ void OnViewPoint(SafetyHookContext& ctx) {
         shared::Pose aimRay{};
         std::uint32_t gf = 0;
         lastGunOk = shared::ReadGun(hdr, lastGun, aimRay, gf);
+        // Likewise the hands (v28, the wrist HUD: its panels sit on the drawn wrist).
+        static shared::Pose lastHands[2] = {};
+        static std::uint32_t lastHandsValid = 0;
+        g_building.hands[0] = lastHands[0];
+        g_building.hands[1] = lastHands[1];
+        g_building.handsValid = lastHandsValid;
+        if (!shared::ReadHands(hdr, lastHands, lastHandsValid)) lastHandsValid = 0;
     }
     g_building.pose[g_thisEye] = p;
     g_building.fov[g_thisEye] = g_thisFov;
@@ -1294,11 +1308,26 @@ void OnViewPoint(SafetyHookContext& ctx) {
 // canvas gets a virtual clip of panel/Scale and its matrix is scaled by Scale (OnHudMatrix): the HUD
 // lays out on a larger virtual screen and is shrunk uniformly into the panel.
 // The HUD loop's start (scopes): the scope view is the third player -- the loop runs over the eyes only.
+// The wrist HUD (WRISTHUD-DESIGN): the loop runs once, for eye 0, whose HUD goes to the mod's texture (hudtex).
 void OnHudLoopStart(SafetyHookContext&) {
-    if (!g_inStereoDraw || g_viewCount < 3) return;
+    if (!g_inStereoDraw) return;
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
-    if (arr && arr[0] == reinterpret_cast<std::uintptr_t>(g_stereoPlayers) && arr[1] == 3) arr[1] = 2;
+    if (!arr || arr[0] != reinterpret_cast<std::uintptr_t>(g_stereoPlayers)) return;
+    if (hudtex::Installed() && hudtex::PlanDraw(bridge::SharedHeader())) arr[1] = 1;
+    else if (g_viewCount >= 3 && arr[1] == 3) arr[1] = 2;
+}
+
+// The screen panel's placement: the host's live values (its menu's Screen HUD page, v28), else the ini's.
+void HudScreen(const shared::Header* hdr, float& dist, float& width, float& down) {
+    dist = g_cfg.hudDistance;
+    width = g_cfg.hudWidth;
+    down = g_cfg.hudDown;
+    if (!hdr) return;
+    const float d = hdr->hudScreen[0], w = hdr->hudScreen[1], dn = hdr->hudScreen[2];
+    if (d >= 0.3f && d <= 20.0f) dist = d;
+    if (w >= 0.1f && w <= 10.0f) width = w;
+    if (d >= 0.3f && dn >= -2.0f && dn <= 2.0f) down = dn;  // (set with the distance)
 }
 
 void OnHudView(SafetyHookContext& ctx) {
@@ -1307,6 +1336,17 @@ void OnHudView(SafetyHookContext& ctx) {
     auto* view = reinterpret_cast<std::uint8_t*>(ctx.esi);
     if (!hdr || !view || !hdr->width || !hdr->height) return;
     const int eye = static_cast<int>(ctx.edx & 1);
+    if (hudtex::ThisDraw()) {
+        // The wrist HUD: eye 0's canvas is the texture, at (0,0) -- its matrix (OnHudMatrix) maps canvas px 1:1 onto it.
+        int cw = 0, ch = 0;
+        hudtex::CanvasSize(cw, ch);
+        *reinterpret_cast<float*>(view + addr::kViewX) = 0.0f;
+        *reinterpret_cast<float*>(view + addr::kViewY) = 0.0f;
+        *reinterpret_cast<float*>(view + addr::kViewSizeX) = static_cast<float>(cw);
+        *reinterpret_cast<float*>(view + addr::kViewSizeY) = static_cast<float>(ch);
+        g_hudWristPending = true;
+        return;
+    }
     {
         // Diagnostics (headset round 8, "glass bowl" after tabbing back): log whenever an eye's view rect
         // changes -- the engine's own, before the HUD placement below rewrites it.
@@ -1323,14 +1363,15 @@ void OnHudView(SafetyHookContext& ctx) {
     const shared::Fov f = g_building.fov[eye];  // this frame's widened FOV (game thread writes it)
     if (!(f.tanRight > f.tanLeft) || !(f.tanUp > f.tanDown)) return;
     const float eyeW = g_eyeW > 0 ? static_cast<float>(g_eyeW) : 0.5f * static_cast<float>(hdr->width), H = static_cast<float>(hdr->height);
-    const float D = g_cfg.hudDistance;
+    float D = 2.0f, panelW = 2.4f, panelDown = 0.1f;
+    HudScreen(hdr, D, panelW, panelDown);  // (live: the host menu's Screen HUD page)
     // Panel centre as seen from this eye: the eye sits +-IPD/2 along the head's right axis.
     const float ex = (eye == 0 ? -0.5f : 0.5f) * g_ipd;
-    const float tx = -ex / D, ty = -g_cfg.hudDown / D;
+    const float tx = -ex / D, ty = -panelDown / D;
     const float u = (tx - f.tanLeft) / (f.tanRight - f.tanLeft);
     const float v = (f.tanUp - ty) / (f.tanUp - f.tanDown);
     // Size: HUD.Width across, 16:9 (the HUD's own layout).
-    const float halfW = 0.5f * g_cfg.hudWidth / D, halfH = halfW * 9.0f / 16.0f;
+    const float halfW = 0.5f * panelW / D, halfH = halfW * 9.0f / 16.0f;
     const float pw = eyeW * 2.0f * halfW / (f.tanRight - f.tanLeft);
     const float ph = H * 2.0f * halfH / (f.tanUp - f.tanDown);
     const float x = static_cast<float>(eye) * eyeW + u * eyeW - 0.5f * pw;
@@ -1342,14 +1383,41 @@ void OnHudView(SafetyHookContext& ctx) {
     *reinterpret_cast<float*>(view + addr::kViewSizeY) = ph / s;
     g_hudScalePending = s;
     static int logged = 0;
-    if (logged < 2 && eye == logged) {
+    static float seenPanel[3] = {};
+    if (eye == 0 && (seenPanel[0] != D || seenPanel[1] != panelW || seenPanel[2] != panelDown) && logged < 40) {
+        // (logged as the panel changes: the menu's Screen HUD page)
         ++logged;
+        seenPanel[0] = D;
+        seenPanel[1] = panelW;
+        seenPanel[2] = panelDown;
         MLOG("hud: eye %d canvas -> x %.0f y %.0f  %.0f x %.0f px, virtual %.0f x %.0f at scale %.2f (panel %.2f m at %.2f m, "
-             "%.2f m down, IPD %.1f mm)", eye, x, y, pw, ph, pw / s, ph / s, s, g_cfg.hudWidth, D, g_cfg.hudDown, g_ipd * 1000.0f);
+             "%.2f m down, IPD %.1f mm)", eye, x, y, pw, ph, pw / s, ph / s, s, panelW, D, panelDown, g_ipd * 1000.0f);
     }
 }
 
 void OnHudMatrix(SafetyHookContext& ctx) {
+    if (g_hudWristPending) {
+        // The wrist HUD: the batches carry the backbuffer's size (FlushCommand +0x60/+0x64) and map pixels to clip space by
+        // it, while the texture is the viewport: scale by backbuffer / texture so canvas px p lands on texture px p.
+        g_hudWristPending = false;
+        const shared::Header* hdr = bridge::SharedHeader();
+        auto* m = reinterpret_cast<float*>(ctx.esp + addr::kHudMatrixStackOffset);
+        int cw = 0, ch = 0;
+        hudtex::CanvasSize(cw, ch);
+        if (hdr && hdr->width && cw > 0 && ch > 0 && m[0] == 1.0f && m[5] == 1.0f && m[10] == 1.0f && m[15] == 1.0f &&
+            m[1] == 0.0f && m[4] == 0.0f) {
+            m[0] = static_cast<float>(hdr->width) / static_cast<float>(cw);
+            m[5] = static_cast<float>(hdr->height) / static_cast<float>(ch);
+            static int logged = 0;
+            if (logged++ < 1) MLOG("hud: wrist pass -- canvas %dx%d at (0,0), matrix x%.4f y%.4f (backbuffer %ux%u)", cw, ch,
+                                   m[0], m[5], hdr->width, hdr->height);
+            hudtex::BeginPass(reinterpret_cast<std::uintptr_t>(g_stereoPlayers[0]));
+        } else {
+            // (Never seen: this pass then draws unscaled at eye 0's top-left. The screen panel from the next Draw on.)
+            hudtex::FailPass();
+        }
+        return;
+    }
     if (g_hudScalePending == 0.0f) return;
     auto* m = reinterpret_cast<float*>(ctx.esp + addr::kHudMatrixStackOffset);
     // Only an identity-plus-translation matrix, as Draw builds it -- anything else isn't ours to touch.
@@ -1584,7 +1652,9 @@ bool Install(const Config& cfg) {
                 bridge::SetPacingAvailable(true);
                 if (cfg.hudMode == 1 && Hook(g_hudMatrixHook, addr::kHudMatrixPush, OnHudMatrix, "HUD canvas matrix"))
                     Hook(g_hudHook, addr::kHudViewRead, OnHudView, "HUD canvas (per eye)");
-                if (cfg.scopeColumn > 0) Hook(g_hudLoopHook, addr::kHudLoopStart, OnHudLoopStart, "HUD loop start (scopes)");
+                const bool hudTex = g_hudHook && hudtex::Install(cfg);  // the wrist HUD (WRISTHUD-DESIGN)
+                if (cfg.scopeColumn > 0 || hudTex)
+                    Hook(g_hudLoopHook, addr::kHudLoopStart, OnHudLoopStart, "HUD loop start (scopes, the wrist HUD)");
             } else {
                 MLOG("stereo: inline hook on Draw failed (error %d) -- mono", static_cast<int>(res.error().type));
             }
@@ -1623,7 +1693,7 @@ bool LastEye0(float (&loc)[3], int (&rot)[3], float (&fov)[4]) {
 
 int ScopeColumnX() { return g_scopeViewX.load(); }
 
-bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info, shared::SlotScope* scope) {
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info, shared::SlotScope* scope, shared::SlotHud* hud) {
     EnterCriticalSection(&g_lock);
     // With UE3's render thread the frame being presented was computed one game frame earlier -- unless its Draw was
     // paced (frame pacing): the next Draw waits for this Present before it commits, so the last one committed is this.
@@ -1648,6 +1718,11 @@ bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info, sha
             scope->gunPose = v.gunPose;
             scope->flags = v.gunValid ? 1u : 0u;
         }
+    }
+    if (hud && ok && v.stereo) {  // (v28: the wrist HUD sits on the drawn wrist)
+        hud->hand[0] = v.hands[0];
+        hud->hand[1] = v.hands[1];
+        hud->flags |= ((v.handsValid & 1u) ? 8u : 0u) | ((v.handsValid & 2u) ? 16u : 0u);
     }
     LeaveCriticalSection(&g_lock);
     meta.hasView = ok ? 1u : 0u;

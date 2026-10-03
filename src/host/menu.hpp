@@ -21,6 +21,7 @@
 
 #include "../common/shared_frame.hpp"
 #include "hands.hpp"
+#include "wristhud.hpp"
 
 namespace mohavr::host {
 
@@ -109,6 +110,15 @@ public:
     float ForegripRadius() const { return foregripR_; }
     float RingScale() const { return ringScale_; }
     bool StartLeft() const { return startLeft_; }
+    // The HUD (WRISTHUD-DESIGN, the HUD tab; the player's [HUD] keys, the shipped ones the defaults): on the wrist or the
+    // screen, when the wrist panels show, their layout, backing, placement and size; the screen panel's distance / size /
+    // height (live: hdr->hudPlace, hdr->hudScreen).
+    const HudSettings& Hud() const { return hud_; }
+    bool WristPageOpen() const { return visible_ && page_ == 7; }
+    bool ScreenHudPageOpen() const { return visible_ && page_ == 8; }
+    // The host's wrist HUD is up (its texture ring opened): only then is the wrist published to the game (else the game
+    // would draw its HUD into a texture nobody shows).
+    void SetWristAvailable(bool ok) { wristAvail_ = ok; PublishHud(); }
 
 private:
     void Render();
@@ -117,6 +127,11 @@ private:
     void SaveHolster(int i);
     void RenderFreeHandPage();
     void RenderKnifePage();
+    void RenderWristPage();
+    void RenderScreenHudPage();
+    void LoadHud();
+    void PublishHud();
+    void SaveHud(bool place, bool panels, bool screen, const wchar_t* only = nullptr);
     void PublishKnife(bool save);
     void RenderGripPage();
     // Round 32, the Reload grip page: the player's adjustments of the weapon in hand's three grips, [ReloadGrip]
@@ -196,6 +211,9 @@ private:
     bool                    offHandKnife_ = false;
     bool                    knifeIcepick_ = false, knifeIcepickDef_ = false;
     float                   knifeAdj_[6] = {}, knifeAdjDef_[6] = {};  // fwd right up (cm), tilt turn roll (deg)
+    HudSettings             hud_{}, hudDef_{};         // the player's HUD settings; the shipped ones
+    int                     wristSel_ = 2;             // the Wrist panels page's panel: 0 left, 1 right, 2 both
+    bool                    wristAvail_ = false;       // SetWristAvailable
     std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
     shared::GunFit          fitForFit_{};
 };

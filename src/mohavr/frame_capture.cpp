@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "hudtex.hpp"
 #include "log.hpp"
 
 namespace mohavr::capture {
@@ -65,6 +66,7 @@ void Capture(IDirect3DDevice9* dev) {
     }
     if (sys) sys->Release();
     if (bb) bb->Release();
+    hudtex::OnCapture(dev, g_dir);  // the wrist HUD's texture beside it (capture-hud.bmp)
 }
 
 }  // namespace

@@ -10,6 +10,7 @@
 #include <string>
 
 #include "../common/shared_frame.hpp"
+#include "hudtex.hpp"
 #include "log.hpp"
 #include "vr_view.hpp"
 
@@ -34,6 +35,7 @@ ID3D12GraphicsCommandList*  g_list       = nullptr;
 ID3D12Fence*                g_gameFence  = nullptr;
 ID3D12Fence*                g_hostFence  = nullptr;
 ID3D12Resource*             g_shared[kRing] = {};
+ID3D12Resource*             g_hudShared[kRing] = {};  // v28: the wrist HUD's texture ring (hudtex's render target copied)
 IDirect3DSurface9*          g_rt         = nullptr;  // our copy of the backbuffer (9On12-backed)
 long                        g_presents   = 0;
 bool                        g_hostExitLogged = false;
@@ -163,6 +165,37 @@ bool Setup(IDirect3DDevice9* dev) {
         if (FAILED(hr = g_d12->CreateSharedHandle(g_shared[i], nullptr, GENERIC_ALL, nullptr, &h))) return Fail("CreateSharedHandle(texture)", hr);
         g_hdr->textureHandles[i] = reinterpret_cast<std::uintptr_t>(h);
     }
+    // v28, the wrist HUD (WRISTHUD-DESIGN): a second ring at the HUD texture's size, copied with each frame -- only with
+    // its redirect installed. A failure here only means no wrist HUD (the HUD stays on screen).
+    if (hudtex::Installed()) {
+        int hw = 0, hh2 = 0;
+        hudtex::CanvasSize(hw, hh2);
+        D3D12_RESOURCE_DESC hd = rd;
+        hd.Width = static_cast<UINT64>(hw);
+        hd.Height = static_cast<UINT>(hh2);
+        bool ok = hw > 0 && hh2 > 0;
+        for (UINT i = 0; ok && i < kRing; ++i) {
+            HANDLE h = nullptr;
+            ok = SUCCEEDED(g_d12->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &hd, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                          IID_PPV_ARGS(&g_hudShared[i]))) &&
+                 SUCCEEDED(g_d12->CreateSharedHandle(g_hudShared[i], nullptr, GENERIC_ALL, nullptr, &h));
+            g_hdr->hudTexHandles[i] = ok ? reinterpret_cast<std::uintptr_t>(h) : 0u;
+        }
+        if (ok) {
+            g_hdr->hudTexW = static_cast<std::uint32_t>(hw);
+            g_hdr->hudTexH = static_cast<std::uint32_t>(hh2);
+            g_hdr->hudCaps = 1u;
+            hudtex::SetShared(true);
+            MLOG("bridge: the wrist HUD's texture ring -- %dx%d B8G8R8A8 (premultiplied), ring %u", hw, hh2, kRing);
+        } else {
+            for (UINT i = 0; i < kRing; ++i) {
+                if (g_hudShared[i]) g_hudShared[i]->Release(), g_hudShared[i] = nullptr;
+                g_hdr->hudTexHandles[i] = 0;
+            }
+            MLOG("bridge: the wrist HUD's texture ring failed (0x%08lX) -- no wrist HUD, the HUD stays on screen",
+                 static_cast<unsigned long>(hr));
+        }
+    }
     HANDLE hg = nullptr, hh = nullptr;
     if (FAILED(hr = g_d12->CreateSharedHandle(g_gameFence, nullptr, GENERIC_ALL, nullptr, &hg))) return Fail("CreateSharedHandle(game fence)", hr);
     if (FAILED(hr = g_d12->CreateSharedHandle(g_hostFence, nullptr, GENERIC_ALL, nullptr, &hh))) return Fail("CreateSharedHandle(host fence)", hr);
@@ -218,12 +251,24 @@ void Publish(IDirect3DDevice9* dev) {
     hr = g_d9on12->UnwrapUnderlyingResource(g_rt, g_queue, IID_PPV_ARGS(&src));
     if (FAILED(hr)) { if (n <= 3) MLOG("bridge: UnwrapUnderlyingResource failed 0x%08lX", static_cast<unsigned long>(hr)); return; }
 
+    // v28: the wrist HUD's texture (what this frame's HUD pass drew), copied into the same slot of its own ring.
+    shared::SlotHud hud{};
+    IDirect3DSurface9* hudSurf = g_hudShared[0] ? hudtex::ForPublish(hud) : nullptr;
+    ID3D12Resource* hudSrc = nullptr;
+    if (hudSurf && FAILED(hr = g_d9on12->UnwrapUnderlyingResource(hudSurf, g_queue, IID_PPV_ARGS(&hudSrc)))) {
+        static int warned = 0;
+        if (warned++ < 3) MLOG("bridge: UnwrapUnderlyingResource (the HUD texture) failed 0x%08lX", static_cast<unsigned long>(hr));
+        hudSrc = nullptr;
+    }
+    if (!hudSrc) hud.flags &= ~3u;  // (nothing copied: that slot's texture is stale -- the host hides the quads)
+
     // Don't overwrite a slot the host may still be reading (GPU-side wait; the host consumes every
     // published frame, so this always completes).
     if (n > kRing) g_queue->Wait(g_hostFence, n - kRing);
     g_alloc[slot]->Reset();
     g_list->Reset(g_alloc[slot], nullptr);
     g_list->CopyResource(g_shared[slot], src);
+    if (hudSrc) g_list->CopyResource(g_hudShared[slot], hudSrc);
     g_list->Close();
     ID3D12CommandList* lists[] = {g_list};
     g_queue->ExecuteCommandLists(1, lists);
@@ -233,14 +278,20 @@ void Publish(IDirect3DDevice9* dev) {
     ID3D12Fence* fence = g_gameFence;
     g_d9on12->ReturnUnderlyingResource(g_rt, 1, &value, &fence);
     src->Release();
+    if (hudSrc) {
+        g_d9on12->ReturnUnderlyingResource(hudSurf, 1, &value, &fence);
+        hudSrc->Release();
+    }
+    if (hudSurf) hudSurf->Release();
 
     // The pose/FOV this image was rendered with (M3); the host submits it with exactly these.
     shared::SlotMeta meta{};
     shared::SlotScope scope{};
     view::PresentedFrameInfo info{};
-    view::MetaForPresentedFrame(meta, &info, &scope);
+    view::MetaForPresentedFrame(meta, &info, &scope, &hud);
     g_hdr->slotMeta[slot] = meta;
     g_hdr->slotScope[slot] = scope;
+    g_hdr->slotHud[slot] = hud;
     g_hdr->slotViewQpc[slot] = info.qpc;
     MemoryBarrier();
     NotePublished(info);

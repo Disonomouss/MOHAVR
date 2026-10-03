@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 27;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change)
+inline constexpr std::uint32_t kVersion = 28;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -60,6 +60,27 @@ struct SlotScope {
     float         tanHalf;    // its half-FOV tangent (square, symmetric)
     Pose          gunPose;    // the gun pose the frame was drawn with (the lens stays on the drawn scope)
     std::uint32_t flags;      // bit0 gunPose valid
+};
+
+// v28 (WRISTHUD-DESIGN.md): the HUD's element rectangles in the HUD texture (canvas px, x0 y0 x1 y1), read live from the
+// game's HUD objects each pass. "The minimap" is the radar compass (the game's MiniMap is never created in single player).
+enum HudRect : std::uint32_t {
+    kHudHealth = 0, kHudCompass = 1, kHudStance = 2,                     // the left wrist panel
+    kHudAmmoBar = 3, kHudAmmoText = 4, kHudNadeText = 5, kHudWeaponIcon = 6, kHudNadeIcon = 7,  // the right panel's core
+    kHudWeaponBadge = 8, kHudNadeBadge = 9,                              // the level badges (right panel, while shown)
+    kHudWeaponMedal = 10, kHudNadeMedal = 11,                            // the kill medals (right panel)
+    kHudRects = 12
+};
+// Per slot beside slotMeta: what the HUD texture copied with that frame holds.
+struct SlotHud {
+    std::uint32_t flags;          // bit0 the texture holds this frame's HUD pass (else empty: hide the quads), bit1 the wrist
+                                  // pass (the eyes are HUD-free), bit2 rect valid, bit3 / bit4 hand[0] / hand[1] valid,
+                                  // bit5 the player is dead or has no pawn (the wrist panels hide)
+    std::uint32_t canvasW, canvasH;
+    float         rs;             // the HUD's live resolutionScale (MOHAHUD.resolutionScale)
+    std::uint32_t shown;          // bit i: element rect i is drawn now (its bRender)
+    float         rect[kHudRects][4];
+    Pose          hand[2];        // the controller aim poses this frame's arms were drawn with (LOCAL)
 };
 
 enum class GameState : std::uint32_t { None = 0, Starting = 1, Ready = 2, Failed = 3 };
@@ -369,6 +390,17 @@ struct Header {
     // --- v26: the knife's hold, adjusted (the menu's Knife grip page; host -> game, written as it changes): forward, right,
     // up (cm, the off controller's frame), tilt, turn, roll (deg, about the handle's middle)
     float                  knifeAdj[6];       // 2976
+    // --- v28: the wrist HUD (WRISTHUD-DESIGN.md; src/mohavr/hudtex.cpp, src/host/wristhud.cpp) ---
+    // game -> host, written once before gameState = Ready: a second ring of shared textures, hudTexW x hudTexH B8G8R8A8 with
+    // premultiplied alpha, holding the HUD pass the game drew into the mod's own render target (handles 0: none)
+    std::uint64_t          hudTexHandles[kRing];  // 3000
+    std::uint32_t          hudTexW, hudTexH;      // 3024
+    std::uint32_t          hudCaps;               // 3032 bit0 the HUD redirect is installed (the wrist HUD can be chosen)
+    // host -> game, live (the menu; written as they change): 0 = not set, the game's own ini
+    volatile std::uint32_t hudPlace;              // 3036 1 screen (the head-locked per-eye panel), 2 wrist
+    volatile float         hudScreen[3];          // 3040 the screen panel: distance, width, down (m)
+    std::uint32_t          pad28;                 // 3052
+    SlotHud                slotHud[kRing];        // 3056 game -> host, per slot, written with slotMeta (before publishedFrame)
 };
 #pragma pack(pop)
 
@@ -454,7 +486,13 @@ static_assert(offsetof(Header, knifePawnSeq) == 2952, "shared::Header layout mus
 static_assert(offsetof(Header, knifeFlags) == 2956, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, knifeHits) == 2960, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, knifeAdj) == 2976, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 3000, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(SlotHud) == 268, "shared structs must be packed identically");
+static_assert(offsetof(Header, hudTexHandles) == 3000, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, hudCaps) == 3032, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, hudPlace) == 3036, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, hudScreen) == 3040, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, slotHud) == 3056, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 3864, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).

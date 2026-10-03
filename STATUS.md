@@ -235,7 +235,18 @@ address-space budget for D3D9On12.
    seen as a live round (a gun mesh's round bone on a carrier, falling to the feet), and spends it (the game's
    ConsumeAmmo); the menu's "Rack ejects a round" and "Ejected round lost / kept" (shared block v27, no layout change).
    **HEADSET-TESTS round 51** (the rack eject) is prepared.
-   Next (researched in work/research/wristhud): the HUD on the off hand's wrist; then the StG44's scope attached by hand.
+   **The wrist HUD** (D55, shipped on: `[HUD] Place=wrist`, proven in the simulator; WRISTHUD-DESIGN.md, ENGINE-NOTES 5br):
+   the game's HUD pass drawn once into a texture of the mod's own (the eyes HUD-free), shared with each frame (shared block
+   v28); health + the compass (the game's "minimap") + stance on the off wrist's left panel, weapon and grenade info on the
+   right, shown when the palm-down wrist is looked at (or always), the rest (hits, objectives, prompts) head-locked in
+   front; the menu's HUD tab (wrist / screen live, shows, layout, backing, the Wrist panels and Screen HUD pages).
+   A code review's fixes (all rerun on the final build, WRISTHUD-DESIGN 2): the host copies `slotHud` before the ack;
+   no redirect without the alpha filter; the panels follow the live gun hand (a cross-draw); `always` only while the
+   panels face the head; the menu's offsets in the wrist's frame in both layouts (+ along = toward the hand); the
+   head-locked rest kept through a recentre; the Screen HUD page writes only the key changed; "health toward the elbow"
+   corrected for left-hand mode (health is on the player's left: toward the hand there).
+   **HEADSET-TESTS round 52** (the wrist HUD) is prepared.
+   Next: the StG44's scope attached by hand.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

@@ -14,6 +14,11 @@ struct Config {
     float hudWidth      = 2.4f;
     float hudDown       = 0.1f;
     float hudScale      = 0.5f;   // [HUD] Scale -- the HUD's own pixel size inside the panel (1 = as designed)
+    // The wrist HUD (WRISTHUD-DESIGN.md, D55): the HUD pass drawn once into a render target of the mod's own, shown by the
+    // host on the off hand's wrist (the health / compass and weapon / grenade groups) and a head-locked quad (the rest).
+    bool  hudRedirect   = true;   // [HUD] Redirect -- 0: its hooks are never installed (the HUD stays on screen whatever Place says)
+    int   hudPlace      = 0;      // [HUD] Place -- 0 screen, 1 wrist: until the host's menu says (the player's [HUD] Place)
+    int   hudCanvas     = 1280;   // [HUD] WristCanvas -- the HUD texture's width in px (height 9/16 of it; the HUD lays out on it)
     bool  hudCrosshair  = false;  // [HUD] Crosshair -- the game's own crosshair (0: hidden; the red dot aims)
     bool  hudHitMarker  = false;  // [HUD] HitMarker -- the red cross on a hit (0: hidden)
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the gun's game pose)

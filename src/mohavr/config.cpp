@@ -51,6 +51,14 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
     c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
     c.hudHitMarker   = get(L"HUD", L"HitMarker", c.hudHitMarker);
+    c.hudRedirect    = get(L"HUD", L"Redirect", c.hudRedirect);
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"HUD", L"Place", L"screen", v, 16, ini.c_str());
+        c.hudPlace = !_wcsicmp(v, L"wrist") ? 1 : 0;
+    }
+    c.hudCanvas = static_cast<int>(GetPrivateProfileIntW(L"HUD", L"WristCanvas", c.hudCanvas, ini.c_str()));
+    if (c.hudCanvas < 640 || c.hudCanvas > 2560) c.hudCanvas = 1280;
     c.weaponTracers  = get(L"Weapon", L"Tracers", c.weaponTracers);
     c.leftHandMirror = get(L"Weapon", L"LeftHandMirror", c.leftHandMirror);
     {

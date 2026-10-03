@@ -832,3 +832,48 @@ work/research/rackeject/design.md (the brass-only Phase 1 for the StG44, C96 and
 check's and the lead's call).
 **Costs:** a bolt or pump worked by habit now costs a round; the M12's action slide lock isn't modelled. Every ejected
 round is a new component (garbage-collected after it is detached).
+
+### D55. The HUD on the off hand's wrist, drawn once into a texture of the mod's own -- Decided 2026-10-03
+`[HUD] Place=wrist` (shipped, proven in the simulator; the menu's new HUD tab switches wrist / screen live), `WristShow=look`,
+`WristLayout=forearm`, `WristBacking=dim`, `WristScale=0.30`, `Redirect=1` (0: the hooks never installed). WRISTHUD-DESIGN.md.
+- **How:** approach F of the research -- the game's HUD pass drawn once (the HUD loop cut to eye 0) into a 1280x720 render
+  target of the mod's own, by binding it around each HUD batch's `FlushCommand::Execute` on the render thread (the canvas
+  never binds a target; ENGINE-NOTES 5br), with premultiplied alpha forced by a `SetRenderState` filter (the game's canvas
+  writes no alpha). The bridge copies it with each frame into a second shared ring (shared block v28, layout 3000 ->
+  3864: `hudTexHandles`, `hudTexW/H`, `hudCaps`, `hudPlace`, `hudScreen`, `slotHud[3]`); the texture is cleared after each
+  Present, so a frame without a pass shows nothing. Chosen over plan B (a permanent HUD column from the eyes' width: -13 %
+  of each eye every frame, no alpha) because the W0 spike proved it inside its time box: every batch redirected, the
+  eyes HUD-free, alpha, no flicker, Resets survived, frame time unchanged.
+- **What goes where:** two panels on the off hand's wrist (the hand not holding the gun: the hands' live gun hand, so a
+  cross-draw moves them; the menu's Gun hand until the hands run), facing up with the palm flat
+  and face down -- health, the compass ("the minimap": the radar compass; the game's MiniMap never exists in single
+  player) and the stance icon on the player's left; the weapon and grenade info (ammo, the icons, the exp bars, the level
+  badges and kill medals while they show) on the right. Everything else (hit indicators, the grenade warning, objectives,
+  notifications, prompts, the stopwatch, the letterbox / fade) stays head-locked: the same texture with the wrist
+  elements cleared, on one quad where the screen panel is. The crops come from the HUD's live elements (reflection each
+  pass, the live resolutionScale published; the icons bounded by the largest tiles), not from assumed layouts.
+- **When:** looked at (the panels face the eyes within 55 deg and the head looks within 40 deg; fading) or always while
+  they face the head (never seen from behind, mirrored; and not popping up while the off hand holds the foregrip unless
+  looked at); hidden in menus, cutscenes, death, the off hand
+  untracked; not hidden while it holds the knife, pistol or a grenade or works a reload. Placed from the pose the frame's
+  arm was drawn with (they stay on the drawn sleeve).
+- **Adjustable:** the HUD tab (HUD, Shows, Layout -- forearm across the chest / arm forward, Backing) and two pages: Wrist
+  panels (which panel, along / across / out, size, tilt, reset; the panels always show while it is open) and Screen HUD
+  (the screen panel's distance / size / height, now live from the host: `hudScreen`). All in the player's ini.
+- **Safety:** the hooks' prologues (and the FlushCommand vtable's slot) are checked before install; a canvas matrix that
+  isn't Draw's falls back to the screen panel for the session; the host publishes the wrist only once its HUD ring opened
+  (else the game would draw its HUD into a texture nobody shows); no render target (a Reset) or no alpha filter (the
+  `SetRenderState` slot outside a module, or the swap failing: the texture would have no coverage) -> the screen panel for
+  that Draw. The host copies `slotHud` with `slotMeta` / `slotScope` before it acks the frame. Mid-recentre only the LOCAL
+  panels are dropped (the head-locked rest stays). The menu writes only the key changed (the Screen HUD page included).
+- **Proven** on the final build (after a code review's fixes; WRISTHUD-DESIGN 2 names the runs): W0 with two Resets and the
+  pause menu, the gate both hands and both layouts (the panels' order along the arm asserted), always, the menu's pages
+  (the across layout's offsets asserted along the arm), the rest quad, ten toggles, death, frame time in both places,
+  scope3 / melee6 / melee9 / knife1, a harness cycle with the shipped defaults.
+**Why:** the player (after round 50): "Move the hud to the off hand wrist. Health and minimap should appear on left of
+wrist when palm is flat face down, weapon and grenade info on the right. Hud should be adjustable, position and size. Option
+between on wrist and on screen." Research, its adversarial check and the W0 spike: work/research/wristhud/design.md.
+**Costs:** one render-target bind per HUD batch (5 us a pass on the render thread) and a 3.7 MB GPU copy per frame (the
+HUD's own draws now once instead of twice); ~15 MB of the game's address space (measured +1 MB virtual at gameplay); up to
+three more quad layers; the panels draw over the gun or the arm in front of them (quads have no depth); the desktop mirror
+shows no HUD on the wrist setting.

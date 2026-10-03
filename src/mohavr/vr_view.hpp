@@ -31,7 +31,10 @@ struct PresentedFrameInfo {
     bool          paced;
 };
 // `scope` (optional, v24): where the eyes and the scope view are in that frame, and the scope view's camera.
-bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr, shared::SlotScope* scope = nullptr);
+// `hud` (optional, v28): the hand poses that frame's arms were drawn with go into hand[] (flags bits 3-4 set); the rest of it
+// is the caller's (hudtex).
+bool MetaForPresentedFrame(shared::SlotMeta& meta, PresentedFrameInfo* info = nullptr, shared::SlotScope* scope = nullptr,
+                           shared::SlotHud* hud = nullptr);
 // Scopes (SCOPE-DESIGN): the scope column's x in the backbuffer (px; -1 none) -- only the scope view starts there (the
 // render thread's per-view hooks tell it by its x).
 int ScopeColumnX();

@@ -20,11 +20,12 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
-enum Tab { tGeneral, tWeapons, tHands, kTabCount };
-const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
+// The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
+enum Tab { tGeneral, tWeapons, tHands, tHud, kTabCount };
+const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands", "HUD"};
 constexpr int kTabMax = 24;
 // (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
 // Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
@@ -33,6 +34,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
      kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
+    {kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -82,6 +84,14 @@ enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount 
 // The Knife grip page (after round 50: "Knife needs hand position adjustment"): the grip, and the knife moved and turned in
 // the hand, saved in the player's ini [OffHand] KnifeGrip = forward | icepick, KnifeAdj = fwd right up tilt turn roll.
 enum KnifeItem { kgGrip, kgFwd, kgRight, kgUp, kgTilt, kgTurn, kgRoll, kgReset, kgBack, kgCount };
+// The Wrist panels page: which panel (left: health and compass; right: weapon and grenades; both), moved along the forearm,
+// across it, out from it (cm), sized (%), tilted toward the eyes (deg); [HUD] WristLeftPanel / WristRightPanel = a c o s t.
+enum WristItem { wpWhich, wpAlong, wpAcross, wpOut, wpSize, wpTilt, wpReset, wpBack, wpCount };
+const char* kWristPanelNames[3] = {"left (health, compass)", "right (weapon, grenades)", "both"};
+const wchar_t* kWristPanelKeys[2] = {L"WristLeftPanel", L"WristRightPanel"};
+// The Screen HUD page: the head-locked panel's distance, size and height ([HUD] Distance / Width / Down).
+enum ScreenItem { shDist, shWidth, shDown, shReset, shBack, shCount };
+const wchar_t* kBackings[3] = {L"none", L"dim", L"dark"};
 const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "lower back", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
@@ -263,6 +273,7 @@ void Menu::ApplySavedSettings() {
     const int defKnife = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Knife", 0, shipped.c_str()));
     offHandKnife_ = GetPrivateProfileIntW(L"OffHand", L"Knife", defKnife, iniPath_.c_str()) != 0;
     MLOG("menu: off-hand knife %s", offHandKnife_ ? "on" : "off");
+    LoadHud();
     MLOG("menu: sticks %s, gun hand %s (at start), red dot %s, frame pacing %s", swapSticks_ ? "swapped (right moves)" : "normal",
          startLeft_ ? "left" : "right", redDot_ ? "on" : "off", pacing_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
@@ -619,11 +630,13 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                                            (page_ == 3 && (in.back || (in.select && selected_ == eqBack))) ||
                                            (page_ == 4 && (in.back || (in.select && selected_ == gBack))) ||
                                            (page_ == 5 && (in.back || (in.select && selected_ == pBack))) ||
-                                           (page_ == 6 && (in.back || (in.select && selected_ == kgBack))));
+                                           (page_ == 6 && (in.back || (in.select && selected_ == kgBack))) ||
+                                           (page_ == 7 && (in.back || (in.select && selected_ == wpBack))) ||
+                                           (page_ == 8 && (in.back || (in.select && selected_ == shBack))));
     if (backFromPage) {
         // Back on the item that opened it, in its tab.
         const int opener = page_ == 1 ? kGunFit : page_ == 2 ? kHolsterPage : page_ == 3 ? kFreeHandPage : page_ == 4 ? kGripPage
-                         : page_ == 5 ? kSpotPage : kKnifePage;
+                         : page_ == 5 ? kSpotPage : page_ == 7 ? kHudWristPage : page_ == 8 ? kHudScreenPage : kKnifePage;
         for (int t = 0; t < kTabCount; ++t)
             for (int i = 0; i < TabCount(t); ++i)
                 if (ItemAt(t, i) == opener) {
@@ -725,6 +738,65 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             WritePrivateProfileStringW(L"ReloadGrip", (wkey + L"." + kGripKinds[gripSel_]).c_str(), nullptr, iniPath_.c_str());
             PublishGrips();
             MLOG("menu: %s %s grip reset", weaponKey_.c_str(), kGripNames[gripSel_]);
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
+    if (page_ == 7) {
+        if (in.up) selected_ = (selected_ + wpCount - 1) % wpCount;
+        if (in.down) selected_ = (selected_ + 1) % wpCount;
+        if ((in.left || in.right) && selected_ == wpWhich) wristSel_ = (wristSel_ + (in.right ? 1 : 2)) % 3;
+        if ((in.left || in.right) && selected_ >= wpAlong && selected_ <= wpTilt) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            for (int p = 0; p < 2; ++p) {
+                if (wristSel_ != 2 && wristSel_ != p) continue;
+                float& v = hud_.panel[p][selected_ - wpAlong];
+                switch (selected_) {
+                    case wpSize: v = std::fmax(40.0f, std::fmin(300.0f, v + dir * 10.0f)); break;
+                    case wpTilt: v = std::fmax(-60.0f, std::fmin(80.0f, v + dir * 5.0f)); break;
+                    default: v = std::fmax(-20.0f, std::fmin(20.0f, v + dir * 0.5f)); break;
+                }
+            }
+            SaveHud(false, true, false);
+            for (int p = 0; p < 2; ++p)
+                if (wristSel_ == 2 || wristSel_ == p)
+                    MLOG("menu: wrist panel %s -> along %+.1f across %+.1f out %+.1f cm, size %.0f%%, tilt %.0f deg", p ? "right" : "left",
+                         hud_.panel[p][0], hud_.panel[p][1], hud_.panel[p][2], hud_.panel[p][3], hud_.panel[p][4]);
+        }
+        if (in.select && selected_ == wpReset) {
+            for (int p = 0; p < 2; ++p) {
+                if (wristSel_ != 2 && wristSel_ != p) continue;
+                for (int k = 0; k < 5; ++k) hud_.panel[p][k] = hudDef_.panel[p][k];
+                if (!iniPath_.empty()) WritePrivateProfileStringW(L"HUD", kWristPanelKeys[p], nullptr, iniPath_.c_str());
+            }
+            MLOG("menu: wrist panel %s reset", kWristPanelNames[wristSel_]);
+        }
+        ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
+        Render();
+        return;
+    }
+    if (page_ == 8) {
+        if (in.up) selected_ = (selected_ + shCount - 1) % shCount;
+        if (in.down) selected_ = (selected_ + 1) % shCount;
+        if ((in.left || in.right) && selected_ <= shDown) {
+            const float dir = in.right ? 1.0f : -1.0f;
+            float& v = hud_.screen[selected_];
+            if (selected_ == shDist) v = std::fmax(0.5f, std::fmin(5.0f, v + dir * 0.1f));
+            else if (selected_ == shWidth) v = std::fmax(0.5f, std::fmin(5.0f, v + dir * 0.1f));
+            else v = std::fmax(-1.0f, std::fmin(1.0f, v - dir * 0.05f));  // (right = up)
+            v = std::round(v * 100.0f) / 100.0f;
+            PublishHud();
+            static const wchar_t* kScreenKeys[3] = {L"Distance", L"Width", L"Down"};
+            SaveHud(false, false, true, kScreenKeys[selected_]);  // (only the key changed)
+            MLOG("menu: screen HUD -> %.2f m away, %.2f m wide, %.2f m down", hud_.screen[0], hud_.screen[1], hud_.screen[2]);
+        }
+        if (in.select && selected_ == shReset) {
+            for (int k = 0; k < 3; ++k) hud_.screen[k] = hudDef_.screen[k];
+            PublishHud();
+            if (!iniPath_.empty())
+                for (const wchar_t* k : {L"Distance", L"Width", L"Down"}) WritePrivateProfileStringW(L"HUD", k, nullptr, iniPath_.c_str());
+            MLOG("menu: screen HUD reset (%.2f m away, %.2f m wide, %.2f m down)", hud_.screen[0], hud_.screen[1], hud_.screen[2]);
         }
         ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0f / 90.0f;
         Render();
@@ -945,6 +1017,23 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"OffHand", L"Knife", offHandKnife_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: off-hand knife -> %s", offHandKnife_ ? "on" : "off");
+        } else if (item == kHudPlace) {
+            hud_.place = 1 - hud_.place;
+            PublishHud();
+            SaveHud(true, false, false, L"Place");
+            MLOG("menu: HUD -> %s", hud_.place ? "the wrist (health and compass left, weapon and grenades right)" : "the screen");
+        } else if (item == kHudShow) {
+            hud_.show = 1 - hud_.show;
+            SaveHud(true, false, false, L"WristShow");
+            MLOG("menu: wrist HUD shows -> %s", hud_.show ? "always" : "when looked at");
+        } else if (item == kHudLayout) {
+            hud_.layout = 1 - hud_.layout;
+            SaveHud(true, false, false, L"WristLayout");
+            MLOG("menu: wrist HUD layout -> %s", hud_.layout ? "across (the arm pointing forward)" : "forearm (the forearm across the chest)");
+        } else if (item == kHudBacking) {
+            hud_.backing = (hud_.backing + (in.right ? 1 : 2)) % 3;
+            SaveHud(true, false, false, L"WristBacking");
+            MLOG("menu: wrist HUD backing -> %ls", kBackings[hud_.backing]);
         } else if (item == kHandFwd || item == kHandUp || item == kHandIn) {
             float& v = handPoint_[item - kHandFwd];
             v = std::fmax(-0.15f, std::fmin(0.15f, v + dir * 0.01f));
@@ -974,6 +1063,14 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             page_ = 3;
             selected_ = 0;
             MLOG("menu: free hand page");
+        } else if (item == kHudWristPage) {
+            page_ = 7;
+            selected_ = 0;
+            MLOG("menu: wrist panels page (the panels show while it is open)");
+        } else if (item == kHudScreenPage) {
+            page_ = 8;
+            selected_ = 0;
+            MLOG("menu: screen HUD page");
         } else if (item == kKnifePage) {
             page_ = 6;
             selected_ = 0;
@@ -1028,6 +1125,10 @@ void Menu::Render() {
         RenderSpotPage();
     } else if (page_ == 6) {
         RenderKnifePage();
+    } else if (page_ == 7) {
+        RenderWristPage();
+    } else if (page_ == 8) {
+        RenderScreenHudPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
     // The tab row: the current tab lit; framed while the row itself is selected (left / right switch).
@@ -1204,6 +1305,36 @@ void Menu::Render() {
                 ImGui::Selectable(label, sel);
                 break;
             case kFreeHandPage: ImGui::Selectable("Free hand  (how your other hand sits)", sel); break;
+            case kHudPlace: {
+                const bool can = wristAvail_;  // (the game has the HUD ring and the host opened it)
+                snprintf(label, sizeof(label), "HUD              <  %s  >", hud_.place ? (can ? "wrist" : "wrist (not available)") : "screen");
+                ImGui::Selectable(label, sel);
+                note(hud_.place ? "your other wrist, palm down: health and the compass (the minimap) left, weapon and grenades right"
+                                : "one panel in front of you");
+                break;
+            }
+            case kHudShow:
+                snprintf(label, sizeof(label), "  Wrist shows    <  %s  >", hud_.show ? "always" : "when looked at");
+                ImGui::Selectable(label, sel);
+                note("when looked at: turn the wrist toward you and look at it");
+                break;
+            case kHudLayout:
+                snprintf(label, sizeof(label), "  Wrist layout   <  %s  >", hud_.layout ? "arm forward" : "forearm across chest");
+                ImGui::Selectable(label, sel);
+                note(hud_.layout ? "the arm pointing forward: the panels either side of the wrist"
+                                 : startLeft_ ? "the forearm across the chest: health on your left (toward the hand), weapon toward the elbow"
+                                              : "the forearm across the chest: health on your left (toward the elbow), weapon toward the hand");
+                break;
+            case kHudBacking:
+                snprintf(label, sizeof(label), "  Wrist backing  <  %ls  >", kBackings[hud_.backing]);
+                ImGui::Selectable(label, sel);
+                break;
+            case kHudWristPage: ImGui::Selectable("Wrist panels  (move and size them)", sel); break;
+            case kHudScreenPage:
+                snprintf(label, sizeof(label), "Screen HUD  (%.1f m away, %.1f m wide)", hud_.screen[0], hud_.screen[1]);
+                ImGui::Selectable(label, sel);
+                note("the panel in front of you; on the wrist, what stays in view (hits, objectives, prompts)");
+                break;
             case kClose: ImGui::Selectable("Close", sel); break;
             default: break;
         }
@@ -1444,6 +1575,148 @@ void Menu::RenderFreeHandPage() {
     ImGui::TextDisabled("Hold your other hand in view and adjust until it sits like your real hand. Saved for you.");
     ImGui::TextDisabled("B: back");
     ImGui::PopFont();
+}
+
+// The wrist HUD's panels (WRISTHUD-DESIGN): moved and sized; they show while this page is open.
+void Menu::RenderWristPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Wrist panels");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  on your other wrist");
+    ImGui::Separator();
+    const int p = wristSel_ == 2 ? 0 : wristSel_;
+    const float* a = hud_.panel[p];
+    char label[128];
+    snprintf(label, sizeof(label), "Panel                 <  %s  >", kWristPanelNames[wristSel_]);
+    ImGui::Selectable(label, selected_ == wpWhich);
+    snprintf(label, sizeof(label), "Along the arm         <  %+.1f cm  >", a[0]);
+    ImGui::Selectable(label, selected_ == wpAlong);
+    snprintf(label, sizeof(label), "Across the arm        <  %+.1f cm  >", a[1]);
+    ImGui::Selectable(label, selected_ == wpAcross);
+    snprintf(label, sizeof(label), "Out from the arm      <  %+.1f cm  >", a[2]);
+    ImGui::Selectable(label, selected_ == wpOut);
+    snprintf(label, sizeof(label), "Size                  <  %.0f%%  >", a[3]);
+    ImGui::Selectable(label, selected_ == wpSize);
+    snprintf(label, sizeof(label), "Tilt toward you       <  %+.0f\xC2\xB0  >", a[4]);
+    ImGui::Selectable(label, selected_ == wpTilt);
+    ImGui::Selectable("Reset", selected_ == wpReset);
+    ImGui::Selectable("Back", selected_ == wpBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Hold your other wrist palm down in view: the panels show while this page is open.");
+    ImGui::TextDisabled("Along the arm: + toward the hand (either layout).");
+    ImGui::TextDisabled(hud_.place ? "Saved for you.   B: back" : "(The HUD is on the screen: choose wrist on the HUD tab.)   B: back");
+    ImGui::PopFont();
+}
+
+void Menu::RenderScreenHudPage() {
+    ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "Screen HUD");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  the panel in front of you");
+    ImGui::Separator();
+    char label[128];
+    snprintf(label, sizeof(label), "Distance              <  %.1f m  >", hud_.screen[0]);
+    ImGui::Selectable(label, selected_ == shDist);
+    snprintf(label, sizeof(label), "Size (width)          <  %.1f m  >", hud_.screen[1]);
+    ImGui::Selectable(label, selected_ == shWidth);
+    snprintf(label, sizeof(label), "Height                <  %+.0f cm  >", -hud_.screen[2] * 100.0f);
+    ImGui::Selectable(label, selected_ == shDown);
+    ImGui::Selectable("Reset", selected_ == shReset);
+    ImGui::Selectable("Back", selected_ == shBack);
+    ImGui::Separator();
+    ImGui::PushFont(nullptr, 26.0f);
+    ImGui::TextDisabled("Live. With the HUD on the wrist this places what stays in view (hits, objectives, prompts).");
+    ImGui::TextDisabled("Saved for you.   B: back");
+    ImGui::PopFont();
+}
+
+void Menu::LoadHud() {
+    // The shipped [HUD] keys are the defaults; the player's own only once changed in the menu.
+    auto str = [&](const wchar_t* key, const wchar_t* def, wchar_t (&out)[64]) {
+        wchar_t d[64] = L"";
+        GetPrivateProfileStringW(L"HUD", key, def, d, 64, shippedPath_.c_str());
+        GetPrivateProfileStringW(L"HUD", key, d, out, 64, iniPath_.c_str());
+        return std::wstring(d);
+    };
+    auto parse = [](const wchar_t* v, float* f, int n, const float* lo, const float* hi) {
+        float t[5] = {};
+        const int got = swscanf_s(v, L"%f %f %f %f %f", &t[0], &t[1], &t[2], &t[3], &t[4]);
+        if (got != n) return;
+        for (int i = 0; i < n; ++i) f[i] = std::fmax(lo[i], std::fmin(hi[i], t[i]));
+    };
+    wchar_t v[64];
+    const std::wstring dPlace = str(L"Place", L"screen", v);
+    hudDef_.place = !_wcsicmp(dPlace.c_str(), L"wrist") ? 1 : 0;
+    hud_.place = !_wcsicmp(v, L"wrist") ? 1 : 0;
+    const std::wstring dShow = str(L"WristShow", L"look", v);
+    hudDef_.show = !_wcsicmp(dShow.c_str(), L"always") ? 1 : 0;
+    hud_.show = !_wcsicmp(v, L"always") ? 1 : 0;
+    const std::wstring dLayout = str(L"WristLayout", L"forearm", v);
+    hudDef_.layout = !_wcsicmp(dLayout.c_str(), L"across") ? 1 : 0;
+    hud_.layout = !_wcsicmp(v, L"across") ? 1 : 0;
+    const std::wstring dBack = str(L"WristBacking", L"dim", v);
+    hudDef_.backing = hud_.backing = 1;
+    for (int i = 0; i < 3; ++i) {
+        if (!_wcsicmp(dBack.c_str(), kBackings[i])) hudDef_.backing = i;
+        if (!_wcsicmp(v, kBackings[i])) hud_.backing = i;
+    }
+    const float plo[5] = {-20, -20, -20, 40, -60}, phi[5] = {20, 20, 20, 300, 80};
+    for (int p = 0; p < 2; ++p) {
+        const std::wstring d = str(kWristPanelKeys[p], L"", v);
+        parse(d.c_str(), hudDef_.panel[p], 5, plo, phi);
+        for (int k = 0; k < 5; ++k) hud_.panel[p][k] = hudDef_.panel[p][k];
+        parse(v, hud_.panel[p], 5, plo, phi);
+    }
+    const float slo[3] = {0.3f, 0.1f, -2.0f}, shi[3] = {20.0f, 10.0f, 2.0f};
+    const wchar_t* sk[3] = {L"Distance", L"Width", L"Down"};
+    for (int k = 0; k < 3; ++k) {
+        const std::wstring d = str(sk[k], L"", v);
+        float f = hudDef_.screen[k];
+        parse(d.c_str(), &f, 1, &slo[k], &shi[k]);
+        hudDef_.screen[k] = f;
+        parse(v, &f, 1, &slo[k], &shi[k]);
+        hud_.screen[k] = f;
+    }
+    PublishHud();
+    MLOG("menu: HUD %s (shows %s, layout %s, backing %ls); wrist panels L %.1f %.1f %.1f %.0f%% %.0f deg, R %.1f %.1f %.1f %.0f%% %.0f "
+         "deg; screen panel %.2f m away, %.2f m wide, %.2f m down", hud_.place ? "wrist" : "screen", hud_.show ? "always" : "when looked at",
+         hud_.layout ? "across" : "forearm", kBackings[hud_.backing], hud_.panel[0][0], hud_.panel[0][1], hud_.panel[0][2],
+         hud_.panel[0][3], hud_.panel[0][4], hud_.panel[1][0], hud_.panel[1][1], hud_.panel[1][2], hud_.panel[1][3], hud_.panel[1][4],
+         hud_.screen[0], hud_.screen[1], hud_.screen[2]);
+}
+
+void Menu::PublishHud() {
+    if (!hdr_) return;
+    hdr_->hudScreen[1] = hud_.screen[1];
+    hdr_->hudScreen[2] = hud_.screen[2];
+    hdr_->hudScreen[0] = hud_.screen[0];  // (the game takes the down with the distance)
+    hdr_->hudPlace = hud_.place && wristAvail_ ? 2u : 1u;
+}
+
+void Menu::SaveHud(bool place, bool panels, bool screen, const wchar_t* only) {
+    if (iniPath_.empty()) return;
+    const wchar_t* ini = iniPath_.c_str();
+    // (only the key the player changed: the shipped defaults of the others stay the defaults)
+    auto want = [&](const wchar_t* k) { return place && (!only || !wcscmp(only, k)); };
+    if (want(L"Place")) WritePrivateProfileStringW(L"HUD", L"Place", hud_.place ? L"wrist" : L"screen", ini);
+    if (want(L"WristShow")) WritePrivateProfileStringW(L"HUD", L"WristShow", hud_.show ? L"always" : L"look", ini);
+    if (want(L"WristLayout")) WritePrivateProfileStringW(L"HUD", L"WristLayout", hud_.layout ? L"across" : L"forearm", ini);
+    if (want(L"WristBacking")) WritePrivateProfileStringW(L"HUD", L"WristBacking", kBackings[hud_.backing], ini);
+    wchar_t b[96];
+    if (panels)
+        for (int p = 0; p < 2; ++p) {
+            if (wristSel_ != 2 && wristSel_ != p) continue;  // (the panel the page changed)
+            const float* a = hud_.panel[p];
+            swprintf_s(b, L"%.1f %.1f %.1f %.0f %.0f", a[0], a[1], a[2], a[3], a[4]);
+            WritePrivateProfileStringW(L"HUD", kWristPanelKeys[p], b, ini);
+        }
+    if (screen) {
+        const wchar_t* sk[3] = {L"Distance", L"Width", L"Down"};
+        for (int k = 0; k < 3; ++k) {
+            if (only && wcscmp(only, sk[k])) continue;
+            swprintf_s(b, L"%.2f", hud_.screen[k]);
+            WritePrivateProfileStringW(L"HUD", sk[k], b, ini);
+        }
+    }
 }
 
 const XrCompositionLayerBaseHeader* Menu::Layer(XrSpace local) {

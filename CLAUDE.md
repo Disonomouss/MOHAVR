@@ -59,7 +59,7 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 
 ## In-headset menu (host)
 - `src/host/menu.cpp`: Dear ImGui into its own quad layer. Left Touch menu button toggles; the left
-  stick navigates and adjusts; the trigger or A selects. The main page is in tabs (General / Weapons / Hands; up past
+  stick navigates and adjusts; the trigger or A selects. The main page is in tabs (General / Weapons / Hands / HUD; up past
   the first item reaches the tab row, where left / right switch); Weapons has the Reload grip page (per gun
   `[ReloadGrip]`, published as shared block v16) and the Reload spots page (per gun `[ReloadSpot]`, host-only). The first item is World Scale, live to the
   game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
@@ -89,6 +89,10 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - Scope tests (SCOPE-DESIGN 3): the simulator reports both eyes at the head's centre, so a test puts the eyepiece before the
   head's centre (`work/research/tests/scope3.ps1 -Gun -Key -Ex -Ey -Ez -Pitch -Zoom`); the host logs "scope: looking
   through" and "the lens shown"; `Debug.ScopeView=1` renders the scope view always (from the right eye).
+- Wrist HUD tests (WRISTHUD-DESIGN 5; the menu's HUD tab, the fourth, after Hands): the off hand palm down across the chest
+  is `hand=l,0.13,-0.40,0.30,90,0,90` with `sim_pose.py --pitch -45` (the right hand: mirrored signs); the host logs
+  "wristhud: panels shown / hidden (why)"; `python work/research/wristhud/host_capture.py --out-prefix P` saves the host's
+  frame, HUD texture and atlas, `check_atlas.py P host.log` checks the crops; `mohavr hud hit <yaw> | objective | status`.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

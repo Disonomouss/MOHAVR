@@ -36,6 +36,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/scope.cpp
         src/mohavr/knife.cpp
         src/mohavr/rackround.cpp
+        src/mohavr/hudtex.cpp
         src/mohavr/offpistol.cpp
         src/mohavr/carrier.cpp
         src/mohavr/script_call.cpp
@@ -73,6 +74,7 @@ else()
         src/host/offknife.cpp
         src/host/offpistol.cpp
         src/host/scope.cpp
+        src/host/wristhud.cpp
         src/mohavr/log.cpp
     )
     # In-headset menu (Dear ImGui, drawn with D3D11 into its own quad layer).
