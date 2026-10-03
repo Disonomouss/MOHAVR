@@ -89,6 +89,7 @@ private:
 
     // [Scope] settings
     bool  on_ = false, zoomGame_ = false, twoHands_ = true;
+    bool  m18_ = true;  // [Scope] M18: the M18's Telescope M86C (its tube in the body mesh, work/research/m18scope)
     float enterDist_ = 0.12f, exitDist_ = 0.16f, enterOff_ = 0.025f, exitOff_ = 0.04f;  // m: behind the eyepiece, off its axis
     float enterCos_ = 0.82f, exitCos_ = 0.64f;     // the eye's look along the axis (35 / 50 deg)
     float field_ = 0.194f;                          // tan of the eyepiece's apparent half field (22 deg across)

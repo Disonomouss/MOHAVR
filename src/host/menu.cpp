@@ -1115,7 +1115,7 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Scope zoom       <  %s  >", scopeZoomGame_ ? "game" : "realistic");
                 ImGui::Selectable(label, sel);
                 note(scopeZoomGame_ ? "the game's zoom: the turning stick up / down zooms while you look through"
-                                    : "each scope's real magnification (Springfield 2.5x, G43 and StG44 4x)");
+                                    : "each scope's real magnification (Springfield 2.5x, G43 and StG44 4x, M18 2.8x)");
                 break;
             case kGunNade:
                 snprintf(label, sizeof(label), "Hand grenades    <  %s  >", gunNadePin_ ? "pin & grip" : "game");

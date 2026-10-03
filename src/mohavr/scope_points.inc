@@ -14,4 +14,5 @@ static const ScopeTube kScopeTubes[] = {
     {"Attachment_Springfield", -1, "upgrade_02_hide_scope", {0.00f, -12.14f, 0.76f}, {0.00f, -12.14f, 33.12f}, 1.29f, {0.043f, 0.057f, -20.882f}, {0.043f, 0.058f, 11.475f}},
     {"Attachment_G43", 1, "upgrade_02_scope", {-0.01f, -13.79f, -2.10f}, {0.00f, -13.79f, 13.33f}, 1.25f, {3.116f, -4.708f, -7.764f}, {3.125f, -4.708f, 7.670f}},
     {"Attachment_Stg44", 2, "altFire_scope", {-0.00f, -16.57f, -3.65f}, {-0.00f, -16.57f, 11.69f}, 1.14f, {3.805f, -6.054f, -6.118f}, {3.805f, -6.054f, 9.226f}},
+    {"Attachment_M18RecoillessRifle", -1, "RootOffset", {4.90f, -13.57f, -8.97f}, {4.90f, -13.57f, 23.30f}, 1.44f, {4.901f, -13.571f, -8.973f}, {4.901f, -13.571f, 23.299f}},
 };

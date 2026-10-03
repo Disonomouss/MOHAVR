@@ -13,7 +13,7 @@ Research: `work/research/scope/` (game-scopes, pipeline, rtt, prior-art, synthes
 | Springfield | every level (not in grenade mode) | 10..40 deg (9.6x..2.3x) | M73B1 2.5x, crosshair | `upgrade_02_hide_scope` |
 | G43 | from level 1 (not in grenade mode) | 10..40 deg (the ini's 25..50 is dead: measured) | ZF4 4x, post and bars | `upgrade_02_scope` |
 | StG44 | from level 2 (mounted ~3 s after the switch) | 35 deg fixed | ZF4 4x, post and bars | `altFire_scope` |
-| M18 | always | 40 deg | -- | none: part of the body mesh; not covered |
+| M18 | always | 40 deg (Enhanced Scope 30..58) | Telescope M86C 2.8x | a piece of the body bone RootOffset: the telescope measured (D53) |
 
 The magnification of a game FOV is tan(40 deg) / tan(FOV / 2) against its 80 deg view. The game's own scope (iron sights
 state 3: hide the gun, a full-screen reticle texture, a narrow world FOV, blur, sway) never runs in VR: the aim button is
@@ -139,7 +139,8 @@ headset each eye is half the IPD to its side.
 - No lens during a recentre (the frame is in the old space).
 
 ## 6. Known limits
-- The M18 recoilless rifle's sight has no part of its own (no geometry): no scope view for it yet.
+- The M18 recoilless rifle's sight has no part of its own; since D53 tools/scope_points.py measures it as a piece of its
+  body bone (a box, the largest connected piece, the eyepiece's glass), and the lens shows the game's own ring sight.
 - The scope view costs a third view while a scope is at an eye: measured within noise in the simulator; the headset's GPU
   time is not measured.
 - While looking through, the eyes give the scope column their width (512 px): a little softer then.

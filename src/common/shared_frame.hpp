@@ -341,7 +341,7 @@ struct Header {
     float                  scopeRadius;       // 2912 the eyepiece's radius (m)
     float                  scopeGameFov[2];   // 2916 the game's zoom: its narrowest and widest FOV (deg; its 80 deg view = 1x)
     float                  scopeRealMag;      // 2924 the real scope's magnification (x; 0 unknown)
-    std::uint32_t          scopeReticle;      // 2928 0 a crosshair, 1 a post and bars (the German scopes)
+    std::uint32_t          scopeReticle;      // 2928 0 a crosshair, 1 a post and bars (the German scopes), 2 the M18's ring sight
     std::uint32_t          pad24;             // 2932
     // --- v25: the off-hand knife (OFFKNIFE-DESIGN.md): the host holds whether it is held, the game draws it to match ---
     // game -> host, once per Draw (seqlock knifeSeq: odd while the game writes)

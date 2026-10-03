@@ -781,3 +781,13 @@ off hand equip with melee functionality? Add a holster to lower back for it."
 **Why:** the player (round 50): "Crouch is good. Unbind melee from flick stick down, no longer needed. Knife needs hand
 position adjustment. Make the knife always available, not gated behind mp40 upgrade." "Holsters need to be able to be
 toggled visible individually."
+
+### D53. The M18's scope: its Telescope M86C measured in the body mesh -- Decided 2026-10-03
+`[Scope] M18=1` (shipped on, proven in the simulator; the menu's Scopes and Scope zoom cover it).
+- **What:** the M18 looks through like the other scoped guns (two hands, the eye at the eyepiece): its telescope on the
+  tube's left, 2.8x real (the Telescope M86C) or the game's zoom (40 deg; Enhanced Scope 30..58), with the game's own ring
+  sight (US_M18_Scope_HUD, measured: a fine and heavy cross and four rings) as the lens's third reticle.
+- **Where:** the telescope has no bone; tools/scope_points.py measures a part of a bone (a box in mesh space, the largest
+  connected piece of its triangles, a wider top ring) and the eyepiece's glass (the lens equals the drawn 2.6 cm glass).
+  The tube is parallel to the bore (0.000 deg), 9.0 u off it. The other rows regenerate byte-identically.
+**Why:** the player (after round 50): "The M18 needs scope functionality." Research: work/research/m18scope.

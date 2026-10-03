@@ -27,13 +27,15 @@ Config g_cfg;
 bool   g_bake = false;
 
 // The real scopes (SCOPE-DESIGN 2.6): the Springfield's M73B1 (a Weaver 330) 2.5x with a crosshair; the G43's ZF4 4x and
-// the StG44's ZF4 4x with the German post and bars.
+// the StG44's ZF4 4x with the German post and bars; the M18's Telescope M86C 2.8x with the game's own ring sight (its
+// US_M18_Scope_HUD, measured: work/research/m18scope).
 struct RealScope {
     const char*   gun;
     float         mag;
-    std::uint32_t reticle;  // 0 a crosshair, 1 a post and bars
+    std::uint32_t reticle;  // 0 a crosshair, 1 a post and bars, 2 the M18's ring sight
 };
-constexpr RealScope kReal[] = {{"Attachment_Springfield", 2.5f, 0}, {"Attachment_G43", 4.0f, 1}, {"Attachment_Stg44", 4.0f, 1}};
+constexpr RealScope kReal[] = {{"Attachment_Springfield", 2.5f, 0}, {"Attachment_G43", 4.0f, 1}, {"Attachment_Stg44", 4.0f, 1},
+                               {"Attachment_M18RecoillessRifle", 2.8f, 2}};
 
 // The gun in hand and its scope's tube in the host's gun frame (metres: x right, y up, z back), taken while quiet.
 struct State {

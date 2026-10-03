@@ -86,7 +86,8 @@ V3 DrawnAxis(const XrPosef& gun, const shared::ScopeInfo& s) {
 }
 
 const char* kShader = R"(
-cbuffer C : register(b0) { float4 ret; float4 aim; }  // ret x: the reticle (0 a crosshair, 1 a post and bars), y: line,
+cbuffer C : register(b0) { float4 ret; float4 aim; }  // ret x: the reticle (0 a crosshair, 1 a post and bars, 2 the M18's
+                                                      // ring sight), y: line,
                                                       // z: post, w: bars' gap; aim xy: the aim line in the field (its centre)
 struct VI { float2 pos : POSITION; float2 uv : TEXCOORD0; float2 ba : TEXCOORD1; };
 struct VO { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float2 ba : TEXCOORD1; };
@@ -102,10 +103,20 @@ float4 ps(VO i) : SV_TARGET {
     float k = 0.0;
     if (ret.x < 0.5) {
         k = max(1.0 - abs(f.x) / ret.y, 1.0 - abs(f.y) / ret.y);
-    } else {
+    } else if (ret.x < 1.5) {
         float post = ret.z * saturate(f.y / (ret.z * 4.0));  // from the bottom up to the centre, pointed
         k = (f.y > 0.0) ? 1.0 - abs(f.x) / max(post, 1e-4) : 0.0;
         k = max(k, (abs(f.x) > ret.w) ? 1.0 - abs(f.y) / (ret.y * 2.0) : 0.0);
+    } else {  // the M18's sight (the game's US_M18_Scope_HUD, measured): fine and heavy cross lines, four rings
+        float ax = abs(f.x), rr = length(f), w = 0.0045, h = 0.013;
+        k = (ax < 0.252) ? 1.0 - abs(f.y) / w : 0.0;
+        k = max(k, (ax >= 0.252 && ax < 0.755) ? 1.0 - abs(f.y) / h : 0.0);
+        k = max(k, (f.y > -0.252 && f.y < 0.576) ? 1.0 - ax / w : 0.0);
+        k = max(k, (f.y <= -0.252 || f.y >= 0.576) ? 1.0 - ax / h : 0.0);
+        k = max(k, 0.6 * (1.0 - abs(rr - 0.066) / w));
+        k = max(k, 1.0 - abs(rr - 0.143) / w);
+        k = max(k, 1.0 - abs(rr - 0.253) / (w * 1.4));
+        k = max(k, 1.0 - abs(rr - 0.382) / (w * 1.4));
     }
     c *= 1.0 - saturate(k * 3.0);
     float a = saturate(i.ba.y);
@@ -127,6 +138,7 @@ bool Scope::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession session,
     GetPrivateProfileStringW(L"Scope", L"Zoom", L"real", z, 16, ini.c_str());
     zoomGame_ = !_wcsicmp(z, L"game");
     twoHands_ = GetPrivateProfileIntW(L"Scope", L"TwoHands", 1, ini.c_str()) != 0;
+    m18_ = GetPrivateProfileIntW(L"Scope", L"M18", 1, ini.c_str()) != 0;
     enterDist_ = IniF(ini, L"EyeDistance", 12.0f, 2.0f, 30.0f) / 100.0f;
     exitDist_ = enterDist_ + 0.04f;
     enterOff_ = IniF(ini, L"EyeOffAxis", 2.5f, 0.5f, 10.0f) / 100.0f;
@@ -278,7 +290,8 @@ void Scope::Update(const shared::Header* hdr, const In& in) {
         aimFromGun_[1] = from.y;
         aimFromGun_[2] = from.z;
     }
-    const char* why = !ready_ ? "no lens" : !on_ ? "switched off" : !geo ? "no scope on the gun in hand" : !in.hasView ? "no view" :
+    const char* why = !ready_ ? "no lens" : !on_ ? "switched off" : !geo ? "no scope on the gun in hand" :
+                      (!m18_ && !std::strcmp(info_.key, "Attachment_M18RecoillessRifle")) ? "the M18's scope switched off" : !in.hasView ? "no view" :
                       !in.gunValid ? "no gun pose" : (twoHands_ && !in.twoHanded) ? "one hand on the gun" :
                       !in.gestures ? "a menu" : !in.eyesOk ? "no eyes" : nullptr;
     float d[2] = {0, 0}, off[2] = {0, 0}, look[2] = {0, 0};
@@ -451,7 +464,7 @@ const XrCompositionLayerBaseHeader* Scope::Layer(XrSpace space, ID3D11Texture2D*
             ax = std::clamp((aim.x / -aim.z) / sc.tanHalf, -0.9f, 0.9f);
             ay = std::clamp(-(aim.y / -aim.z) / sc.tanHalf, -0.9f, 0.9f);
         }
-        const float r[8] = {info_.reticle == 1u ? 1.0f : 0.0f, 0.006f, 0.035f, 0.30f, ax, ay, 0.0f, 0.0f};
+        const float r[8] = {static_cast<float>(info_.reticle < 2u ? info_.reticle : 2u), 0.006f, 0.035f, 0.30f, ax, ay, 0.0f, 0.0f};
         std::memcpy(m.pData, r, sizeof(r));
         ctx_->Unmap(cb_, 0);
     }

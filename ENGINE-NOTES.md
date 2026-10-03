@@ -2103,6 +2103,20 @@ Measured in the simulator (work/research/tests/knife1-4.ps1), the harness level 
   (the hand 30 cm ahead of the head, the blade 32 cm) meets him from 0.55 m ahead. A test soldier's Health written to 1000
   goes to 200 after a hit (the game clamps it to his default), as with the bayonet.
 
+## 5bp. The M18's telescope (D53, 2026-10-03)
+
+Measured (work/research/m18scope; tools/scope_points.py) and in the simulator (work/research/tests/m18scope1.ps1):
+- **The mesh:** US_M18recoilless_Rigged's telescope is a connected piece of the body bone RootOffset (1786 triangles; the
+  bone is identity at the idle): the eyepiece's rim at mesh (4.90, -13.57, -8.97), the front at Z 23.30, the eyepiece glass
+  a back-facing disc r 1.29 set 0.35 u in, the objective glass r 1.30 at Z 18.70; parallel to the bore (0.000 deg), 7.54 u
+  above and 4.90 u left of it.
+- **The game's scope:** MOHAM18RecoillessRifle's IsScopeEnabled is always true; its ScopeParams at upgrade level 2 (the
+  harness save: Enhanced Scope) read 30..58 at run time (the upgrade's values survive PostBeginPlay's 40/40 copy), the
+  current FOV 40.
+- **In the host's gun frame** (the player's M18 fit 34 20 -3): the eyepiece at (-0.112, 0.037, 0.104) m (the design's
+  estimate (-0.126, 0.035, 0.104)); looked through at 2.8x (real) and 1.5x (the game's zoom from 58 deg), the drawn tube
+  0.00 deg off the aim line, the lens 2.6 cm across.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
