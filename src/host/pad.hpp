@@ -101,8 +101,8 @@ public:
     void  SetRedirectB(bool on) { redirectB_ = on; }
     bool  TakeRedirectB() { const bool r = redirectReq_; redirectReq_ = false; return r; }
     // Tests: where "hand=l,@mag|@pouch|@bolt" puts a hand (LOCAL), from the last frame's hands.
-    void  SetTestTargets(const XrVector3f (&p)[10], const bool (&ok)[10], const XrPosef& align, bool alignOk) {
-        for (int i = 0; i < 10; ++i) {
+    void  SetTestTargets(const XrVector3f (&p)[11], const bool (&ok)[11], const XrPosef& align, bool alignOk) {
+        for (int i = 0; i < 11; ++i) {
             testTarget_[i] = p[i];
             testTargetOk_[i] = ok[i];
         }
@@ -169,8 +169,8 @@ private:
     double      segStart_[2] = {-1.0, -1.0}, segDur_[2]{};
     bool        segSmooth_[2]{};
     int         segFrames_[2]{};
-    XrVector3f  testTarget_[10]{};     // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade",
-    bool        testTargetOk_[10]{};   // "@pistol", "@chest" (LOCAL)
+    XrVector3f  testTarget_[11]{};     // "@mag", "@pouch", "@bolt", "@magin", "@boltup", "@boltback", "@fore", "@grenade",
+    bool        testTargetOk_[11]{};   // "@pistol", "@chest", "@back" (LOCAL)
     XrPosef     testAlign_{};          // "@magin,...,align": the aim pose that seats the held magazine, turned too
     bool        testAlignOk_ = false;
     bool        scopeZoom_ = false, zoomHold_ = false;

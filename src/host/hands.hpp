@@ -16,6 +16,8 @@
 //   * The off-hand pistol (offpistol.hpp): the off hand at a pistol holster draws the pistol while a gun is in the other
 //     hand; while it holds it, its presses are the pistol's (a click at a holster puts it back), the foregrip and the
 //     reload's spots are out of reach, and the gun hand at a pistol holster is refused.
+//   * The off-hand knife (offknife.hpp): the off hand at a knife holster ([Holsters] LowerBack=Knife) draws the MP40's
+//     Dagger; while it holds it its presses are the knife's (a click at a holster puts it back), as the pistol's.
 //   A grip used for any of these is kept from the pad mapping until released (Consumed). A short pulse on the
 //   controller marks a hand entering a holster spot or the foregrip.
 #pragma once
@@ -29,6 +31,7 @@
 
 #include "../common/shared_frame.hpp"
 #include "offhand.hpp"
+#include "offknife.hpp"
 #include "offpistol.hpp"
 #include "reload.hpp"
 
@@ -38,7 +41,7 @@ namespace mohavr::host {
 struct HolsterSpot {
     float x, y, z, r;
 };
-constexpr int kHolsters = 5;  // right shoulder, left shoulder, right hip, left hip, chest
+constexpr int kHolsters = 6;  // right shoulder, left shoulder, right hip, left hip, chest, lower back
 constexpr int kSpots = kHolsters + 1;  // ... and the magazine pouch (the manual reload; it runs no command)
 
 class Hands {
@@ -99,10 +102,10 @@ public:
         float       pulseAmp[2]{}, pulseMs[2]{};  // ... of this strength and length (0: the default short one)
         bool        maskFace[2]{};  // the manual reload's release button kept from the pad (per physical hand)
         bool        maskTrigger[2]{};  // ... and a trigger (the flip of a held taped pair)
-        bool        targetOk[10]{}; // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade|
-        XrVector3f  target[10]{};   // @pistol|@chest): the magazine, the pouch, the action, the aim point that seats a held
-                                    // magazine, a bolt lifted / back, the foregrip (GOAL A3: a pump gun's pump), the grenade
-                                    // holster, the pistol holster, the chest holster
+        bool        targetOk[11]{}; // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade|
+        XrVector3f  target[11]{};   // @pistol|@chest|@back): the magazine, the pouch, the action, the aim point that seats a
+                                    // held magazine, a bolt lifted / back, the foregrip (GOAL A3: a pump gun's pump), the
+                                    // grenade holster, the pistol holster, the chest holster, the knife holster
         bool        alignOk = false;  // tests: @magin with "align": the aim pose that seats the held magazine, turned too
         XrPosef     align{};
         bool        maskSwitch = false;  // the off hand holds a grenade: the game's own grenade switch (Xbox RB) kept back
@@ -111,6 +114,8 @@ public:
         bool        meleeBusy = false;  // physical melee holds off: the gun hand just pressed at a holster or the pouch (0.4 s),
                                         // the manual reload working the gun, a menu open (and 0.15 s after)
         bool        turned = false;     // the gun pose is turned onto the off hand this frame (two-handed, past 12 cm)
+        bool        knifeBusy = false;  // the off-hand knife's strikes hold off: just drawn or put back (0.4 s), a menu open (and
+                                        // 0.15 s after)
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
     };
     Output Update(const Input& in);
@@ -132,6 +137,8 @@ public:
     void SetGunNade(OffHandGrenade* n) { gunNade_ = n; }
     // The off-hand pistol (likewise).
     void SetOffPistol(OffHandPistol* p) { pistol_ = p; }
+    // The off-hand knife (likewise).
+    void SetOffKnife(OffHandKnife* k) { knife_ = k; }
     // Round 31: where on each controller the hand interacts (the white dot; metres from the aim point: forward, up, in
     // toward the palm -- mirrored for the left hand), the foregrip ring's radius (m) and the reload rings' scale.
     void SetHandPoint(const float (&fwdUpIn)[3]) { for (int i = 0; i < 3; ++i) handPoint_[i] = fwdUpIn[i]; }
@@ -152,6 +159,7 @@ private:
     OffHandGrenade* nade_ = nullptr;
     OffHandGrenade* gunNade_ = nullptr;
     OffHandPistol* pistol_ = nullptr;
+    OffHandKnife* knife_ = nullptr;
     float handPoint_[3]{};       // forward, up, in (m)
     float foregripR_ = 0.12f;    // the foregrip ring's radius (m)
     bool  pouchReload_ = true;   // [Hands] PouchReload: a hand holding a gun grips the pouch -> reloaded at once
@@ -175,6 +183,7 @@ private:
     int   gunHand_ = 1;
     double gunPressAt_ = -1.0;  // when the gun hand last pressed at a holster or the pouch (physical melee holds off after)
     double gesturesOffAt_ = -1.0;  // when the gestures were last off (a menu): physical melee holds off a little after
+    double offGripAt_ = -1.0;      // when the knife was last drawn or put back (its strikes hold off a little after)
     int   lastStart_ = -1;       // the start setting last applied
     shared::GunFit defaultFit_{};
 };

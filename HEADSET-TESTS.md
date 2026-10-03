@@ -1973,6 +1973,39 @@ lower-back holster.
 
 ---
 
+## Round 50: prepared 2026-10-03, the off-hand knife and crouch on the stick click
+**Your requests:** "Remap crouch to right stick click"; "The mp40 has an upgrade that is a knife for its melee attack, can
+we make the knife an off hand equip with melee functionality? Add a holster to lower back for it."
+
+**Changed:**
+- **Crouch** is the right stick click (it toggles). The game's own melee button moved to a down flick of the right stick.
+- **The off-hand knife:** with a gun in hand, reach behind you to the lower back with your free hand and squeeze the grip:
+  the MP40's Dagger comes into that hand (once the Dagger is earned: the MP40's second upgrade). Stab with it (a quick push
+  along the blade) or slash across: 150, as the game's own Dagger. The hand buzzes on a hit.
+  - Put it back: squeeze at any holster (the lower back, a hip, the chest...).
+  - While you hold it the gun is one-handed: no foregrip, no reloading by hand, no grenade or pistol in that hand.
+- **Menu -> Weapons -> "Off-hand knife"** (on / off). The Holsters page has the "lower back" spot to move, and any holster
+  can hold the knife.
+
+**How to try it:**
+1. Crouch and stand with the right stick click.
+2. With a gun in your gun hand, reach to the small of your back with the other hand: the controller buzzes as it enters
+   the spot. Squeeze.
+3. Stab and slash at an enemy. Try a slow push too (it shouldn't count).
+4. Put it back at a holster; draw it again.
+
+**Questions:**
+1. Crouch on the click: good?
+2. Is the lower back easy to find without looking? Is it in the right place?
+3. The grip: is the knife at a natural angle in your hand? (The menu can't change it yet; the ini's KnifeGrip=icepick holds
+   it blade-down, as the game does.)
+4. Do stabs and slashes register when you mean them, and not when you don't?
+5. Squeeze to draw and squeeze at a holster to put back -- or hold the grip while you hold the knife?
+
+**Deployed for this round:** the shipped defaults (the knife on).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -84,6 +84,17 @@ struct Config {
 // [Scope] (SCOPE-DESIGN): a scope raised to the eye shows a third view rendered down its axis.
 bool  scopeEnable = false;        // [Scope] Enable
 int   scopeColumn = 512;          // [Scope] Column -- px at the backbuffer's right kept for the scope view (taken from the eyes)
+// The off-hand knife (OFFKNIFE-DESIGN): the MP40's Dagger in the off hand from the lower back, with physical melee.
+bool  offKnifeForward = true;     // [OffHand] KnifeGrip -- forward (the blade along the controller) or icepick (the game's)
+float offKnifeTilt = 10.0f;       // [OffHand] KnifeTilt -- deg the forward blade points up from the controller's forward
+bool  knifeRequireEarned = true;  // [Knife] Require -- earned (the Dagger upgrade) or carried (an MP40 with it in the inventory)
+float knifeDamage = 150.0f;       // [Knife] Damage -- every knife hit's (the game's Dagger: 150); <= 0: the gun in hand's melee
+float knifeThrustSpeed = 2.0f;    // [Knife] ThrustSpeed -- m/s: the hand along the blade, a stab
+float knifeThrustCos = 0.8f;      // [Knife] ThrustCos
+float knifeThrustTravel = 0.12f;  // [Knife] ThrustTravel -- m along the blade in 0.25 s
+float knifeSlashSpeed = 4.0f;     // [Knife] SlashSpeed -- m/s at the tip across the blade
+float knifeSlashCos = 0.6f;       // [Knife] SlashCos
+float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself for a slash
     bool armIK          = true;   // [Weapon] ArmIK -- the arms reach from the body to the gun in the hand (M8)
     bool freeOffHand    = true;   // [Weapon] FreeOffHand -- off the foregrip the support hand follows the other controller
     bool  freeArmPose = true;  // [Weapon] FreeArmPose -- the free arm starts from the long gun's arm pose (pistol, grenade)
@@ -111,6 +122,7 @@ int   scopeColumn = 512;          // [Scope] Column -- px at the backbuffer's ri
     bool debugMeleeTrace = false;    // [Debug] MeleeTrace -- physical melee: each armed swing, its speeds, contacts, refusals
 bool  debugScopeView = false;    // [Debug] ScopeView -- the scope spike: the third view always on, from the right eye
 float debugScopeFov = 10.0f;     // [Debug] ScopeViewFov -- its FOV (degrees)
+bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: its holds, refusals, strikes
     bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)

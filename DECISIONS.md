@@ -745,3 +745,26 @@ special cases, such as upgraded guns that have bayonets."
 **Why:** the player (2026-10-03): "I don't want scopes to be a button press that brings up an overlay. I'd like scopes to
 feel natural, you bring them up to your eye and can see through them"; "Make both the game's value and realistic a toggle
 in menu. Two hands needed to use scope."
+
+
+### D51. The off-hand knife: the MP40's Dagger from a lower-back holster, with its own strikes -- Decided 2026-10-03
+`[OffHand] Knife=1` (shipped on, proven in the simulator; the menu's Weapons tab "Off-hand knife", the player's),
+`KnifeHold=toggle`, `KnifeGrip=forward`, `KnifeTilt=10`; `[Knife] Require=earned`, `Damage=150`; `[Holsters]
+LowerBack=Knife`, `LowerBackSpot=0 -58 -22 16`. OFFKNIFE-DESIGN.md.
+- **What:** once the Dagger is earned (the MP40's second upgrade), with a gun in the gun hand the off hand's grip at the
+  lower back draws the knife; a press at any holster puts it back (or let go, with KnifeHold=grip). A stab along the blade
+  or a slash across it into a soldier does the game's melee at the Dagger's 150; the off hand pulses.
+- **The knife:** the class default MP40 attachment's KnifeMeshComponent (found with FindObject), cloned onto the arms as a
+  third carrier the arm bake draws in the off hand -- no MP40 needs to be carried.
+- **The hold, level-triggered:** the host holds whether it is held (knifeFlags in the view seqlock), the game draws or
+  sheathes to match and publishes whether it can (shared block v25). The knife has no state to carry, so no event ring
+  (the pistol's design, A.3, was larger than needed).
+- **The strikes:** physical melee's per-hand state became a Channel; the knife is a second channel on the off hand's pose
+  with the bayonet's thrust / slash estimate at a hand-held blade's speeds (stab 2 m/s, slash 4 m/s). The gun's channel is
+  unchanged (its regressions identical). The knife strikes whether or not "Physical melee" is on (its own switch).
+- **Holsters:** six now (the pouch moved to the 7th spot); the hand's holster is the one it is deepest in (distance over
+  radius), not the list's last match -- the lower back touches the left hip.
+- **The code review** (7 findings confirmed, all fixed; OFFKNIFE-DESIGN 3): a draw impossible with FreeOffHand=0, a retry
+  after the host's let-go, every squeeze holding strikes off, a shared pulse slot, the test command undone.
+**Why:** the player (2026-10-03): "The mp40 has an upgrade that is a knife for its melee attack, can we make the knife an
+off hand equip with melee functionality? Add a holster to lower back for it."

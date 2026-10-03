@@ -160,6 +160,22 @@ Config LoadConfig(const std::wstring& dir) {
     if (c.scopeColumn < 0 || c.scopeColumn > 2048) c.scopeColumn = 512;
     c.debugScopeView = get(L"Debug", L"ScopeView", c.debugScopeView);
     c.debugScopeFov = getf(L"Debug", L"ScopeViewFov", c.debugScopeFov, 1.0f, 90.0f);
+    c.debugKnifeTrace = get(L"Debug", L"KnifeTrace", c.debugKnifeTrace);
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"OffHand", L"KnifeGrip", L"forward", v, 16, ini.c_str());
+        c.offKnifeForward = _wcsicmp(v, L"icepick") != 0;
+        GetPrivateProfileStringW(L"Knife", L"Require", L"earned", v, 16, ini.c_str());
+        c.knifeRequireEarned = _wcsicmp(v, L"carried") != 0;
+    }
+    c.offKnifeTilt = getf(L"OffHand", L"KnifeTilt", c.offKnifeTilt, -90.0f, 90.0f);
+    c.knifeDamage = getf(L"Knife", L"Damage", c.knifeDamage, 1.0f, 10000.0f);
+    c.knifeThrustSpeed = getf(L"Knife", L"ThrustSpeed", c.knifeThrustSpeed, 0.5f, 20.0f);
+    c.knifeThrustCos = getf(L"Knife", L"ThrustCos", c.knifeThrustCos, 0.0f, 1.0f);
+    c.knifeThrustTravel = getf(L"Knife", L"ThrustTravel", c.knifeThrustTravel, 0.0f, 1.0f);
+    c.knifeSlashSpeed = getf(L"Knife", L"SlashSpeed", c.knifeSlashSpeed, 0.5f, 30.0f);
+    c.knifeSlashCos = getf(L"Knife", L"SlashCos", c.knifeSlashCos, 0.0f, 1.0f);
+    c.knifeHandSpeed = getf(L"Knife", L"HandSpeed", c.knifeHandSpeed, 0.0f, 10.0f);
     c.viewModel      = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ViewModel", c.viewModel, ini.c_str()));
     if (c.viewModel < 0 || c.viewModel > 2) c.viewModel = 0;
     c.gripX          = getf(L"Weapon", L"GripX", c.gripX, -200.0f, 200.0f);

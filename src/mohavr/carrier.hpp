@@ -16,6 +16,9 @@ struct Slot {
 // which would keep the bake from it). The slot holds the clone before AttachComponent, so the bake knows it at its first
 // update. `who` prefixes the log lines; `trace` logs the success too. False, the slot empty, on any failure.
 bool Attach(Slot& slot, std::uintptr_t pawn, std::uintptr_t weapon, const char* who, bool trace);
+// The same with any MOHASkeletalMeshComponent `tmpl` (a class default's subobject: the MP40's KnifeMeshComponent), cloned
+// into `outer`.
+bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace);
 // Detaches the slot's clone (when its pawn is still the local one) and empties the slot.
 void Detach(Slot& slot, const char* who, bool trace);
 // The slot's clone while its pawn is the local pawn, else 0.

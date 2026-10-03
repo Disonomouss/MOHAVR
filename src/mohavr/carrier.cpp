@@ -96,15 +96,19 @@ void Detach(Slot& slot, const char* who, bool trace) {
 }
 
 bool Attach(Slot& slot, std::uintptr_t pawn, std::uintptr_t weapon, const char* who, bool trace) {
+    return AttachTemplate(slot, pawn, Obj(weapon, "DroppedPickupMesh"), weapon, who, trace);
+}
+
+bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace) {
     Detach(slot, who, trace);
-    const std::uintptr_t arms = Obj(pawn, "FPArms"), tmpl = Obj(weapon, "DroppedPickupMesh");
-    if (!arms || !tmpl) {
-        MLOG("%s: carrier -- arms %s, pickup mesh %s: none (nothing drawn in the hand)", who, names::Name(arms).c_str(),
+    const std::uintptr_t arms = Obj(pawn, "FPArms");
+    if (!arms || !tmpl || !outer) {
+        MLOG("%s: carrier -- arms %s, template %s: none (nothing drawn in the hand)", who, names::Name(arms).c_str(),
              names::Name(tmpl).c_str());
         return false;
     }
     Call clone(tmpl, "Clone");
-    if (!clone.Set("InOuter", &weapon, sizeof(weapon)) || !clone.Run()) return false;
+    if (!clone.Set("InOuter", &outer, sizeof(outer)) || !clone.Run()) return false;
     const std::uintptr_t c = clone.ReturnObject();
     if (!c || !names::IsA(c, "MOHASkeletalMeshComponent")) {
         MLOG("%s: carrier -- Clone gave %s (%s)", who, names::Name(c).c_str(), names::ClassName(c).c_str());

@@ -56,10 +56,13 @@ bool PistolZone(const std::string& cmd) {
     return c == "switchpistol";
 }
 
+// A holster that holds the off-hand knife (a host-only command: never run in the game).
+bool KnifeZone(const std::string& cmd) { return !_stricmp(cmd.c_str(), "Knife"); }
+
 }  // namespace
 
 const wchar_t* Hands::SpotName(int i) {
-    static const wchar_t* kNames[kSpots] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip", L"Chest", L"MagPouch"};
+    static const wchar_t* kNames[kSpots] = {L"RightShoulder", L"LeftShoulder", L"RightHip", L"LeftHip", L"Chest", L"LowerBack", L"MagPouch"};
     return i >= 0 && i < kSpots ? kNames[i] : L"";
 }
 
@@ -71,10 +74,11 @@ void Hands::Init(const std::wstring& ini) {
     zones_[2] = {L"RightHip", "SwitchPistol"};
     zones_[3] = {L"LeftHip", "SwitchGrenade"};
     zones_[4] = {L"Chest", "SwitchPistol"};  // the player, 2026-10-02: "Add chest holster" (the off-hand pistol's cross-draw)
+    zones_[5] = {L"LowerBack", "Knife"};     // the player, 2026-10-03: "Add a holster to lower back for it" (the off-hand knife)
     // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r. The last is
     // the manual reload's magazine pouch, at the middle of the belt (D21).
     const HolsterSpot builtIn[kSpots] = {{20, -22, -8, 16}, {-20, -22, -8, 16}, {22, -65, 0, 16}, {-22, -65, 0, 16}, {0, -34, 10, 12},
-                                         {0, -60, 14, 12}};
+                                         {0, -58, -22, 16}, {0, -60, 14, 12}};
     for (int i = 0; i < kSpots; ++i) {
         wchar_t v[64] = L"";
         if (i < kHolsters) {
@@ -108,9 +112,9 @@ void Hands::Init(const std::wstring& ini) {
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
     pouchReload_ = GetPrivateProfileIntW(L"Hands", L"PouchReload", 0, ini.c_str()) != 0;
     mirrorLeft_ = GetPrivateProfileIntW(L"Weapon", L"LeftHandMirror", 1, ini.c_str()) != 0;
-    MLOG("hands: holsters %d (%s / %s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
+    MLOG("hands: holsters %d (%s / %s / %s / %s / %s / %s), foregrip %d, reload gesture %d, left hand mirrored %d", holsters_,
          zones_[0].command.c_str(), zones_[1].command.c_str(), zones_[2].command.c_str(), zones_[3].command.c_str(),
-         zones_[4].command.c_str(), foregrip_, reloadGesture_, mirrorLeft_);
+         zones_[4].command.c_str(), zones_[5].command.c_str(), foregrip_, reloadGesture_, mirrorLeft_);
 }
 
 void Hands::SetCommand(int i, const std::string& c) {
@@ -126,7 +130,10 @@ Hands::Output Hands::Update(const Input& in) {
     // 5.5.)
     const bool nadeHeld = nade_ && nade_->Holding();
     const bool pistolHeld = pistol_ && pistol_->Holding();
-    const bool offBusy = nadeHeld || pistolHeld;  // the off hand holds something: no foregrip, no reload spots
+    const bool knifeHeld = knife_ && knife_->Holding();  // (as the frame starts: a draw or a put back below holds strikes off)
+    const bool offBusy = nadeHeld || pistolHeld || knifeHeld;  // the off hand holds something: no foregrip, no reload spots
+    // A holster in use: one that holds something (a knife holster only while the off-hand knife is on).
+    auto zoneLive = [&](int z) { return !zones_[z].command.empty() && (!KnifeZone(zones_[z].command) || (knife_ && knife_->On())); };
     if (static_cast<int>(in.startLeft) != lastStart_ && !offBusy) {
         lastStart_ = in.startLeft ? 1 : 0;
         gunHand_ = in.startLeft ? 0 : 1;
@@ -210,7 +217,7 @@ Hands::Output Hands::Update(const Input& in) {
     };
     if (holsters_)
         for (int z = 0; z < kHolsters; ++z)
-            if (!zones_[z].command.empty() || in.pouchShown) addSpot(kHolster, centre[z], spots_[z].r, false);
+            if (zoneLive(z) || in.pouchShown) addSpot(kHolster, centre[z], spots_[z].r, false);
     if (gunOk && foregripOk && in.fit.foreFwd >= 15.0f && !offBusy) addSpot(kForegrip, fore, foregripR_, true);
     if (gunOk && reloadOk && !offBusy) addSpot(kMagazine, mag, 0.10f * ringScale_, true);
     // The pouch: while the gun's magazine is out (a new one comes from it), or while the Holsters page moves it.
@@ -262,12 +269,18 @@ Hands::Output Hands::Update(const Input& in) {
     for (int h = 0; h < 2; ++h) {
         const bool ok = (in.valid & (1u << h)) != 0;
         const V3 hp = pt[h];
-        // Which holster spot the hand is in (a pulse when it enters one).
+        // Which holster spot the hand is in (a pulse when it enters one): the one it is deepest in, by its distance over the
+        // radius (the lower back touches the left hip; the list's order mustn't decide).
         int zone = -1;
         if (ok && holsters_) {
+            float best = 1.0f;
             for (int z = 0; z < kHolsters; ++z) {
-                if (zones_[z].command.empty()) continue;
-                if (Len(Sub(hp, centre[z])) < spots_[z].r) zone = z;
+                if (!zoneLive(z)) continue;
+                const float depth = Len(Sub(hp, centre[z])) / spots_[z].r;
+                if (depth < best) {
+                    best = depth;
+                    zone = z;
+                }
             }
         }
         // The off hand at the foregrip and a holster at once (the chest spot, a long gun at low ready): whichever centre the
@@ -326,6 +339,18 @@ Hands::Output Hands::Update(const Input& in) {
             consumed_[h] = true;
             continue;
         }
+        // The off hand holds the knife: likewise its presses are the knife's (a click at a holster puts it back).
+        if (h == o && knifeHeld) {
+            OffHandKnife::Pulse kp;
+            knife_->HeldPress(zone >= 0, kp);
+            if (kp.amp > 0.0f) {
+                out.pulse[h] = true;
+                out.pulseAmp[h] = kp.amp;
+                out.pulseMs[h] = kp.ms;
+            }
+            consumed_[h] = true;
+            continue;
+        }
         // The manual reload's spots first (the pouch touches the hip spots; RELOAD-DESIGN 3.4).
         if (h == o && reloadActive && reload_->TakePress({hp.x, hp.y, hp.z}, {pouch.x, pouch.y, pouch.z}, pouchR)) {
             consumed_[h] = true;
@@ -363,6 +388,20 @@ Hands::Output Hands::Update(const Input& in) {
                 MLOG("hands: the gun hand at %ls while the off hand holds the pistol -- refused", zones_[zone].key);
                 continue;
             }
+        }
+        // The off-hand knife (OFFKNIFE-DESIGN): the off hand at a knife holster draws it while a gun is in the other hand;
+        // the gun hand there does nothing (the command is the host's, never the game's).
+        if (zone >= 0 && KnifeZone(zones_[zone].command)) {
+            OffHandKnife::Pulse kp;
+            if (h == o && gunOk && knife_) knife_->DrawPress(kp);
+            else kp = {0.2f, 60.0f};
+            out.pulse[h] = true;
+            out.pulseAmp[h] = kp.amp;
+            out.pulseMs[h] = kp.ms;
+            consumed_[h] = true;
+            if (h != o || !gunOk) MLOG("hands: %s hand at %ls -- the knife is the off hand's, with a gun in the other", h ? "right" : "left",
+                                       zones_[zone].key);
+            continue;
         }
         if (zone >= 0) {
             out.command = zones_[zone].command;
@@ -519,11 +558,31 @@ Hands::Output Hands::Update(const Input& in) {
         out.targetOk[9] = true;
         out.target[9] = {centre[4].x - hpOff.x, centre[4].y - hpOff.y, centre[4].z - hpOff.z};
     }
+    // The off-hand knife, every frame (grip mode: letting go puts it back).
+    if (knife_) {
+        OffHandKnife::Pulse kp;
+        knife_->Frame(held_[o], kp);
+        if (kp.amp > 0.0f) {
+            out.pulse[o] = true;
+            out.pulseAmp[o] = std::fmax(out.pulseAmp[o], kp.amp);
+            out.pulseMs[o] = std::fmax(out.pulseMs[o], kp.ms);
+        }
+        // Tests (pad_cmd.txt hand=l,@back): the first knife holster, moved by the hand point like the other spots.
+        const V3 hpOff = Sub(pt[o], P(in.aim[o].position));
+        for (int z = 0; z < kHolsters && holsters_; ++z)
+            if (KnifeZone(zones_[z].command)) {
+                out.targetOk[10] = true;
+                out.target[10] = {centre[z].x - hpOff.x, centre[z].y - hpOff.y, centre[z].z - hpOff.z};
+                break;
+            }
+    }
     out.twoHanded = twoHanded_;
     out.gunHand = gunHand_;
     if (!in.gestures) gesturesOffAt_ = in.now;
     out.meleeBusy = (gunPressAt_ >= 0.0 && in.now - gunPressAt_ < 0.4) || (reload_ && reload_->GunHandBusy()) ||
                     (gesturesOffAt_ >= 0.0 && in.now - gesturesOffAt_ < 0.15);
+    if (knife_ && knife_->Holding() != knifeHeld) offGripAt_ = in.now;
+    out.knifeBusy = (offGripAt_ >= 0.0 && in.now - offGripAt_ < 0.4) || (gesturesOffAt_ >= 0.0 && in.now - gesturesOffAt_ < 0.15);
     if (gunOk && g == gunHand_) {
         out.gunValid = true;
         out.gun = gun;

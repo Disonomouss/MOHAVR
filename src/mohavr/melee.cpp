@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cwchar>
+#include <initializer_list>
 #include <string>
 
 #include "../common/shared_frame.hpp"
@@ -16,6 +17,7 @@
 #include "bridge.hpp"
 #include "carrier.hpp"
 #include "config.hpp"
+#include "knife.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "offhand.hpp"
@@ -142,10 +144,6 @@ struct Sample {
     bool   two = false, tracked = false;
 };
 constexpr int kHist = 64;  // ~0.7 s at 90 Hz
-Sample g_hist[kHist];
-int    g_hn = 0, g_hhead = 0;
-
-const Sample& Hist(int back) { return g_hist[(g_hhead + kHist - 1 - back) % kHist]; }  // 0 = the newest
 
 // The head's heading frame (right, forward) at a sample.
 void Heading(const Sample& s, float (&right)[3], float (&fwd)[3]) {
@@ -181,8 +179,8 @@ void PointRel(const Sample& s, const float* o, float* out) {
 
 // --- the strikes -----------------------------------------------------------------------------------------------------
 
-enum Kind { kButt, kGrip, kFront, kBayonet, kKinds };
-const char* const kKindName[kKinds] = {"butt", "grip", "front", "bayonet"};
+enum Kind { kButt, kGrip, kFront, kBayonet, kKnife, kKinds };
+const char* const kKindName[kKinds] = {"butt", "grip", "front", "bayonet", "knife"};
 
 struct Strike {
     Kind   kind = kButt;
@@ -191,6 +189,7 @@ struct Strike {
     // The centre's lever: its place in the gun pose's frame (LOCAL metres: right, up, back), from the drawn gun while the
     // weapon is quiet -- a constant of the held gun, so the game's own gun animation (a kick) is never speed.
     float  o[3]{};
+    float  axis[3]{0, 0, -1};  // the blade's direction in the same frame (the gun's barrel: -Z)
     bool   haveLever = false;
     // Drawn (world) positions, last Draw.
     float  prev[3][3]{};
@@ -200,7 +199,7 @@ struct Strike {
     double armedUntil = -1.0;   // QPC seconds (the peak hold)
     bool   firstArmed = false;  // armed since the last Draw: also swept from the hand (a point already inside a body)
     bool   ready = true;        // false after a hit until the speed drops below half its gate (one swing, one hit)
-    bool   thrust = false;      // this swing's: a bayonet thrust (else a stroke or a slash)
+    bool   thrust = false;      // this swing's: a blade's thrust (else a stroke or a slash)
     bool   worldFx = false;     // this swing's world contact already shown
     float  speed = 0.0f, hand = 0.0f, along = 0.0f, travel = 0.0f, turn = 0.0f;  // the newest estimate's
     float  peak = 0.0f, peakHand = 0.0f, gate = 0.0f;
@@ -209,19 +208,35 @@ struct Strike {
     bool   loggedStep = false;  // (the trace: a tracking step)
 };
 
-Strike         g_strikes[4];
-int            g_strikeN = 0;
+// One hand's strikes: the gun in the gun hand, the off-hand knife (OFFKNIFE-DESIGN A4) -- its pose's history (gp / gq: the gun
+// pose, or the off hand's aim pose), its strike points and their swings, its gates and re-melee interval.
+struct Gates {
+    float butt, hand, travel, thrust, thrustCos, thrustTravel, maxTurn, slash, slashCos, bladeHand;
+};
+struct Channel {
+    Sample        hist[kHist];
+    int           hn = 0, hhead = 0;
+    double        lastT = -1.0;          // the newest host display time taken (s)
+    double        glitchUntil = -1.0;    // display time: no arming before (a tracking jump)
+    float         quietUntil = -1.0f;    // game time: no strike before (the re-melee interval)
+    Strike        strikes[4];
+    int           strikeN = 0;
+    Gates         gates{};
+    std::uint32_t epochSeen = 0xFFFFFFFFu;
+    const Sample& Hist(int back) const { return hist[(hhead + kHist - 1 - back) % kHist]; }  // 0 = the newest
+};
+Channel        g_gun, g_knife;
 std::uintptr_t g_strikesFor = 0;  // the weapon they are for
 int            g_strikesLevel = -9;
 std::uintptr_t g_strikesAtt = 0;
 bool           g_leverMirrored = false;
 
-bool Blade(Kind k) { return k == kFront || k == kBayonet; }
+bool Blade(Kind k) { return k == kFront || k == kBayonet || k == kKnife; }
 
 // The gun's strikes at its upgrade level: per kind, the row at the highest level not above it. The launchers strike with
 // nothing (their ends are behind the head and a metre out: the right stick's melee only).
 void BuildStrikes(std::uintptr_t gun, std::uintptr_t att, int level) {
-    g_strikeN = 0;
+    g_gun.strikeN = 0;
     g_strikesFor = gun;
     g_strikesLevel = level;
     g_strikesAtt = att;
@@ -237,8 +252,8 @@ void BuildStrikes(std::uintptr_t gun, std::uintptr_t att, int level) {
         if (!best[k] || s.level > best[k]->level) best[k] = &s;
     }
     auto add = [&](Kind kind, const MeleeStrike* s) {
-        if (!s || g_strikeN >= 4) return;
-        Strike& st = g_strikes[g_strikeN++];
+        if (!s || g_gun.strikeN >= 4) return;
+        Strike& st = g_gun.strikes[g_gun.strikeN++];
         st = Strike{};
         st.kind = kind;
         std::memcpy(st.sample[0], s->mesh, sizeof(st.sample[0]));
@@ -266,20 +281,20 @@ void BuildStrikes(std::uintptr_t gun, std::uintptr_t att, int level) {
         add(kBayonet, best[kBayonet]);
     }
     std::string what;
-    for (int i = 0; i < g_strikeN; ++i) {
+    for (int i = 0; i < g_gun.strikeN; ++i) {
         char b[96];
-        sprintf_s(b, " %s (%.1f %.1f %.1f, %d point%s)", kKindName[g_strikes[i].kind], g_strikes[i].sample[0][0], g_strikes[i].sample[0][1],
-                  g_strikes[i].sample[0][2], g_strikes[i].n, g_strikes[i].n > 1 ? "s" : "");
+        sprintf_s(b, " %s (%.1f %.1f %.1f, %d point%s)", kKindName[g_gun.strikes[i].kind], g_gun.strikes[i].sample[0][0], g_gun.strikes[i].sample[0][1],
+                  g_gun.strikes[i].sample[0][2], g_gun.strikes[i].n, g_gun.strikes[i].n > 1 ? "s" : "");
         what += b;
     }
     MLOG("melee: %s at level %d strikes with:%s", key.c_str(), level,
-         g_strikeN ? what.c_str() : launcher ? " nothing (a launcher: the right stick's melee only)" : " nothing (no strike points)");
+         g_gun.strikeN ? what.c_str() : launcher ? " nothing (a launcher: the right stick's melee only)" : " nothing (no strike points)");
 }
 
 // The swings start again (the levers stay: they belong to the gun).
-void ResetSwings() {
-    for (int i = 0; i < g_strikeN; ++i) {
-        Strike& s = g_strikes[i];
+void ResetSwings(Channel& c) {
+    for (int i = 0; i < c.strikeN; ++i) {
+        Strike& s = c.strikes[i];
         s.havePrev = false;
         s.over = 0;
         s.armedUntil = -1.0;
@@ -290,9 +305,9 @@ void ResetSwings() {
         s.loggedStep = false;
     }
 }
-void ResetHistory() {
-    g_hn = g_hhead = 0;
-    ResetSwings();
+void ResetHistory(Channel& c) {
+    c.hn = c.hhead = 0;
+    ResetSwings(c);
 }
 
 // --- the state -------------------------------------------------------------------------------------------------------
@@ -300,10 +315,11 @@ void ResetHistory() {
 std::uintptr_t g_pawn = 0;
 bool           g_wasOn = false;
 std::string    g_why;
-double         g_lastT = -1.0;          // the newest host display time taken (s)
-double         g_glitchUntil = -1.0;    // display time: no arming before (a tracking jump)
-float          g_quietUntil = -1.0f;    // game time: no strike before (the weapon's re-melee interval)
-int            g_skipDraws = 0;         // contact skipped this many Draws (a snap turn's carry, a teleport, a reset)
+bool           g_knifeOn = false;
+std::string    g_knifeWhy;
+bool           g_knifeMirrored = false;
+int            g_skipDraws = 0;
+int            g_knifeSkip = 0;         // (the knife's: its own count down)         // contact skipped this many Draws (a snap turn's carry, a teleport, a reset)
 std::uint32_t  g_epochSeen = 0xFFFFFFFFu, g_flagsSeen = 0xFFFFFFFFu, g_recenterSeen = 0xFFFFFFFFu;
 float          g_lastYaw = 0.0f, g_lastLoc[3]{};
 bool           g_havePawnPose = false;
@@ -427,9 +443,9 @@ float RecentSpeed(float now) {
 // damage, the player's controller, the impulse along the swing, the melee damage type and the hit's bone; then the
 // attachment's melee impact effects (re-read after the damage: a kill may change the weapon). `bayonet`: the blade's
 // damage (InstantHitDamage[2]: 200 on the M12 at level 2), else the weapon's base melee damage (InstantHitDamageThird_TUNE,
-// 50: the upgrades never write it).
-bool ApplyHit(std::uintptr_t pawn, std::uintptr_t gun, std::uint8_t (&impact)[kImpact], bool bayonet, float now, int& dmgOut, int& healthBefore,
-              int& healthAfter) {
+// 50: the upgrades never write it). `own` > 0: the strike's own damage (the off-hand knife's).
+bool ApplyHit(std::uintptr_t pawn, std::uintptr_t gun, std::uint8_t (&impact)[kImpact], bool bayonet, float own, float now, int& dmgOut,
+              int& healthBefore, int& healthAfter) {
     std::uintptr_t actor = 0;
     std::memcpy(&actor, impact, 4);
     const std::uintptr_t ctrl = Obj(pawn, "Controller");
@@ -438,7 +454,7 @@ bool ApplyHit(std::uintptr_t pawn, std::uintptr_t gun, std::uint8_t (&impact)[kI
     float dmg2 = -1.0f;
     ArrayAt(gun, "InstantHitDamage", 2, &dmg2, sizeof(dmg2));
     if (base <= 0.0f) base = dmg2 > 0.0f ? dmg2 : 50.0f;
-    float dmg = bayonet && dmg2 > 0.0f ? dmg2 : base;
+    float dmg = own > 0.0f ? own : bayonet && dmg2 > 0.0f ? dmg2 : base;
     // Above GroundSpeed (a sprint) the target's Health, the game's rule.
     const float speed = RecentSpeed(now), ground = Float(pawn, "GroundSpeed", 490.0f);
     const bool isPawn = names::IsA(actor, "Pawn");
@@ -474,8 +490,8 @@ bool ApplyHit(std::uintptr_t pawn, std::uintptr_t gun, std::uint8_t (&impact)[kI
 // (the mirror and the catch-up undone) -- only while the weapon is quiet (Active, no shot or ammo change for 0.5 s): the
 // game's own animation of the gun (the kick) never enters them.
 void TakeLevers(const float (&G)[16], const float (&ctrlInv)[16], const float* R, const float* Winv, bool mirrored, float upm) {
-    for (int i = 0; i < g_strikeN; ++i) {
-        Strike& s = g_strikes[i];
+    for (int i = 0; i < g_gun.strikeN; ++i) {
+        Strike& s = g_gun.strikes[i];
         float w[3];
         Xform(s.sample[0], G, w);
         if (R) Xform(w, R, w);        // back out of the mirror world
@@ -503,31 +519,28 @@ void PointLocal(const Sample& s, const float* o, float* out) {
 // isn't (the second review of D49). Per strike: its speed, the hand's (the faster hand when two-handed), along the blade,
 // the gun's turn.
 constexpr float kSustain = 0.5f;
-void Estimate() {
-    if (g_hn < 3) return;
-    const Sample& a = Hist(0);
-    const Sample& q = Hist(1);  // the sample before the newest
+void Estimate(Channel& ch) {
+    if (ch.hn < 3) return;
+    const Sample& a = ch.Hist(0);
+    const Sample& q = ch.Hist(1);  // the sample before the newest
     int k = 1;
-    while (k < g_hn - 1 && a.t - Hist(k).t < 0.030) ++k;
-    const Sample& b = Hist(k);
+    while (k < ch.hn - 1 && a.t - ch.Hist(k).t < 0.030) ++k;
+    const Sample& b = ch.Hist(k);
     const float dt = static_cast<float>(a.t - b.t), dt1 = static_cast<float>(a.t - q.t);
     if (dt <= 0.0f || dt > 0.12f || dt1 <= 0.0f) return;
     const float zero[3] = {0, 0, 0};
     // The travel window: the sample ~0.25 s back.
     int k2 = k;
-    while (k2 < g_hn - 1 && a.t - Hist(k2).t < 0.25) ++k2;
-    const Sample& c = Hist(k2);
+    while (k2 < ch.hn - 1 && a.t - ch.Hist(k2).t < 0.25) ++k2;
+    const Sample& c = ch.Hist(k2);
     // The gun's turn over the window (in the room).
     const float qd = std::fabs(a.gq[0] * b.gq[0] + a.gq[1] * b.gq[1] + a.gq[2] * b.gq[2] + a.gq[3] * b.gq[3]);
     const float turn = 2.0f * std::acos(qd > 1.0f ? 1.0f : qd) / dt;
     // Per frame (0 the room, 1 against the head): the hand's velocity (the faster hand two-handed) and over the newest sample
     // alone, its move over the travel window, the barrel's direction (the gun pose's forward, -Z).
     struct Frame {
-        float vh[3], vh1[3], hand, handDisp[3], blade[3];
+        float vh[3], vh1[3], hand, handDisp[3];
     } fr[2];
-    const float fwdXr[3] = {0, 0, -1};
-    float bw[3];
-    Rotate(a.gq, fwdXr, bw);
     for (int f = 0; f < 2; ++f) {
         Frame& F = fr[f];
         float ha[3], hb[3], hc[3], hq[3];
@@ -548,14 +561,16 @@ void Estimate() {
             const float vo[3] = {(oa[0] - ob[0]) / dt, (oa[1] - ob[1]) / dt, (oa[2] - ob[2]) / dt};
             if (Len(vo) > F.hand) F.hand = Len(vo);
         }
-        if (f == 0) std::memcpy(F.blade, bw, sizeof(bw));
-        else RelDir(a, bw, F.blade);
     }
     const float hand = std::fmin(fr[0].hand, fr[1].hand);
     const double now = Now();
-    for (int i = 0; i < g_strikeN; ++i) {
-        Strike& s = g_strikes[i];
+    for (int i = 0; i < ch.strikeN; ++i) {
+        Strike& s = ch.strikes[i];
         if (!s.haveLever) continue;
+        // The blade's direction (the gun's barrel; the knife's blade) in each frame.
+        float blade[2][3];
+        Rotate(a.gq, s.axis, blade[0]);
+        RelDir(a, blade[0], blade[1]);
         // The gates (MELEE-DESIGN 2.4) in each frame: a butt or grip stroke; a blade's thrust along the barrel (the hand: a
         // thrust drives the whole gun), or its slash across it.
         float speed = 1e9f, travel = 1e9f, along = 1e9f;
@@ -572,21 +587,21 @@ void Estimate() {
             const float v[3] = {(pa[0] - pb[0]) / dt, (pa[1] - pb[1]) / dt, (pa[2] - pb[2]) / dt};
             const float d[3] = {pa[0] - pc[0], pa[1] - pc[1], pa[2] - pc[2]};
             const float d1[3] = {pa[0] - pq[0], pa[1] - pq[1], pa[2] - pq[2]};
-            const float sl = Len(v), tr = Len(d), al = Dot(F.vh, F.blade);
-            const float sl1 = Len(d1) / dt1, al1 = Dot(F.vh1, F.blade);  // (the newest sample alone)
+            const float sl = Len(v), tr = Len(d), al = Dot(F.vh, blade[f]);
+            const float sl1 = Len(d1) / dt1, al1 = Dot(F.vh1, blade[f]);  // (the newest sample alone)
             speed = std::fmin(speed, sl);
             travel = std::fmin(travel, tr);
             along = std::fmin(along, al);
             if (!Blade(s.kind)) {
-                win[f] = sl >= g_cfg.meleeButtSpeed && F.hand >= g_cfg.meleeHandSpeed && tr >= g_cfg.meleeTravel;
-                pass[f] = win[f] && sl1 >= kSustain * g_cfg.meleeButtSpeed;
+                win[f] = sl >= ch.gates.butt && F.hand >= ch.gates.hand && tr >= ch.gates.travel;
+                pass[f] = win[f] && sl1 >= kSustain * ch.gates.butt;
             } else {
-                thrWin[f] = al >= g_cfg.meleeThrustSpeed && al >= g_cfg.meleeThrustCos * Len(F.vh) &&
-                            Dot(F.handDisp, F.blade) >= g_cfg.meleeThrustTravel && turn < g_cfg.meleeMaxTurn;
-                slaWin[f] = sl >= g_cfg.meleeSlashSpeed && std::fabs(Dot(v, F.blade)) <= g_cfg.meleeSlashCos * sl &&
-                            F.hand >= g_cfg.meleeBladeHandSpeed && tr >= g_cfg.meleeTravel;
-                thr[f] = thrWin[f] && al1 >= kSustain * g_cfg.meleeThrustSpeed;
-                sla[f] = slaWin[f] && sl1 >= kSustain * g_cfg.meleeSlashSpeed;
+                thrWin[f] = al >= ch.gates.thrust && al >= ch.gates.thrustCos * Len(F.vh) &&
+                            Dot(F.handDisp, blade[f]) >= ch.gates.thrustTravel && turn < ch.gates.maxTurn;
+                slaWin[f] = sl >= ch.gates.slash && std::fabs(Dot(v, blade[f])) <= ch.gates.slashCos * sl &&
+                            F.hand >= ch.gates.bladeHand && tr >= ch.gates.travel;
+                thr[f] = thrWin[f] && al1 >= kSustain * ch.gates.thrust;
+                sla[f] = slaWin[f] && sl1 >= kSustain * ch.gates.slash;
                 win[f] = thrWin[f] || slaWin[f];
                 pass[f] = thr[f] || sla[f];
             }
@@ -598,7 +613,7 @@ void Estimate() {
         s.turn = turn;
         const bool thrust = thr[0] && thr[1];
         const bool fast = Blade(s.kind) ? thrust || (sla[0] && sla[1]) : pass[0] && pass[1];
-        const float gate = !Blade(s.kind) ? g_cfg.meleeButtSpeed : thrust ? g_cfg.meleeThrustSpeed : g_cfg.meleeSlashSpeed;
+        const float gate = !Blade(s.kind) ? ch.gates.butt : thrust ? ch.gates.thrust : ch.gates.slash;
         if (pass[0] != pass[1]) {
             if (!s.loggedOne) {
                 s.loggedOne = true;
@@ -618,10 +633,10 @@ void Estimate() {
             s.loggedStep = false;
         }
         // Re-armed once slow again; inferred (untracked) samples and a tracking jump never arm.
-        if (!s.ready && speed < 0.5f * (Blade(s.kind) ? g_cfg.meleeSlashSpeed : g_cfg.meleeButtSpeed) &&
-            (!Blade(s.kind) || along < 0.5f * g_cfg.meleeThrustSpeed))
+        if (!s.ready && speed < 0.5f * (Blade(s.kind) ? ch.gates.slash : ch.gates.butt) &&
+            (!Blade(s.kind) || along < 0.5f * ch.gates.thrust))
             s.ready = true;
-        s.over = fast && a.tracked && b.tracked && a.t >= g_glitchUntil ? s.over + 1 : 0;
+        s.over = fast && a.tracked && b.tracked && a.t >= ch.glitchUntil ? s.over + 1 : 0;
         if (s.over >= 2 && s.ready) {
             if (now > s.armedUntil) {  // a new swing
                 s.peak = s.peakHand = 0.0f;
@@ -674,9 +689,18 @@ bool Seen(std::uintptr_t pawn, std::uintptr_t target, const float (&grip)[3], co
     return true;
 }
 
+// The host's pulse: kind 1 a soldier, 2 an actor, 3 the world; | 0x100 the off-hand knife's (its own counter).
 void Feedback(shared::Header* hdr, std::uint32_t kind, float power) {
     if (!hdr) return;
-    hdr->meleePower = power < 0.0f ? 0.0f : power > 1.0f ? 1.0f : power;
+    power = power < 0.0f ? 0.0f : power > 1.0f ? 1.0f : power;
+    if (kind & 0x100u) {
+        hdr->knifePower = power;
+        hdr->knifeKind = kind & 0xFFu;
+        _ReadWriteBarrier();
+        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->knifeHits));
+        return;
+    }
+    hdr->meleePower = power;
     hdr->meleeKind = kind;
     _ReadWriteBarrier();
     InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->meleeHits));
@@ -684,8 +708,11 @@ void Feedback(shared::Header* hdr, std::uint32_t kind, float power) {
 
 // A contact along start -> end (a strike point's sweep): the first thing met decides; past the world (effects only, the
 // swing goes on) the sweep looks again, twice. True if the swing was spent (a soldier, or a prop meant for it).
-bool Contact(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t gun, Strike& st, const float (&start)[3], const float (&end)[3],
-             const float (&grip)[3], float now) {
+bool Contact(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t gun, Channel& ch, Strike& st, const float (&start)[3],
+             const float (&end)[3], const float (&grip)[3], float now) {
+    const bool knife = st.kind == kKnife;
+    const float own = knife ? g_cfg.knifeDamage : -1.0f;
+    const std::uint32_t hand = knife ? 0x100u : 0u;  // (meleeKind bit8: the off hand's)
     float from[3] = {start[0], start[1], start[2]};
     float dir[3] = {end[0] - start[0], end[1] - start[1], end[2] - start[2]};
     const float l = Len(dir);
@@ -712,19 +739,20 @@ bool Contact(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t gun, Strik
             if (Recently(actor, now)) return false;
             if (g_cfg.meleeLOS && !Seen(pawn, actor, grip, hitLoc)) return false;
             int dmg = 0, before = -1, after = -1;
-            const bool ok = ApplyHit(pawn, gun, impact, st.kind == kBayonet, now, dmg, before, after);
+            const bool ok = ApplyHit(pawn, gun, impact, st.kind == kBayonet, own, now, dmg, before, after);
             ++g_hits;
             float interval = Float(gun, "MeleeInterruptInterval", 0.6f);
             const float impactI = Float(gun, "MeleeImpactInterval", 0.3f);
             if (impactI > interval) interval = impactI;  // (GetMeleeInterruptInterval: the larger)
-            g_quietUntil = now + interval;
+            if (knife) interval = 0.4f;  // (the knife's own: the MP40's knife melee)
+            ch.quietUntil = now + interval;
             Remember(actor, now + g_cfg.meleeTargetCooldown);
             st.ready = false;
             st.armedUntil = -1.0;
             st.loggedArm = false;
-            Feedback(hdr, 1u, st.gate > 0.0f ? st.peak / st.gate - 1.0f : 0.0f);
+            Feedback(hdr, 1u | hand, st.gate > 0.0f ? st.peak / st.gate - 1.0f : 0.0f);
             MLOG("melee: strike %u -- %s%s at %.1f m/s (hand %.1f) hit %s (%s) for %d: Health %d -> %d%s", g_hits, kKindName[st.kind],
-                 st.kind == kBayonet ? (st.thrust ? " thrust" : " slash") : "", st.peak, st.peakHand, names::Name(actor).c_str(), bone.c_str(),
+                 st.kind == kBayonet || knife ? (st.thrust ? " thrust" : " slash") : "", st.peak, st.peakHand, names::Name(actor).c_str(), bone.c_str(),
                  dmg, before, after, ok ? "" : " -- TakeDamage did not run");
             return true;
         }
@@ -736,21 +764,21 @@ bool Contact(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t gun, Strik
         if (!Bit(actor, "bStatic") && MeleeProp(actor, dtype) && !Recently(actor, now)) {
             if (g_cfg.meleeLOS && !Seen(pawn, actor, grip, hitLoc)) return false;
             int dmg = 0, before = -1, after = -1;
-            ApplyHit(pawn, gun, impact, st.kind == kBayonet, now, dmg, before, after);
+            ApplyHit(pawn, gun, impact, st.kind == kBayonet, own, now, dmg, before, after);
             ++g_hits;
-            g_quietUntil = now + 0.25f;
+            ch.quietUntil = now + 0.25f;
             Remember(actor, now + 0.5f);
             st.ready = false;
             st.armedUntil = -1.0;
             st.loggedArm = false;
-            Feedback(hdr, 2u, st.gate > 0.0f ? st.peak / st.gate - 1.0f : 0.0f);
+            Feedback(hdr, 2u | hand, st.gate > 0.0f ? st.peak / st.gate - 1.0f : 0.0f);
             MLOG("melee: strike %u -- %s at %.1f m/s hit %s (a prop) for %d", g_hits, kKindName[st.kind], st.peak, names::Name(actor).c_str(), dmg);
             return true;
         }
         if (!st.worldFx) {
             st.worldFx = true;
             Effects(pawn, impact);
-            Feedback(hdr, 3u, 0.0f);
+            Feedback(hdr, 3u | hand, 0.0f);
             TRACE_LOG("melee: %s struck %s (the world: effects only)", kKindName[st.kind], names::Name(actor).c_str());
         }
         for (int j = 0; j < 3; ++j) from[j] = hitLoc[j] + dir[j] * 1.0f;  // on past it
@@ -759,11 +787,191 @@ bool Contact(shared::Header* hdr, std::uintptr_t pawn, std::uintptr_t gun, Strik
     return false;
 }
 
+// The off-hand knife's strikes (OFFKNIFE-DESIGN A4): its tip and the blade's middle on the off hand's pose (the knife's place
+// in the hand is a constant of the hold, so the levers come straight from it: no quiet gun to wait for), with the bayonet's
+// thrust and slash gates at the knife's numbers. Independent of the gun's: whatever the gun hand is doing, the knife strikes.
+void KnifeDraw(shared::Header* hdr, std::uintptr_t pawn, const shared::Pose (&hands)[2], const shared::Pose& head, std::int64_t xrTime,
+               std::uint32_t bits, std::uint32_t flags, float now) {
+    Channel& c = g_knife;
+    const std::uintptr_t inv = Obj(pawn, "InvManager"), gun = Obj(pawn, "Weapon");
+    float kc[16];
+    const char* hard = !(bits & 8u) ? "no knife held" : !bridge::HostRunning() ? "no host"
+                     : !knife::CarrierComponent() || !knife::KnifeInController(kc) ? "the knife isn't drawn"
+                     : !gun || !names::IsA(gun, "EALAWeapon") ? "no gun in hand" : nullptr;
+    if (hard) {
+        if (g_knifeOn || (c.strikeN && g_knifeWhy != hard)) MLOG("melee: the knife off -- %s", hard);
+        g_knifeOn = false;
+        g_knifeWhy = hard;
+        if (c.strikeN) {
+            ResetHistory(c);
+            c.strikeN = 0;
+        }
+        return;
+    }
+    const float upm = hdr->unitsPerMeter > 1.0f && hdr->unitsPerMeter < 1000.0f ? hdr->unitsPerMeter : 100.0f;
+    float R[16];
+    const bool mirrored = viewmodel::DrawMirror(R);
+    // Its strike: the tip and the blade's middle (DE_MP40_altFire_Knife: the blade along mesh +Z from the guard at 0 to the
+    // tip at 32.5; tools/melee_points.py's numbers for a 1-bone mesh), its lever and blade in the off hand's aim pose frame
+    // (x right, y up, z back, m) -- from the knife in the controller's frame (forward, right, up; units), the right
+    // un-mirrored in left-hand mode.
+    if (!c.strikeN || mirrored != g_knifeMirrored) {
+        g_knifeMirrored = mirrored;
+        c.strikeN = 1;
+        Strike& s = c.strikes[0];
+        s = Strike{};
+        s.kind = kKnife;
+        const float tip[3] = {0.0f, 0.0f, 32.5f}, mid[3] = {0.0f, 0.0f, 16.0f};
+        std::memcpy(s.sample[0], tip, sizeof(tip));
+        std::memcpy(s.sample[1], mid, sizeof(mid));
+        s.n = 2;
+        ResetHistory(c);
+    }
+    {
+        Strike& s = c.strikes[0];
+        const float base[3] = {0, 0, 0};
+        float t[3], b[3];
+        Xform(s.sample[0], kc, t);
+        Xform(base, kc, b);
+        auto toXr = [&](const float* r, float* out, float scale) {
+            out[0] = (mirrored ? -r[1] : r[1]) * scale;
+            out[1] = r[2] * scale;
+            out[2] = -r[0] * scale;
+        };
+        toXr(t, s.o, 1.0f / upm);
+        float d[3] = {t[0] - b[0], t[1] - b[1], t[2] - b[2]};
+        const float l = Len(d);
+        if (l > 1.0f) toXr(d, s.axis, 1.0f / l);
+        s.haveLever = true;
+    }
+    // A jump the host knows of (the knife drawn or put back, the off hand held by HoldLost or back, the gun hand changed, a
+    // recentre): no speed across it.
+    const std::uint32_t epoch = (bits >> 16) & 0xFFu;
+    if (epoch != c.epochSeen) {
+        c.epochSeen = epoch;
+        ResetHistory(c);
+    }
+    // A new host sample: the off hand's aim pose.
+    const double ts = static_cast<double>(xrTime) * 1e-9;
+    bool newSample = false;
+    if (xrTime && ts != c.lastT) {
+        newSample = true;
+        const shared::Pose& off = hands[(flags & 4u) ? 1 : 0];
+        Sample smp;
+        smp.t = ts;
+        smp.at = Now();
+        const float gp[3] = {off.px, off.py, off.pz}, gq[4] = {off.qx, off.qy, off.qz, off.qw};
+        std::memcpy(smp.gp, gp, sizeof(gp));
+        std::memcpy(smp.gq, gq, sizeof(gq));
+        const float hp[3] = {head.px, head.py, head.pz}, hq[4] = {head.qx, head.qy, head.qz, head.qw};
+        std::memcpy(smp.hp, hp, sizeof(hp));
+        std::memcpy(smp.hq, hq, sizeof(hq));
+        smp.tracked = (bits & 16u) != 0;
+        if (c.hn > 0) {
+            const Sample& last = c.Hist(0);
+            const float dts = static_cast<float>(ts - last.t);
+            if (dts > 0.1f) {
+                ResetHistory(c);
+            } else {
+                const float qd = std::fabs(smp.gq[0] * last.gq[0] + smp.gq[1] * last.gq[1] + smp.gq[2] * last.gq[2] + smp.gq[3] * last.gq[3]);
+                const float turned = 2.0f * std::acos(qd > 1.0f ? 1.0f : qd);
+                const float dg = Dist(smp.gp, last.gp), dh = Dist(smp.hp, last.hp);
+                if (dts <= 0.0f || dg > 20.0f * dts || dh > 20.0f * dts || turned > 40.0f * dts) {
+                    TRACE_LOG("melee: the knife -- a tracking jump in %.0f ms (the off hand %.2f m, the head %.2f m, turned %.0f deg) -- "
+                              "no strike for 0.1 s", dts * 1000.0f, dg, dh, turned * 57.2958f);
+                    ResetHistory(c);
+                    c.glitchUntil = ts + 0.1;
+                }
+            }
+        }
+        c.hist[c.hhead] = smp;
+        c.hhead = (c.hhead + 1) % kHist;
+        if (c.hn < kHist) ++c.hn;
+        c.lastT = ts;
+    }
+    // Soft gates: the off hand busy (a press or a release just now, a menu), the game's menus and gates, the gun's own melee
+    // (the button melee: no double hit).
+    const char* why = nullptr;
+    const char* baseWhy = "";
+    if (bits & 32u) why = "the off hand is busy (a press, the menu)";
+    else if (hdr->gameUiMenu) why = "a game menu";
+    else if (!offhand::BaseAvailable(pawn, inv, gun, baseWhy)) why = baseWhy;
+    else if (Obj(Obj(pawn, "WorldInfo"), "Pauser")) why = "paused";
+    else if (names::StateName(gun).find("Melee") != std::string::npos) why = "the gun's own melee";
+    const bool on = !why;
+    if (on != g_knifeOn || (!on && g_knifeWhy != why)) {
+        MLOG("melee: the knife %s", on ? "on" : (std::string("off -- ") + why).c_str());
+        g_knifeOn = on;
+        g_knifeWhy = why ? why : "";
+    }
+    if (newSample) Estimate(c);
+    // The drawn knife (as the bake draws it: its frame x the body's move since the view, through the mirror) and the off hand.
+    float gw[16], ctrl[16], offF[16], W[16];
+    bool offValid = false, two = false;
+    if (!knife::CarrierFrame(gw) || !viewmodel::HandFrames(ctrl, offF, offValid, two) || !offValid) {
+        ResetSwings(c);
+        return;
+    }
+    if (g_cfg.catchUp && viewmodel::BodyMoveSinceView(W)) {
+        float t[16];
+        carrier::Mul16(gw, W, t);
+        std::memcpy(gw, t, sizeof(gw));
+    }
+    if (mirrored) {
+        float t[16];
+        carrier::Mul16(gw, R, t);
+        std::memcpy(gw, t, sizeof(gw));
+    }
+    const double qnow = Now();
+    const bool fresh = c.hn > 0 && qnow - c.Hist(0).at < 0.05;
+    float grip[3];
+    GripWorld(offF, mirrored ? R : nullptr, grip);
+    const float pad = 5.0f * upm / 100.0f, maxStep = 60.0f * upm / 100.0f;
+    Strike& s = c.strikes[0];
+    float w[3][3];
+    for (int k = 0; k < s.n; ++k) Xform(s.sample[k], gw, w[k]);
+    const bool armed = on && fresh && qnow <= s.armedUntil && g_knifeSkip == 0 && now >= c.quietUntil;
+    bool struck = false;
+    if (armed) {
+        for (int k = 0; k < s.n && !struck; ++k) {
+            if (s.firstArmed) {  // from the hand out: a blade already inside a body is entered from its side
+                float d[3] = {w[k][0] - grip[0], w[k][1] - grip[1], w[k][2] - grip[2]};
+                const float l = Len(d);
+                if (l > 1.0f) {
+                    const float end[3] = {w[k][0] + d[0] / l * pad, w[k][1] + d[1] / l * pad, w[k][2] + d[2] / l * pad};
+                    struck = Contact(hdr, pawn, gun, c, s, grip, end, grip, now);
+                }
+            }
+            if (struck || !s.havePrev) continue;
+            float d[3] = {w[k][0] - s.prev[k][0], w[k][1] - s.prev[k][1], w[k][2] - s.prev[k][2]};
+            const float l = Len(d);
+            if (l < 0.25f || l > maxStep) continue;
+            const float start[3] = {s.prev[k][0] - d[0] / l * pad, s.prev[k][1] - d[1] / l * pad, s.prev[k][2] - d[2] / l * pad};
+            const float end[3] = {w[k][0] + d[0] / l * pad, w[k][1] + d[1] / l * pad, w[k][2] + d[2] / l * pad};
+            struck = Contact(hdr, pawn, gun, c, s, start, end, grip, now);
+        }
+        s.firstArmed = false;
+    }
+    for (int k = 0; k < s.n; ++k) std::memcpy(s.prev[k], w[k], sizeof(w[k]));
+    s.havePrev = true;
+    if (qnow > s.armedUntil && s.loggedArm) {
+        TRACE_LOG("melee: knife swing over -- peak %.1f m/s (hand %.1f), no contact", s.peak, s.peakHand);
+        s.loggedArm = false;
+    }
+    if (g_knifeSkip > 0) --g_knifeSkip;
+}
+
 }  // namespace
 
 void Configure(const Config& cfg, bool bake) {
     g_cfg = cfg;
     g_bake = bake;
+    g_gun.gates = {cfg.meleeButtSpeed, cfg.meleeHandSpeed, cfg.meleeTravel, cfg.meleeThrustSpeed, cfg.meleeThrustCos,
+                   cfg.meleeThrustTravel, cfg.meleeMaxTurn, cfg.meleeSlashSpeed, cfg.meleeSlashCos, cfg.meleeBladeHandSpeed};
+    // The knife: a stab along its blade, a slash across it -- a hand-held blade's speeds (the bayonet's 8 m/s slash is a
+    // tip a metre out on a rifle).
+    g_knife.gates = {cfg.meleeButtSpeed, cfg.meleeHandSpeed, cfg.meleeTravel, cfg.knifeThrustSpeed, cfg.knifeThrustCos,
+                     cfg.knifeThrustTravel, cfg.meleeMaxTurn, cfg.knifeSlashSpeed, cfg.knifeSlashCos, cfg.knifeHandSpeed};
     MLOG("melee: physical melee %s (the shipped default; the menu's switch is the player's) -- hand %.1f, butt %.1f m/s; blade: "
          "hand %.1f, slash %.1f (cos <= %.2f), thrust %.1f m/s (cos %.2f, %.2f m, under %.1f rad/s); travel %.2f m, hold %.2f s; "
          "muzzle %d, world %d, props %d, line of sight %d, charge kill %d%s",
@@ -778,12 +986,15 @@ void OnDraw(shared::Header* hdr) {
     if (pawn != g_pawn) {
         g_pawn = pawn;
         g_strikesFor = 0;
-        g_strikeN = 0;
+        g_gun.strikeN = 0;
         for (Recent& r : g_recent) r = Recent{};
         g_test = 0;
-        g_quietUntil = -1.0f;
+        g_gun.quietUntil = -1.0f;
         g_havePawnPose = false;
-        ResetHistory();
+        ResetHistory(g_gun);
+        ResetHistory(g_knife);
+        g_knife.strikeN = 0;
+        g_knife.quietUntil = -1.0f;
     }
     if (!hdr || !pawn || !g_bake) return;
     // The host's side, one seqlock read: the gun pose, the head, the hands, the display time and the melee bits. A torn read
@@ -809,12 +1020,14 @@ void OnDraw(shared::Header* hdr) {
             float dy = std::fabs(yaw - g_lastYaw);
             if (dy > 32768.0f) dy = 65536.0f - dy;
             const float upm0 = hdr->unitsPerMeter > 1.0f && hdr->unitsPerMeter < 1000.0f ? hdr->unitsPerMeter : 100.0f;
-            if (dy > 1820.0f || Dist(loc, g_lastLoc) > 0.6f * upm0) g_skipDraws = 2;  // (10 deg, 0.6 m in one Draw)
+            if (dy > 1820.0f || Dist(loc, g_lastLoc) > 0.6f * upm0) g_skipDraws = g_knifeSkip = 2;  // (10 deg, 0.6 m in one Draw)
         }
         g_lastYaw = yaw;
         std::memcpy(g_lastLoc, loc, sizeof(loc));
         g_havePawnPose = true;
     }
+    // The off-hand knife's strikes (whatever the gun's switch and state).
+    KnifeDraw(hdr, pawn, hands, head, xrTime, bits, flags, now);
     // Hard gates (the speed history starts again): the switch, the host, the gun.
     const std::uintptr_t inv = Obj(pawn, "InvManager"), gun = Obj(pawn, "Weapon");
     const char* hard = nullptr;
@@ -827,7 +1040,7 @@ void OnDraw(shared::Header* hdr) {
             g_wasOn = false;
             g_why = hard;
         }
-        ResetHistory();
+        ResetHistory(g_gun);
         return;
     }
     // The gun in hand's strikes (again on a switch or an upgrade; the levers too).
@@ -835,7 +1048,7 @@ void OnDraw(shared::Header* hdr) {
     const int level = Int(gun, "CurrentUpgradeLevel", -1);
     if (gun != g_strikesFor || level != g_strikesLevel || att != g_strikesAtt) {
         BuildStrikes(gun, att, level);
-        ResetHistory();
+        ResetHistory(g_gun);
     }
     // A gun-pose jump the host knows of (the foregrip taken or let go, a hand held by HoldLost or back, the gun hand
     // changed, a recentre): no speed across it.
@@ -844,13 +1057,13 @@ void OnDraw(shared::Header* hdr) {
         g_epochSeen = epoch;
         g_flagsSeen = flags;
         g_recenterSeen = hdr->recenterSeq;
-        ResetHistory();
+        ResetHistory(g_gun);
         g_skipDraws = 2;
     }
     // A new host sample: into the history (a gap or a hand jump starts it again).
     const double ts = static_cast<double>(xrTime) * 1e-9;
     bool newSample = false;
-    if (xrTime && ts != g_lastT) {
+    if (xrTime && ts != g_gun.lastT) {
         newSample = true;
         Sample smp;
         smp.t = ts;
@@ -868,11 +1081,11 @@ void OnDraw(shared::Header* hdr) {
         std::memcpy(smp.op, op, sizeof(op));
         smp.two = (flags & 2u) != 0;
         smp.tracked = (bits & 2u) != 0;
-        if (g_hn > 0) {
-            const Sample& last = Hist(0);
+        if (g_gun.hn > 0) {
+            const Sample& last = g_gun.Hist(0);
             const float dts = static_cast<float>(ts - last.t);
             if (dts > 0.1f) {
-                ResetHistory();
+                ResetHistory(g_gun);
             } else {
                 // Over 20 m/s for the gun hand, the head or (two-handed: it steers the gun) the off hand, or the gun turning
                 // over 40 rad/s in one sample: tracking, not a swing.
@@ -882,15 +1095,15 @@ void OnDraw(shared::Header* hdr) {
                 if (dts <= 0.0f || dg > 20.0f * dts || dh > 20.0f * dts || dof > 20.0f * dts || turned > 40.0f * dts) {
                     TRACE_LOG("melee: a tracking jump in %.0f ms (the gun hand %.2f m, the head %.2f m, the off hand %.2f m, the gun "
                               "turned %.0f deg) -- no strike for 0.1 s", dts * 1000.0f, dg, dh, dof, turned * 57.2958f);
-                    ResetHistory();
-                    g_glitchUntil = ts + 0.1;
+                    ResetHistory(g_gun);
+                    g_gun.glitchUntil = ts + 0.1;
                 }
             }
         }
-        g_hist[g_hhead] = smp;
-        g_hhead = (g_hhead + 1) % kHist;
-        if (g_hn < kHist) ++g_hn;
-        g_lastT = ts;
+        g_gun.hist[g_gun.hhead] = smp;
+        g_gun.hhead = (g_gun.hhead + 1) % kHist;
+        if (g_gun.hn < kHist) ++g_gun.hn;
+        g_gun.lastT = ts;
     }
     // Soft gates (contact refused, the history kept): busy, menus, the pause, the weapon's state, the game's own gates.
     const char* why = nullptr;
@@ -901,7 +1114,7 @@ void OnDraw(shared::Header* hdr) {
     else if (Obj(inv, "PendingWeapon")) why = "a weapon switch";
     else if (Obj(Obj(pawn, "WorldInfo"), "Pauser")) why = "paused";
     else if (!StrikeState(names::StateName(gun))) why = "the weapon is busy";
-    else if (!g_strikeN) why = "no strike points";
+    else if (!g_gun.strikeN) why = "no strike points";
     const bool on = !why;
     if (on != g_wasOn || (!on && g_why != why)) {
         MLOG("melee: %s", on ? "on" : (std::string("off -- ") + why).c_str());
@@ -914,7 +1127,7 @@ void OnDraw(shared::Header* hdr) {
     float D[16], ctrl[16], off[16], R[16], Wm[16];
     bool offValid = false, two = false;
     if (lo < 0 || !armsik::BakedMove(comp, D) || !viewmodel::HandFrames(ctrl, off, offValid, two)) {
-        ResetSwings();
+        ResetSwings(g_gun);
         return;
     }
     float l2w[16], G[16];
@@ -938,7 +1151,7 @@ void OnDraw(shared::Header* hdr) {
         if (ammo != g_ammoSeen) g_ammoSeen = ammo, g_ammoAt = tick;
         if (state != g_stateSeen) g_stateSeen = state, g_quietSince = tick;
         if (mirrored != g_leverMirrored) {  // the other hand: its levers again from a quiet gun
-            for (int i = 0; i < g_strikeN; ++i) g_strikes[i].haveLever = false;
+            for (int i = 0; i < g_gun.strikeN; ++i) g_gun.strikes[i].haveLever = false;
             g_leverMirrored = mirrored;
         }
         const bool quiet = state == "Active" && tick - g_flashAt > 500 && tick - g_ammoAt > 500 && tick - g_quietSince > 300;
@@ -950,20 +1163,20 @@ void OnDraw(shared::Header* hdr) {
             TakeLevers(G, ctrlInv, mirrored ? R : nullptr, carry ? Winv : nullptr, mirrored, upm);
         }
     }
-    if (newSample) Estimate();
+    if (newSample) Estimate(g_gun);
     // The contact: each armed strike's points swept from last Draw's drawn positions to this one's (from 10 units before
     // to 10 past: a braked stroke, a start just inside); a newly armed strike also from the hand out to each point.
     const double qnow = Now();
-    const bool fresh = g_hn > 0 && qnow - Hist(0).at < 0.05;  // (the host's newest sample under 50 ms old)
+    const bool fresh = g_gun.hn > 0 && qnow - g_gun.Hist(0).at < 0.05;  // (the host's newest sample under 50 ms old)
     float grip[3];
     GripWorld(ctrl, mirrored ? R : nullptr, grip);
     const float pad = 10.0f * upm / 100.0f, maxStep = 60.0f * upm / 100.0f;
     bool struck = false;
-    for (int i = 0; i < g_strikeN; ++i) {
-        Strike& s = g_strikes[i];
+    for (int i = 0; i < g_gun.strikeN; ++i) {
+        Strike& s = g_gun.strikes[i];
         float w[3][3];
         for (int k = 0; k < s.n; ++k) Xform(s.sample[k], G, w[k]);
-        const bool armed = on && fresh && qnow <= s.armedUntil && g_skipDraws == 0 && now >= g_quietUntil;
+        const bool armed = on && fresh && qnow <= s.armedUntil && g_skipDraws == 0 && now >= g_gun.quietUntil;
         if (armed && !struck) {
             for (int k = 0; k < s.n && !struck; ++k) {
                 if (s.firstArmed) {  // from the hand out: a point already inside a body is entered from its side
@@ -971,7 +1184,7 @@ void OnDraw(shared::Header* hdr) {
                     const float l = Len(d);
                     if (l > 1.0f) {
                         const float end[3] = {w[k][0] + d[0] / l * pad, w[k][1] + d[1] / l * pad, w[k][2] + d[2] / l * pad};
-                        struck = Contact(hdr, pawn, gun, s, grip, end, grip, now);
+                        struck = Contact(hdr, pawn, gun, g_gun, s, grip, end, grip, now);
                     }
                 }
                 if (struck || !s.havePrev) continue;
@@ -980,7 +1193,7 @@ void OnDraw(shared::Header* hdr) {
                 if (l < 0.25f || l > maxStep) continue;  // (still, or a jump)
                 const float start[3] = {s.prev[k][0] - d[0] / l * pad, s.prev[k][1] - d[1] / l * pad, s.prev[k][2] - d[2] / l * pad};
                 const float end[3] = {w[k][0] + d[0] / l * pad, w[k][1] + d[1] / l * pad, w[k][2] + d[2] / l * pad};
-                struck = Contact(hdr, pawn, gun, s, start, end, grip, now);
+                struck = Contact(hdr, pawn, gun, g_gun, s, start, end, grip, now);
             }
             s.firstArmed = false;
         }
@@ -1078,16 +1291,17 @@ bool TestCommand(const wchar_t* line) {
         if (t) names::ReadVector(t + addr::kActorLocation, loc);
         MLOG("melee: where -- target %s at %.0f %.0f %.0f, Spine2 %s %.0f %.0f %.0f; eye %.0f %.0f %.0f", t ? names::Name(t).c_str() : "none",
              loc[0], loc[1], loc[2], haveSpine ? "at" : "unknown", sp[0], sp[1], sp[2], eye[0], eye[1], eye[2]);
-        for (int i = 0; i < g_strikeN; ++i)
-            for (int k = 0; k < g_strikes[i].n; ++k) {
-                const float* w = g_strikes[i].prev[k];
-                MLOG("melee:   %s point %d at %.0f %.0f %.0f -- %.2f m from Spine2 (dx %.2f dy %.2f dz %.2f)", kKindName[g_strikes[i].kind], k,
-                     w[0], w[1], w[2], haveSpine ? Dist(w, sp) / upm : -1.0f, (w[0] - sp[0]) / upm, (w[1] - sp[1]) / upm, (w[2] - sp[2]) / upm);
-            }
+        for (const Channel* ch : {&g_gun, &g_knife})
+            for (int i = 0; i < ch->strikeN; ++i)
+                for (int k = 0; k < ch->strikes[i].n; ++k) {
+                    const float* w = ch->strikes[i].prev[k];
+                    MLOG("melee:   %s point %d at %.0f %.0f %.0f -- %.2f m from Spine2 (dx %.2f dy %.2f dz %.2f)", kKindName[ch->strikes[i].kind], k,
+                         w[0], w[1], w[2], haveSpine ? Dist(w, sp) / upm : -1.0f, (w[0] - sp[0]) / upm, (w[1] - sp[1]) / upm, (w[2] - sp[2]) / upm);
+                }
     } else if (!std::wcscmp(line, L"mohavr melee") || !std::wcscmp(line, L"mohavr melee status")) {
         Status();
-        for (int i = 0; i < g_strikeN; ++i) {
-            const Strike& s = g_strikes[i];
+        for (int i = 0; i < g_gun.strikeN + g_knife.strikeN; ++i) {
+            const Strike& s = i < g_gun.strikeN ? g_gun.strikes[i] : g_knife.strikes[i - g_gun.strikeN];
             MLOG("melee:   %s -- %.1f m/s, hand %.1f (along %.1f), %.2f m in 0.25 s, turning %.1f rad/s, %s, %s; lever %.2f %.2f %.2f m%s; "
                  "drawn at %.0f %.0f %.0f",
                  kKindName[s.kind], s.speed, s.hand, s.along, s.travel, s.turn, s.ready ? "ready" : "spent",
@@ -1109,7 +1323,7 @@ bool TestCommand(const wchar_t* line) {
         MLOG("melee: test -- %s's AI on again, forgotten", t ? names::Name(t).c_str() : "none");
         g_test = 0;
     } else if (!std::wcsncmp(line, L"mohavr melee enemy", 18)) {
-        // "mohavr melee enemy at <butt|grip|front|bayonet> [depth]": his Spine2 depth m past that strike point;
+        // "mohavr melee enemy at <butt|grip|front|bayonet|knife> [depth]": his Spine2 depth m past that strike point;
         // "mohavr melee enemy [dist [right]] [ally]": dist m ahead (the nearest allied soldier with "ally").
         float depth = 0.05f;
         int atKind = -1;
@@ -1146,8 +1360,9 @@ bool TestCommand(const wchar_t* line) {
         const float r[3] = {-f[1], f[0], 0.0f};  // (UE: +Y right of +X)
         float spot[3] = {ploc[0] + (f[0] * dist + r[0] * right) * upm, ploc[1] + (f[1] * dist + r[1] * right) * upm, ploc[2]};
         const Strike* at = nullptr;
-        for (int i = 0; i < g_strikeN; ++i)
-            if (g_strikes[i].kind == atKind && g_strikes[i].havePrev) at = &g_strikes[i];
+        for (const Channel* ch : {&g_gun, &g_knife})
+            for (int i = 0; i < ch->strikeN; ++i)
+                if (ch->strikes[i].kind == atKind && ch->strikes[i].havePrev) at = &ch->strikes[i];
         if (atPoint && !at) MLOG("melee: test -- the gun in hand has no %ls strike drawn", kindName);
         if (at) {
             // His Spine2 `depth` m past that point along the heading: his Location keeps its offset from the spine; at least
@@ -1216,7 +1431,7 @@ bool TestCommand(const wchar_t* line) {
             if (a && names::IsA(a, "Pawn")) break;
         }
         int dmg = 0, before = -1, after = -1;
-        const bool ok = a && names::IsA(a, "Pawn") && ApplyHit(pawn, gun, impact, false, GameTime(pawn), dmg, before, after);
+        const bool ok = a && names::IsA(a, "Pawn") && ApplyHit(pawn, gun, impact, false, -1.0f, GameTime(pawn), dmg, before, after);
         MLOG("melee: test hit -- %s (%s): %d damage, Health %d -> %d%s", names::Name(a).c_str(),
              names::NameAt(reinterpret_cast<std::uintptr_t>(impact + kImpactBone)).c_str(), dmg, before, after, ok ? "" : " (not applied)");
         Status();

@@ -74,6 +74,8 @@ public:
     bool ScopeZoomGame() const { return scopeZoomGame_; } // [Scope] Zoom=game (else the real scopes' magnification)
     // The off-hand pistol (OFFPISTOL-DESIGN; likewise the shipped [OffHand] Pistol until toggled).
     bool OffHandPistolOn() const { return offHandPistol_; }
+    // The off-hand knife (OFFKNIFE-DESIGN; likewise the shipped [OffHand] Knife until toggled).
+    bool OffHandKnifeOn() const { return offHandKnife_; }
     // The fit of any weapon by its class (the off-hand pistol's): the player's saved one, else the shipped one, else the
     // defaults. Read once per key.
     shared::GunFit FitFor(const std::string& key);
@@ -179,6 +181,7 @@ private:
     bool                    physicalMelee_ = false;
     bool                    scope_ = false, scopeZoomGame_ = false;
     bool                    offHandPistol_ = false;
+    bool                    offHandKnife_ = false;
     std::string             fitForKey_ = "\x01";       // FitFor's last key and fit
     shared::GunFit          fitForFit_{};
 };

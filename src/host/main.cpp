@@ -32,6 +32,7 @@
 #include "hands.hpp"
 #include "reload.hpp"
 #include "offhand.hpp"
+#include "offknife.hpp"
 #include "offpistol.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
@@ -406,6 +407,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     mohavr::host::ManualReload manualReload;  // D21: the manual reload's toggle, engagement and events
     mohavr::host::OffHandGrenade offhandNade;  // the off-hand grenade (OFFHAND-DESIGN): its toggle, state and events
     mohavr::host::OffHandPistol offhandPistol;  // the off-hand pistol (OFFPISTOL-DESIGN): likewise
+    mohavr::host::OffHandKnife offhandKnife;    // the off-hand knife (OFFKNIFE-DESIGN): likewise
     mohavr::host::OffHandGrenade gunNade;       // the gun hand's grenade by pin, cook and grip ([Weapon] GrenadePin)
     mohavr::host::Hands::Output handsOut;
     mohavr::host::Markers markers;  // the gesture spots' rings
@@ -418,6 +420,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         hands.SetOffHand(&offhandNade);
         offhandPistol.Init(ExeDir() + L"\\MOHAVR.ini");
         hands.SetOffPistol(&offhandPistol);
+        offhandKnife.Init(ExeDir() + L"\\MOHAVR.ini");
+        hands.SetOffKnife(&offhandKnife);
         gunNade.InitMain(ExeDir() + L"\\MOHAVR.ini");
         hands.SetGunNade(&gunNade);
         if (menuOk) {
@@ -732,6 +736,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // The off-hand pistol's game side (the pistol a draw gets, availability, its state, shots and refills).
                 if (menuOk) offhandPistol.SetOn(menu.OffHandPistolOn());
                 if (handsOk) offhandPistol.Poll(g_hdr, nowS);
+                // The off-hand knife's game side (whether a draw can happen, a held one may stay).
+                if (menuOk) offhandKnife.SetOn(menu.OffHandKnifeOn());
+                if (handsOk) offhandKnife.Poll(g_hdr, nowS);
                 // M8: the gun from both hands (gun hand, foregrip, holsters, reload gesture), in the same seqlock.
                 if (handsOk) {
                     mohavr::host::Hands::Input hin{};
@@ -829,6 +836,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     g_hdr->nadePose = gunHeld ? gunNade.HandPose() : offhandNade.HandPose();
                 }
                 g_hdr->pistolFlags = offhandPistol.Flags();
+                g_hdr->knifeFlags = handsOk ? offhandKnife.Flags() : 0u;
                 g_hdr->pistolTrigger = offhandPistol.Trigger();
                 g_hdr->offAimRay = offhandPistol.AimRay();
                 {
@@ -856,6 +864,22 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     const bool tracked = handsOk && (real & (1u << gh)) && (!handsOut.twoHanded || (real & (1u << (1 - gh))));
                     g_hdr->meleeOn = (menuOk && menu.PhysicalMelee() ? 1u : 0u) | (tracked ? 2u : 0u) |
                                      (handsOk && handsOut.meleeBusy ? 4u : 0u) | ((epoch & 0xFFu) << 8);
+                    // The off-hand knife's (OFFKNIFE-DESIGN A4): held; the off hand really tracked; busy; the off hand's pose
+                    // epoch (+1 on a draw or a put back, the off hand held by HoldLost or back, the gun hand changed, a recentre).
+                    static std::uint32_t offEpoch = 0, seenKnife = 0xFFFFFFFFu, seenOffHeld = 0xFFFFFFFFu, seenOffRecenter = 0;
+                    static int seenOffHand = -1;
+                    const int oh = 1 - gh;
+                    const std::uint32_t offHeld = (held >> oh) & 1u;
+                    if (handsOk && (offhandKnife.Epoch() != seenKnife || offHeld != seenOffHeld || gh != seenOffHand ||
+                                    g_hdr->recenterSeq != seenOffRecenter)) {
+                        seenKnife = offhandKnife.Epoch();
+                        seenOffHeld = offHeld;
+                        seenOffHand = gh;
+                        seenOffRecenter = g_hdr->recenterSeq;
+                        ++offEpoch;
+                    }
+                    if (handsOk && offhandKnife.Holding())
+                        g_hdr->meleeOn |= 8u | ((real >> oh) & 1u ? 16u : 0u) | (handsOut.knifeBusy ? 32u : 0u) | ((offEpoch & 0xFFu) << 16);
                 }
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
@@ -880,21 +904,29 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     // A melee strike (the game's count): the gun hand, and the off hand on the foregrip; a soldier or a prop
                     // 50 ms at 0.6..1 by the strike's speed, the world 25 ms at 0.35 -- merged with this frame's other pulses
                     // (a second pulse on the same hand would cut the first short).
-                    static std::uint32_t meleeSeen = g_hdr->meleeHits;
-                    if (g_hdr->meleeHits != meleeSeen) {
-                        meleeSeen = g_hdr->meleeHits;
-                        const bool world = g_hdr->meleeKind == 3u;
-                        const float amp = world ? 0.35f : 0.6f + 0.4f * g_hdr->meleePower, ms = world ? 25.0f : 50.0f;
+                    // The off-hand knife's strikes have their own count: the off hand only.
+                    static std::uint32_t meleeSeen = g_hdr->meleeHits, knifeSeen = g_hdr->knifeHits;
+                    for (int ch = 0; ch < 2; ++ch) {
+                        const bool offKnife = ch == 1;
+                        const std::uint32_t hits = offKnife ? g_hdr->knifeHits : g_hdr->meleeHits;
+                        std::uint32_t& seen = offKnife ? knifeSeen : meleeSeen;
+                        if (hits == seen) continue;
+                        seen = hits;
+                        _ReadWriteBarrier();
+                        const std::uint32_t kind = offKnife ? g_hdr->knifeKind : g_hdr->meleeKind;
+                        const float power = offKnife ? g_hdr->knifePower : g_hdr->meleePower;
+                        const bool world = (kind & 0xFFu) == 3u;
+                        const float amp = world ? 0.35f : 0.6f + 0.4f * power, ms = world ? 25.0f : 50.0f;
                         for (int h = 0; h < 2; ++h) {
-                            if (h != handsOut.gunHand && !handsOut.twoHanded) continue;
-                            const float a = h == handsOut.gunHand ? amp : amp * 0.8f;
+                            if (offKnife ? h == handsOut.gunHand : h != handsOut.gunHand && !handsOut.twoHanded) continue;
+                            const float a = offKnife || h == handsOut.gunHand ? amp : amp * 0.8f;
                             handsOut.pulse[h] = true;
                             handsOut.pulseAmp[h] = std::fmax(handsOut.pulseAmp[h], a);
                             handsOut.pulseMs[h] = std::fmax(handsOut.pulseMs[h], ms);
                         }
-                        MLOG("host: melee strike %u (%s) -- pulse %.2f for %.0f ms%s", meleeSeen,
-                             g_hdr->meleeKind == 1u ? "a soldier" : g_hdr->meleeKind == 2u ? "an actor" : "the world", amp, ms,
-                             handsOut.twoHanded ? ", both hands" : "");
+                        MLOG("host: melee strike %u (%s) -- pulse %.2f for %.0f ms%s", seen,
+                             (kind & 0xFFu) == 1u ? "a soldier" : (kind & 0xFFu) == 2u ? "an actor" : "the world", amp, ms,
+                             offKnife ? ", the off hand (the knife)" : handsOut.twoHanded ? ", both hands" : "");
                     }
                     for (int h = 0; h < 2; ++h) {
                         if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);

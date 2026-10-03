@@ -2084,6 +2084,25 @@ Research in work/research/scope/, the design in SCOPE-DESIGN.md. Measured in the
 - **The simulator's eye poses are both at the head's centre** (xrLocateViews gives no IPD there); the eye separation the
   game renders comes from elsewhere.
 
+## 5bo. The MP40's Dagger as an off-hand knife (D51, 2026-10-03)
+
+Measured in the simulator (work/research/tests/knife1-4.ps1), the harness level Var_Flk_P:
+- **The template:** `Object.FindObject("MOHAGameNonNative.Default__Attachment_MP40.KnifeMeshComponent", <FPArms' class>)`
+  through the pawn finds the class default's subobject: a `MOHASkeletalMeshComponent`, mesh `DE_MP40_altFire_Knife` (one
+  bone), DepthPriorityGroup 2 (the foreground, as the arms). Not tested in another level (every level cooks the MP40's
+  classes: likely, unproven).
+- **Its clone** (`Clone(InOuter = the pawn)`) attached to the arms' Camera bone draws in the off hand under the arm bake like
+  the pistol and grenade carriers; detached on put back. The mesh: the blade along +Z, the guard at 0, the tip 32.5, the
+  handle's middle -2, the pommel -8.1 (units).
+- **The game's grip:** the arms' `KnifeSocket` on LeftHand, (8, 2.5, 0), pitch -20024, roll 3640 (an icepick: the blade out
+  of the little finger's side), the mesh's RotOrigin (0, -16384, 16384) as the guns'.
+- **Earned:** `WeaponUpgradeManager.GetAppliedUpgradeLevel(3)` (the MP40) is 2 in the harness save; the test command
+  `mohavr upgradelevel 3 1` writes `iUpgradeLevel[3]` and the call returns 1 at once.
+- **Strikes:** a 0.35 m stab in 0.12 s measures 2.9 m/s along the blade (2.6 m/s by the hand's velocity on the blade's
+  axis); a 0.6 m slash in 0.1 s 6.0 m/s. The test soldier can't be moved closer than 0.85 m (centre to centre): the knife
+  (the hand 30 cm ahead of the head, the blade 32 cm) meets him from 0.55 m ahead. A test soldier's Health written to 1000
+  goes to 200 after a hit (the game clamps it to his default), as with the bayonet.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

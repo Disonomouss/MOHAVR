@@ -19,15 +19,16 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
-const int kTabItems[kTabCount][15] = {
+constexpr int kTabMax = 20;
+const int kTabItems[kTabCount][kTabMax] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
-    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kGripPage, kSpotPage,
-     kGiveAll, kClose, -1},
+    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kGripPage,
+     kSpotPage, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
@@ -35,7 +36,7 @@ bool g_giveAllMenu = false;
 bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
 // Tab t's i-th shown item (-1 past the end), and how many it shows.
 int ItemAt(int t, int i) {
-    for (int k = 0; k < 15 && kTabItems[t][k] >= 0; ++k)
+    for (int k = 0; k < kTabMax && kTabItems[t][k] >= 0; ++k)
         if (Shown(kTabItems[t][k]) && i-- == 0) return kTabItems[t][k];
     return -1;
 }
@@ -63,10 +64,10 @@ constexpr float kFitStep = 1.0f, kAngleStep = 2.0f, kRayStep = 0.5f;  // units (
 enum HolsterItem { hWhich, hHolds, hRight, hUp, hForward, hSize, hRings, hReset, hBack, hCount };
 // What a holster can hold: the game's commands, in the menu's order, with their names.
 const char* const kHoldCommands[] = {"SwitchPrimary", "SwitchSecondary", "SwitchPistol", "SwitchGrenade", "SwitchFragGrenade",
-                                     "SwitchGammon", "SwitchStick", "Reload", ""};
+                                     "SwitchGammon", "SwitchStick", "Knife", "Reload", ""};
 const char* const kHoldNames[] = {"primary", "secondary", "pistol", "grenade", "frag grenade", "Gammon bomb", "stick grenade",
-                                  "reload", "nothing"};
-constexpr int kHoldCount = 9;
+                                  "knife (off hand)", "reload", "nothing"};
+constexpr int kHoldCount = 10;
 int HoldIndex(const std::string& c) {
     for (int i = 0; i < kHoldCount; ++i)
         if (!_stricmp(c.c_str(), kHoldCommands[i])) return i;
@@ -75,7 +76,7 @@ int HoldIndex(const std::string& c) {
 // The Free hand page: how the free support hand sits on its controller (pitch, yaw, roll in degrees; forward in cm),
 // saved in the player's ini [Hands] FreeHand = p y r f.
 enum FreeHandItem { eqPitch, eqYaw, eqRoll, eqForward, eqReset, eqBack, eqCount };
-const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "magazine pouch"};
+const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "lower back", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
 
 std::wstring UserIniPath() {
@@ -246,6 +247,10 @@ void Menu::ApplySavedSettings() {
     const int defPistol = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Pistol", 0, shipped.c_str()));
     offHandPistol_ = GetPrivateProfileIntW(L"OffHand", L"Pistol", defPistol, iniPath_.c_str()) != 0;
     MLOG("menu: off-hand pistol %s", offHandPistol_ ? "on" : "off");
+    // The off-hand knife: likewise the shipped [OffHand] Knife until the player toggles it.
+    const int defKnife = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Knife", 0, shipped.c_str()));
+    offHandKnife_ = GetPrivateProfileIntW(L"OffHand", L"Knife", defKnife, iniPath_.c_str()) != 0;
+    MLOG("menu: off-hand knife %s", offHandKnife_ ? "on" : "off");
     MLOG("menu: sticks %s, gun hand %s (at start), red dot %s, frame pacing %s", swapSticks_ ? "swapped (right moves)" : "normal",
          startLeft_ ? "left" : "right", redDot_ ? "on" : "off", pacing_ ? "on" : "off");
     MLOG("menu: gun fit defaults grip %.1f %.1f %.1f, aim line %.1f cm up (gun in hand %d)", fitDefault_.grip[0],
@@ -847,6 +852,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"OffHand", L"Pistol", offHandPistol_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: off-hand pistol -> %s", offHandPistol_ ? "on" : "off (the pistol holster draws the game's pistol)");
+        } else if (item == kOffKnife) {
+            offHandKnife_ = !offHandKnife_;
+            if (!iniPath_.empty())
+                WritePrivateProfileStringW(L"OffHand", L"Knife", offHandKnife_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: off-hand knife -> %s", offHandKnife_ ? "on" : "off");
         } else if (item == kHandFwd || item == kHandUp || item == kHandIn) {
             float& v = handPoint_[item - kHandFwd];
             v = std::fmax(-0.15f, std::fmin(0.15f, v + dir * 0.01f));
@@ -1045,6 +1055,11 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Off-hand pistol  <  %s  >", offHandPistol_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
                 note("the free hand draws the pistol at the pistol holster: the gun stays in hand");
+                break;
+            case kOffKnife:
+                snprintf(label, sizeof(label), "Off-hand knife   <  %s  >", offHandKnife_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("the MP40's dagger (its 2nd upgrade): the free hand draws it at the lower back; stab or slash");
                 break;
             case kGripPage:
                 snprintf(label, sizeof(label), "Reload grip  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());

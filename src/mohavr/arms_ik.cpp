@@ -19,6 +19,7 @@
 #include "names.hpp"
 #include "offhand.hpp"
 #include "offpistol.hpp"
+#include "knife.hpp"
 #include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
@@ -378,7 +379,9 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
     bool offValid = false, twoHanded = false;
     const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
     // (The off-hand pistol drawn: the hand holds it whatever FreeOffHand says.)
-    const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent() || offhand::CarrierComponent()) && framesOk && offValid &&
+    const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent() || offhand::CarrierComponent() || knife::CarrierComponent() ||
+                           knife::Pending()) &&
+                          framesOk && offValid &&
                           !twoHanded;
     M4 supportDrawn{};  // saved support-side bone -> world
     const shared::Header* hdrK = bridge::SharedHeader();
@@ -489,7 +492,8 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4&
         // computed from the same off controller frame and catch-up as the pistol's bake, so they can't separate. Else,
         // round 31: the manual reload's grip (the game's reload animation's hand on the magazine / handle) takes over.
         float gt[16];
-        if (offpistol::HandOnGun(gt, g_gripFingers, g_gripNames) || offhand::HandOnGrenade(gt, g_gripFingers, g_gripNames)) {
+        if (offpistol::HandOnGun(gt, g_gripFingers, g_gripNames) || offhand::HandOnGrenade(gt, g_gripFingers, g_gripNames) ||
+            knife::HandOnKnife(gt, g_gripFingers, g_gripNames)) {
             M4 onGun;
             std::memcpy(onGun.m, gt, sizeof(onGun.m));
             target = Mul(onGun, offCtrl);
@@ -735,7 +739,8 @@ void BakeCarrier(std::uintptr_t comp) {
     sv->bones.assign(bones, bones + num);
     float gw[16];
     const bool pistol = comp == offpistol::CarrierComponent();
-    if (pistol ? offpistol::CarrierFrame(gw) : offhand::CarrierFrame(gw)) {
+    const bool knifeItem = !pistol && comp == knife::CarrierComponent();
+    if (pistol ? offpistol::CarrierFrame(gw) : knifeItem ? knife::CarrierFrame(gw) : offhand::CarrierFrame(gw)) {
         M4 l2w, G;
         std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
         std::memcpy(G.m, gw, sizeof(G.m));
@@ -786,7 +791,7 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
-    if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent()) {  // the off hand's item: before the move test
+    if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent() || comp == knife::CarrierComponent()) {  // the off hand's item: before the move test
         BakeCarrier(comp);
         return;
     }

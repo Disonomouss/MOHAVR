@@ -34,6 +34,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/offhand.cpp
         src/mohavr/melee.cpp
         src/mohavr/scope.cpp
+        src/mohavr/knife.cpp
         src/mohavr/offpistol.cpp
         src/mohavr/carrier.cpp
         src/mohavr/script_call.cpp
@@ -68,6 +69,7 @@ else()
         src/host/markers.cpp
         src/host/reload.cpp
         src/host/offhand.cpp
+        src/host/offknife.cpp
         src/host/offpistol.cpp
         src/host/scope.cpp
         src/mohavr/log.cpp

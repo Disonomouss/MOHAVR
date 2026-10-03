@@ -223,8 +223,10 @@ address-space budget for D3D9On12.
    **Scopes you raise to your eye** (D50, shipped on, proven in the simulator; SCOPE-DESIGN.md): with both hands on a scoped
    gun and an eye at the eyepiece, that eye looks through it -- a third view the game renders, shown in the drawn eyepiece
    (realistic or the game's zoom, in the menu). **HEADSET-TESTS round 49 passed** ("It feels really good").
-   Crouch on the right stick click (round 50; the game's button melee on the down flick). Next: the MP40's Dagger as an
-   off-hand knife from a lower-back holster; the StG44's scope attached by hand.
+   Crouch on the right stick click (round 50; the game's button melee on the down flick).
+   **The off-hand knife** (D51, shipped on, proven in the simulator; OFFKNIFE-DESIGN.md): once the MP40's Dagger is earned,
+   the off hand draws it from a lower-back holster and stabs or slashes with it (150; physical melee's second channel).
+   Next: HEADSET-TESTS round 50; then the StG44's scope attached by hand (design B in work/research/knife-scope).
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

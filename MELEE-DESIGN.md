@@ -169,7 +169,7 @@ A row applies at the highest level not above the gun's `CurrentUpgradeLevel`.
 ### 2.9 What stays
 - **The right stick click stays the game's melee:** its animation, its 2 m camera trace, the MP40's dagger stab.
 - **The MP40's "Dagger" is not on the gun,** so the gun's own strikes do the base 50. The dagger stays on the button; an
-  off-hand knife is a question for the player.
+  off-hand knife is a question for the player (answered: yes, D51 -- the off hand draws it from the lower back).
 
 ### 2.10 Shared block v23 (2528 -> 2544)
 
@@ -245,7 +245,7 @@ foregrip could win over a full tube's pouch.
 - The bayonet: are thrust and slash both natural?
 - Should the muzzle or the barrel count too (`Muzzle=1`)?
 - Keep the right stick's melee? Does its animation pull the gun out of your hand?
-- The MP40's dagger: should it be an off-hand knife?
+- The MP40's dagger: should it be an off-hand knife? **Yes** (the player, 2026-10-03): D51, OFFKNIFE-DESIGN.md.
 
 ## 5. The critique's findings and what changed
 - **Speed:** the first draft rebuilt each lever from the animated gun every sample, so a kick or a head nod became speed.

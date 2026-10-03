@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 24;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes
+inline constexpr std::uint32_t kVersion = 25;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -318,10 +318,13 @@ struct Header {
                                               //      ORIENTATION_TRACKED: not HoldLost, not inferred), bit2 the gun hand busy (a
                                               //      holster or the pouch just pressed, the magazine out, a menu), bits 8-15 the gun
                                               //      pose's epoch (+1 on a jump: the foregrip's turn on / off, a hand held / back,
-                                              //      the gun hand changed, a recentre)
+                                              //      the gun hand changed, a recentre); v25, the off-hand knife: bit3 held,
+                                              //      bit4 the off hand really tracked, bit5 the off hand busy (its grip just
+                                              //      pressed or let go, a menu), bits 16-23 the off hand's pose epoch
     volatile std::uint32_t meleeHits;         // 2532 game -> host: +1 per strike that hit (the host's pulse)
     volatile float         meleePower;        // 2536 game -> host: that strike's speed over its gate, 0..1 (written before meleeHits)
-    volatile std::uint32_t meleeKind;         // 2540 game -> host: 1 a soldier, 2 an actor, 3 the world (written before meleeHits)
+    volatile std::uint32_t meleeKind;         // 2540 game -> host: 1 a soldier, 2 an actor, 3 the world (written before meleeHits);
+                                              //      (v25: the knife's strikes are counted in knifeHits)
     // --- v24: scopes (SCOPE-DESIGN.md) ---
     SlotScope              slotScope[kRing];  // 2544 game -> host, per slot, written with slotMeta (before publishedFrame)
     // host -> game, per XR frame INSIDE the view seqlock
@@ -340,6 +343,24 @@ struct Header {
     float                  scopeRealMag;      // 2924 the real scope's magnification (x; 0 unknown)
     std::uint32_t          scopeReticle;      // 2928 0 a crosshair, 1 a post and bars (the German scopes)
     std::uint32_t          pad24;             // 2932
+    // --- v25: the off-hand knife (OFFKNIFE-DESIGN.md): the host holds whether it is held, the game draws it to match ---
+    // game -> host, once per Draw (seqlock knifeSeq: odd while the game writes)
+    volatile std::uint32_t knifeSeq;          // 2936
+    std::uint32_t          knifeCaps;         // 2940 bit0 installed (the template found, the arm bake on), bit1 a draw can happen
+                                              //      now, bit2 the Dagger earned ([Knife] Require met), bit3 drawn in the hand,
+                                              //      bit6 the game's button melee would hang its own knife (an MP40 at level 2)
+    std::uint32_t          knifeState;        // 2944 bits 8-15 the last refusal: 1 unavailable, 2 not earned, 3 no template,
+                                              //      4 the draw failed
+    float                  knifeDamage;       // 2948 what a hit does
+    volatile std::uint32_t knifePawnSeq;      // 2952 +1 on a new local pawn (the host lets go of one held)
+    // host -> game, per XR frame INSIDE the view seqlock
+    std::uint32_t          knifeFlags;        // 2956 bit0 on, bit1 held, bit2 the icepick grip (else forward)
+    // game -> host: the knife's strikes, as meleeHits / meleeKind / meleePower for the gun (its own: a gun hit in the same
+    // window can't take its pulse); kind and power written before the count
+    volatile std::uint32_t knifeHits;         // 2960
+    volatile std::uint32_t knifeKind;         // 2964 1 a soldier, 2 an actor, 3 the world
+    volatile float         knifePower;        // 2968
+    std::uint32_t          pad25;             // 2972
 };
 #pragma pack(pop)
 
@@ -420,7 +441,11 @@ static_assert(offsetof(Header, scopeCamera) == 2804, "shared::Header layout must
 static_assert(offsetof(Header, scopeSeq) == 2832, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, scopeKey) == 2840, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, scopeReticle) == 2928, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 2936, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, knifeSeq) == 2936, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, knifePawnSeq) == 2952, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, knifeFlags) == 2956, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, knifeHits) == 2960, "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 2976, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
@@ -480,6 +505,47 @@ inline bool ReadScopeWant(const Header* h, std::uint32_t& want, float& tanHalf, 
         want = h->scopeWant;
         tanHalf = h->scopeTanHalf;
         camera = h->scopeCamera;
+#if defined(_MSC_VER)
+        _ReadWriteBarrier();
+#endif
+        if (h->viewSeq == s1) return true;
+    }
+    return false;
+}
+
+// What the game publishes about the off-hand knife (v25).
+struct KnifeInfo {
+    std::uint32_t caps, state, pawnSeq;
+    float         damage;
+};
+// Seqlock read of it; false while the game is mid-write (try next frame).
+inline bool ReadKnifeInfo(const Header* h, KnifeInfo& k) {
+    const std::uint32_t s1 = h->knifeSeq;
+    if (s1 & 1u) return false;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    k.caps = h->knifeCaps;
+    k.state = h->knifeState;
+    k.pawnSeq = h->knifePawnSeq;
+    k.damage = h->knifeDamage;
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#endif
+    return h->knifeSeq == s1;
+}
+// The host's knife flags (v25, inside the view seqlock).
+inline bool ReadKnifeFlags(const Header* h, std::uint32_t& flags) {
+    for (int t = 0; t < 64; ++t) {
+        const std::uint32_t s1 = h->viewSeq;
+        if (s1 & 1u) {
+            _mm_pause();
+            continue;
+        }
+#if defined(_MSC_VER)
+        _ReadWriteBarrier();
+#endif
+        flags = h->knifeFlags;
 #if defined(_MSC_VER)
         _ReadWriteBarrier();
 #endif

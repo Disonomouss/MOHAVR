@@ -19,6 +19,7 @@
 #include "melee.hpp"
 #include "offpistol.hpp"
 #include "scope.hpp"
+#include "knife.hpp"
 #include "viewmodel.hpp"
 #include "game_exec.hpp"
 #include "config.hpp"
@@ -457,6 +458,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         }
         if (offhand::TestCommand(line)) continue;  // "mohavr nade ..." (the off-hand grenade's spike)
         if (scope::TestCommand(line)) continue;      // "mohavr scope ..." (scopes)
+        if (knife::TestCommand(line)) continue;      // "mohavr knife ..." (the off-hand knife)
         if (offpistol::TestCommand(line)) continue;  // "mohavr pistol ..." (the off-hand pistol)
         if (melee::TestCommand(line)) continue;      // "mohavr melee ..." (physical melee)
         const bool ok = gexec::Run(player, line);
@@ -556,6 +558,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     offpistol::OnDraw(hdr);
     melee::OnDraw(hdr);
     scope::OnDraw(hdr);
+    knife::OnDraw(hdr);
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1595,6 +1598,7 @@ bool Install(const Config& cfg) {
     offpistol::Configure(cfg, armsOk);       // (likewise the pistol)
     melee::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (physical melee: the drawn gun)
     scope::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (scopes: the drawn gun's tube)
+    knife::Configure(cfg, armsOk && !cfg.hideViewModel);  // (the off-hand knife: the bake draws it)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);
