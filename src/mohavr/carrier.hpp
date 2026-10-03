@@ -17,8 +17,10 @@ struct Slot {
 // update. `who` prefixes the log lines; `trace` logs the success too. False, the slot empty, on any failure.
 bool Attach(Slot& slot, std::uintptr_t pawn, std::uintptr_t weapon, const char* who, bool trace);
 // The same with any MOHASkeletalMeshComponent `tmpl` (a class default's subobject: the MP40's KnifeMeshComponent), cloned
-// into `outer`.
-bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace);
+// into `outer`. `noAnim`: the clone's Animations cleared before it is attached (a gun's WeaponMeshComponent names a shared
+// AnimNodeSequence of another class default: the rack eject's round, D54); `bounds`: its fCustomBoundsSize (units).
+bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace,
+                    bool noAnim = false, float bounds = 200.0f);
 // Detaches the slot's clone (when its pawn is still the local one) and empties the slot.
 void Detach(Slot& slot, const char* who, bool trace);
 // The slot's clone while its pawn is the local pawn, else 0.

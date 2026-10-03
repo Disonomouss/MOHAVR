@@ -63,6 +63,10 @@ public:
     bool Pacing() const { return pacing_; }  // frame pacing (the player's once toggled; default the shipped [Bridge] Pace)
     // The manual reload (D21; the player's once toggled, default the shipped [Weapon] ManualReload).
     bool ManualReloadOn() const { return manualReload_; }
+    // D54, the rack eject: on, and whether an ejected round goes back to the reserve ([ManualReload] RackEject /
+    // RackEjectKeep in the player's ini; default the shipped ones).
+    bool RackEjectOn() const { return rackEject_; }
+    bool RackEjectKeep() const { return rackEjectKeep_; }
     // The off-hand grenade (OFFHAND-DESIGN; likewise the shipped [OffHand] Grenade until toggled).
     bool OffHandGrenadeOn() const { return offHandNade_; }
     bool GrenadeClick() const { return nadeClick_; }
@@ -181,6 +185,7 @@ private:
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    manualReload_ = false;
+    bool                    rackEject_ = false, rackEjectKeep_ = false;
     bool                    offHandNade_ = false;
     bool                    nadeClick_ = false;
     bool                    gunNadePin_ = false;

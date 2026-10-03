@@ -27,6 +27,11 @@ struct Config {
     bool  holdOpen = true;     // [ManualReload] HoldOpen -- an emptied bolt action stays open (the follower) until loaded (GOAL A2)
     bool  reloadGrips = true;     // [ManualReload] Grips: the reload animations' hand on the magazine / handle (round 31)
     float debugReloadSlowMo = 1.0f;  // [Debug] ReloadSlowMo: the fall and the flip this many times slower (captures)
+    // D54, the rack eject's thrown round ([ManualReload]; the switch itself is the host's, reloadFlags bit7):
+    float rackRoundSpeed = 1.5f;  // RackRoundSpeed -- m/s it leaves the port (plus the port's own speed)
+    float rackRoundUp    = 0.6f;  // RackRoundUp -- how steeply up: 0 straight out to the side, 1 = 45 deg up
+    float rackRoundSpin  = 12.0f; // RackRoundSpin -- rad/s it tumbles while it falls
+    float rackRoundRest  = 1.0f;  // RackRoundRest -- s it lies at your feet before it is gone
     bool  brassMirror   = true;   // [Weapon] BrassMirror -- with the gun in the left hand, the brass thrown mirrored too
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle

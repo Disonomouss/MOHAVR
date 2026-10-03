@@ -92,7 +92,9 @@ unverified.
 1. **Chamber on a drop.** IN §3.3 keeps one round in every gun; RL §7.5 keeps one only on closed bolts and tracks
    `cocked` for the open-bolt Thompson, MP40 and BAR. **Design: RL's per-gun action type** (an open bolt holds no round).
 2. **Racking a loaded closed-bolt gun.** RL §7.7 ejects the chambered round (lost or back to reserve); IN §2.3 changes
-   nothing. **Design: no ammo change** (the extracted round isn't modelled; nothing is lost).
+   nothing. **Design: no ammo change** (the extracted round isn't modelled; nothing is lost). **[Revised by D54,
+   2026-10-03]** the player asked for RL's: a full stroke of a loaded closed-bolt action throws the chambered round out,
+   seen, and spent (`[ManualReload] RackEject`, `RackEjectKeep` for the reserve); the RACK BACK row in §2.2.
 3. **Max+1.** RL §1.3 allows it (SetAmmoCount has no clamp; the next SubtractAmmo clamps to Max); IN caps at Max.
    **Design: cap at Max** (`ChamberPlusOne=0`) until the HUD has been seen with Max+1 [S].
 4. **Hook site.** RL §2.2: a MidHook at 0x10E45CF1 or the vtable slot 0x115883E4; IN §3.4: an inline hook on the exec's
@@ -299,8 +301,23 @@ only touched when `!bInfiniteAmmo` (`EW:634-637`). The game never returns box-ma
 | **EJECT** (button or pull-out) | `magIn` | `k = C`; closed bolt with `KeepChambered=1`: `keep = min(k, 1)`, else `keep = 0`; `C = keep`; `ToReserve(k − keep)`; `magIn = false`; `pending = false`; `heldRounds = k − keep`. Open bolt: `cocked` unchanged. |
 | **TAKE** (pouch) | `!magIn` | `heldRounds = inf ? M : min(M, R + O)` (no ammo moves; the host only offers the pouch when `ammoReserve = R + O > 0 || inf`). |
 | **INSERT** | `!magIn` | `magIn = true`. Ready (closed: `C ≥ 1`; open: `cocked`): `add = ChamberPlusOne ? M : M − C` (≥ 0); `C += FromReserve(add)`; `pending = false`. Not ready: `pending = (inf || R + O > 0)`; **no ammo moves**. |
-| **RACK** | — | Closed: if `C == 0 && magIn && pending`: `C = FromReserve(M)`, `pending = false`; otherwise nothing (an empty gun without a fed magazine stays back; a loaded one keeps its round). Open: if `!cocked`: `cocked = true`, and if `magIn && pending`: `C = FromReserve(M)`, `pending = false`; if already cocked: nothing. |
+| **RACK** | — | Closed: if `C == 0 && magIn && pending`: `C = FromReserve(M)`, `pending = false`; otherwise nothing (an empty gun without a fed magazine stays back; a loaded one keeps its round -- D54: unless RACK BACK threw it at the arm point). Open: if `!cocked`: `cocked = true`, and if `magIn && pending`: `C = FromReserve(M)`, `pending = false`; if already cocked: nothing. |
 | **DROP** (the held magazine let go) | — | `heldRounds = 0`; log only (its rounds went back at EJECT). |
+| **RACK BACK** (D54, v27; the action at RackArm, not a tug) | RackEject on, a gun with a `RackRound`, closed bolt, `C ≥ 1`, the game's reload blocked, not yet this stroke | `ConsumeAmmo(0)` (`C −= 1`; else a direct write); `RackEjectKeep`: `ToReserve(1)`; the round thrown from the drawn port (a carrier, else the gun's brass). EjectOnEmpty (the Garand) at `C == 0` with the clip in: `EjectClip`, the ping, `magIn = false`. RACK ends the stroke. |
+
+**The rack eject per gun (D54; the bolt and pump guns of GOAL A2/A3 too):**
+
+| Gun | Action | A full stroke of the loaded action | The round drawn (`RackRound`) |
+|---|---|---|---|
+| Colt M1911A1 | closed (slide) | RACK BACK: the chambered round out, `C − 1` | its own `bullet` |
+| C96 (every level) | closed (bolt) | RACK BACK, as the Colt (at level ≤ 0 racked to `C 0`: the magazine out) | the Colt's `bullet` x1.05 / 0.85 |
+| StG44 | closed (handle) | RACK BACK | the G43's `bullet` x0.6 along |
+| G43 | closed (handle) | RACK BACK | its own `bullet` |
+| M1 Garand | closed (op-rod) | RACK BACK; at its last round the empty clip pings out | the Springfield's `bullet01` |
+| K98, Springfield | bolt | BOLT BACK on a live round (`chamberEmpty` tracked: the next stroke feeds, the one after throws it) | own `bullet2` / `bullet01` |
+| M12 | pump | PUMP BACK on a live shell (a spent hull as before, no count change) | its own `shell` |
+| Thompson, MP40, BAR | open bolt | nothing (the chamber is empty at rest) | none |
+| M18, Panzerschreck | breech / tube | nothing (no extractor) | none |
 
 Every write is a plain int on the game thread (the clip at `w + off("AmmoCount")`, the reserve at `inv + off("AmmoStorage")
 + 12·i + 4`). `wrote = true` for the Draw. Consequences: a save, a death or a weapon switch never loses rounds that

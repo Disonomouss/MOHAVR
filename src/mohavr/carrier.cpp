@@ -99,7 +99,8 @@ bool Attach(Slot& slot, std::uintptr_t pawn, std::uintptr_t weapon, const char* 
     return AttachTemplate(slot, pawn, Obj(weapon, "DroppedPickupMesh"), weapon, who, trace);
 }
 
-bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace) {
+bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::uintptr_t outer, const char* who, bool trace,
+                    bool noAnim, float bounds) {
     Detach(slot, who, trace);
     const std::uintptr_t arms = Obj(pawn, "FPArms");
     if (!arms || !tmpl || !outer) {
@@ -122,7 +123,8 @@ bool AttachTemplate(Slot& slot, std::uintptr_t pawn, std::uintptr_t tmpl, std::u
     CopyField<int>(c, arms, "iMinLODLevel");
     std::memcpy(reinterpret_cast<void*>(c + addr::kMohaSkelMeshFov), reinterpret_cast<const void*>(arms + addr::kMohaSkelMeshFov), 4);
     const int bo = names::PropertyOffset(c, "fCustomBoundsSize");
-    if (bo >= 0) *reinterpret_cast<float*>(c + bo) = 200.0f;
+    if (bo >= 0) *reinterpret_cast<float*>(c + bo) = bounds;
+    if (noAnim) SetObj(c, "Animations", 0);  // (no tree: the reference pose; the bake writes every bone anyway)
     for (const char* b : {"CollideActors", "BlockActors", "BlockZeroExtent", "BlockNonZeroExtent", "BlockRigidBody"}) SetBit(c, b, false);
     SetBit(c, "CastShadow", Bit(arms, "CastShadow"));
     SetBit(c, "bCastDynamicShadow", Bit(arms, "bCastDynamicShadow"));

@@ -20,6 +20,7 @@
 #include "offhand.hpp"
 #include "offpistol.hpp"
 #include "knife.hpp"
+#include "rackround.hpp"
 #include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
@@ -737,6 +738,35 @@ void BakeCarrier(std::uintptr_t comp) {
     if (!sv) return;  // no slot free: left as the game has it this update
     sv->comp = comp;
     sv->bones.assign(bones, bones + num);
+    // D54, the rack eject's round: only its round bone, put in the world where its fall has it (no catch-up: it is in the
+    // world, not in a hand); every other bone collapsed (a zero 3x3), and all of them once it is gone.
+    if (rackround::IsCarrier(comp)) {
+        float rw[16];
+        int rb = -1;
+        const bool on = rackround::BoneFrame(comp, rb, rw);
+        M4 l2w, F;
+        std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
+        std::memcpy(F.m, rw, sizeof(F.m));
+        // (The review of D54: the round's frame is in the real world; in left-hand mode the proxy draws it through this
+        // frame's mirror, as the arms' parts -- l2w x M -- so the bake puts it through M first: F x M x M = F.)
+        float mn[16];
+        if (viewmodel::DrawMirror(mn)) {
+            M4 Mm;
+            std::memcpy(Mm.m, mn, sizeof(Mm.m));
+            F = Mul(F, Mm);
+        }
+        const M4 inv = AffineInverse(l2w);
+        for (int i = 0; i < num; ++i) {
+            if (on && i == rb) {
+                bones[i] = Mul(F, inv);
+                continue;
+            }
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c) bones[i].m[r][c] = 0.0f;
+        }
+        MarkBaked(comp);
+        return;
+    }
     float gw[16];
     const bool pistol = comp == offpistol::CarrierComponent();
     const bool knifeItem = !pistol && comp == knife::CarrierComponent();
@@ -791,7 +821,8 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
-    if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent() || comp == knife::CarrierComponent()) {  // the off hand's item: before the move test
+    if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent() || comp == knife::CarrierComponent() ||
+        rackround::IsCarrier(comp)) {  // the off hand's item (and the rack eject's round): before the move test
         BakeCarrier(comp);
         return;
     }

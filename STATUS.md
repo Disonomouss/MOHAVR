@@ -229,8 +229,13 @@ address-space budget for D3D9On12.
    **HEADSET-TESTS round 50 passed** (crouch on the click good; the knife worked: 5 hits on soldiers). Its follow-ups (D52):
    the knife always available and its hold adjustable (Knife grip page, shared block v26), the button melee unmapped, each
    holster's ring on its own. **The M18's scope** (D53, shipped on, proven in the simulator): its Telescope M86C measured in
-   the body mesh, 2.8x or the game's zoom, the game's ring sight. Next (researched in work/research/wristhud, rackeject):
-   the HUD on the off hand's wrist, a racked round ejected and spent; then the StG44's scope attached by hand.
+   the body mesh, 2.8x or the game's zoom, the game's ring sight. **The rack eject** (D54, shipped on, proven in the
+   simulator; ENGINE-NOTES 5bq): a full stroke of a loaded closed-bolt action (the Colt, C96, StG44, G43, Garand), a bolt
+   drawn back on a live round (K98, Springfield) or the M12 pumped on a live shell throws the round out of the drawn port,
+   seen as a live round (a gun mesh's round bone on a carrier, falling to the feet), and spends it (the game's
+   ConsumeAmmo); the menu's "Rack ejects a round" and "Ejected round lost / kept" (shared block v27, no layout change).
+   **HEADSET-TESTS round 51** (the rack eject) is prepared.
+   Next (researched in work/research/wristhud): the HUD on the off hand's wrist; then the StG44's scope attached by hand.
    **HEADSET-TESTS round 28 passed** (still deployed): the left hand's brass thrown mirrored (`Weapon.BrassMirror=1`: a negative
    Scale3D.Y on the brass component, D19, ENGINE-NOTES 5aj). Round 27: the flash at the barrel, left-hand mode, jumps and
    falls, idle controllers and the right hand's brass passed; the left hand's brass failed (thrown the right-hand way,

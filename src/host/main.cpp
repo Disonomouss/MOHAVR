@@ -726,6 +726,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // D21: the game's side of the manual reload (its geometry, ammo, state), before the hands use it.
                 const double nowS = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                 if (menuOk) manualReload.SetOn(menu.ManualReloadOn());
+                if (menuOk) manualReload.SetRackEject(menu.RackEjectOn(), menu.RackEjectKeep());  // (D54)
                 manualReload.Poll(g_hdr, nowS, handsOk && (handBits & 3u) == 3u);
                 // The off-hand grenade's game side (counts, availability, its state, the fuse's ticks), likewise.
                 if (menuOk) offhandNade.SetOn(menu.OffHandGrenadeOn());

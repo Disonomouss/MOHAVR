@@ -22,6 +22,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
+#include "rackround.hpp"
 #include "script_call.hpp"
 #include "viewmodel.hpp"
 
@@ -121,6 +122,10 @@ struct GunLine {
     Vec3                     swingAxis, swingAt;
     float                    swingDeg = 0.0f;
     int                      holdOpen = -1;
+    // D54 (the rack eject): a full stroke of the loaded action throws the chambered round out of the ShellEject port, spent
+    // -- RackRound=<Attachment>.<bone> (the round drawn: that class default mesh's round bone; none / absent: this gun
+    // ejects nothing), RackRoundLen (its length along the bone's Z, mesh units), RackRoundScale=along,across.
+    rackround::Source        rack;
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -270,6 +275,16 @@ void ParseLines(const std::wstring& ini) {
         g.sndClip = Split(Token(line, "SndClip"), ';');
         g.sndCase = Split(Token(line, "SndCase"), ';');
         g.magLen = static_cast<float>(atof(Token(line, "MagLen").c_str()));
+        {
+            const std::string rr = Token(line, "RackRound");
+            const size_t rdot = rr.find('.');
+            if (!rr.empty() && rr != "none" && rdot != std::string::npos) {
+                g.rack.attachment = rr.substr(0, rdot);
+                g.rack.bone = rr.substr(rdot + 1);
+                g.rack.len = static_cast<float>(atof(Token(line, "RackRoundLen").c_str()));
+                sscanf_s(Token(line, "RackRoundScale").c_str(), "%f,%f", &g.rack.scaleLen, &g.rack.scaleWidth);
+            }
+        }
         g.magSeat = static_cast<float>(atof(Token(line, "MagSeat").c_str()));
         g_lines.push_back(g);
     }
@@ -311,6 +326,7 @@ struct WState {
     bool           chamberEmpty = false; // GOAL A3 (a pump gun): nothing in the chamber (the case out, not yet pumped closed on
                                          // a shell; or an empty gun loaded) -- the clip's rounds are all in the tube
     bool           caseFall = false;     // GOAL A5: the breech opened on a spent case -- the bake throws it out (it falls)
+    bool           strokeEjected = false; // D54: this stroke of a Step 1 action threw its round (RACK BACK; RACK ends it)
     DWORD          trigRackUntil = 0;    // TriggerRack (the Colt): the trigger held until then after a rack loaded the gun
     std::uint32_t  rechamber[2] = {}, fire0[2] = {};  // the game's FNames set to None (to put back)
     bool           rechamberOff = false, fireOff = false;
@@ -357,6 +373,7 @@ std::uintptr_t AmmoClassOf(std::uintptr_t w) {
 }
 
 std::vector<std::string> g_failedKeys;  // guns whose RefSkeleton check failed: the game's own reload
+bool Blocking(std::uintptr_t self);
 
 // The converted line for this weapon now, or null (no line, below MinUpgrade, alt mode, the check failed).
 const GunLine* Converted(std::uintptr_t w) {
@@ -636,8 +653,8 @@ void PlayCue(std::uintptr_t pawn, std::uintptr_t w, const std::string& want, con
 }
 
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)", "BOLT UP", "BOLT BACK",
-                            "BOLT FORWARD", "BOLT DOWN"};
-constexpr std::uint32_t kEventCount = 11;
+                            "BOLT FORWARD", "BOLT DOWN", "RACK BACK"};
+constexpr std::uint32_t kEventCount = 12;
 const char* kBoltName[] = {"closed", "lifted", "open", "forward"};
 
 // GOAL A2: a fired case leaves as the bolt comes back -- the attachment's EjectRechamberedShell (a final call to
@@ -672,6 +689,89 @@ void ClearPendingFire(std::uintptr_t pawn) {
     if (data && count > 0) *reinterpret_cast<int*>(data) = 0;
 }
 
+// --- D54, the rack eject ---------------------------------------------------------------------------------------------
+// The drawn gun's ShellEject port, from the gun bakes (OverrideBones): its world frame (rows forward, right, up, origin),
+// the gun mesh's axes in the world, and the port's speed from two bakes a frame or more apart.
+struct PortState {
+    std::string key;
+    float       f[16] = {}, rows[16] = {};
+    float       prev[3] = {};
+    double      t = 0.0, prevT = 0.0;
+    bool        have = false, havePrev = false;
+    bool        mirrored = false;  // (taken from left-hand mode's mirror world: f and rows are the real world's either way)
+    DWORD       tick = 0;
+    float       upm = 100.0f, floorZ = 0.0f;
+} g_port;
+
+double QpcNow() {
+    static LARGE_INTEGER f{};
+    if (!f.QuadPart) QueryPerformanceFrequency(&f);
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    return static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
+}
+
+// A script function of the pawn's weapon attachment with no parameters (EjectRechamberedShell, EjectShell, EjectClip),
+// through ProcessEvent with script::Call's checks; false (logged) when it isn't there or can't be called.
+bool AttachmentCall(std::uintptr_t pawn, const char* fn) {
+    const std::uintptr_t att = script::Obj(pawn, "CurrentWeaponAttachment");
+    script::Call c(att, fn, true);
+    const bool ok = att && c.ok && c.Run();
+    if (!ok) MLOG("reload: %s.%s -- %s", att ? names::Name(att).c_str() : "(no attachment)", fn, c.ok ? "FAULTED" : "not callable");
+    return ok;
+}
+
+// The thrown round's look: the round carrier (rackround), else the gun's own brass (its rechamber case, else its shell).
+const char* ThrowRound(std::uintptr_t pawn, const GunLine& l) {
+    if (g_port.have && g_port.key == l.key && GetTickCount() - g_port.tick < 250) {
+        float vel[3] = {0, 0, 0};
+        if (g_port.havePrev && g_port.t - g_port.prevT > 0.004 && g_port.t - g_port.prevT < 0.25) {
+            const float dt = static_cast<float>(g_port.t - g_port.prevT);
+            for (int i = 0; i < 3; ++i) vel[i] = (g_port.f[12 + i] - g_port.prev[i]) / dt;
+            const float sp = std::sqrt(vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]), cap = 3.0f * g_port.upm;
+            if (sp > cap)
+                for (float& x : vel) x *= cap / sp;
+        }
+        if (rackround::Throw(pawn, l.rack, g_port.rows, g_port.f, vel, g_port.floorZ, g_port.upm)) return "a live round thrown";
+    } else {
+        MLOG("reload: no fresh port of %s drawn -- the brass instead", l.key.c_str());
+    }
+    if (AttachmentCall(pawn, "EjectRechamberedShell")) return "the gun's brass (no round carrier: EjectRechamberedShell)";
+    if (AttachmentCall(pawn, "EjectShell")) return "the gun's brass (no round carrier: EjectShell)";
+    return "nothing seen (no round carrier, no brass)";
+}
+
+// The chambered live round out, spent (the player: "it should count as a round spent"): the weapon's own ConsumeAmmo(0)
+// through ProcessEvent (MOHAPlayerPawn.ConsumeAmmo -> SubtractAmmo(1) -> SetAmmoCount -> UpdateLowAmmoMix; the game
+// skips it during its upgrade sequence); a direct AmmoCount - 1 and the low-ammo mix if it can't be called.
+// [ManualReload] RackEjectKeep (reloadFlags bit8): the round goes back to the reserve instead. Called only while the manual
+// reload blocks the game's reload, after the shot detector (OnDraw): the drop is never taken for a shot.
+std::string EjectLive(std::uintptr_t pawn, std::uintptr_t w, const GunLine& l) {
+    int* clipP = Field(w, "AmmoCount");
+    if (!clipP || *clipP < 1) return "nothing chambered";
+    const int c = *clipP;
+    script::Call cons(w, "ConsumeAmmo", true);
+    const std::uint8_t mode = 0;
+    const bool ran = cons.ok && cons.Set("FireModeNum", &mode, 1) && cons.Run();
+    std::string how;
+    if (!ran) {
+        *clipP = c - 1;
+        script::Call low(w, "UpdateLowAmmoMix", true);
+        if (low.ok && low.Set("FireModeNum", &mode, 1)) low.Run();
+        how = "spent (a direct write: ConsumeAmmo not callable)";
+    } else {
+        how = *clipP == c - 1 ? "spent (ConsumeAmmo)" : "ConsumeAmmo kept the count (the game's upgrade sequence)";
+    }
+    if ((g_flags & 256u) && *clipP < c) {
+        ToReserve(pawn, w, c - *clipP);
+        how += ", back to the reserve (RackEjectKeep)";
+    }
+    return "the live round ejected, " + how + "; " + ThrowRound(pawn, l);
+}
+
+// Whether a full stroke of this gun's action throws its chambered round now (the switch, a round to throw, driven).
+bool RackEjects(std::uintptr_t w, const GunLine& l) { return (g_flags & 128u) && !l.rack.attachment.empty() && Blocking(w); }
+
 // A cue played a moment later (GOAL A1: the Garand's op-rod slams home ~0.35 s after the clip goes in).
 struct DelayedCue {
     bool           on = false;
@@ -692,6 +792,7 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     bool closes = false;  // Feed=insert: the action closed on its own
     const char* refused = nullptr;  // (A2) the event didn't apply, and why
     bool caseOut = false, clipOut = false, loadedClip = false, fed = false;
+    std::string ejected;  // D54: what a stroke of the loaded action threw out
     const bool taped = TapedNow(l.key);
     if (taped && s.half < 0) s.half = TapedMode(w);
     int& c = *clipP;
@@ -699,7 +800,9 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     case shared::kReloadEject: {
         if (!s.magIn) break;
         const bool keepOne = l.keepChambered >= 0 ? l.keepChambered != 0 : g_cfg.keepChambered;
-        const int keep = (!l.open && keepOne) ? std::min(c, 1) : 0;
+        // (D54, the review: with the slide held back after a RACK BACK the chamber is empty -- every round goes with the
+        // magazine.)
+        const int keep = (!l.open && keepOne && !s.strokeEjected) ? std::min(c, 1) : 0;
         const int k = c;
         c = keep;
         ToReserve(pawn, w, k - keep);
@@ -773,7 +876,37 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         s.gameEjected = false;
         break;
     }
+    case shared::kReloadRackBack:  // D54: a Step 1 action drawn back to its arm point
+        if (l.open || l.boltAction || l.pump) {
+            refused = "not a closed-bolt Step 1 action";
+        } else if (l.rack.attachment.empty()) {
+            refused = "this gun throws no round (RackRound)";
+        } else if (!(g_flags & 128u)) {
+            refused = "the rack eject is off";
+        } else if (s.strokeEjected) {
+            refused = "this stroke threw its round already";
+        } else if (c < 1) {
+            refused = "nothing chambered";
+        } else if (!Blocking(w)) {
+            refused = "the manual reload isn't driving the gun";
+        } else {
+            ejected = EjectLive(pawn, w, l);
+            s.strokeEjected = true;
+            // EjectOnEmpty (the Garand): the last round out, the empty clip goes with its ping (the follower releases it,
+            // as after the last shot): the magazine is out, the action held back.
+            if (l.ejectOnEmpty && c == 0 && s.magIn) {
+                s.magIn = false;
+                s.pending = false;
+                s.gameEjected = true;
+                const bool thrown = AttachmentCall(pawn, "EjectClip");
+                const int vv = VariantOf(l.key);
+                if (!l.sndOut.empty()) PlayCue(pawn, w, l.sndOut[vv < static_cast<int>(l.sndOut.size()) ? vv : 0], "the clip pings out");
+                ejected += thrown ? "; the empty clip thrown (EjectClip)" : "; the magazine out";
+            }
+        }
+        break;
     case shared::kReloadRack:
+        s.strokeEjected = false;
         if (!l.open) {
             if (c == 0 && s.magIn && s.pending) {
                 c = FromReserve(pawn, w, std::min(s.pendingRounds, m));
@@ -812,6 +945,9 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
                     caseOut = true;
                     s.spent = false;
                     s.chamberEmpty = true;
+                } else if (!s.chamberEmpty && c >= 1 && RackEjects(w, l)) {  // D54: a live shell out, spent
+                    ejected = EjectLive(pawn, w, l);
+                    s.chamberEmpty = true;
                 }
             }
             break;
@@ -825,6 +961,10 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
                 else s.caseFall = true;
                 caseOut = true;
                 s.spent = false;
+                s.chamberEmpty = true;  // (D54: the chamber is tracked for bolts too -- the next stroke feeds it)
+            } else if (!s.chamberEmpty && c >= 1 && RackEjects(w, l)) {  // D54: the live round out (controlled feed: a second
+                ejected = EjectLive(pawn, w, l);                          // stroke throws the round the first one fed)
+                s.chamberEmpty = true;
             }
         }
         break;
@@ -847,6 +987,10 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
             refused = "held open: the magazine is empty";
         } else {
             s.bolt = 3;
+            if (s.chamberEmpty && c >= 1) {  // D54: a round from the magazine into the chamber
+                s.chamberEmpty = false;
+                fed = true;
+            }
             if (s.clipSeated) {  // the bolt pushes the empty clip out of the guides
                 s.clipSeated = false;
                 clipOut = true;
@@ -888,11 +1032,11 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
     if (l.pump) {
         const char* ev = type == shared::kReloadBoltBack ? "PUMP BACK" : type == shared::kReloadBoltForward ? "PUMP FORWARD" :
                          type < kEventCount ? kEventName[type] : "?";
-        MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); pump %s, chamber %s%s%s%s%s", ev, l.key.c_str(), c0, c,
+        MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); pump %s, chamber %s%s%s%s%s%s", ev, l.key.c_str(), c0, c,
              r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.bolt == 2 ? "back" : "forward",
              s.spent ? "spent" : (s.chamberEmpty || c == 0) ? "empty" : "live", caseOut ? "; the case ejected" : "",
              fed ? "; a shell chambered" : "", type == shared::kReloadInsert && !refused ? "; a shell into the tube" : "",
-             refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
+             ejected.empty() ? "" : ("; " + ejected).c_str(), refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
         return;
     }
     char twin[80] = "";
@@ -900,17 +1044,19 @@ void Apply(std::uintptr_t pawn, std::uintptr_t w, WState& s, const GunLine& l, s
         snprintf(twin, sizeof(twin), "; taped: half %c in the gun%s, half A %d, B %d", s.half ? 'B' : 'A', s.magIn ? "" : " (out)",
                  s.halfCount[0], s.halfCount[1]);
     if (l.boltAction) {
-        MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); bolt %s%s%s%s%s%s%s", type < kEventCount ? kEventName[type] : "?",
+        MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); bolt %s%s%s%s%s%s%s%s%s", type < kEventCount ? kEventName[type] : "?",
              l.key.c_str(), c0, c, r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), kBoltName[s.bolt & 3],
-             s.spent ? ", a spent case in" : "", s.clipSeated ? ", a clip in the guides" : "", caseOut ? "; the case ejected" : "",
-             clipOut ? "; the clip pushed out" : "", loadedClip ? "; a stripper clip" : (type == shared::kReloadInsert && !refused ? "; a round" : ""),
-             refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
+             s.spent ? ", a spent case in" : "", s.chamberEmpty ? ", the chamber empty" : "", s.clipSeated ? ", a clip in the guides" : "",
+             caseOut ? "; the case ejected" : "", clipOut ? "; the clip pushed out" : "", fed ? "; a round chambered" : "",
+             loadedClip ? "; a stripper clip" : (type == shared::kReloadInsert && !refused ? "; a round" : ""),
+             ejected.empty() ? "" : ("; " + ejected).c_str(), refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
         return;
     }
-    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s%s%s", type < kEventCount ? kEventName[type] : "?",
+    MLOG("reload: %s %s: clip %d -> %d, reserve %d -> %d (owed %d); magazine %s%s%s%s%s%s%s", type < kEventCount ? kEventName[type] : "?",
          l.key.c_str(), c0, c, r0, ReserveAvailable(pawn, w), OwedFor(AmmoClassOf(w)), s.magIn ? "in" : "out",
          s.pending ? ", pending (rack to feed)" : "", l.open ? (s.cocked ? ", cocked" : ", bolt forward") : "", twin,
-         closes ? "; the action closed on its own" : "");
+         closes ? "; the action closed on its own" : "", ejected.empty() ? "" : ("; " + ejected).c_str(),
+         refused ? (std::string("; REFUSED -- ") + refused).c_str() : "");
 }
 
 // RELOAD-DESIGN 2.5: whether the game's own reload is blocked for `self` right now.
@@ -940,6 +1086,8 @@ struct Resolved {
     int              boltSlide = -1;
     int              boltParent = -1;  // GOAL A3: the action bone's parent (a pump moves along its Z row)
     int              boltSwing = -1;   // GOAL A5: the hinge bone of a breech that swings open
+    int              eject = -1;       // D54: the ShellEject socket's bone (a gun with RackRound), and the socket in its frame
+    float            ejectRel[16] = {};
 };
 std::deque<Resolved> g_resolved;
 
@@ -1078,6 +1226,35 @@ const Resolved* Resolve(std::uintptr_t comp, std::uintptr_t mesh, int num, const
     if (!l.topRound.empty()) {
         r.top = find(l.topRound);
         if (r.top < 0 && why.empty()) why = "no top-round bone " + l.topRound;
+    }
+    // D54: the port a rack-ejected round leaves from -- the mesh's ShellEject socket (not ShellEject_Player, which is
+    // offset for the flat view: ENGINE-NOTES 5bq), on its bone; none: no round is thrown (the gun's brass instead).
+    if (!l.rack.attachment.empty()) {
+        const int so = names::PropertyOffset(mesh, "Sockets");
+        const std::uintptr_t arr = so >= 0 ? names::ReadPointer(mesh + so) : 0;
+        const int ns = so >= 0 ? *reinterpret_cast<const int*>(mesh + so + 4) : 0;
+        for (int i = 0; arr && i < ns && i < 64 && r.eject < 0; ++i) {
+            const std::uintptr_t sk = names::ReadPointer(arr + 4u * i);
+            const int no = sk ? names::PropertyOffset(sk, "SocketName") : -1;
+            if (no < 0 || names::NameAt(sk + no) != "ShellEject") continue;
+            const int bo = names::PropertyOffset(sk, "BoneName"), lo = names::PropertyOffset(sk, "RelativeLocation"),
+                      ro = names::PropertyOffset(sk, "RelativeRotation");
+            if (bo < 0 || lo < 0 || ro < 0) break;
+            r.eject = find(names::NameAt(sk + bo));
+            const float* t = reinterpret_cast<const float*>(sk + lo);
+            const int* rot = reinterpret_cast<const int*>(sk + ro);
+            // FRotationTranslationMatrix (pitch, yaw, roll in 65536ths), row vectors.
+            const float k = 3.14159265f / 32768.0f;
+            const float sp = std::sin(rot[0] * k), cp = std::cos(rot[0] * k), sy = std::sin(rot[1] * k), cy = std::cos(rot[1] * k),
+                        sr = std::sin(rot[2] * k), cr = std::cos(rot[2] * k);
+            const float m[16] = {cp * cy, cp * sy, sp, 0, sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp, 0,
+                                 -(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp, 0, t[0], t[1], t[2], 1};
+            std::memcpy(r.ejectRel, m, sizeof(m));
+            MLOG("reload: %s's ShellEject socket on %s #%d at %.2f %.2f %.2f, turned %d %d %d (the rack eject's port)",
+                 l.gripKey.c_str(), names::NameAt(sk + bo).c_str(), r.eject, t[0], t[1], t[2], rot[0], rot[1], rot[2]);
+        }
+        if (r.eject < 0) MLOG("reload: %s on %s -- no ShellEject socket: a rack-ejected round shows as the gun's brass",
+                              l.gripKey.c_str(), names::Name(mesh).c_str());
     }
     r.ok = why.empty();
     if (r.ok) {
@@ -1662,6 +1839,47 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (!shown) Collapse(bones, r->top, saved, kMove);
         topShown = shown ? 1 : 0;
     }
+    // D54: the drawn ShellEject port (its bone as drawn now, in the world) for a rack-ejected round, and its speed.
+    if (haveRf && r->eject >= 0 && r->eject < num) {
+        float bw[16], pw[16];
+        Mul(bones + 16 * r->eject, l2w, bw);
+        Mul(r->ejectRel, bw, pw);
+        const double tq = QpcNow();
+        if (g_port.key != key) g_port = PortState{};
+        if (g_port.have && tq - g_port.t >= 0.008) {  // (several bakes a frame: the speed from frames apart)
+            std::memcpy(g_port.prev, g_port.f + 12, sizeof(g_port.prev));
+            g_port.prevT = g_port.t;
+            g_port.havePrev = true;
+        }
+        if (!g_port.have || tq - g_port.t >= 0.008) g_port.t = tq;
+        g_port.key = key;
+        // The port's point as drawn; its axes the gun's own (the socket's in the reference pose: forward = mesh +Z, right =
+        // mesh -X, up = mesh -Y) -- the game's pose turns some guns' tag_eject with their animations (the K98's: 45 deg).
+        const float axes[9] = {a[8], a[9], a[10], -a[0], -a[1], -a[2], -a[4], -a[5], -a[6]};
+        for (int k = 0; k < 3; ++k) {
+            const float* pa = axes + 3 * k;
+            const float pl = std::sqrt(pa[0] * pa[0] + pa[1] * pa[1] + pa[2] * pa[2]);
+            for (int i = 0; i < 3; ++i) pw[4 * k + i] = pl > 1e-6f ? pa[i] / pl : 0.0f;
+        }
+        std::memcpy(g_port.f, pw, sizeof(g_port.f));
+        std::memcpy(g_port.rows, a, sizeof(g_port.rows));
+        // (The review of D54: left-hand mode bakes in the mirror world. The thrown round lives in the real world -- the port,
+        // its axes and the gun's taken through this frame's mirror (row vectors: drawn = baked x M) -- so a head moved or
+        // turned during its fall and rest doesn't move it (the round's bake undoes the mirror it is drawn through), and
+        // the port's speed is a real one.)
+        float mirror[16];
+        const bool mirrored = viewmodel::DrawMirror(mirror);
+        if (mirrored) {
+            Mul(g_port.f, mirror, g_port.f);
+            Mul(g_port.rows, mirror, g_port.rows);
+        }
+        if (mirrored != g_port.mirrored) g_port.havePrev = false;  // (the last sample in the other world: no speed from it)
+        g_port.mirrored = mirrored;
+        g_port.have = true;
+        g_port.tick = nowTick;
+        g_port.upm = upm;
+        g_port.floorZ = feetZ();
+    }
     // Round 31, the reload grips: the off hand takes the game's own grip -- on the magazine while grabbed, on the one it
     // holds, on the handle while racking -- the part's drawn frame x the grip (the hand in the part's frame).
     g_gripNow.grip = nullptr;
@@ -2067,6 +2285,7 @@ bool InstantReload(std::uintptr_t pawn) {
 
 bool Install(const Config& cfg, bool pipelineHooked) {
     g_cfg = cfg;
+    rackround::Configure(cfg, pipelineHooked);  // (D54: the arm bake draws a rack-ejected round)
     if (!cfg.manualReload && !cfg.debugReloadProbe) return false;
     ParseLines(cfg.iniPath);
     if (cfg.manualReload)
@@ -2186,6 +2405,7 @@ void OnDraw(shared::Header* hdr) {
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     if (g_cfg.debugReloadProbe) ProbeDraw(pawn);
     if (!g_cfg.manualReload) return;
+    rackround::OnDraw();  // (D54: the rack-ejected rounds at rest go)
     CheckCue();
     g_lastDraw = GetTickCount();
     g_flags = hdr ? hdr->reloadFlags : 0;
@@ -2201,6 +2421,10 @@ void OnDraw(shared::Header* hdr) {
     const std::uintptr_t w = PawnWeapon(pawn);
     const GunLine* line = w ? Converted(w) : nullptr;
     WState* s = w ? &StateFor(w) : nullptr;
+    // D54 (the review): a stroke ends when the off hand lets the action go (reloadFlags bit6), whether or not a RACK
+    // followed (the host's abort -- no off hand, a menu, alternate fire -- and a gun change send none): the next full
+    // stroke throws again. RACK BACK is only ever sent while bit6 is set.
+    if (s && !(g_flags & 64u)) s->strokeEjected = false;
     int* clipP = w ? Field(w, "AmmoCount") : nullptr;
     if (s && line && clipP) {
         const int c = *clipP;
@@ -2377,6 +2601,11 @@ void OnDraw(shared::Header* hdr) {
             st |= (s->spent ? 128u : 0u) | (s->bolt == 2 ? 256u : 0u) | (c < m ? 512u : 0u) | (s->gated ? 2048u : 0u) |
                   (s->chamberEmpty ? 8192u : 0u);
         }
+        // D54 (bit16): a live round chambered that a full stroke would throw out now -- a Step 1 closed bolt with a round
+        // (not one held back after this stroke threw its round), a bolt or pump not open on a live round (not spent, not emptied).
+        if (c >= 1 && !line->open && RackEjects(w, *line) &&
+            ((!line->boltAction && !line->pump) ? !s->strokeEjected : (!s->spent && !s->chamberEmpty && s->bolt != 2)))
+            st |= 65536u;
     }
     hdr->reloadState = st;
     _ReadWriteBarrier();

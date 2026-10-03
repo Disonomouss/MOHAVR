@@ -19,16 +19,19 @@ constexpr float kScaleMin = 20.0f, kScaleMax = 200.0f, kScaleStep = 5.0f;
 constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
-            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kItemCount };
+            kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
+            kRackKeep, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 enum Tab { tGeneral, tWeapons, tHands, kTabCount };
 const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands"};
-constexpr int kTabMax = 20;
+constexpr int kTabMax = 24;
+// (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
+// Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
 const int kTabItems[kTabCount][kTabMax] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kClose, -1},
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
-     kSpotPage, kGiveAll, kClose, -1},
+     kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
 };
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
@@ -218,6 +221,12 @@ void Menu::ApplySavedSettings() {
     const int defReload = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"ManualReload", 0, shipped.c_str()));
     manualReload_ = GetPrivateProfileIntW(L"Weapon", L"ManualReload", defReload, iniPath_.c_str()) != 0;
     MLOG("menu: manual reload %s", manualReload_ ? "on" : "off");
+    // D54, the rack eject: likewise the shipped [ManualReload] RackEject / RackEjectKeep until the player toggles them.
+    const int defRack = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"RackEject", 0, shipped.c_str()));
+    rackEject_ = GetPrivateProfileIntW(L"ManualReload", L"RackEject", defRack, iniPath_.c_str()) != 0;
+    const int defKeep = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"RackEjectKeep", 0, shipped.c_str()));
+    rackEjectKeep_ = GetPrivateProfileIntW(L"ManualReload", L"RackEjectKeep", defKeep, iniPath_.c_str()) != 0;
+    MLOG("menu: rack eject %s, an ejected round %s", rackEject_ ? "on" : "off", rackEjectKeep_ ? "kept" : "lost");
     // The off-hand grenade: likewise the shipped [OffHand] Grenade until the player toggles it.
     const int defNade = static_cast<int>(GetPrivateProfileIntW(L"OffHand", L"Grenade", 0, shipped.c_str()));
     offHandNade_ = GetPrivateProfileIntW(L"OffHand", L"Grenade", defNade, iniPath_.c_str()) != 0;
@@ -888,6 +897,15 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (!iniPath_.empty())
                 WritePrivateProfileStringW(L"Weapon", L"ManualReload", manualReload_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: manual reload -> %s", manualReload_ ? "on" : "off (the game's own reload)");
+        } else if (item == kRackEject) {
+            rackEject_ = !rackEject_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"ManualReload", L"RackEject", rackEject_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: rack eject -> %s", rackEject_ ? "on (a full stroke of a loaded action throws its round out)" : "off");
+        } else if (item == kRackKeep) {
+            rackEjectKeep_ = !rackEjectKeep_;
+            if (!iniPath_.empty())
+                WritePrivateProfileStringW(L"ManualReload", L"RackEjectKeep", rackEjectKeep_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: an ejected round -> %s", rackEjectKeep_ ? "kept (back to the reserve)" : "lost (spent)");
         } else if (item == kOffNade) {
             offHandNade_ = !offHandNade_;
             if (!iniPath_.empty())
@@ -1090,6 +1108,16 @@ void Menu::Render() {
             case kReload:
                 snprintf(label, sizeof(label), "Manual reload    <  %s  >", manualReload_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
+                break;
+            case kRackEject:
+                snprintf(label, sizeof(label), "Rack ejects a round <  %s  >", rackEject_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("racking a loaded slide, bolt or pump throws the chambered round out");
+                break;
+            case kRackKeep:
+                snprintf(label, sizeof(label), "  Ejected round   <  %s  >", rackEjectKeep_ ? "kept" : "lost");
+                ImGui::Selectable(label, sel);
+                note(rackEjectKeep_ ? "kept: it goes back to your reserve" : "lost: it counts as a round spent");
                 break;
             case kOffNade:
                 snprintf(label, sizeof(label), "Off-hand grenade <  %s  >", offHandNade_ ? "on" : "off");

@@ -78,6 +78,7 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   Bolt actions: `@boltup`, `@boltback` (and `@bolt` = the knob closed), `reload=boltup|boltback|boltfwd|boltdown`; the
   game command `mohavr upgradelevel <type> <level>` (before `GiveWeapon`) gives a lower upgrade level.
   The M12's pump: `@fore` (the foregrip point; the grip there is the pump, drawn back along the gun), `reload=pumpback|pumpfwd`.
+  The rack eject (D54): `reload=rackback` sends RACK BACK (a loaded closed-bolt action at full travel: the live round out).
 - Physical melee tests (MELEE-DESIGN 3): a `hand=` line with `dur=S` is a keyframe the host moves the hand to over S
   seconds (a swing at a known speed); `handframe=room` keeps the test hands still in the room while `tools/sim_pose.py`
   moves the head (`handframe=head` follows it again); `hand=l,@fore,0,0,0,0,0,0,pin` keeps the hand where the spot is

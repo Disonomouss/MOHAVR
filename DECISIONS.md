@@ -791,3 +791,44 @@ toggled visible individually."
   connected piece of its triangles, a wider top ring) and the eyepiece's glass (the lens equals the drawn 2.6 cm glass).
   The tube is parallel to the bore (0.000 deg), 9.0 u off it. The other rows regenerate byte-identically.
 **Why:** the player (after round 50): "The M18 needs scope functionality." Research: work/research/m18scope.
+
+### D54. A loaded action racked throws its live round out, spent -- Decided 2026-10-03
+`[ManualReload] RackEject=1` (shipped on, proven in the simulator; the menu's Weapons tab "Rack ejects a round"),
+`RackEjectKeep=0` (the menu's "Ejected round  lost / kept"). Revises RELOAD-DESIGN 0.5.2 and D22's "a loaded closed bolt
+loses nothing", and D30's "a live shell stays (a press check loses nothing)".
+- **Which guns:** only the closed-bolt actions that really extract a live round -- the Colt, the C96 (every level), the
+  StG44, the G43 and the Garand on a full stroke of the slide / handle / op-rod; the K98 and the Springfield when the bolt
+  is drawn back (controlled feed: a second stroke throws the round the first one fed); the M12 on a full pump with a live
+  shell. The open-bolt Thompson, MP40 and BAR (the chamber is empty at rest), the M18 (no extractor) and the Panzerschreck
+  throw nothing; nor does a gun in its rifle-grenade mode (not converted then).
+- **When:** a Step 1 action at its arm point (RackArm 0.85, not a tug of a locked-back one): a new host event RACK BACK
+  (11), sent only while the game reports a live round chambered that a stroke would throw (`reloadState` bit16); a bolt at
+  BOLT BACK (the chamber is now tracked for bolts too); the pump at PUMP BACK. A partial pull, a tug, an empty gun, a spent
+  case: nothing new (a spent case / hull leaves as before, no count change).
+- **The count:** the weapon's own `ConsumeAmmo(0)` through ProcessEvent (the game's spent-round path: skipped in its
+  upgrade sequence), a direct AmmoCount - 1 plus the low-ammo mix if it can't be called; only while the manual reload
+  blocks the game's reload, after the shot detector (never taken for a shot). Kept: the round goes back to the reserve
+  (its cap's overflow carried, as every return). The Garand racked out at its last round also throws its empty clip
+  (its own `EjectClip`) with the ping: the magazine is out, the op-rod held back.
+- **The visible round is a live round for every gun** (the player asked to see one; the game's shell meshes are all empty
+  cases): a carrier -- a clone of a class-default attachment's WeaponMeshComponent (`FindObject`, the knife's way, D51),
+  its Animations cleared, attached to the arms -- of which the arm bake draws only the round bone, on a ballistic fall from
+  the drawn gun's ShellEject port (out to its right, RackRoundUp of that up, a little back, plus the port's own speed;
+  tumbling RackRoundSpin; flat at the feet for RackRoundRest, then gone; two in flight, the oldest reused). The sources:
+  each gun's own round bone (Colt `bullet`, G43 `bullet`, K98 `bullet2`, Springfield `bullet01`, M12 `shell`); the
+  Garand's .30-06 from the Springfield's; the StG44's from the G43's at 0.6 its length; the C96's from the Colt's
+  (x1.05 / 0.85: the MP40's 9 mm draws dark). A class not loaded in a level: the gun's own brass instead.
+- **Shared block v27** with no layout change: event 11, `reloadFlags` bit7 (on) and bit8 (kept), `reloadState` bit16.
+- **The code review's fixes (2026-10-03):** a stroke ends when the off hand lets the action go (`reloadFlags` bit6), so a
+  stroke the host drops without a RACK (its abort, a gun change) doesn't eat the next one's round; the magazine taken out
+  while the slide is held back after RACK BACK takes every round (the chamber is empty: no KeepChambered round); in
+  left-hand mode the round lives in the real world (the port taken through the draw's mirror, the round's bake undoing
+  the mirror it is drawn through), so a head moved or turned while it falls or lies doesn't move it; the menu's two
+  items moved after "Reload spots" (the regression scripts' step counts to the earlier Weapons items stay valid; the tab
+  holds up to 24). HEADSET-TESTS round 51.
+**Why:** the player (after round 50): "Sliding back the bolt/slide and pumping the shotgun should eject a round visibly and
+it should count as a round spent. Only for guns in which this would be accurate for." Research and its adversarial check:
+work/research/rackeject/design.md (the brass-only Phase 1 for the StG44, C96 and Garand dropped for the carrier, at the
+check's and the lead's call).
+**Costs:** a bolt or pump worked by habit now costs a round; the M12's action slide lock isn't modelled. Every ejected
+round is a new component (garbage-collected after it is detached).

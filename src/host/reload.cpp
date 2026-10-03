@@ -12,13 +12,13 @@
 namespace mohavr::host {
 namespace {
 const char* kEventName[] = {"?", "EJECT", "INSERT", "RACK", "TAKE", "DROP", "INSERT (the other half)", "BOLT UP", "BOLT BACK",
-                            "BOLT FORWARD", "BOLT DOWN"};
+                            "BOLT FORWARD", "BOLT DOWN", "RACK BACK"};
 const char* kMagName[] = {"in the gun", "grabbed", "in the off hand", "out"};
 // (GOAL A3: a pump gun's BOLT BACK / FORWARD are its pump's strokes.)
 const char* EventName(std::uint32_t type, bool pump) {
     if (pump && type == shared::kReloadBoltBack) return "PUMP BACK";
     if (pump && type == shared::kReloadBoltForward) return "PUMP FORWARD";
-    return type <= shared::kReloadBoltDown ? kEventName[type] : "?";
+    return type <= shared::kReloadRackBack ? kEventName[type] : "?";
 }
 
 struct V3 { float x, y, z; };
@@ -73,6 +73,9 @@ void ManualReload::Init(const std::wstring& ini) {
     pumpArm_ = std::clamp(iniFloat(L"PumpArm", 0.85f), 0.3f, 1.0f);
     pumpTrigger_ = GetPrivateProfileIntW(L"ManualReload", L"PumpTrigger", 1, ini.c_str()) != 0;
     foreGrabTrigger_ = GetPrivateProfileIntW(L"ManualReload", L"ForeGrabTrigger", 1, ini.c_str()) != 0;
+    // D54 (the shipped default; the menu's toggle is the player's)
+    rackEject_ = GetPrivateProfileIntW(L"ManualReload", L"RackEject", 0, ini.c_str()) != 0;
+    rackEjectKeep_ = GetPrivateProfileIntW(L"ManualReload", L"RackEjectKeep", 0, ini.c_str()) != 0;
     MLOG("reload: the pump %s; the foregrip hand's trigger %s", pumpTrigger_ ? "only with the foregrip hand's trigger held" :
          "whenever the foregrip is held", foreGrabTrigger_ ? "takes a GrabTrigger gun's magazine" : "does nothing on the foregrip");
     GetPrivateProfileStringW(L"ManualReload", L"Hold", L"0 0 0", b, 64, ini.c_str());
@@ -93,8 +96,16 @@ void ManualReload::SetOn(bool on) {
     MLOG("reload: manual reload %s (the menu)", on ? "on" : "off");
 }
 
+void ManualReload::SetRackEject(bool on, bool keep) {
+    if (on == rackEject_ && keep == rackEjectKeep_) return;
+    rackEject_ = on;
+    rackEjectKeep_ = keep;
+    MLOG("reload: the rack eject %s%s (the menu)", on ? "on -- a full stroke of a loaded action throws its round out" : "off",
+         on ? (keep ? "; the round back to the reserve" : "; the round is spent") : "");
+}
+
 void ManualReload::Queue(std::uint32_t type, double now) {
-    if (type < shared::kReloadEject || type > shared::kReloadBoltDown) return;
+    if (type < shared::kReloadEject || type > shared::kReloadRackBack) return;
     pending_.push_back({type, keyHash_, now});
 }
 
@@ -459,7 +470,9 @@ void ManualReload::Frame(const In& in, Out& out) {
                 if (actStage_ == 1 && actS_ >= 1.85f) {
                     Queue(shared::kReloadBoltBack, in.now);
                     actStage_ = 2;
-                    Pulse(out, o, 0.6f, 30.0f);
+                    // (D54: a live round thrown out -- reloadState bit16)
+                    if (geo_.state & 65536u) MLOG("reload: BOLT BACK on a live round: it is thrown out");
+                    Pulse(out, o, (geo_.state & 65536u) ? 0.8f : 0.6f, (geo_.state & 65536u) ? 40.0f : 30.0f);
                 }
                 if (actStage_ == 2 && actS_ <= 1.1f) {
                     Queue(shared::kReloadBoltForward, in.now);
@@ -518,8 +531,9 @@ void ManualReload::Frame(const In& in, Out& out) {
             if (!rackArmed_ && rack_ >= pumpArm_) {
                 Queue(shared::kReloadBoltBack, in.now);
                 rackArmed_ = true;
-                MLOG("reload: PUMP BACK (%.1f cm back%s)", 100.0f * pulled, (geo_.state & 128u) ? "; a spent case in" : "");
-                Pulse(out, o, 0.6f, 30.0f);
+                MLOG("reload: PUMP BACK (%.1f cm back%s)", 100.0f * pulled,
+                     (geo_.state & 128u) ? "; a spent case in" : (geo_.state & 65536u) ? "; a live shell: it is thrown out" : "");
+                Pulse(out, o, (geo_.state & 65536u) ? 0.8f : 0.6f, (geo_.state & 65536u) ? 40.0f : 30.0f);
             } else if (rackArmed_ && rack_ < 0.3f) {
                 Queue(shared::kReloadBoltForward, in.now);
                 rackArmed_ = false;
@@ -553,8 +567,13 @@ void ManualReload::Frame(const In& in, Out& out) {
             rack_ = 0.0f;
         } else if (!rackArmed_ && (tug_ ? pulled >= rackTug_ : rack_ >= rackArm_)) {
             rackArmed_ = true;
-            MLOG("reload: the action armed (%.1f cm back)", 100.0f * pulled);
-            Pulse(out, o, 0.4f, 20.0f);
+            // D54: a full stroke (not a tug) of a loaded action throws the chambered round out at the arm point -- RACK
+            // BACK, sent only while the game says a live round is chambered (reloadState bit16: the rack eject on, a gun
+            // that throws one).
+            const bool live = !tug_ && rackEject_ && (geo_.state & 65536u);
+            if (live) Queue(shared::kReloadRackBack, in.now);
+            MLOG("reload: the action armed (%.1f cm back)%s", 100.0f * pulled, live ? " -- RACK BACK: the live round out" : "");
+            Pulse(out, o, live ? 0.7f : 0.4f, live ? 35.0f : 20.0f);
         } else if (rackArmed_ && !tug_ && rack_ < 0.3f) {
             sendRack("brought forward");
             rackArmed_ = false;
@@ -746,7 +765,7 @@ std::uint32_t ManualReload::Flags() const {
     // bit6: the off hand holds the action now (the grips: an open bolt let go is posed, but not held).
     const bool held = boltHeld_ || pumpHeld_ || actHeld_;
     return (on_ ? 1u : 0u) | (static_cast<std::uint32_t>(mag_) << 1) | (posed ? 8u : 0u) | (engaged_ ? 16u : 0u) |
-           (mag_ == kInHand && flipped_ ? 32u : 0u) | (held ? 64u : 0u);
+           (mag_ == kInHand && flipped_ ? 32u : 0u) | (held ? 64u : 0u) | (rackEject_ ? 128u : 0u) | (rackEjectKeep_ ? 256u : 0u);
 }
 
 shared::Pose ManualReload::MagPose() const {

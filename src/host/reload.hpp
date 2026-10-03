@@ -43,6 +43,9 @@ public:
     void Init(const std::wstring& ini);
     void SetOn(bool on);
     bool On() const { return on_; }
+    // D54, the rack eject (the menu's; [ManualReload] RackEject / RackEjectKeep): a full stroke of a loaded action throws
+    // the chambered round out, spent (keep: back to the reserve). The game gets it as reloadFlags bits 7 and 8.
+    void SetRackEject(bool on, bool keep);
     // Round 31: the grab rings' scale (the magazine's and the action's; the player's, the menu).
     void SetRingScale(float s) { ringScale_ = s > 0.2f ? s : 0.2f; }
     // Round 33: the weapon in hand's grab rings moved and sized (the menu's Reload spots page): per ring (0 the magazine,
@@ -131,6 +134,7 @@ private:
     void SetMag(Mag m, const char* why);
 
     bool          on_ = false;
+    bool          rackEject_ = false, rackEjectKeep_ = false;  // D54
     int           releaseButton_ = 1;
     float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
     float         boltGrabR_ = 0.05f, rackArm_ = 0.85f, rackMin_ = 0.04f, rackTug_ = 0.01f;

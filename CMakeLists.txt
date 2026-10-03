@@ -35,6 +35,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/melee.cpp
         src/mohavr/scope.cpp
         src/mohavr/knife.cpp
+        src/mohavr/rackround.cpp
         src/mohavr/offpistol.cpp
         src/mohavr/carrier.cpp
         src/mohavr/script_call.cpp

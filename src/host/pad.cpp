@@ -415,7 +415,7 @@ void Pad::ReadTests(double now) {
                     // pump's strokes are the bolt's back / forward.)
                     static const char* kNames[] = {"", "eject", "insert", "rack", "take", "drop", "", "boltup", "boltback",
                                                    "boltfwd", "boltdown"};
-                    std::uint32_t pumpE = !strcmp(v, "pumpback") ? 8u : !strcmp(v, "pumpfwd") ? 9u : 0u;
+                    std::uint32_t pumpE = !strcmp(v, "pumpback") ? 8u : !strcmp(v, "pumpfwd") ? 9u : !strcmp(v, "rackback") ? 11u : 0u;
                     if (pumpE) {
                         testReload_.push_back(pumpE);
                         MLOG("pad: test reload event %s", v);

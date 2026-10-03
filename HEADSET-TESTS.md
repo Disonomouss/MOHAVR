@@ -2008,6 +2008,46 @@ we make the knife an off hand equip with melee functionality? Add a holster to l
 
 ---
 
+## Round 51: prepared 2026-10-03, the rack eject
+**Your request:** "Sliding back the bolt/slide and pumping the shotgun should eject a round visibly and it should count as a
+round spent. Only for guns in which this would be accurate for."
+
+**Changed:**
+- **Racking a loaded gun throws its live round out**, and it counts as spent: the Colt, the C96, the StG44, the G43 and the
+  Garand when you pull the slide / handle all the way back; the K98 and the Springfield when you draw the bolt back on a
+  live round (a second bolt cycle throws the round the first one fed); the M12 when you pump it on a live shell. The round
+  flies out of the ejection port to the gun's right, tumbles and lies at your feet for about a second.
+- **Not on:** the Thompson, MP40 and BAR (open bolts: nothing in the chamber at rest), the M18, the Panzerschreck. A partial
+  pull, a tug on a locked-back slide, an empty gun or a spent case after a shot throw nothing new (a spent case leaves as
+  before and costs nothing).
+- The Garand racked out at its last round also pings its empty clip out.
+- **Menu -> Weapons -> "Rack ejects a round"** (on / off) and **"Ejected round"** (lost / kept: kept puts it back in your
+  reserve). Both sit after "Reload spots".
+
+**How to try it:**
+1. With the Colt (or the C96, StG44, G43, Garand) loaded, pull the slide all the way back with the off hand and let it go.
+   Watch the round fly out; the magazine count drops by one.
+2. Pull it only part way: nothing should come out.
+3. With the K98 or Springfield, work the bolt twice without firing: two live rounds out. Fire, then work it: only the
+   empty case.
+4. With the M12, pump it twice without firing (a live shell each time); fire, then pump: only the hull.
+5. Try left-hand mode (Menu -> General -> Gun hand) and look at the round on the floor while you move your head.
+
+**Questions:**
+1. Does the thing that flies out read as a live round (a brass case with a bullet; the M12's red shell)?
+2. The throw: its speed (1.5 m/s), how high it goes, its spin, and how long it lies on the floor (1 s). Too much, too
+   little?
+3. The moment it comes out (when the slide reaches about 85% of its travel back): does it feel right?
+4. Lost or kept: should an ejected round be gone (as asked) or go back to your reserve?
+5. The M12: pumping with the foregrip trigger held now costs a shell each time (the real gun's action lock isn't
+   modelled). Too easy to waste shells?
+6. The K98 / Springfield: is a habitual second bolt cycle costing a round acceptable?
+7. Left-hand mode: is the round thrown to the left, and does it stay put on the floor when you move or turn your head?
+
+**Deployed for this round:** the shipped defaults (the rack eject on, an ejected round lost).
+
+---
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 26;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted
+inline constexpr std::uint32_t kVersion = 27;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -210,7 +210,9 @@ struct Header {
     float                  boltTravel;     // metres from the held position to full back
     std::int32_t           ammoClip, ammoMax, ammoReserve;  // ammoReserve = the reserve + the rounds owed (RELOAD-DESIGN 2.2)
     std::uint32_t          reloadState;    // bit0 magIn, bit1 pending, bit2 ready (closed: clip >= 1; open: cocked), bit3
-                                           // action held back, bit4 rack needed, bit5 open-bolt gun, bit6 infinite ammo
+                                           // action held back, bit4 rack needed, bit5 open-bolt gun, bit6 infinite ammo;
+                                           // v27: bit16 a live round chambered that a full stroke of the action would
+                                           // eject now (the rack eject on, the gun throws one: RackRound)
     volatile std::uint32_t reloadPawnSeq;  // bumped on a new local pawn: the host resets every gun to "in the gun"
     volatile std::uint32_t reloadEvtAck;   // the last event the game processed (applied or rejected)
     // host -> game, per XR frame inside the view seqlock (viewSeq), next to gunPose
@@ -218,7 +220,10 @@ struct Header {
                                            // 1 grabbed, 2 in the off hand, 3 out); bit3 action held; bit4 engaged (the
                                            // pipeline is alive: the game blocks its own reload only then); bit5 the held
                                            // taped pair flipped (its other half toward the well); bit6 the off hand holds
-                                           // the action (a bolt's knob, a handle, the pump) -- its grip applies
+                                           // the action (a bolt's knob, a handle, the pump) -- its grip applies;
+                                           // v27 (D54): bit7 the rack eject on (a full stroke of a loaded action throws
+                                           // the chambered round out, spent), bit8 an ejected round goes back to the
+                                           // reserve (RackEjectKeep)
     std::uint32_t          reloadKeyHash;  // FNV-1a 32 of the attachment class these flags are for
     float                  magPull;        // metres the grabbed magazine is drawn out along magOut
     Pose                   magPose;        // the held magazine's grab-point frame in LOCAL (the gun frame's axes)
@@ -454,9 +459,11 @@ static_assert(sizeof(Header) == 3000, "shared::Header layout must match between 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
 // v18 (GOAL A2): the two-stage action's steps -- a bolt lifted (7), drawn back (8), pushed forward (9), turned down (10).
+// v27 (D54): RACK BACK (11) -- a Step 1 action (slide, bolt handle, op-rod) drawn back to its arm point (not a tug): a
+// chambered live round leaves the port.
 enum ReloadEvent : std::uint32_t { kReloadEject = 1, kReloadInsert = 2, kReloadRack = 3, kReloadTake = 4, kReloadDrop = 5,
                                    kReloadInsertOther = 6, kReloadBoltUp = 7, kReloadBoltBack = 8, kReloadBoltForward = 9,
-                                   kReloadBoltDown = 10 };
+                                   kReloadBoltDown = 10, kReloadRackBack = 11 };
 inline std::uint32_t KeyHash(const char* s) {  // FNV-1a 32
     std::uint32_t h = 2166136261u;
     for (; s && *s; ++s) h = (h ^ static_cast<std::uint8_t>(*s)) * 16777619u;

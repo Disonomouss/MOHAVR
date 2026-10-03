@@ -2117,6 +2117,58 @@ Measured (work/research/m18scope; tools/scope_points.py) and in the simulator (w
   estimate (-0.126, 0.035, 0.104)); looked through at 2.8x (real) and 1.5x (the game's zoom from 58 deg), the drawn tube
   0.00 deg off the aim line, the lens 2.6 cm across.
 
+## 5bq. The rack eject: the ports, the rounds, ConsumeAmmo, the round carrier (D54, 2026-10-03)
+
+Research: work/research/rackeject (design.md and its adversarial check; ports.txt, round_bones.txt, cartridges.txt from
+the cooked meshes). Measured in the simulator (work/research/tests/rackeject1-6.ps1, 1v), the harness level Var_Flk_P,
+every gun at upgrade level 2 (the harness save):
+- **No live-round mesh:** the cooked shell static meshes (GCm_Wpn_emptyShells: shell_45, shell_9x19, shell_792x57,
+  shell_12guage) are all empty cases (a capped head, an open mouth). Live rounds exist only as gun-mesh bones, each with
+  its origin at the round's base and the round along its +Z: Colt `bullet` (3.28 u), G43 `bullet` (7.05), K98 `bullet1` /
+  `bullet2` (7.74), Springfield `bullet01` / `bullet02` (8.10), M12 `shell` (4.48), MP40 `bullet` (3.05). The C96's and
+  the Garand's `clip` bones are clips; the StG44, BAR and Thompson have none.
+- **The ports:** every converted gun's `ShellEject` socket is on its `tag_eject` bone, turned (pitch 16384, roll -16384):
+  socket X = mesh +Z (forward), Y = mesh -X (the gun's right), Z = mesh -Y (up). Read at run time from the mesh's Sockets
+  (Colt at (0.56, -1.26, -4.10) on tag_eject #7, G43 (-0.46, -1.25, 1.60) #5, StG44 (0.27, 0, 0) #7; the K98, Springfield,
+  C96, Garand and M12 at the bone's origin). `ShellEject_Player` (the game's brass) is offset for the flat view (the C96's
+  10 u behind the port). **The K98's tag_eject is turned ~45 deg in the game's animated pose** (the port's "right"
+  measured (0.39, 0.59, -0.71) while the gun's is (-0.86, 0.50, -0.07)): the thrown round takes the port's point from the
+  drawn bone and its axes from the gun mesh's own (`a`'s rows).
+- **The count:** `EALAWeapon.ConsumeAmmo(FireModeNum 0)` through AActor::ProcessEvent (`script::Call`) drops AmmoCount by
+  one on every gun tried (Colt 7 -> 0 by racks, G43, StG44, Garand 8 -> 0, C96 -- with bInfiniteAmmo set in the harness:
+  it still drops -- K98, Springfield, M12 8 -> 0); the HUD's clip follows. Run in OnDraw after the shot detector and
+  before `lastClip` is taken: never seen as a shot. RackEjectKeep: the G43's round back to the reserve (at its cap of
+  120: carried as owed, `reserve 120 -> 121 (owed 1)`).
+- **The Garand's clip:** racked out at its last round, the attachment's `EjectClip` (a script function: it spawns the
+  game's clip projectile) is called through ProcessEvent, and the mod plays the ping (`GARAND.WpnPing_PC_Garand ... is
+  playing`); the magazine is out, a new clip loads it as after the last shot.
+- **The round carrier:** `FindObject("MOHAGameNonNative.Default__<Attachment>.WeaponMeshComponent", <FPArms' class>)`
+  finds the class default's MOHASkeletalMeshComponent for the Colt, G43, K98, Springfield, M12 and MP40 in Var_Flk_P
+  (other levels: unproven); a missing class (`Attachment_NoSuchGun`, a test) logs NOT FOUND and the gun's own brass is
+  thrown (`EjectShell`, moved to the drawn gun by muzzle.cpp). The template's `Animations` names
+  `Default__MOHAParachuteActor.AnimNodeSeq0`: cleared on the clone before AttachComponent (no tree: the reference pose).
+  The clone attached to the arms' Camera bone (fCustomBoundsSize 600) is drawn through the arm bake with every bone but
+  the round's collapsed: seen in the captures (logs/shots/rackeject1v-*, rackeject2-*, rackeject3-*, rackeject4-*) as a
+  brass case with a copper bullet (the MP40's 9 mm draws dark grey: not used), the M12's red hull, the StG44's shortened
+  round; in left-hand mode thrown to the left (the mirror world's port).
+- **The fall:** from a gun held 0.35 m ahead at chest height the round drops 1.48 m to the feet (the pawn's location less
+  its collision half-height) in 0.63 s at 1.5 m/s, RackRoundUp 0.6 (about 0.8 m out to the side); the landing plays the
+  attachment's `PlayShellImpactSound`.
+- **Left-hand mode (the review of D54):** the gun bakes run in the mirror world, and the round carrier copies the arms'
+  first-person FOV, so the proxy hook draws it through the mirror of the frame it is drawn in (l2w x M; M rebuilt every
+  frame from the head and the camera's yaw). The thrown round is kept in the real world: the port (point and axes) and the
+  gun's axes are taken through `viewmodel::DrawMirror` when they are sampled, and the round's bake writes F x M x inv(l2w)
+  (drawn F x M x M = F). Measured (rackeject8 C, the round drawn 5x to be seen: logs/shots/rackeject8big-restA..D): thrown
+  to the player's left (the port's right (0.87, 0.50) in the real world at yaw -30), then the head turned 79 deg to it,
+  moved 25 cm each way and turned 15 deg more -- the round lies on the same spot of the floor in every capture (before,
+  it was placed once in the throw-time mirror world: a head move d or turn theta moved it 2d / 2 theta).
+- **The stroke and the magazine (the review of D54):** `strokeEjected` (a Step 1 stroke threw its round) ends when the off
+  hand lets the action go (`reloadFlags` bit6 clear), not only on a RACK: the host's abort and a gun change send none
+  (rackeject8 B: RACK BACK 7 -> 6, another gun taken while held, the Colt back -> the next full rack 6 -> 5, no refusal).
+  While it is set the chamber is empty: the magazine out then takes every round (rackeject8 A: the slide held back after
+  RACK BACK 7 -> 6, EJECT 6 -> 0; brought forward: nothing chambered; a magazine in, racked: 7). `reloadState` bit16 is
+  clear for a Step 1 gun held back after its round was thrown.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
