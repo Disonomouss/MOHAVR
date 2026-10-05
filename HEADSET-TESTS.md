@@ -2096,6 +2096,8 @@ screen."
 
 **Deployed for this round:** the shipped defaults (the HUD on the wrist, shown when looked at, forearm layout, dim backing).
 
+**Answers (2026-10-03, rounds 51 and 52, one session):** "M18 scope is good." The StG44: "The stg chamber does not open with the bolt. The off hand and the bolt move but the chamber clips through the cover." (The mesh: the StG44's only moving action part is the `Bolt` bone -- the handle and a rod that shows along the left side's slot when drawn back; the bolt body in the ejection port and its dust cover are part of the body (RootOffset) and cannot move; logs/shots/stg44-bolt-explained.png. Asked which part clips.) The wrist HUD and the rack eject's other questions not yet answered.
+
 ---
 
 ## Template
