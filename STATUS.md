@@ -14,6 +14,8 @@ harness deploys it, drives the game to gameplay, and waits on the mod's log. The
 **not deployed**; the game folder matches its baseline. Next: **M2** (PLAN.md), starting with the
 address-space budget for D3D9On12.
 
+**Release 0.8.1** (2026-10-05, D57): 0.8.0 crashed in the first mission (out of 2 GB of address space in VR; not new in
+0.8.0). The installers now offer the 4 GB flag in MOHA.exe (on by default, reversible), proven in the simulator.
 **Release 0.8.0** (2026-10-05, D56): `MOHAVR-0.8.0-Setup.exe` (a setup program, Inno Setup) and the zip, on the private
 GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.ps1`.
 

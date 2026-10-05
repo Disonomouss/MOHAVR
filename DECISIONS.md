@@ -896,3 +896,33 @@ shows no HUD on the wrist setting.
   the game's file; the player's settings unchanged), and the real game folder found by itself, installed and uninstalled
   back to tools\deploy.ps1's baseline.
 **Why:** the player (2026-10-05): "Release latest version", "Build the installer for 0.8.0".
+
+### D57. The game may use 4 GB: an optional large-address-aware flag in MOHA.exe -- Decided 2026-10-05 (the player's choice)
+- **Why it's needed:** 0.8.0 crashed in the first mission on two PCs: `Present` failed with E_OUTOFMEMORY, then D3D9On12
+  faulted in a copy. MOHA is 32-bit and not large address aware: 2 GB. Measured in Hus_M1_P at 2880x1620 (ENGINE-NOTES 5bs):
+  - the VR path climbs from ~1.46 to ~1.75-1.86 GB within 4 minutes of the opening cutscene;
+  - the unmodded game stays at ~1.4 GB;
+  - the round-42 build (1 October) climbs the same way, so it was never 0.8.0's features;
+  - the extra is the D3D9-on-D3D12 path: 16 private 32 MB reservations (512 MB, 176 MB committed) against the game's 5;
+  - at the crash, 122 MB free, the largest block 20 MB.
+- **What:** both installers offer "Let the game use up to 4 GB of memory", on by default.
+  - It sets IMAGE_FILE_LARGE_ADDRESS_AWARE (0x20 at e_lfanew + 22) in `MOHA.exe`.
+  - The original exe is kept first: setup in ProgramData\MOHAVR, the zip's script in %LOCALAPPDATA%\MOHAVR.
+  - Only a flag the installer set is recorded. That flag is cleared on uninstall, or when the option is unticked on an update.
+  - An exe already large address aware is left alone.
+  - The mod logs at start whether it has 4 GB (`memory: MOHA.exe large address aware: yes/no`).
+  - Steam's "verify files" restores the original exe; running setup again sets the flag again.
+- **This revises standing rule 1** (never modify game files) for this one bit, at the player's request. D10 had chosen the
+  64-bit host over patching the exe; the first mission now needs both. Rule 2 holds: it is still Steam's SteamStub-wrapped
+  exe that runs.
+- **Proven [S]:**
+  - The flagged exe starts through Steam (SteamStub accepts it) and has 4095 MB.
+  - Hus_M1_P ran 7 minutes past where both PCs crashed, with 2.2 GB free.
+  - With `[Debug] ReserveLow=1500` forcing the game and the mod above 2 GB:
+    - Hus_M1_P ran 5 minutes at 3.36 GB;
+    - a harness cycle passed;
+    - the StG44 was drawn and baked and a rack threw a live round, as without it;
+    - the knife was drawn.
+  - work/research/tests/setup2.ps1 and ziplaa.ps1: ticked, unticked, re-ticked and uninstalled restore the exe
+    byte-identically; an already flagged exe is left alone.
+**Why:** the player (2026-10-05), after the crash: "Make the optional step."

@@ -128,6 +128,8 @@ float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself f
     bool debugTraceScissor = false;  // [Debug] TraceScissor -- log scissor rects set while the viewport is offset
     bool debugReflect   = false;  // [Debug] Reflect -- log the class/property layout of the player's pawn once (research)
     bool debugCrashDump = true;      // [Debug] CrashDump -- a crash in d3d9/d3d9on12/ucrtbase writes a dump (round 29)
+    int  debugReserveLow = 0;        // [Debug] ReserveLow -- MB of the low 2 GB reserved at start (tests: the game and the mod
+                                     // then allocate above 2 GB, with MOHA.exe large address aware: D57)
     bool debugCrashDumpTest = false; // [Debug] CrashDumpTest -- a caught access violation at the first Draw (tests)
     bool debugOffHandTrace = false;  // [Debug] OffHandTrace -- the off-hand grenade: availability, the hold's states, ticks
     bool debugMeleeTrace = false;    // [Debug] MeleeTrace -- physical melee: each armed swing, its speeds, contacts, refusals

@@ -29,6 +29,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.debugGameCommands = get(L"Debug", L"GameCommands", c.debugGameCommands);
     c.debugCrashDump = get(L"Debug", L"CrashDump", c.debugCrashDump);
     c.debugCrashDumpTest = get(L"Debug", L"CrashDumpTest", c.debugCrashDumpTest);
+    c.debugReserveLow = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"ReserveLow", 0, ini.c_str()));
     c.debugReloadProbe = get(L"Debug", L"ReloadProbe", c.debugReloadProbe);
     c.debugReloadTrace = get(L"Debug", L"ReloadTrace", c.debugReloadTrace);
     c.debugOffHandTrace = get(L"Debug", L"OffHandTrace", c.debugOffHandTrace);

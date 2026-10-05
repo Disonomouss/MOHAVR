@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Drive MOHA from scripts: launch windowed, detect screens, send keys, measure, quit, restore.
 
@@ -31,7 +31,8 @@ param(
     [Parameter(Position = 2)] [string] $Arg2,
     [int] $Width  = 1920,
     [int] $Height = 1080,
-    [switch] $Fullscreen   # exclusive fullscreen instead of windowed (device-loss tests; takes over the screen)
+    [switch] $Fullscreen,  # exclusive fullscreen instead of windowed (device-loss tests; takes over the screen)
+    [string[]] $ExtraArgs = @()  # launch: more game arguments (a map to start in, e.g. Hus_M1_P: the memory tests)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -277,7 +278,7 @@ switch ($Action) {
         $backup = (& (Join-Path $PSScriptRoot 'userdata.ps1') backup | Select-Object -Last 1)
         Save-State ([pscustomobject]@{ backup = $backup; restored = $false; launched = (Get-Date).ToString('o'); pid = 0 })
         $mode = if ($Fullscreen) { '-fullscreen' } else { '-windowed' }
-        & $SteamExe -applaunch $AppId $mode "ResX=$Width" "ResY=$Height" -log
+        & $SteamExe -applaunch $AppId @ExtraArgs $mode "ResX=$Width" "ResY=$Height" -log
         $t0 = Get-Date; $p = $null
         while (-not $p -and ((Get-Date) - $t0).TotalSeconds -lt 90) { Start-Sleep -Milliseconds 500; $p = Get-Moha }
         if (-not $p) { throw 'MOHA did not start within 90 s (Steam dialog?) -- user data NOT touched, run restore anyway' }

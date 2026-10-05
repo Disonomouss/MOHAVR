@@ -30,6 +30,14 @@ try {
         $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($dll))
         if ($text -notmatch 'MOHAVR-host\.exe') { throw "The dinput8.dll in $bin is not MOHAVR's -- leaving it alone. Nothing was removed." }
     }
+    # D57: a 4 GB flag the installer set is cleared again (the kept original goes too).
+    if ((Test-Path $manifest) -and ((Get-Content $manifest -Raw | ConvertFrom-Json).laa -eq $true)) {
+        $exe = Join-Path $bin 'MOHA.exe'
+        $b = [IO.File]::ReadAllBytes($exe)
+        $o = [BitConverter]::ToInt32($b, 0x3C) + 22
+        if ($b[$o] -band 0x20) { $b[$o] = $b[$o] -band 0xDF; [IO.File]::WriteAllBytes($exe, $b); Write-Host 'MOHA.exe is back to 2 GB of memory.' }
+        Remove-Item (Join-Path $dataDir 'MOHA.exe.original') -ErrorAction SilentlyContinue
+    }
     $removed = 0
     foreach ($f in $ours) {
         $p = Join-Path $bin $f

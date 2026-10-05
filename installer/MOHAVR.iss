@@ -4,6 +4,10 @@
 ; game's: the same rules as release\install.ps1 -- the game found through Steam, a dinput8.dll that isn't MOHAVR's never
 ; overwritten, the game not running, a changed shipped MOHAVR.ini saved aside; the player's own settings
 ; (%LOCALAPPDATA%\MOHAVR) never touched, on install or uninstall.
+; The one exception, the player's choice (D57; the task "laa", ticked by default): MOHA.exe's large-address-aware flag, so
+; the 32-bit game may use 4 GB instead of 2 GB (the first mission ran out in VR). One bit of the exe's header; the original
+; exe kept in {autoappdata}\MOHAVR first; cleared again on uninstall or when the task is unticked on an update -- only a
+; flag this setup set.
 
 #ifndef AppVersion
   #error Pass /DAppVersion=x.y.z (tools\package.ps1 does)
@@ -46,6 +50,9 @@ UninstallFilesDir={autoappdata}\MOHAVR\uninstall
 [Messages]
 SelectDirLabel3=Setup will add MOHAVR to Medal of Honor: Airborne in the following folder (the game's own folder, the one that contains UnrealEngine3\Binaries\MOHA.exe).
 SelectDirBrowseLabel=To continue, click Next. If this isn't your game's folder, click Browse.
+
+[Tasks]
+Name: "laa"; Description: "Let the game use up to 4 GB of memory (recommended: without it the first mission runs out of memory in VR). Sets one flag in MOHA.exe's header; the original is kept and put back on uninstall."; GroupDescription: "Memory:"
 
 [Files]
 ; dinput8.dll is removed by the uninstall code only while it is still MOHAVR's (another mod may have replaced it).
@@ -158,6 +165,91 @@ begin
                  ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
+// D57: MOHA.exe's large-address-aware flag (0x20 in the COFF header's Characteristics, at e_lfanew + 22).
+function LaaOffset(S: TFileStream): Integer;
+var
+  B: AnsiString;
+  Pe: Integer;
+begin
+  Result := -1;
+  SetLength(B, 4);
+  S.Seek($3C, soFromBeginning);
+  S.ReadBuffer(B, 4);
+  Pe := Ord(B[1]) + Ord(B[2]) * $100 + Ord(B[3]) * $10000 + Ord(B[4]) * $1000000;
+  if (Pe <= 0) or (Pe > $10000) then exit;
+  S.Seek(Pe, soFromBeginning);
+  S.ReadBuffer(B, 4);
+  if B <> 'PE' + #0 + #0 then exit;
+  Result := Pe + 22;
+end;
+
+// The flag now (-1 unreadable, 0 off, 1 on); with Want >= 0 it is set to that first. True if it now matches Want.
+function LaaFlag(const Exe: String; Want: Integer; var Now: Integer): Boolean;
+var
+  S: TFileStream;
+  B: AnsiString;
+  O, Ch: Integer;
+begin
+  Result := False;
+  Now := -1;
+  try
+    if Want >= 0 then S := TFileStream.Create(Exe, fmOpenReadWrite or fmShareDenyWrite)
+    else S := TFileStream.Create(Exe, fmOpenRead or fmShareDenyNone);
+    try
+      O := LaaOffset(S);
+      if O < 0 then exit;
+      SetLength(B, 2);
+      S.Seek(O, soFromBeginning);
+      S.ReadBuffer(B, 2);
+      Ch := Ord(B[1]) + Ord(B[2]) * $100;
+      if (Want >= 0) and (((Ch and $20) <> 0) <> (Want = 1)) then begin
+        if Want = 1 then Ch := Ch or $20 else Ch := Ch and not $20;
+        B[1] := Chr(Ch and $FF);
+        B[2] := Chr((Ch shr 8) and $FF);
+        S.Seek(O, soFromBeginning);
+        S.WriteBuffer(B, 2);
+      end;
+      if (Ch and $20) <> 0 then Now := 1 else Now := 0;
+      Result := (Want < 0) or (Now = Want);
+    finally
+      S.Free;
+    end;
+  except
+    Log('MOHA.exe''s header: ' + GetExceptionMessage);
+  end;
+end;
+
+function LaaMarker(): String;
+begin
+  Result := ExpandConstant('{autoappdata}\MOHAVR\laa-set.txt');
+end;
+
+// Applies the task: on -> the flag set (the original exe kept first, once; a marker that this setup set it), off -> a flag
+// this setup set cleared again.
+procedure ApplyLaa(const Exe: String; On: Boolean);
+var
+  Now: Integer;
+  Keep: String;
+begin
+  LaaFlag(Exe, -1, Now);
+  if On then begin
+    if Now = 1 then begin Log('MOHA.exe is already large address aware'); exit; end;
+    if Now < 0 then begin Log('MOHA.exe''s header is not readable -- the 4 GB option is skipped'); exit; end;
+    Keep := ExpandConstant('{autoappdata}\MOHAVR');
+    ForceDirectories(Keep);
+    if not FileExists(Keep + '\MOHA.exe.original') then FileCopy(Exe, Keep + '\MOHA.exe.original', False);
+    if LaaFlag(Exe, 1, Now) then begin
+      SaveStringToFile(LaaMarker(), Exe, False);
+      Log('MOHA.exe: large address aware set (4 GB); the original kept as ' + Keep + '\MOHA.exe.original');
+    end else
+      MsgBox('Setup could not change MOHA.exe (is the game running, or the file read-only?). MOHAVR is installed, but the ' +
+             'game keeps its 2 GB of memory: the first mission may run out in VR. Run setup again to retry.', mbInformation, MB_OK);
+  end else if FileExists(LaaMarker()) then begin
+    if LaaFlag(Exe, 0, Now) then Log('MOHA.exe: large address aware cleared (the option was unticked)');
+    DeleteFile(LaaMarker());
+  end;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Dll: String;
@@ -190,6 +282,8 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   Old, Keep: String;
 begin
+  if CurStep = ssPostInstall then
+    ApplyLaa(AddBackslash(WizardDirValue) + 'UnrealEngine3\Binaries\MOHA.exe', WizardIsTaskSelected('laa'));
   if CurStep = ssInstall then begin
     Old := AddBackslash(WizardDirValue) + 'UnrealEngine3\Binaries\MOHAVR.ini';
     if FileExists(Old) then begin
@@ -216,8 +310,15 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Dll: String;
+  Now: Integer;
 begin
   if CurUninstallStep = usUninstall then begin
+    // D57: a large-address-aware flag this setup set is cleared; the kept original goes too.
+    if FileExists(LaaMarker()) then begin
+      if LaaFlag(ExpandConstant('{app}\UnrealEngine3\Binaries\MOHA.exe'), 0, Now) then Log('MOHA.exe: large address aware cleared');
+      DeleteFile(LaaMarker());
+    end;
+    DeleteFile(ExpandConstant('{autoappdata}\MOHAVR\MOHA.exe.original'));
     Dll := ExpandConstant('{app}\UnrealEngine3\Binaries\dinput8.dll');
     if FileExists(Dll) then begin
       if IsOurs(Dll) then DeleteFile(Dll)

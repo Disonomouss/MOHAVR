@@ -1,4 +1,4 @@
-# MOHAVR 0.8.0: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.1: VR for Medal of Honor: Airborne
 
 MOHAVR turns the Steam PC version of *Medal of Honor: Airborne* into a VR game. You get a stereo, head-tracked view,
 motion controllers with guns held in your hands, and physical interactions: holsters on your body, reloading by hand,
@@ -14,17 +14,22 @@ in-headset menu adjusts all of it. This is a **test build**: read "Known issues"
 
 ## Install
 
-**Setup program (recommended):** run `MOHAVR-0.8.0-Setup.exe`.
+**Setup program (recommended):** run `MOHAVR-0.8.1-Setup.exe`.
 - It finds the game through Steam. If it can't, browse to the game's folder: the one that contains
   `UnrealEngine3\Binaries\MOHA.exe`.
 - It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
   is changed.
 - If another mod's `dinput8.dll` is already there, setup stops and changes nothing. Quit the game before installing.
+- **"Let the game use up to 4 GB of memory"** is ticked by default; leave it ticked. The game is 32-bit and can only use
+  2 GB, and in VR the first mission runs out (the game crashes after a few minutes).
+  - It sets one flag in `MOHA.exe`'s header; the original exe is kept and put back when you uninstall.
+  - If Steam's "Verify integrity of game files" ever restores the original exe, run setup again.
 - Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
   "More info", then "Run anyway".
 
-**Zip (manual):** unzip `MOHAVR-0.8.0.zip` anywhere and double-click `install.cmd`. If your game is somewhere Steam
-doesn't know about, run `install.ps1 -GameDir "<game folder>"` instead.
+**Zip (manual):** unzip `MOHAVR-0.8.1.zip` anywhere and double-click `install.cmd`. If your game is somewhere Steam
+doesn't know about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag (`-Keep2GB` leaves
+`MOHA.exe` alone).
 
 **Updating:** install the new version over the old one. Your in-headset settings are kept. If the shipped `MOHAVR.ini`
 changed, your old copy is saved to `%LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous`.
@@ -184,3 +189,6 @@ double-click `uninstall.cmd`). Uninstalling removes only MOHAVR's files and logs
 
 The mod writes `MOHAVR.log` and `MOHAVR-host.log` next to `MOHA.exe`. If the mod can't start VR, the game still runs
 as a normal flat game, and the logs say why.
+
+If the game crashes after a few minutes in a mission, check that `MOHAVR.log` says
+`memory: MOHA.exe large address aware: yes`. If it says `no`, run setup again with the 4 GB option ticked.

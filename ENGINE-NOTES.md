@@ -2214,6 +2214,51 @@ the build check verifies 39 signatures).
   through ProcessEvent show a hit indicator and an objective message (the FString parameters are the caller's: ProcessEvent
   destroys only locals); `Suicide` kills the player (the HUD pass stops; the pawn's Health <= 0).
 
+## 5bs. Memory in VR and the 4 GB flag (D57, 2026-10-05)
+
+Measured in Hus_M1_P (the first mission's opening cutscene), 2880x1620 unless noted. The virtual size is
+`Get-Process MOHA`; the address-space breakdowns come from work/research/memory/memmap.py (live VirtualQueryEx) and
+dumpmem*.py (a crash dump's MemoryInfoListStream).
+
+**Virtual size (MB):**
+
+| Build | Start | After 4 minutes |
+|---|---|---|
+| Unmodded | ~1,375 | ~1,395 |
+| 0.8.0 | ~1,490 | ~1,740 |
+| 0.8.0 with the wrist HUD, scope, rack eject and knife off | ~1,455 | ~1,715 |
+| 0.8.0 at 1920x1080 | 1,540 | 1,858 |
+| The round-42 build (2026-10-01) | 1,456 | 1,823 |
+
+So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
+
+**Where the memory goes:**
+- The game alone has 607 MB free, with a 395 MB largest block.
+- In VR it has 288 MB free, with a 140 MB largest block.
+- The difference is private 32 MB reservations: 16 in VR (176 MB committed, 336 reserved) against 5 for the game (31 + 129).
+  Also nvwgf2um.dll (58 MB) stands in for nvd3dum.dll (44 MB), plus D3D12Core.
+
+**The crash** (crash-32168.dmp):
+- `Present` returned 0x8007000E five times in 16 s, then an access violation in ucrtbase memcpy under d3d9on12.dll.
+- The address space was 122 MB free, the largest block 20.4 MB.
+- Committed: private 1,014 MB, images 253 MB, mapped 67 MB. 21 private 32 MB chunks and 17 private 16 MB chunks.
+
+**The 4 GB flag:**
+- IMAGE_FILE_LARGE_ADDRESS_AWARE: 0x20 in the COFF Characteristics at e_lfanew + 22; MOHA.exe's are 0x0102.
+- With it set, the SteamStub-wrapped exe starts through Steam and gets 4095 MB.
+- Hus_M1_P ran 7 minutes at up to 1,875 MB with 2.2 GB free, the largest block 2 GB.
+- `[Debug] ReserveLow=N` reserves N MB of the low 2 GB in DllMain, which forces the later allocations high. At 1500 MB:
+  - Hus_M1_P ran 5 minutes at 3,360 MB;
+  - the harness cycle (gameplay) passed;
+  - the StG44 was given and drawn, the gun baked (2 per Draw), and a rack threw the carrier round;
+  - the knife carrier drew.
+  The game and the mod are fine above 2 GB.
+
+**Test tools:**
+- `tools/harness.ps1 launch -ExtraArgs` gives a map to start in. The mod's command-line rewrite (Render.ResX/ResY) puts its
+  arguments first, so a map argument only works unmodded. With the mod, use the game command `open <map>`.
+- `tools/laa.py status|set|clear`.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -21,7 +21,9 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 ## Standing rules
 1. **Never modify game files.** Patch in memory only. The mod ships only its own DLL(s) and ini.
    `work/` holds derived copies (unwrapped exe, decompressed packages) for analysis; nothing in
-   it is shipped or copied into the game folder.
+   it is shipped or copied into the game folder. **The one exception (D57, the player's choice):** the installers' optional
+   4 GB step sets the large-address-aware flag in `MOHA.exe`'s header (one bit), keeps the original, and clears it again on
+   uninstall. Tests that set it (`tools/laa.py`) restore the original exe afterwards.
 2. **The mod must run against the original, SteamStub-wrapped `MOHA.exe`.**
    `work/MOHA.exe.unpacked.exe` is for analysis and debugging only.
 3. **All engine addresses live in one header**, each with a comment saying what it is and how

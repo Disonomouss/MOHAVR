@@ -11,15 +11,35 @@
     What was installed is recorded in %LOCALAPPDATA%\MOHAVR\install.json, which uninstall.ps1 uses.
     Your in-headset settings (%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini) are never touched.
 
+    By default it also lets the game use up to 4 GB of memory: one flag in MOHA.exe's header (D57; without it the first
+    mission runs out of memory in VR). The original MOHA.exe is kept in %LOCALAPPDATA%\MOHAVR first, and uninstall.ps1 clears
+    the flag again. -Keep2GB leaves MOHA.exe as it is.
+
 .EXAMPLE
     .\install.ps1
     .\install.ps1 -GameDir "D:\Games\Medal of Honor Airborne"
 #>
-param([string] $GameDir)
+param([string] $GameDir, [switch] $Keep2GB)
 
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $files = 'dinput8.dll', 'MOHAVR-host.exe', 'MOHAVR.ini'
+# D57: MOHA.exe's large-address-aware flag (0x20 in the COFF header's Characteristics): the game may use 4 GB instead of 2
+# (the first mission ran out of memory in VR). Returns the flag after the change (or now, with $Want = $null).
+function Set-Laa([string] $Exe, $Want) {
+    $b = [IO.File]::ReadAllBytes($Exe)
+    $pe = [BitConverter]::ToInt32($b, 0x3C)
+    if ($b[$pe] -ne 0x50 -or $b[$pe + 1] -ne 0x45) { throw "$Exe has no PE header" }
+    $o = $pe + 22
+    $on = ($b[$o] -band 0x20) -ne 0
+    if ($Want -ne $null -and $on -ne $Want) {
+        if ($Want) { $b[$o] = $b[$o] -bor 0x20 } else { $b[$o] = $b[$o] -band 0xDF }
+        [IO.File]::WriteAllBytes($Exe, $b)
+        $on = $Want
+    }
+    return $on
+}
+
 $dataDir = Join-Path $env:LOCALAPPDATA 'MOHAVR'
 $manifest = Join-Path $dataDir 'install.json'
 
@@ -73,9 +93,28 @@ try {
     }
     foreach ($f in $files) { Copy-Item (Join-Path $here $f) (Join-Path $bin $f) -Force }
 
+    # The 4 GB option (D57): only a flag this installer set is recorded (and cleared again by uninstall.ps1).
+    $exe = Join-Path $bin 'MOHA.exe'
+    $prevLaa = (Test-Path $manifest) -and ((Get-Content $manifest -Raw | ConvertFrom-Json).laa -eq $true)
+    $laa = $false
+    if (-not $Keep2GB) {
+        if (Set-Laa $exe $null) { $laa = $prevLaa; Write-Host 'MOHA.exe can already use 4 GB of memory.' }
+        else {
+            $orig = Join-Path $dataDir 'MOHA.exe.original'
+            if (-not (Test-Path $orig)) { Copy-Item $exe $orig }
+            $null = Set-Laa $exe $true
+            $laa = $true
+            Write-Host "MOHA.exe can now use 4 GB of memory (the original is kept as $orig)."
+        }
+    } elseif ($prevLaa) {
+        $null = Set-Laa $exe $false
+        Write-Host 'MOHA.exe is back to 2 GB of memory (-Keep2GB).'
+    }
+
     [pscustomobject]@{
         installed = (Get-Date).ToString('o')
         gameDir   = $GameDir
+        laa       = $laa
         files     = @($files | ForEach-Object { [pscustomobject]@{ name = $_; sha256 = (Get-FileHash (Join-Path $bin $_)).Hash } })
     } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $manifest
 
