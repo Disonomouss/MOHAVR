@@ -877,3 +877,22 @@ between on wrist and on screen." Research, its adversarial check and the W0 spik
 HUD's own draws now once instead of twice); ~15 MB of the game's address space (measured +1 MB virtual at gameplay); up to
 three more quad layers; the panels draw over the gun or the arm in front of them (quads have no depth); the desktop mirror
 shows no HUD on the wrist setting.
+
+### D56. Release 0.8.0 with a setup program -- Decided 2026-10-05
+- **What:** `dist\MOHAVR-0.8.0-Setup.exe`, an Inno Setup 6 installer (`installer\MOHAVR.iss`, built by
+  `tools\package.ps1` beside the zip, which keeps the script installer). It keeps release\install.ps1's rules:
+  - the game found through Steam (its uninstall entry for app 24840, then every library in libraryfolders.vdf), a folder
+    without UnrealEngine3\Binaries\MOHA.exe refused;
+  - a dinput8.dll that isn't MOHAVR's (no "MOHAVR-host.exe" string) never overwritten, nor removed on uninstall;
+  - the game not running (install and uninstall);
+  - an update whose shipped MOHAVR.ini differs keeps the old one as %LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous;
+  - the player's settings never touched; the uninstaller kept out of the game's folder (ProgramData\MOHAVR\uninstall);
+    the mod's logs removed with it.
+  Administrator rights (a UAC prompt), the usual for Program Files; `/DTestBuild` builds a no-UAC copy for the tests.
+- **The release:** version 0.8.0 (MOHAVR_VERSION), the README rewritten for today's controls and features, a GitHub
+  release on the private repo with the setup and the zip.
+- **Proven [S]:** work/research/tests/setup1.ps1 on fake game folders (not the game and another mod's dll refused with
+  nothing written; a clean install byte-identical to the build; an update keeps the edited ini; the uninstaller leaves only
+  the game's file; the player's settings unchanged), and the real game folder found by itself, installed and uninstalled
+  back to tools\deploy.ps1's baseline.
+**Why:** the player (2026-10-05): "Release latest version", "Build the installer for 0.8.0".

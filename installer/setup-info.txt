@@ -1,0 +1,14 @@
+MOHAVR turns the Steam version of Medal of Honor: Airborne into a VR game.
+
+Before you continue:
+
+- Quit the game if it is running.
+- Setup adds three files next to the game's MOHA.exe (dinput8.dll, MOHAVR-host.exe, MOHAVR.ini) and a README.
+  Nothing of the game's own is changed.
+- If another mod's dinput8.dll is already in the game's Binaries folder, setup stops and changes nothing.
+- Your in-headset settings (in %LOCALAPPDATA%\MOHAVR) are kept when you install, update or uninstall.
+
+To play: start your VR runtime (for example Virtual Desktop, SteamVR or Quest Link), then start the game from Steam as
+usual and put the headset on. Hold the left menu button for the MOHAVR menu.
+
+This is a test build. The README lists the controls, the features and the known issues.

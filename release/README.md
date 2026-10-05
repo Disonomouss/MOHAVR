@@ -1,130 +1,186 @@
-# MOHAVR: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.0: VR for Medal of Honor: Airborne
 
-MOHAVR turns the Steam PC version of *Medal of Honor: Airborne* into a VR game: a stereo, head-tracked
-view, playable with motion controllers, plus an in-headset settings menu. It is an **early test
-build**. Read "Known issues" before playing.
+MOHAVR turns the Steam PC version of *Medal of Honor: Airborne* into a VR game. You get a stereo, head-tracked view,
+motion controllers with guns held in your hands, and physical interactions: holsters on your body, reloading by hand,
+melee swings, scopes you raise to your eye, an off-hand pistol, grenade and knife, and the HUD on your wrist. An
+in-headset menu adjusts all of it. This is a **test build**: read "Known issues" before playing.
 
 ## What you need
 
-- *Medal of Honor: Airborne* from Steam. The mod checks the game build (3648) and stays inactive on any
-  other version.
-- Windows 10 (1703 or later) or Windows 11, and a graphics card with Direct3D 12.
-- A PC VR headset with an OpenXR runtime: Virtual Desktop, SteamVR, or Meta Quest Link. MOHAVR uses
-  whichever OpenXR runtime is active.
+- *Medal of Honor: Airborne* from Steam. The mod checks the game build (3648) and stays inactive on any other version.
+- 64-bit Windows 10 (1703 or later) or Windows 11, and a graphics card with Direct3D 12.
+- A PC VR headset with an OpenXR runtime: Virtual Desktop, SteamVR, or Meta Quest Link. MOHAVR uses whichever OpenXR
+  runtime is active.
 
 ## Install
 
-1. Unzip the whole folder anywhere.
-2. Double-click `install.cmd`. It finds the game through Steam. If your game is somewhere Steam
-   doesn't know about, run `install.ps1 -GameDir "<game folder>"` instead.
+**Setup program (recommended):** run `MOHAVR-0.8.0-Setup.exe`.
+- It finds the game through Steam. If it can't, browse to the game's folder: the one that contains
+  `UnrealEngine3\Binaries\MOHA.exe`.
+- It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
+  is changed.
+- If another mod's `dinput8.dll` is already there, setup stops and changes nothing. Quit the game before installing.
+- Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
+  "More info", then "Run anyway".
 
-It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing
-of the game's is changed. If another mod's `dinput8.dll` is already there, the installer stops and
-changes nothing.
+**Zip (manual):** unzip `MOHAVR-0.8.0.zip` anywhere and double-click `install.cmd`. If your game is somewhere Steam
+doesn't know about, run `install.ps1 -GameDir "<game folder>"` instead.
+
+**Updating:** install the new version over the old one. Your in-headset settings are kept. If the shipped `MOHAVR.ini`
+changed, your old copy is saved to `%LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous`.
 
 ## Play
 
 1. Start your VR runtime (for example, connect with Virtual Desktop).
 2. Start the game from Steam as usual.
-3. Put the headset on. The picture appears in front of you. Once you are in the game, the world is in 3D
-   and follows your head.
+3. Put the headset on. Menus appear on a flat screen in front of you. In the game, the world is in 3D around you.
 
-The monitor shows what the headset shows (a mirror over the game's window), while the game is in front.
+The monitor shows the headset view (a mirror over the game's window) while the game is in front. If the game window
+shows the game normally instead of staying white, the mod isn't running: check the logs (below).
 
 ## Controls
 
-You play with the VR controllers and aim by pointing the right one (a red dot shows where shots land). To use an Xbox controller or
-mouse and keyboard instead, set `Input.Controllers=0` in `MOHAVR.ini`.
-
 | Controller | Game |
 |---|---|
-| Left stick | Move |
-| Left stick click | Sprint (click to start, click again or stop moving to stop) |
-| Right stick left/right | Turn (smooth, or snap: see the menu) |
-| Right stick flicked down | Crouch / stand up |
-| Right trigger | Fire |
-| Left trigger | Aim down the sights |
+| Left stick | Move (the way you look) |
+| Left stick click | Sprint (click to start; click again or stop to stop) |
+| Right stick left / right | Turn (smooth, or snap: see the menu) |
+| Right stick click | Crouch / stand up |
+| Right trigger | Fire the gun in your gun hand |
+| Left trigger | The free hand's trigger: fires the off-hand pistol, pulls a grenade's pin |
 | A | Jump |
-| B | Reload |
-| Right grip | Interact (doors, pick-ups) |
+| B or right grip | Reload / use / interact (the game decides which) |
 | Y | Switch weapon |
-| X | Grenade |
-| Left grip | Alternate fire |
-| Right stick click | Melee |
+| X | Throw a grenade (the game's way) |
 | Left menu button (tap) | Pause |
 | Left menu button (hold) | MOHAVR menu |
 
-B and the right grip both press the game's reload/use button; the game decides which action happens.
-In the game's menus the face buttons work as labelled: A selects, B goes back.
-The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
+You aim by pointing the gun: a red dot shows where shots land. In the game's menus the face buttons work as
+labelled: A selects, B goes back. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
-**Hand features** (all on; `[Hands]` and `[Holsters]` in `MOHAVR.ini` turn each off, `Hands.ThrowScale` sets
-how hard grenades fly):
+## Your hands
 
-| Do this | Game |
+Either hand can hold the gun: the hand that draws from a holster holds it, and the other hand is free. A short buzz
+tells you a hand is at a holster or a grab spot. Rings show where the spots are (green = a squeeze there acts).
+
+**Holsters.** Squeeze the grip with a hand at a spot on your body:
+
+| Spot | Holds (change it in the menu) |
 |---|---|
-| Squeeze a grip with the hand over your right shoulder | Long gun 1 |
-| ... over your left shoulder | Long gun 2 |
-| ... at your right hip | Pistol |
-| ... at your left hip | Grenade |
-| Squeeze the other hand's grip at the gun's foregrip | Hold the gun with two hands (it points through that hand) |
-| Squeeze the other hand's grip at the gun's magazine | Reload |
-| Swing and let go of the trigger with a grenade | Throw it (a slow release throws the game's way) |
+| Over your right shoulder | Long gun 1 |
+| Over your left shoulder | Long gun 2 |
+| Right hip | Pistol |
+| Left hip | Grenade |
+| Chest | Pistol |
+| Lower back | Knife (the free hand) |
+| Belt, front | Ammunition pouch |
 
-Either hand can draw, and the hand that draws holds the gun: its trigger fires. A short buzz tells you your hand
-is at a holster or the foregrip, and rings show where the spots are (green = a squeeze there acts); a white dot marks
-your other hand.
+**Two hands.** Squeeze the free hand's grip at the gun's foregrip: the gun points through that hand.
+
+**Reloading by hand.** Every gun is reloaded with your hands:
+- Drop the magazine with B (Y if your left hand holds the gun).
+- Take a new one from the pouch on your belt.
+- Push it into the gun.
+- Work the slide, bolt or pump with your free hand.
+
+Bolt rifles are worked after every shot, the M12's pump is its foregrip, and the Garand takes an en-bloc clip.
+Racking a loaded closed-bolt gun throws its live round out, and that round is spent.
+
+**Pouch reload** (on by default): grip the pouch with the hand holding a gun, and it reloads at once.
+
+**Grenades.** Take one with the free hand from the grenade holster while the gun stays in your other hand:
+1. The free hand's trigger pulls the pin.
+2. A second squeeze lets the spoon go (the fuse burns).
+3. Swing and let go of the grip to throw.
+
+The gun hand's grenades work the same way.
+
+**Off-hand pistol.** Draw it with the free hand from a pistol holster; its trigger fires it. A squeeze at any holster
+puts it back. With the pistol in your gun hand, the free hand draws its twin.
+
+**Knife.** Draw it with the free hand from your lower back. Stab along the blade or slash across it. A squeeze at any
+holster puts it back.
+
+**Melee.** Swing the gun: its butt (or a bayonet, a pistol's grip) striking an enemy does the game's melee.
+
+**Scopes.** Hold a scoped gun with both hands and bring the scope up to your eye: that eye looks through it. This
+covers the Springfield, the G43, the StG44 and the M18. The zoom is realistic, or the game's, set in the menu.
+
+**HUD on your wrist.** Look at your free wrist with the palm flat and face down:
+- Health and the compass are on its left.
+- Weapon, ammunition and grenades are on its right.
+- Hit indicators, objectives and prompts stay in front of you.
+
+Switch it to a panel in front of you in the menu's HUD tab.
 
 ## The in-headset menu
 
-Hold the left menu button to open the menu (with `Input.Controllers=0`, a tap is enough). Use the
-left stick to move and change values, and the trigger or A to select. B closes it. The menu has:
+Hold the left menu button to open it. The left stick moves and changes values, the trigger or A selects, and B goes
+back or closes. Up from the first item reaches the tabs.
 
-- **World scale**: how big the world feels (higher = smaller).
-- **Height**: raise or lower yourself for seated or standing play.
-- **Turning**: smooth, snap 30° or snap 45°.
-- **Sticks**: move with the left stick and turn with the right, or the other way round.
-- **Gun hand**: the hand that holds the gun when you start (drawing from a holster changes it).
-- **Gun fit**: fits the gun you're holding to your hand. Move it forward/back, left/right and up/down, tilt it,
-  shift the aim line (the red dot) until it runs along the barrel, and place the foregrip. Each gun keeps its own
-  fit; B goes back.
-- **Holsters**: move each holster (right/left, up/down, forward/back from your head) and size it; choose when
-  the rings show (never, near, always).
-- **Recentre**: face forward from where you are now.
+- **General**
+  - World scale (higher = smaller world)
+  - Height (seated or standing)
+  - Turning (smooth, snap 30 or 45 degrees)
+  - Sticks (swap them)
+  - Move direction (where you look, or your body)
+  - The starting gun hand
+  - The red dot
+  - Frame pacing
+  - Recentre
+- **Weapons**
+  - Gun fit (fit each gun to your hand and line up its aim)
+  - Manual reload, Pouch reload
+  - Physical melee
+  - Scopes and Scope zoom
+  - Grenades (Hand grenades, Off-hand grenade, Grenade hold)
+  - Off-hand pistol
+  - Off-hand knife and Knife grip
+  - Reload grip and Reload spots (per gun)
+  - Rack ejects a round, and whether the ejected round is lost or kept
+- **Hands**
+  - Holsters and pouch (move, size, choose what each holds, show or hide each ring)
+  - The hand point (the white dot)
+  - The foregrip and reload ring sizes
+  - The free hand's pose
+- **HUD**
+  - Wrist or screen
+  - When the wrist panels show
+  - Their layout and backing
+  - Wrist panels (move and size each)
+  - Screen HUD (distance, size, height)
 
 Your choices are saved in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and kept across updates.
 
-## Settings (`MOHAVR.ini`)
+## Settings (`MOHAVR.ini`, next to `MOHA.exe`)
 
-These are on by default: VR controllers, menus on a flat screen in front of you, the HUD as one panel, the
-headset view mirrored on the monitor, and 2880×1620 rendering. Settings you may want to change:
+Most things are in the menu. A few you may want to change in the ini:
 
 | Setting | What it does |
 |---|---|
-| `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880×1620). Lower it (for example 1920×1080) if the game stutters. |
-| `Camera.CinemaScreen=2` | Also shows cutscenes on the flat screen (default `1`: menus only). |
-| `HUD.Width`, `Distance`, `Down`, `Scale` | Size and position of the HUD panel. |
-| `Aim.Spread` | The game's shot spread: `0` (default) none -- your hand is the spread, `1` the game's. |
-| `Aim.Mode` | What you aim with: `3` the right controller (default: shots land where it points, marked by a red dot; `Aim.Reticle=0` hides the dot), `2` the left controller, `1` your head (shots land where you look), `0` the game's own (your body's direction, with up/down from your head). |
-| `Weapon.ViewModel` | The first-person gun: `0` as the game draws it (looks doubled in the headset), `1` true 3D in front of you, `2` in your aiming hand (default; `Weapon.GripX/Y/Z` fit it to your hand, `Aim.RayUp` lines the aim up with its barrel). |
-| `Weapon.ArmIK` | `1` (default): the arms reach from your shoulders to the gun, and your other hand follows its controller unless it holds the foregrip (`FreeOffHand=0` keeps it on the gun); `ShoulderWidth`, `ShoulderDrop`, `ShoulderBack` place the shoulders (cm). |
-| `Weapon.HideViewModel=1` | Hides the first-person gun. |
-| `Bridge.Mirror=2` | Puts the monitor mirror in its own window (`0` turns it off). |
-| `Controls.SprintToggle=0` | Hold the click to sprint instead of toggling. |
+| `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880x1620). Lower it (for example 1920x1080) if the game stutters. |
+| `Input.Controllers=0` | Play with an Xbox controller or mouse and keyboard instead of VR controllers. |
+| `Camera.CinemaScreen=2` | Also show cutscenes on the flat screen (default `1`: menus only). |
+| `Bridge.Mirror=2` | Put the monitor mirror in its own window (`0` turns it off). |
+| `Controls.SprintToggle=0` | Hold the stick click to sprint instead of toggling. |
 
 ## Known issues
 
-- **Aiming:** you aim with the right controller (the red dot). The HUD's crosshair still marks the middle of
-  your view, not your aim.
-- The gun is drawn in your hand, but both arms move with it as one piece, so they can look detached from your
-  body. In your left hand the gun is still held by a right arm reaching across.
+- **StG44:** working the cocking handle doesn't open the ejection port. The game's model has the bolt and the dust
+  cover built into the gun's body, so only the handle and its rod move.
+- **Wrist HUD:** the panels draw over the gun or arm when they pass in front of the wrist. The desktop mirror shows no
+  HUD in wrist mode.
+- **Ejected rounds and objects:** a dropped magazine or an ejected round can show through a wall or table close by.
+- **Levels:** the knife and the ejected rounds use other guns' models from the game. They were checked in the first
+  levels only.
 
 ## Uninstall
 
-Double-click `uninstall.cmd`. It removes only MOHAVR's files. To also remove your saved in-headset
-settings, run `uninstall.ps1 -RemoveSettings`.
+Use Windows Settings > Apps > "MOHAVR", or run the uninstaller from the Start menu's MOHAVR folder (zip installs:
+double-click `uninstall.cmd`). Uninstalling removes only MOHAVR's files and logs. Your saved in-headset settings stay in
+`%LOCALAPPDATA%\MOHAVR`; delete that folder to remove them too.
 
 ## If something goes wrong
 
-The mod writes `MOHAVR.log` and `MOHAVR-host.log` next to `MOHA.exe`. If the mod can't start VR, the game
-still runs as a normal flat game, and the logs say why.
+The mod writes `MOHAVR.log` and `MOHAVR-host.log` next to `MOHA.exe`. If the mod can't start VR, the game still runs
+as a normal flat game, and the logs say why.

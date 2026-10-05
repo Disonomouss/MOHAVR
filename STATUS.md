@@ -14,6 +14,9 @@ harness deploys it, drives the game to gameplay, and waits on the mod's log. The
 **not deployed**; the game folder matches its baseline. Next: **M2** (PLAN.md), starting with the
 address-space budget for D3D9On12.
 
+**Release 0.8.0** (2026-10-05, D56): `MOHAVR-0.8.0-Setup.exe` (a setup program, Inno Setup) and the zip, on the private
+GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.ps1`.
+
 ## Done
 - RE/VR toolchain mirrored from RDR2VR and verified (tools/SETUP.md):
   - MCP bridges: `ghidra`, `cheatengine`, `x64dbg` (x32dbg for MOHA), `openxr-simulator`.
