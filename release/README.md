@@ -192,3 +192,8 @@ as a normal flat game, and the logs say why.
 
 If the game crashes after a few minutes in a mission, check that `MOHAVR.log` says
 `memory: MOHA.exe large address aware: yes`. If it says `no`, run setup again with the 4 GB option ticked.
+
+## License
+
+MOHAVR is free software under the GNU General Public License v3.0 (`LICENSE` in the source repository). Medal of Honor:
+Airborne and its files belong to their owners; the mod ships none of them.
