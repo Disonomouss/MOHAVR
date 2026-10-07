@@ -1063,3 +1063,17 @@ hud, then hold X."
   - leaning 0.30 m from the chair crouched (the eye 130.8, the real head), and sitting up stood;
   - a jump: 711 ms in the air, the camera within 0.5 cm of the body, no crouch action.
   The landing's MinEyeHeight is unchanged: the compensation is 0 when standing. **[H]** round 54.
+
+### D64. The runtime's capabilities in the host's log -- Decided 2026-10-08 (GOAL B1)
+- **Why:** remote testers on other headsets and runtimes send logs. Their first questions are what the runtime offers
+  and what it wants.
+- **What:** at start the host logs:
+  - every instance extension offered, in one line;
+  - the system's name, vendor, tracking (orientation, position) and swapchain / layer limits;
+  - the recommended and maximum per-eye size;
+  - the swapchain formats (DXGI numbers) and the reference spaces (STAGE = a floor);
+  - the refresh rate, through `XR_FB_display_refresh_rate` (enabled only when offered).
+  Diagnostics, always on. The extension list is kept as a set the later bindings use (B3).
+- **Proven [S]:** the simulator: 9 extensions (including `XR_KHR_composition_layer_depth`); orientation and position
+  tracking; swapchains up to 4096x4096 and 16 layers; 1280x1400 per eye recommended; formats 29 28 91 87 10 2 24 20 40
+  45 55; spaces VIEW LOCAL STAGE; refresh rate "not exposed".

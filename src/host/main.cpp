@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <deque>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -197,18 +198,25 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // D59: the HP Reverb G2's controllers have their own profile (XR_EXT_hp_mixed_reality_controller: SteamVR offers it,
     // e.g. with the Oasis driver). Enabled only when the runtime has it, so the controllers bind directly instead of
     // through the runtime's remapping of the Touch bindings.
-    bool hpControllers = false;
+    // GOAL B1: everything the runtime offers, logged once -- what a remote tester's log must answer.
+    std::vector<std::string> offered;
     {
         uint32_t n = 0;
         if (XR_SUCCEEDED(xrEnumerateInstanceExtensionProperties(nullptr, 0, &n, nullptr)) && n) {
             std::vector<XrExtensionProperties> props(n, {XR_TYPE_EXTENSION_PROPERTIES});
             if (XR_SUCCEEDED(xrEnumerateInstanceExtensionProperties(nullptr, n, &n, props.data())))
-                for (const auto& p : props)
-                    if (!strcmp(p.extensionName, XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME)) hpControllers = true;
+                for (const auto& p : props) offered.emplace_back(p.extensionName);
         }
+        std::string all;
+        for (const auto& e : offered) all += (all.empty() ? "" : " ") + e;
+        MLOG("host: runtime extensions (%zu): %s", offered.size(), all.c_str());
     }
+    auto has = [&](const char* name) { return std::find(offered.begin(), offered.end(), name) != offered.end(); };
+    const bool hpControllers = has(XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME);
+    const bool fbRefresh = has(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);  // B1: the refresh rate, logged
     std::vector<const char*> exts = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
     if (hpControllers) exts.push_back(XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME);
+    if (fbRefresh) exts.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     XrInstanceCreateInfo ici{XR_TYPE_INSTANCE_CREATE_INFO};
     strcpy_s(ici.applicationInfo.applicationName, "MOHAVR");
     strcpy_s(ici.applicationInfo.engineName, "Unreal Engine 3 (MOHA)");
@@ -228,7 +236,22 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     XR_OK(xrGetSystem(instance, &sgi, &system), "xrGetSystem (headset connected?)");
     XrSystemProperties sp{XR_TYPE_SYSTEM_PROPERTIES};
     xrGetSystemProperties(instance, system, &sp);
-    MLOG("host: system \"%s\"", sp.systemName);
+    MLOG("host: system \"%s\" (vendor %u): orientation tracking %s, position tracking %s; swapchains up to %ux%u, %u layers",
+         sp.systemName, sp.vendorId, sp.trackingProperties.orientationTracking ? "yes" : "NO",
+         sp.trackingProperties.positionTracking ? "yes" : "NO", sp.graphicsProperties.maxSwapchainImageWidth,
+         sp.graphicsProperties.maxSwapchainImageHeight, sp.graphicsProperties.maxLayerCount);
+    {
+        uint32_t n = 0;
+        std::vector<XrViewConfigurationView> vv;
+        if (XR_SUCCEEDED(xrEnumerateViewConfigurationViews(instance, system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &n, nullptr)) && n) {
+            vv.assign(n, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+            xrEnumerateViewConfigurationViews(instance, system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, n, &n, vv.data());
+        }
+        if (!vv.empty())
+            MLOG("host: the runtime recommends %ux%u per eye (max %ux%u, %u samples)", vv[0].recommendedImageRectWidth,
+                 vv[0].recommendedImageRectHeight, vv[0].maxImageRectWidth, vv[0].maxImageRectHeight,
+                 vv[0].recommendedSwapchainSampleCount);
+    }
 
     // --- D3D11 on the runtime's adapter, which must be the game's -------------------------------
     PFN_xrGetD3D11GraphicsRequirementsKHR getReqs = nullptr;
@@ -310,6 +333,29 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     XR_OK(xrEnumerateSwapchainFormats(session, 0, &fmtCount, nullptr), "xrEnumerateSwapchainFormats");
     std::vector<int64_t> fmts(fmtCount);
     XR_OK(xrEnumerateSwapchainFormats(session, fmtCount, &fmtCount, fmts.data()), "xrEnumerateSwapchainFormats");
+    {
+        // GOAL B1: the formats (DXGI numbers: 87 B8G8R8A8_UNORM, 91 its sRGB, 28 R8G8B8A8_UNORM, 29 its sRGB), the reference
+        // spaces (STAGE: a floor), the refresh rate (XR_FB_display_refresh_rate, when offered).
+        std::string f;
+        for (int64_t v : fmts) f += (f.empty() ? "" : " ") + std::to_string(v);
+        uint32_t ns = 0;
+        std::vector<XrReferenceSpaceType> spaces;
+        if (XR_SUCCEEDED(xrEnumerateReferenceSpaces(session, 0, &ns, nullptr)) && ns) {
+            spaces.resize(ns);
+            xrEnumerateReferenceSpaces(session, ns, &ns, spaces.data());
+        }
+        std::string sn;
+        for (auto t : spaces)
+            sn += std::string(sn.empty() ? "" : " ") + (t == XR_REFERENCE_SPACE_TYPE_VIEW ? "VIEW" : t == XR_REFERENCE_SPACE_TYPE_LOCAL ? "LOCAL"
+                                                       : t == XR_REFERENCE_SPACE_TYPE_STAGE ? "STAGE" : std::to_string(t));
+        float hz = 0.0f;
+        PFN_xrGetDisplayRefreshRateFB getHz = nullptr;
+        if (fbRefresh && XR_SUCCEEDED(xrGetInstanceProcAddr(instance, "xrGetDisplayRefreshRateFB",
+                                                            reinterpret_cast<PFN_xrVoidFunction*>(&getHz))) && getHz)
+            getHz(session, &hz);
+        MLOG("host: swapchain formats %s; reference spaces %s; refresh rate %s", f.c_str(), sn.c_str(),
+             hz > 0.0f ? (std::to_string(static_cast<int>(hz + 0.5f)) + " Hz").c_str() : "not exposed");
+    }
     int64_t fmt = 0;
     for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) { fmt = f; break; }
     if (!fmt) for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM) { fmt = f; break; }

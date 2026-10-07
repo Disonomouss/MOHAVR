@@ -96,12 +96,17 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   real head), up -> stood; a jump 711 ms, no crouch action; the landing path unchanged (no compensation standing).
 
 ## Track B: compatibility (other headsets and runtimes)
-- [ ] **B1 Capabilities log.** At start the host logs:
+- [x] **B1 Capabilities log.** At start the host logs:
   - the runtime's instance extensions (one line);
   - the swapchain formats offered;
   - the system name and its tracking properties;
   - the view configuration's recommended size and refresh rate.
   This is what a remote tester's log must answer. **[S]:** the lines appear with the simulator.
+
+  **DONE** (D64): with the simulator -- `runtime extensions (9): ... XR_KHR_composition_layer_depth ...`, `system "OpenXR
+  Simulator" (vendor 0): orientation tracking yes, position tracking yes; swapchains up to 4096x4096, 16 layers`, `the runtime
+  recommends 1280x1400 per eye`, `swapchain formats 29 28 91 87 10 2 24 20 40 45 55; reference spaces VIEW LOCAL STAGE;
+  refresh rate not exposed`.
 - [ ] **B2 Image-format fallback.** The host stops with "runtime offers no B8G8R8A8 swapchain format". When only
   R8G8B8A8 (sRGB or not) is offered, use it, with a swizzling copy (a shader blit, not CopyResource) for the game's
   BGRA frames, the menu, the wrist HUD, the reticle and the scope view.
