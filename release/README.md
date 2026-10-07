@@ -186,6 +186,9 @@ Most things are in the menu. A few you may want to change in the ini:
 
 ## Known issues
 
+- **Mounted MG42s:** you aim a manned MG42 with your head (and turn it with the stick), as the flat game does; the gun
+  stays on its mount.
+
 - **StG44:** working the cocking handle doesn't open the ejection port. The game's model has the bolt and the dust
   cover built into the gun's body, so only the handle and its rod move.
 - **Wrist HUD:** the panels dim when the gun passes in front of them, but the off hand's own fingers can still show

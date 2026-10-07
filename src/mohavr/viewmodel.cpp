@@ -10,6 +10,7 @@
 #include <string>
 
 #include "addresses.hpp"
+#include "mounted.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
 #include "bridge.hpp"
@@ -261,6 +262,7 @@ void OnActivityTick(SafetyHookContext& ctx) {
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
+    mounted::Configure(cfg.mountedGame);
     // Weapon.SprintArms, WalkArms and JumpArms are their own switches: they work whatever Weapon.ViewModel is (the game
     // camera's sprint shake, walk sway and landing dip come from the arms too).
     if (cfg.sprintArms != 0 || cfg.walkArms || cfg.jumpArms) {
@@ -418,7 +420,8 @@ void UpdateWeaponKey(shared::Header* hdr) {
         }
     }
     // Something drawn first-person that isn't a weapon (the parachute) and no weapon: the game's own drawing (OnPlayerView).
-    g_noGunDrawn = notGun && !gun;
+    // GOAL D2: a mounted gun stays on its mount -- drawn where the game puts it, as the parachute is.
+    g_noGunDrawn = (notGun && !gun) || mounted::GameHandles(pawn);
     g_gunComp = gun;
     const std::string key = gun ? names::ClassName(names::Outer(gun)) : std::string();
     // What it is, by the weapon's class chain: a grenade (EALAGrenade), a pistol (MOHAPistol), else a long gun.

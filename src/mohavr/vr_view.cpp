@@ -28,6 +28,7 @@
 #include "reload.hpp"
 #include "script_call.hpp"
 #include "falltrace.hpp"
+#include "mounted.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -471,6 +472,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (melee::TestCommand(line)) continue;      // "mohavr melee ..." (physical melee)
         if (hudtex::TestCommand(player, line)) continue;  // "mohavr hud ..." (the wrist HUD)
         if (falltrace::TestCommand(line)) continue;  // "mohavr falltrace ..." (GOAL C3)
+        if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }

@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "addresses.hpp"
+#include "mounted.hpp"
 #include "bridge.hpp"
 #include "config.hpp"
 #include "log.hpp"
@@ -538,6 +539,12 @@ void OnPlayerView(std::uintptr_t ctrl, const float (&shotStart)[3]) {
     if (ctrl && (!g_cfg.hudCrosshair || !g_cfg.hudHitMarker)) HideHudBits(ctrl);
     if (pawn && !g_cfg.weaponTracers) HideTracers(pawn);
     if (!hdr || !pawn) {
+        g_frame.valid = false;
+        Publish(0.0f, 0);
+        return;
+    }
+    // GOAL D2: manning a mounted gun, the game aims it (no hand ray, no reticle).
+    if (mounted::GameHandles(pawn)) {
         g_frame.valid = false;
         Publish(0.0f, 0);
         return;

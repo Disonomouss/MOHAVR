@@ -1176,3 +1176,18 @@ hud, then hold X."
   its chunk's bone map, then posing a hinge: days of reverse engineering, with a crash risk in every LOD. The other way
   is new art, which the mod can't ship (standing rule 1). Out of proportion for one gun's detail.
 - **The README** keeps the known issue.
+
+### D71. Mounted MG42s: the game draws and aims them, the head aims in VR -- Decided 2026-10-08 (GOAL D)
+- **Why:** the mod had no handling of mounted guns (D33). Measured at a nest (MOUNTED-DESIGN 2): the view model pulled
+  the mounted MG42 into the gun hand, off its mount, and the hand's ray aimed it.
+- **What (Phase 1):** while a `MOHAMountedGunWeapon` is in hand, the view model treats it as "no gun drawn" (the game
+  draws the parts, in true 3D) and the aim stands down. The gun sits on its mount, camera-locked as in the flat game:
+  the head aims it, the stick turns the mount, and barrel, view and shots agree. `[Weapon] MountedGame=1` (a fix: on).
+  Test commands: `mohavr mg list | goto [n] | use [n] | where` (a nest is a `MOHAPawn` in the pawn list; manning goes
+  through its `MyCSA.UsedBy`).
+- **Not built:** both hands on the handles (MOUNTED-DESIGN 3.2: `rMGRot` from the hands, the gun drawn off the camera,
+  firing along the barrel). How it should feel is for the headset to judge; round 54 asks.
+- **Proven [S]** (the EA copy, Husky's street, 10 nests found):
+  - manned: the MG42 on the wall, the hands on it, in stereo;
+  - a soldier 6 m ahead killed (Health 110 -> 0, `MOHAMGDamageType`), the belt 78 -> 60;
+  - the head's pitch pitches the gun with the view; the stick turns the mount (`rMGRot` yaw 3632).

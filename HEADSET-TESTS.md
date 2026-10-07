@@ -2163,6 +2163,15 @@ BGRA swapchains (some Pimax / Varjo setups) now works too.
 1. Which headset and controllers, and which runtime (SteamVR, the headset's own, Virtual Desktop)?
 2. Does every button do what the README's table says? Which doesn't?
 3. Send `MOHAVR-host.log` after a session.
+### D Mounted MG42s
+**Changed:** manning an MG42 nest (walk up, press use), the gun now stays on its mount and you aim it with your head,
+as the flat game aims with the mouse; the stick turns it. Before, the gun jumped into your hand. Every MG42 nest
+mission (Husky, Avalanche, Neptune, Market Garden, Varsity, the Flakturm) has some.
+
+**Questions:**
+1. Does manning a nest work, and does the gun sit right on the wall or sandbags? (yes/no)
+2. Aiming with your head: fine, or would you rather hold the handles and aim with your hands? (head / hands)
+3. Getting off the gun (use again): does it work and give your own gun back? (yes/no)
 
 ## Template
 

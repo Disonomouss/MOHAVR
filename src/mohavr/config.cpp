@@ -88,6 +88,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.reloadSounds  = get(L"ManualReload", L"Sounds", c.reloadSounds);
     c.dropFall      = get(L"ManualReload", L"DropFall", c.dropFall);
     c.fallTrace     = get(L"ManualReload", L"FallTrace", c.fallTrace);
+    c.mountedGame   = get(L"Weapon", L"MountedGame", c.mountedGame);
     c.holdOpen       = get(L"ManualReload", L"HoldOpen", c.holdOpen);
     c.reloadGrips   = get(L"ManualReload", L"Grips", c.reloadGrips);
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));

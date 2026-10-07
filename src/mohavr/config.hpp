@@ -30,6 +30,7 @@ struct Config {
     bool  reloadSounds = true;    // [ManualReload] Sounds: the arms' own reload cues at the events (M7)
     bool  dropFall = true;        // [ManualReload] DropFall: a dropped magazine falls (round 31)
     bool  fallTrace = true;       // [ManualReload] FallTrace: falls stop at tables and walls (GOAL C3, D69)
+    bool  mountedGame = true;     // [Weapon] MountedGame: a manned MG42 is drawn and aimed by the game (GOAL D2, D71)
     bool  holdOpen = true;     // [ManualReload] HoldOpen -- an emptied bolt action stays open (the follower) until loaded (GOAL A2)
     bool  reloadGrips = true;     // [ManualReload] Grips: the reload animations' hand on the magazine / handle (round 31)
     float debugReloadSlowMo = 1.0f;  // [Debug] ReloadSlowMo: the fall and the flip this many times slower (captures)

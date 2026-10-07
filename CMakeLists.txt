@@ -37,6 +37,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/knife.cpp
         src/mohavr/rackround.cpp
         src/mohavr/falltrace.cpp
+        src/mohavr/mounted.cpp
         src/mohavr/hudtex.cpp
         src/mohavr/offpistol.cpp
         src/mohavr/carrier.cpp

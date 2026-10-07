@@ -171,7 +171,7 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   and bone maps for every LOD plus a hinge pose (days, crash risk), or new art (not shippable).
 
 ## Track D: mounted guns (research first)
-- [ ] **D1 Research** (time box 2 h; D33 and GOAL 2026-09-30 A6 have the background):
+- [x] **D1 Research** (time box 2 h; D33 and GOAL 2026-09-30 A6 have the background):
   - how the player mounts a gun: the controller's `PlayerMountedMG` / `PlayerUsingMG` states;
   - how the game drives the mounted gun's aim and the camera;
   - what the mod does there today: the hands, the aim ray, the view;
@@ -179,9 +179,19 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
     spawned or moved near the save's tower.
   Write `MOUNTED-DESIGN.md`: what's known, the options (the view locked to the gun or free, both hands on the handles
   aiming it, or the head aiming as the game does now), a recommendation, and the first phase.
-- [ ] **D2 Phase 1, if D1 found a path:** the view and the hands at a nest are sane (no doubled gun, no aim ray off into
+
+  **DONE** (MOUNTED-DESIGN.md): the nest is a `MOHAPawn` in the pawn list, manned through `MyCSA.UsedBy`; the states
+  `PlayerMountingMG` / `PlayerMountedMG` and `rMGRot` read; reached in the simulator (`mohavr mg list` found 10 nests,
+  `goto` and `use` manned one). Before the fix the view model drew the mounted MG42 in the hand and the hand aimed it.
+  Recommendation: Phase 1 the game's way (the head aims), Phase 2 hands on the handles after the headset round.
+- [x] **D2 Phase 1, if D1 found a path:** the view and the hands at a nest are sane (no doubled gun, no aim ray off into
   the sky, the HUD readable). The gun aims with the hands on its handles if the research makes that feasible, behind
   `[Weapon] MountedHands=0`. **[S]:** at a nest, firing at a known spot hits it. Otherwise BLOCKED with the reason.
+
+  **DONE** (D71; `logs/shots/0656*-d2-*.png`): Phase 1 -- `[Weapon] MountedGame=1`: the gun on its mount drawn by the
+  game, no hand ray, no reticle; a soldier placed 6 m ahead killed by the burst (`Health 0 ... MOHAMGDamageType on
+  Spine1`, ammo 78 -> 60); the head pitches the gun with the view, the stick turns the mount. The hands on the handles
+  (MountedHands) is designed (MOUNTED-DESIGN 3.2), not built: how it should feel goes to the headset first (round 54).
 
 ## Track E: mission sweep (unattended QA)
 - [ ] **E1 Every mission loads with the mod and the guns' extras work.** List the campaign maps (`CookedPC`, the
