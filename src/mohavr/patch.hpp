@@ -13,4 +13,8 @@ bool BytesMatch(std::uintptr_t va, const std::uint8_t* expected, std::size_t siz
 // Returns false, leaving memory untouched, if it doesn't.
 bool SwapPointer(std::uintptr_t slot, void* expected, void* replacement);
 
+// Overwrite `size` bytes of code at `va` with `replacement` if they currently equal `expected` (no other thread may be
+// running them). Returns false, leaving memory untouched, if they don't.
+bool WriteBytes(std::uintptr_t va, const std::uint8_t* expected, const std::uint8_t* replacement, std::size_t size);
+
 }  // namespace mohavr::patch

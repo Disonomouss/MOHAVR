@@ -1,4 +1,6 @@
 # The Medal of Honor Airborne install directory. The only place the project records it.
-# Read by tools/gamedir.py. Override at run time with the MOHAVR_GAMEDIR environment variable.
+# Read by tools/gamedir.py, deploy.ps1 and harness.ps1. Override at run time with the MOHAVR_GAMEDIR environment variable.
 # The executable is UnrealEngine3\Binaries\MOHA.exe (32-bit x86, UE3, D3D9).
-C:\Program Files (x86)\Steam\steamapps\common\Medal of Honor Airborne
+# Steam: C:\Program Files (x86)\Steam\steamapps\common\Medal of Honor Airborne (uninstalled from this PC, 2026-10-07).
+# EA app (D58): its Binaries folder was given the player's Modify right once (icacls), as Program Files needs admin.
+C:\Program Files\EA Games\Medal of Honor Airborne

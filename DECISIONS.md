@@ -926,3 +926,62 @@ shows no HUD on the wrist setting.
   - work/research/tests/setup2.ps1 and ziplaa.ps1: ticked, unticked, re-ticked and uninstalled restore the exe
     byte-identically; an already flagged exe is left alone.
 **Why:** the player (2026-10-05), after the crash: "Make the optional step."
+
+### D58. The EA app's copy of the game is supported: the same build, recognised by its wrapper -- Decided 2026-10-07
+- **Why it can work:** the EA app sells the same compiled MOHA.exe as Steam (ENGINE-NOTES 1b): the same TimeDateStamp,
+  section layout and `.rdata`; only the DRM wrapper differs (EA's OOA, which encrypts the code on disk, for SteamStub, which
+  doesn't). Once `Activation.dll` has decrypted it, every address in `addresses.hpp` holds, so there is one address set,
+  not two.
+- **What:**
+  - The build check knows both wrappers by the entry point. It accepts the EA header fields (SizeOfImage, CheckSum, entry)
+    and still requires the same timestamp and all 39 signatures. The log names the store.
+  - On the EA copy the mod loads while its imports are still being resolved (in table order), so the IAT hooks
+    (Direct3DCreate9, GetCommandLineW for Render.ResX/ResY, XInputGetState) wait for the game's entry point: the OEP's
+    `jmp __tmainCRTStartup` goes through a stub of the mod's (verified before written). Steam's path is unchanged.
+  - `render_res` finds GetCommandLineW in the game's own import table (`kGameImportDirRva`) instead of the header's,
+    which the EA copy points at the DRM's table. The same table for Steam.
+  - Both installers find the game through the EA app too (after Steam). The setup program already runs as administrator.
+    The zip's scripts say to run them as administrator when the folder (Program Files) refuses writes.
+  - The setup program no longer defaults to a remembered folder that no longer holds the game. Only that folder is
+    replaced, never one given with `/DIR` or typed. (A first version replaced any folder without the game: test 1's
+    deliberately wrong `/DIR` installed into the real EA copy. It was put back byte-identical: the exe's flag cleared,
+    the dll removed. The player's `MOHAVR.ini.previous`, a copy of an older shipped ini, was overwritten by test 4 with no
+    backup to restore.)
+  - The setup program repeats the folder checks (the game is there, no other mod's `dinput8.dll`) in `PrepareToInstall`,
+    which runs also when an update skips the folder page (`DisableDirPage=auto`). Its message boxes are suppressible, so
+    `/SUPPRESSMSGBOXES` test runs no longer stop on them.
+  - The tools: `gamedir.txt` points at the EA copy on this PC (Steam's is uninstalled). `deploy.ps1` keeps its baseline
+    per game folder. `harness.ps1` starts the EA copy directly and clicks through `moha_setup.exe` (Play, OK). The EA
+    app drops the harness's arguments, so harness runs deploy with `Render.ResX=1920`, `Render.ResY=1080` (the mod adds
+    `-windowed ResX ResY` itself). `laa.py` uses `gamedir.py`.
+- **Rule 2 extended:** the mod runs against the original wrapped exe: Steam's SteamStub or the EA app's OOA, never an
+  unwrapped one.
+- **Proven [S]:** harness cycles on the EA copy (launcher clicked through, main menu, campaign, gameplay, clean quit, the
+  player's data restored), with every hook installed and the host's OpenXR session at 90 Hz (899 new game frames of 900).
+  With the 4 GB flag set by `laa.py`: a cycle passed and the mod saw 4095 MB; the exe was byte-identical after clearing it.
+  The setup program (test build): work/research/tests/setup1.ps1 passes on fake folders (refusals with nothing written, a
+  clean install, an update's `.previous`, the uninstall), with the real EA copy checked untouched after each case. Run
+  without `/DIR`, it found the EA copy, installed, set the 4 GB flag, and uninstalled back to the deploy baseline with the
+  original exe. Not yet proven: a headset session on the EA copy [H].
+**Why:** the player (2026-10-07): "This is the directory of the EA store version of the game. Can we make it compatible
+with the vr mod?"
+
+### D59. The HP Reverb G2's controllers bound directly -- Decided 2026-10-07
+- **Why:** a tester plays on a Reverb G2 through SteamVR with the Oasis driver (a native SteamVR headset since Windows
+  dropped WMR). SteamVR's OpenXR runtime offers `XR_EXT_hp_mixed_reality_controller` (found in vrclient_x64.dll), and its
+  G2 bindings name the controller `hpmotioncontroller`, so it likely reports the HP profile. The host bound only Touch and
+  Index (plus the simple controller, menu only), which left the G2 to SteamVR's remapping of the Touch bindings.
+- **What:** the host enables the extension when the runtime offers it. It binds `/interaction_profiles/hp/mixed_reality_controller`
+  exactly as Touch, whose layout the G2 copies (X/Y, A/B, grip, trigger, stick with click, menu): the menu's actions and
+  the whole gameplay pad. It logs whether the runtime offers the profile, and which profile each hand is bound as on
+  every interaction-profile change (the line to read when a controller misbehaves). The README says so, and where to
+  rebind under SteamVR.
+- **Proven [S]:** the simulator doesn't offer the extension. The host doesn't enable it there and still binds Touch (logged
+  "bound as /interaction_profiles/oculus/touch_controller"); harness cycle OK. The HP paths follow the extension's spec.
+  **[H]:** the tester's G2 session (the log's "HP Reverb G2 controller profile: yes" and "bound as .../hp/mixed_reality_controller").
+- **Also, the tools:** `deploy.ps1` refuses a folder that holds the player's own install (the setup's README or its
+  uninstall entry for that folder). Before this, a test deploy took the player's 0.8.2 install for its own (the dll was
+  byte-identical to the build) and undeploy removed its three files. `harness.ps1` polls for the host's exit instead of
+  `WaitForExit`, which threw "Access is denied" once.
+**Why:** the player (2026-10-07): "A tester is using Reverb G2 with Oasis drivers (Native SteamVR headset). Will it be
+compatible?" -- "Do it".

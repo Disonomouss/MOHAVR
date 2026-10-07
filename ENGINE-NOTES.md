@@ -15,6 +15,33 @@ Measured facts only. Each entry says how it was verified. Anything not yet measu
 Every address in these notes, and in the mod's address header, is for this hash. The mod
 should check it at start-up and stand down on a mismatch.
 
+## 1b. The EA app's copy: the same build, another wrapper (D58, measured 2026-10-07)
+
+| | |
+|---|---|
+| Install | `C:\Program Files\EA Games\Medal of Honor Airborne` (key `HKLM\SOFTWARE\WOW6432Node\Electronic Arts\Medal of Honor Airborne`, value `Install Dir`; uninstall entry `{25F28E39-FDBB-11DB-8314-0800200C9A66}`) |
+| Executable | `UnrealEngine3\Binaries\MOHA.exe`, 14,908,232 bytes, SHA-256 `12AE2B20A9E4DF4FDF0FC8C1488C883BACAD31889CE4ABA24F014438C62B5940`, Authenticode-signed |
+| Header | TimeDateStamp **0x47BFE8F8** (= Steam's), SizeOfImage `0xF2E000`, CheckSum `0xE402F3`, entry RVA `0xF2D000` (in `.ooa`) |
+| Wrapper | EA "OOA": an `.ooa` section where Steam has `.bind`; the header's import directory names only `Core/Activation.dll` |
+
+Evidence that it is the same compiled game (the files compared section by section):
+- the same section VAs and virtual sizes;
+- `.rdata`, `.rsrc` and `.reloc` byte-identical, including the game's own import descriptors (RVA `0xCDAB3C`) and IAT;
+- `.text`, `.textidx`, `CONST` and `.data` encrypted on disk (entropy 8.00 bits/byte), decrypted in memory: all 39 build-check
+  signatures match at the mod's DllMain, and every hook installs (harness cycle in gameplay, the host at 90 Hz).
+
+How it starts (matters for the mod and the harness):
+- `MOHA.exe` started by anything but the EA app hands over to the EA app, which runs `moha_setup.exe` (the game's settings
+  dialog, "Medal of Honor Airborne(tm) Setup"). Its Play starts `MOHA.exe -no_launcher`; a settings-above-defaults warning
+  (same title, OK) can come first. Command-line arguments given to the first `MOHA.exe` are dropped.
+- `Activation.dll` decrypts the image, then resolves the game's imports **one DLL at a time, in table order**, loading
+  each. The mod's `dinput8.dll` is loaded partway: d3d9's slots are already filled, XInput's still hold `0x80000002` (the
+  unresolved ordinal) and kernel32's the hint/name RVAs. The mod therefore installs its IAT hooks from the entry point
+  (the OEP's `jmp __tmainCRTStartup` at `0x1112B7EF`, redirected through a stub), the first game code after the imports.
+- The large-address-aware bit (D57) is accepted: the flagged exe starts and the mod sees 4095 MB.
+- Program Files: the Binaries folder needs administrator rights to write (this PC: the player's Modify right was granted
+  once, 2026-10-07, for `tools/deploy.ps1`).
+
 ## 2. PE layout
 
 | Fact | Value | Evidence |

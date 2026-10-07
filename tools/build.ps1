@@ -55,6 +55,10 @@ if (Test-Path $cmakeDir) { $env:PATH = "$cmakeDir;$ninjaDir;$env:PATH" }
 Import-Module (Join-Path $vsRoot 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
 Enter-VsDevShell -VsInstallPath $vsRoot -SkipAutomaticLocation -DevCmdArguments "-arch=$Arch -host_arch=x64" | Out-Null
 
+# No C:\dev\vcpkg (a fresh machine): Visual Studio's bundled copy, chosen explicitly (it builds the same static triplets).
+if (-not (Test-Path $vcpkgRoot) -and (Test-Path (Join-Path $vsRoot 'VC\vcpkg\scripts'))) {
+    $vcpkgRoot = Join-Path $vsRoot 'VC\vcpkg'
+}
 $env:VCPKG_ROOT = $vcpkgRoot
 $toolchain = (Join-Path $vcpkgRoot 'scripts\buildsystems\vcpkg.cmake') -replace '\\', '/'
 if (-not (Test-Path $toolchain)) { throw "vcpkg toolchain not found at $toolchain (set VCPKG_ROOT)" }

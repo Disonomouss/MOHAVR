@@ -8,4 +8,7 @@ namespace mohavr {
 // mismatch (Debug.TestWrongBuild) to prove the stand-down path.
 bool CheckBuild(bool forceFail);
 
+// D58: is this the EA app's copy (the OOA wrapper) rather than Steam's? Valid once CheckBuild has passed.
+bool IsEaBuild();
+
 }  // namespace mohavr

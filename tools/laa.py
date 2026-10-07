@@ -11,7 +11,8 @@ import shutil
 import struct
 import sys
 
-GAME = r'C:\Program Files (x86)\Steam\steamapps\common\Medal of Honor Airborne\UnrealEngine3\Binaries\MOHA.exe'
+from gamedir import game_exe
+
 LAA = 0x0020
 
 
@@ -24,7 +25,7 @@ def offset(data):
 
 def main(argv):
     cmd = argv[0] if argv else 'status'
-    exe = argv[1] if len(argv) > 1 else GAME
+    exe = argv[1] if len(argv) > 1 else str(game_exe())
     data = bytearray(open(exe, 'rb').read())
     o = offset(data)
     ch = struct.unpack_from('<H', data, o)[0]

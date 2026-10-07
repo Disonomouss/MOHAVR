@@ -45,6 +45,13 @@ function Assert-NotRunning { if (Get-Process MOHA -ErrorAction SilentlyContinue)
 switch ($Action) {
     'deploy' {
         Assert-NotRunning
+        # The player's own MOHAVR install (the setup program or the zip): a test deploy would overwrite it and undeploy
+        # remove it (2026-10-07: the player's 0.8.2 install, whose dll was byte-identical to the build, was taken for ours).
+        $installed = (Test-Path (Join-Path $bin 'MOHAVR-README.md')) -or
+            @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+              Where-Object { $_.PSChildName -eq '{546DE66D-2985-4665-AC46-5B89E0AB9D47}_is1' -and
+                             (Get-ItemProperty $_.PSPath).InstallLocation.TrimEnd('\') -eq $gameDir.TrimEnd('\') }).Count -gt 0
+        if ($installed) { throw "the player's own MOHAVR install is in $bin (setup or zip) -- not deploying over it; ask the player" }
         $src = Join-Path $root 'build\x86\dinput8.dll'
         if (-not (Test-Path $src)) { throw 'build\x86\dinput8.dll not found -- run tools\build.ps1' }
         $s = Load-State
@@ -57,7 +64,9 @@ switch ($Action) {
                 throw "a dinput8.dll that MOHAVR did not deploy is already in $bin -- refusing to overwrite it"
             }
         }
-        if (-not $s -or -not $s.baseline) {
+        # The baseline belongs to one game folder (Steam's and the EA app's differ, D58): a state from another folder is
+        # not reused.
+        if (-not $s -or -not $s.baseline -or $s.gameDir -ne $gameDir) {
             $baseline = @(Get-ChildItem $bin -Force | ForEach-Object Name | Where-Object { $ours -notcontains $_ } | Sort-Object)
         } else { $baseline = @($s.baseline) }
 
@@ -87,13 +96,14 @@ switch ($Action) {
         [IO.File]::WriteAllText((Join-Path $bin 'MOHAVR.ini'), $text, (New-Object Text.UTF8Encoding($false)))
 
         Save-State ([pscustomobject]@{
-            deployed = (Get-Date).ToString('o'); dllHash = (Hash $target); iniOverrides = $Set; baseline = $baseline })
+            deployed = (Get-Date).ToString('o'); gameDir = $gameDir; dllHash = (Hash $target); iniOverrides = $Set; baseline = $baseline })
         Write-Host ("deployed dinput8.dll + MOHAVR.ini to {0}{1}" -f $bin, $(if ($Set) { " (ini: $($Set -join ', '))" } else { '' }))
     }
 
     'undeploy' {
         Assert-NotRunning
         $s = Load-State
+        if ($s -and $s.gameDir -and $s.gameDir -ne $gameDir) { throw "the last deploy went to $($s.gameDir), not $gameDir -- set MOHAVR_GAMEDIR to undeploy it" }
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
         if (Get-Process MOHAVR-host -ErrorAction SilentlyContinue) { throw 'MOHAVR-host is still running' }
         foreach ($l in 'MOHAVR.log', 'MOHAVR.prev.log', 'MOHAVR-host.log', 'MOHAVR-host.prev.log') {

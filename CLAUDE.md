@@ -1,7 +1,7 @@
 # MOHAVR — VR mod for Medal of Honor: Airborne
 
-Native 6DoF VR mod (OpenXR) for Medal of Honor: Airborne (Steam app 24840): a 2007 Unreal
-Engine 3 game, 32-bit, Direct3D 9.
+Native 6DoF VR mod (OpenXR) for Medal of Honor: Airborne (Steam app 24840, or the EA app's copy of the same build, D58):
+a 2007 Unreal Engine 3 game, 32-bit, Direct3D 9.
 
 ## Working unattended
 If the player is away (overnight goal): work through `UNATTENDED-REPORT.md` §6 (done) / §7 (current) in order, under the rules in
@@ -24,7 +24,7 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
    it is shipped or copied into the game folder. **The one exception (D57, the player's choice):** the installers' optional
    4 GB step sets the large-address-aware flag in `MOHA.exe`'s header (one bit), keeps the original, and clears it again on
    uninstall. Tests that set it (`tools/laa.py`) restore the original exe afterwards.
-2. **The mod must run against the original, SteamStub-wrapped `MOHA.exe`.**
+2. **The mod must run against the original, wrapped `MOHA.exe`**: Steam's (SteamStub) or the EA app's (OOA, D58).
    `work/MOHA.exe.unpacked.exe` is for analysis and debugging only.
 3. **All engine addresses live in one header**, each with a comment saying what it is and how
    it was verified. Addresses are valid for the build pinned in `ENGINE-NOTES.md` §1 only.
@@ -105,7 +105,9 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   next `launch` refuses to start until then.
 - **The screen checks only work at 1920×1080**, because MOHA's UI is fixed-pixel. The shipped ini renders at
   2880×1620 (`Render.ResX/ResY`), so for harness runs deploy with `-Set 'Render.ResX=0','Render.ResY=0'` (plus
-  the simulator's `OpenXR.RuntimeJson`).
+  the simulator's `OpenXR.RuntimeJson`). **On the EA app's copy** (this PC's, D58) the EA app drops the harness's
+  arguments: deploy with `-Set 'Render.ResX=1920','Render.ResY=1080'` instead. The harness clicks through the game's
+  launcher (`moha_setup.exe`) itself.
 - The engine writes no log, so screen state comes from `tools/screen_match.py` checks in
   `tools/harness-ref/` (D9). Add a new screen with
   `python tools/screen_match.py --add NAME shot.png X0 Y0 X1 Y1`, using a static UI area.

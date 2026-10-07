@@ -184,13 +184,16 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
 void Pad::AppendBindings(const std::string& profile, const std::function<XrPath(const char*)>& path,
                          std::vector<XrActionSuggestedBinding>& out) const {
     auto add = [&](XrAction a, const char* p) { out.push_back({a, path(p)}); };
-    if (profile == "/interaction_profiles/oculus/touch_controller" || profile == "/interaction_profiles/valve/index_controller") {
+    // D59: the HP Reverb G2's controllers have Touch's layout (X/Y, A/B, grip, trigger, stick) and the same paths.
+    const bool touchLayout = profile == "/interaction_profiles/oculus/touch_controller" ||
+                             profile == "/interaction_profiles/hp/mixed_reality_controller";
+    if (touchLayout || profile == "/interaction_profiles/valve/index_controller") {
         add(aim_[0], "/user/hand/left/input/aim/pose");
         add(aim_[1], "/user/hand/right/input/aim/pose");
         add(haptic_[0], "/user/hand/left/output/haptic");
         add(haptic_[1], "/user/hand/right/output/haptic");
     }
-    if (profile == "/interaction_profiles/oculus/touch_controller") {
+    if (touchLayout) {
         add(stick_[0], "/user/hand/left/input/thumbstick");
         add(stick_[1], "/user/hand/right/input/thumbstick");
         add(src_[kA], "/user/hand/right/input/a/click");

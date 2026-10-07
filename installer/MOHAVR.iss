@@ -19,7 +19,7 @@ AppName=MOHAVR
 AppVersion={#AppVersion}
 AppVerName=MOHAVR {#AppVersion}
 AppPublisher=MOHAVR
-AppComments=VR for Medal of Honor: Airborne (Steam)
+AppComments=VR for Medal of Honor: Airborne (Steam or the EA app)
 DefaultDirName={code:GameDir}
 AppendDefaultDirName=no
 DirExistsWarning=no
@@ -79,6 +79,7 @@ Type: files; Name: "{app}\UnrealEngine3\Binaries\MOHAVR-host.prev.log"
 const
   GameSub = 'steamapps\common\Medal of Honor Airborne';
   ExeSub = 'UnrealEngine3\Binaries\MOHA.exe';
+  EAGameKey = '{25F28E39-FDBB-11DB-8314-0800200C9A66}';  // the EA app's uninstall entry for the game (D58)
   Marker = 'MOHAVR-host.exe';  // MOHAVR's dinput8.dll carries this string (any version)
 
 function HasGame(const Dir: String): Boolean;
@@ -118,7 +119,8 @@ begin
   end;
 end;
 
-// The game's folder: Steam's own uninstall entry for app 24840, then every Steam library; else the usual place.
+// The game's folder: Steam's own uninstall entry for app 24840, then every Steam library, then the EA app's copy (D58: its
+// own key and its uninstall entry); else the usual place.
 function FindGame(): String;
 var
   S: String;
@@ -142,12 +144,45 @@ begin
     if HasGame(AddBackslash(Libs[I]) + GameSub) then begin
       Result := AddBackslash(Libs[I]) + GameSub; exit;
     end;
+  if RegQueryStringValue(HKLM32, 'SOFTWARE\Electronic Arts\Medal of Honor Airborne', 'Install Dir', S) and HasGame(S) then begin
+    Result := RemoveBackslashUnlessRoot(S); exit;
+  end;
+  if RegQueryStringValue(HKLM32, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\' + EAGameKey, 'InstallLocation', S) and HasGame(S) then begin
+    Result := RemoveBackslashUnlessRoot(S); exit;
+  end;
 end;
 
 function GameDir(Param: String): String;
 begin
   Result := FindGame();
   if Result = '' then Result := ExpandConstant('{commonpf32}\Steam\') + GameSub;
+end;
+
+// True if the command line names the folder (/DIR=...): that one is never replaced.
+function DirOnCommandLine(): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(Copy(ParamStr(I), 1, 5), '/DIR=') = 0 then Result := True;
+end;
+
+// UsePreviousAppDir: the remembered folder of an earlier MOHAVR that no longer holds the game (the game moved, or Steam's
+// copy was swapped for the EA app's) is replaced by the one found now. Only that folder: never one given with /DIR (a
+// wrong one must still be refused on the folder page), and the player can still browse.
+procedure InitializeWizard();
+var
+  S: String;
+begin
+  if (WizardForm.PrevAppDir <> '') and not DirOnCommandLine() and
+     (CompareText(WizardForm.DirEdit.Text, WizardForm.PrevAppDir) = 0) and not HasGame(WizardForm.DirEdit.Text) then begin
+    S := FindGame();
+    if S <> '' then begin
+      Log('The previous install''s folder ' + WizardForm.PrevAppDir + ' no longer holds the game -- ' + S + ' instead');
+      WizardForm.DirEdit.Text := S;
+    end;
+  end;
 end;
 
 function IsOurs(const Dll: String): Boolean;
@@ -242,8 +277,8 @@ begin
       SaveStringToFile(LaaMarker(), Exe, False);
       Log('MOHA.exe: large address aware set (4 GB); the original kept as ' + Keep + '\MOHA.exe.original');
     end else
-      MsgBox('Setup could not change MOHA.exe (is the game running, or the file read-only?). MOHAVR is installed, but the ' +
-             'game keeps its 2 GB of memory: the first mission may run out in VR. Run setup again to retry.', mbInformation, MB_OK);
+      SuppressibleMsgBox('Setup could not change MOHA.exe (is the game running, or the file read-only?). MOHAVR is installed, but the ' +
+             'game keeps its 2 GB of memory: the first mission may run out in VR. Run setup again to retry.', mbInformation, MB_OK, IDOK);
   end else if FileExists(LaaMarker()) then begin
     if LaaFlag(Exe, 0, Now) then Log('MOHA.exe: large address aware cleared (the option was unticked)');
     DeleteFile(LaaMarker());
@@ -257,24 +292,35 @@ begin
   Result := True;
   if CurPageID = wpSelectDir then begin
     if not HasGame(WizardDirValue) then begin
-      MsgBox('This folder isn''t Medal of Honor: Airborne: there is no ' + ExeSub + ' in it.' + #13#10#13#10 +
-             'Choose the game''s own folder (in Steam: right-click the game > Manage > Browse local files).', mbError, MB_OK);
+      SuppressibleMsgBox('This folder isn''t Medal of Honor: Airborne: there is no ' + ExeSub + ' in it.' + #13#10#13#10 +
+             'Choose the game''s own folder (in Steam: right-click the game > Manage > Browse local files; in the EA app: ' +
+             'the game''s ... menu > View properties > Browse).', mbError, MB_OK, IDOK);
       Result := False;
       exit;
     end;
     Dll := AddBackslash(WizardDirValue) + 'UnrealEngine3\Binaries\dinput8.dll';
     if FileExists(Dll) and not IsOurs(Dll) then begin
-      MsgBox('There is already a dinput8.dll in the game''s Binaries folder that isn''t MOHAVR''s (another mod?).' + #13#10#13#10 +
-             'Remove or rename it first: MOHAVR will not overwrite it. Nothing was changed.', mbError, MB_OK);
+      SuppressibleMsgBox('There is already a dinput8.dll in the game''s Binaries folder that isn''t MOHAVR''s (another mod?).' + #13#10#13#10 +
+             'Remove or rename it first: MOHAVR will not overwrite it. Nothing was changed.', mbError, MB_OK, IDOK);
       Result := False;
     end;
   end;
 end;
 
+// Runs on every install, also when the folder page was skipped (an update: DisableDirPage=auto), so the folder checks are
+// repeated here.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dll: String;
 begin
   Result := '';
-  if GameRunning() then Result := 'Medal of Honor: Airborne is running. Quit the game, then run setup again.';
+  Dll := AddBackslash(WizardDirValue) + 'UnrealEngine3\Binaries\dinput8.dll';
+  if not HasGame(WizardDirValue) then
+    Result := WizardDirValue + ' isn''t Medal of Honor: Airborne: there is no ' + ExeSub + ' in it. Nothing was changed.'
+  else if FileExists(Dll) and not IsOurs(Dll) then
+    Result := 'There is already a dinput8.dll in the game''s Binaries folder that isn''t MOHAVR''s (another mod?). ' +
+              'Remove or rename it first: MOHAVR will not overwrite it. Nothing was changed.'
+  else if GameRunning() then Result := 'Medal of Honor: Airborne is running. Quit the game, then run setup again.';
 end;
 
 // An update: the shipped MOHAVR.ini changed -> the old copy is kept for the player (their own settings are elsewhere).
@@ -302,7 +348,7 @@ function InitializeUninstall(): Boolean;
 begin
   Result := True;
   if GameRunning() then begin
-    MsgBox('Medal of Honor: Airborne is running. Quit the game, then uninstall MOHAVR.', mbError, MB_OK);
+    SuppressibleMsgBox('Medal of Honor: Airborne is running. Quit the game, then uninstall MOHAVR.', mbError, MB_OK, IDOK);
     Result := False;
   end;
 end;

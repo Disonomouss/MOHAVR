@@ -14,6 +14,14 @@ harness deploys it, drives the game to gameplay, and waits on the mod's log. The
 **not deployed**; the game folder matches its baseline. Next: **M2** (PLAN.md), starting with the
 address-space budget for D3D9On12.
 
+**The EA app's copy is supported** (2026-10-07, D58, ENGINE-NOTES 1b): the same build as Steam's under EA's OOA wrapper.
+The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
+(`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
+into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**0.8.2** (built 2026-10-07, not published): the EA copy (D58) and the Reverb G2's controllers bound directly (D59,
+a tester's G2 under SteamVR + Oasis [H]). The player installed 0.8.2 into the EA copy with the setup program; a test
+deploy then removed its dinput8.dll, MOHAVR-host.exe and MOHAVR.ini (the README, the 4 GB flag and the uninstall entry
+remain): **run dist\MOHAVR-0.8.2-Setup.exe again** to repair it. deploy.ps1 now refuses a folder with the player's install.
 **Release 0.8.1** (2026-10-05, D57): 0.8.0 crashed in the first mission (out of 2 GB of address space in VR; not new in
 0.8.0). The installers now offer the 4 GB flag in MOHA.exe (on by default, reversible), proven in the simulator.
 **Release 0.8.0** (2026-10-05, D56): `MOHAVR-0.8.0-Setup.exe` (a setup program, Inno Setup) and the zip, on the private

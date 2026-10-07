@@ -24,6 +24,12 @@ try {
     $bin = Join-Path $GameDir 'UnrealEngine3\Binaries'
     if (-not (Test-Path $bin)) { throw "$bin does not exist" }
     if (Get-Process MOHA, MOHAVR-host -ErrorAction SilentlyContinue) { throw 'The game (or MOHAVR-host) is running -- quit it first.' }
+    # The EA app's folder is under Program Files (D58): writing there needs administrator rights.
+    $probe = Join-Path $bin 'MOHAVR.write-test'
+    try { [IO.File]::WriteAllText($probe, ''); Remove-Item -LiteralPath $probe -Force }
+    catch [UnauthorizedAccessException] {
+        throw "Windows needs administrator rights to change $bin. Right-click uninstall.cmd > Run as administrator. Nothing was removed."
+    }
 
     $dll = Join-Path $bin 'dinput8.dll'
     if (Test-Path $dll) {

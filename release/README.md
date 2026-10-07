@@ -1,21 +1,25 @@
-# MOHAVR 0.8.1: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.2: VR for Medal of Honor: Airborne
 
-MOHAVR turns the Steam PC version of *Medal of Honor: Airborne* into a VR game. You get a stereo, head-tracked view,
-motion controllers with guns held in your hands, and physical interactions: holsters on your body, reloading by hand,
-melee swings, scopes you raise to your eye, an off-hand pistol, grenade and knife, and the HUD on your wrist. An
-in-headset menu adjusts all of it. This is a **test build**: read "Known issues" before playing.
+MOHAVR turns the PC version of *Medal of Honor: Airborne* (Steam or the EA app) into a VR game. You get a stereo,
+head-tracked view, motion controllers with guns held in your hands, and physical interactions: holsters on your body,
+reloading by hand, melee swings, scopes you raise to your eye, an off-hand pistol, grenade and knife, and the HUD on your
+wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Known issues" before playing.
 
 ## What you need
 
-- *Medal of Honor: Airborne* from Steam. The mod checks the game build (3648) and stays inactive on any other version.
+- *Medal of Honor: Airborne* from Steam or the EA app (both sell the same build). The mod checks the game build (3648)
+  and stays inactive on any other version.
 - 64-bit Windows 10 (1703 or later) or Windows 11, and a graphics card with Direct3D 12.
 - A PC VR headset with an OpenXR runtime: Virtual Desktop, SteamVR, or Meta Quest Link. MOHAVR uses whichever OpenXR
   runtime is active.
+  - Controllers: Meta Touch and Valve Index are bound directly. The HP Reverb G2's are too (for example through SteamVR
+    with the Oasis driver; SteamVR must be the active OpenXR runtime: SteamVR Settings > OpenXR). Others go through
+    the runtime's remapping.
 
 ## Install
 
-**Setup program (recommended):** run `MOHAVR-0.8.1-Setup.exe`.
-- It finds the game through Steam. If it can't, browse to the game's folder: the one that contains
+**Setup program (recommended):** run `MOHAVR-0.8.2-Setup.exe`.
+- It finds the game through Steam or the EA app. If it can't, browse to the game's folder: the one that contains
   `UnrealEngine3\Binaries\MOHA.exe`.
 - It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
   is changed.
@@ -23,13 +27,14 @@ in-headset menu adjusts all of it. This is a **test build**: read "Known issues"
 - **"Let the game use up to 4 GB of memory"** is ticked by default; leave it ticked. The game is 32-bit and can only use
   2 GB, and in VR the first mission runs out (the game crashes after a few minutes).
   - It sets one flag in `MOHA.exe`'s header; the original exe is kept and put back when you uninstall.
-  - If Steam's "Verify integrity of game files" ever restores the original exe, run setup again.
+  - If Steam's "Verify integrity of game files" or the EA app's "Repair" ever restores the original exe, run setup again.
 - Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
   "More info", then "Run anyway".
 
-**Zip (manual):** unzip `MOHAVR-0.8.1.zip` anywhere and double-click `install.cmd`. If your game is somewhere Steam
-doesn't know about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag (`-Keep2GB` leaves
-`MOHA.exe` alone).
+**Zip (manual):** unzip `MOHAVR-0.8.2.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
+Steam nor the EA app knows about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag
+(`-Keep2GB` leaves `MOHA.exe` alone). The EA app installs under Program Files: right-click `install.cmd` (and later
+`uninstall.cmd`) and choose "Run as administrator".
 
 **Updating:** install the new version over the old one. Your in-headset settings are kept. If the shipped `MOHAVR.ini`
 changed, your old copy is saved to `%LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous`.
@@ -37,7 +42,7 @@ changed, your old copy is saved to `%LOCALAPPDATA%\MOHAVR\MOHAVR.ini.previous`.
 ## Play
 
 1. Start your VR runtime (for example, connect with Virtual Desktop).
-2. Start the game from Steam as usual.
+2. Start the game from Steam or the EA app as usual. (The EA app first shows the game's own settings window: press Play.)
 3. Put the headset on. Menus appear on a flat screen in front of you. In the game, the world is in 3D around you.
 
 The monitor shows the headset view (a mirror over the game's window) while the game is in front. If the game window
@@ -189,6 +194,9 @@ double-click `uninstall.cmd`). Uninstalling removes only MOHAVR's files and logs
 
 The mod writes `MOHAVR.log` and `MOHAVR-host.log` next to `MOHA.exe`. If the mod can't start VR, the game still runs
 as a normal flat game, and the logs say why.
+
+If a controller button does nothing, `MOHAVR-host.log` says which profile each hand was bound as
+(`host: /user/hand/left bound as ...`). Under SteamVR, buttons can be rebound in SteamVR > Controller Bindings.
 
 If the game crashes after a few minutes in a mission, check that `MOHAVR.log` says
 `memory: MOHA.exe large address aware: yes`. If it says `no`, run setup again with the 4 GB option ticked.

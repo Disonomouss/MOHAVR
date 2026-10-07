@@ -7,6 +7,11 @@
 #include "patch.hpp"
 
 namespace mohavr {
+namespace {
+bool g_ea = false;
+}
+
+bool IsEaBuild() { return g_ea; }
 
 bool CheckBuild(bool forceFail) {
     const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
@@ -18,11 +23,16 @@ bool CheckBuild(bool forceFail) {
     const auto* nt  = reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
 
     const std::uint32_t wantStamp = forceFail ? (addr::kTimeDateStamp ^ 1u) : addr::kTimeDateStamp;
+    // D58: the same build under one of two wrappers -- Steam's (SteamStub) or the EA app's (OOA). The wrapper decides the
+    // header fields; the signatures below are the same for both.
+    const bool ea = nt->OptionalHeader.AddressOfEntryPoint == addr::kEaEntryRva;
+    const char* store = ea ? "EA app" : "Steam";
+    g_ea = ea;
     struct Field { const char* name; std::uint32_t have, want; } fields[] = {
         {"TimeDateStamp", nt->FileHeader.TimeDateStamp,          wantStamp},
-        {"SizeOfImage",   nt->OptionalHeader.SizeOfImage,        addr::kSizeOfImage},
-        {"CheckSum",      nt->OptionalHeader.CheckSum,           addr::kCheckSum},
-        {"EntryPoint",    nt->OptionalHeader.AddressOfEntryPoint, addr::kEntryRva},
+        {"SizeOfImage",   nt->OptionalHeader.SizeOfImage,        ea ? addr::kEaSizeOfImage : addr::kSizeOfImage},
+        {"CheckSum",      nt->OptionalHeader.CheckSum,           ea ? addr::kEaCheckSum : addr::kCheckSum},
+        {"EntryPoint",    nt->OptionalHeader.AddressOfEntryPoint, ea ? addr::kEaEntryRva : addr::kEntryRva},
     };
     bool ok = true;
     for (const auto& f : fields) {
@@ -39,7 +49,7 @@ bool CheckBuild(bool forceFail) {
     }
     if (forceFail) MLOG("build check: Debug.TestWrongBuild=1 -- mismatch simulated");
     if (ok) {
-        MLOG("build check: OK -- MOHA.exe build 3648 (timestamp 0x%08X, %u signatures)",
+        MLOG("build check: OK -- MOHA.exe build 3648, the %s's (timestamp 0x%08X, %u signatures)", store,
              addr::kTimeDateStamp, static_cast<unsigned>(sizeof(addr::kSignatures) / sizeof(addr::kSignatures[0])));
     }
     return ok;

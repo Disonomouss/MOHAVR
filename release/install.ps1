@@ -7,7 +7,8 @@
     and MOHAVR.ini (settings). Nothing of the game's own is changed or replaced. The mod will not
     install over a dinput8.dll that isn't MOHAVR's (another mod): remove that one first.
 
-    The game is found through Steam (every library folder). Pass -GameDir if it's somewhere else.
+    The game is found through Steam (every library folder), then the EA app. Pass -GameDir if it's somewhere else. The EA
+    app's folder (under Program Files) needs the script run as administrator.
     What was installed is recorded in %LOCALAPPDATA%\MOHAVR\install.json, which uninstall.ps1 uses.
     Your in-headset settings (%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini) are never touched.
 
@@ -63,16 +64,35 @@ function Find-Game {
         $g = Join-Path $l 'steamapps\common\Medal of Honor Airborne'
         if (Test-Path (Join-Path $g 'UnrealEngine3\Binaries\MOHA.exe')) { return $g }
     }
+    # The EA app's copy (D58): its own key, then its uninstall entry.
+    $ea = @(@('HKLM:\SOFTWARE\WOW6432Node\Electronic Arts\Medal of Honor Airborne', 'Install Dir'),
+            @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{25F28E39-FDBB-11DB-8314-0800200C9A66}', 'InstallLocation'))
+    foreach ($kv in $ea) {
+        try {
+            $g = (Get-ItemProperty $kv[0] -ErrorAction Stop).($kv[1])
+            if ($g -and (Test-Path (Join-Path $g 'UnrealEngine3\Binaries\MOHA.exe'))) { return $g.TrimEnd('\') }
+        } catch {}
+    }
     return $null
+}
+
+# The EA app installs under Program Files, which needs administrator rights to write (Steam's folder doesn't).
+function Assert-Writable([string] $Dir) {
+    $probe = Join-Path $Dir 'MOHAVR.write-test'
+    try { [IO.File]::WriteAllText($probe, ''); Remove-Item -LiteralPath $probe -Force }
+    catch [UnauthorizedAccessException] {
+        throw "Windows needs administrator rights to change $Dir. Right-click this script (install.cmd / uninstall.cmd) > Run as administrator."
+    }
 }
 
 try {
     foreach ($f in $files) { if (-not (Test-Path (Join-Path $here $f))) { throw "$f is missing from this folder -- unpack the whole zip first" } }
     if (-not $GameDir) { $GameDir = Find-Game }
-    if (-not $GameDir) { throw 'Medal of Honor Airborne was not found in any Steam library. Run again with -GameDir "<game folder>".' }
+    if (-not $GameDir) { throw 'Medal of Honor Airborne was not found in any Steam library or the EA app. Run again with -GameDir "<game folder>".' }
     $bin = Join-Path $GameDir 'UnrealEngine3\Binaries'
     if (-not (Test-Path (Join-Path $bin 'MOHA.exe'))) { throw "No UnrealEngine3\Binaries\MOHA.exe under $GameDir" }
     if (Get-Process MOHA -ErrorAction SilentlyContinue) { throw 'The game is running -- quit it first.' }
+    Assert-Writable $bin
 
     $target = Join-Path $bin 'dinput8.dll'
     if (Test-Path $target) {
@@ -119,7 +139,7 @@ try {
     } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $manifest
 
     Write-Host "MOHAVR installed into $bin"
-    Write-Host 'Start your VR runtime (e.g. Virtual Desktop), then start the game from Steam as usual.'
+    Write-Host 'Start your VR runtime (e.g. Virtual Desktop), then start the game from Steam or the EA app as usual.'
     Write-Host 'The monitor shows the headset view while the game is in front (see README).'
     exit 0
 }

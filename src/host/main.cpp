@@ -193,19 +193,33 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         SetEnvironmentVariableW(L"XR_RUNTIME_JSON", runtimeJson.c_str());
         MLOG("host: XR_RUNTIME_JSON = %ls", runtimeJson.c_str());
     }
-    const char* exts[] = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
+    // D59: the HP Reverb G2's controllers have their own profile (XR_EXT_hp_mixed_reality_controller: SteamVR offers it,
+    // e.g. with the Oasis driver). Enabled only when the runtime has it, so the controllers bind directly instead of
+    // through the runtime's remapping of the Touch bindings.
+    bool hpControllers = false;
+    {
+        uint32_t n = 0;
+        if (XR_SUCCEEDED(xrEnumerateInstanceExtensionProperties(nullptr, 0, &n, nullptr)) && n) {
+            std::vector<XrExtensionProperties> props(n, {XR_TYPE_EXTENSION_PROPERTIES});
+            if (XR_SUCCEEDED(xrEnumerateInstanceExtensionProperties(nullptr, n, &n, props.data())))
+                for (const auto& p : props)
+                    if (!strcmp(p.extensionName, XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME)) hpControllers = true;
+        }
+    }
+    std::vector<const char*> exts = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
+    if (hpControllers) exts.push_back(XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME);
     XrInstanceCreateInfo ici{XR_TYPE_INSTANCE_CREATE_INFO};
     strcpy_s(ici.applicationInfo.applicationName, "MOHAVR");
     strcpy_s(ici.applicationInfo.engineName, "Unreal Engine 3 (MOHA)");
     ici.applicationInfo.apiVersion = XR_MAKE_VERSION(1, 0, 0);
-    ici.enabledExtensionCount = 1;
-    ici.enabledExtensionNames = exts;
+    ici.enabledExtensionCount = static_cast<uint32_t>(exts.size());
+    ici.enabledExtensionNames = exts.data();
     XrInstance instance = XR_NULL_HANDLE;
     XR_OK(xrCreateInstance(&ici, &instance), "xrCreateInstance");
     XrInstanceProperties ip{XR_TYPE_INSTANCE_PROPERTIES};
     xrGetInstanceProperties(instance, &ip);
-    MLOG("host: runtime \"%s\" %u.%u.%u", ip.runtimeName, XR_VERSION_MAJOR(ip.runtimeVersion),
-         XR_VERSION_MINOR(ip.runtimeVersion), XR_VERSION_PATCH(ip.runtimeVersion));
+    MLOG("host: runtime \"%s\" %u.%u.%u (HP Reverb G2 controller profile: %s)", ip.runtimeName, XR_VERSION_MAJOR(ip.runtimeVersion),
+         XR_VERSION_MINOR(ip.runtimeVersion), XR_VERSION_PATCH(ip.runtimeVersion), hpControllers ? "yes" : "not offered");
 
     XrSystemGetInfo sgi{XR_TYPE_SYSTEM_GET_INFO};
     sgi.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
@@ -371,6 +385,16 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             {aBack, path("/user/hand/right/input/b/click")},
         });
         suggest("/interaction_profiles/valve/index_controller", {});
+        // D59: the G2's controllers: Touch's layout (X/Y, A/B, a menu button on each), bound the same.
+        if (hpControllers)
+            suggest("/interaction_profiles/hp/mixed_reality_controller", {
+                {aToggle, path("/user/hand/left/input/menu/click")},
+                {aStick, path("/user/hand/left/input/thumbstick")},
+                {aSelect, path("/user/hand/left/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/a/click")},
+                {aBack, path("/user/hand/right/input/b/click")},
+            });
         suggest("/interaction_profiles/khr/simple_controller", {
             {aToggle, path("/user/hand/left/input/menu/click")},
             {aSelect, path("/user/hand/right/input/select/click")},
@@ -380,7 +404,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         attach.countActionSets = controllers ? 2 : 1;
         attach.actionSets = sets;
         XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
-        MLOG("host: actions attached (menu%s; Touch, Index, simple controller)", controllers ? " + gameplay pad" : "");
+        MLOG("host: actions attached (menu%s; Touch, Index%s, simple controller)", controllers ? " + gameplay pad" : "",
+             hpControllers ? ", HP Reverb G2" : "");
     }
     // M7: the aim poses (for the game's aim) and the reticle (ReticleSize in degrees; shown per the menu's Red dot,
     // whose default is the shipped [Aim] Reticle).
@@ -532,6 +557,18 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     MLOG("host: session ending (%s)", StateName(st));
                     SetState(HostState::Exited, "session ended by runtime");
                     return 0;
+                }
+            } else if (ev.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED) {
+                // Which profile the runtime bound each hand to: the first thing to read when a controller misbehaves.
+                for (const char* hand : {"/user/hand/left", "/user/hand/right"}) {
+                    XrPath hp = XR_NULL_PATH;
+                    XrInteractionProfileState ps{XR_TYPE_INTERACTION_PROFILE_STATE};
+                    char prof[XR_MAX_PATH_LENGTH] = "none";
+                    uint32_t len = 0;
+                    if (XR_SUCCEEDED(xrStringToPath(instance, hand, &hp)) &&
+                        XR_SUCCEEDED(xrGetCurrentInteractionProfile(session, hp, &ps)) && ps.interactionProfile != XR_NULL_PATH)
+                        xrPathToString(instance, ps.interactionProfile, sizeof(prof), &len, prof);
+                    MLOG("host: %s bound as %s", hand, prof);
                 }
             }
             ev = {XR_TYPE_EVENT_DATA_BUFFER};

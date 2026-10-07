@@ -89,6 +89,44 @@ public static class Win {
 
 function Get-Moha { Get-Process MOHA -ErrorAction SilentlyContinue | Select-Object -First 1 }
 
+if (-not ('MohaHarness.Launcher' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace MohaHarness {
+public static class Launcher {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowExW(IntPtr p, IntPtr after, string c, string t);
+    [DllImport("user32.dll")] static extern bool PostMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
+    // D58: the EA app starts the game through moha_setup.exe's dialog ("Medal of Honor Airborne(tm) Setup"): Play, then OK
+    // on its "settings above the defaults" warning (same title). Posts BM_CLICK to whichever is up; true if one was.
+    public static bool ClickThrough() {
+        bool clicked = false;
+        IntPtr d = IntPtr.Zero;
+        while ((d = FindWindowExW(IntPtr.Zero, d, "#32770", "Medal of Honor Airborne(tm) Setup")) != IntPtr.Zero) {
+            foreach (var label in new[] { "OK", "Play" }) {
+                IntPtr b = FindWindowExW(d, IntPtr.Zero, "Button", label);
+                if (b != IntPtr.Zero) { PostMessageW(b, 0xF5, IntPtr.Zero, IntPtr.Zero); clicked = true; break; }
+            }
+        }
+        return clicked;
+    }
+}}
+'@
+}
+
+# D58: the EA app's game -- the MOHA.exe started first only hands over to the EA app (which runs moha_setup.exe, whose Play
+# starts "MOHA.exe -no_launcher"); that second process is the game.
+function Wait-EAGame([int] $timeout) {
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt $timeout) {
+        if ([MohaHarness.Launcher]::ClickThrough()) { Write-Host '  clicked through the game''s launcher (moha_setup.exe)' }
+        $g = Get-CimInstance Win32_Process -Filter "Name='MOHA.exe'" | Where-Object { $_.CommandLine -match '-no_launcher' } | Select-Object -First 1
+        if ($g) { return Get-Process -Id $g.ProcessId -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 500
+    }
+    return $null
+}
+
 function Save-State($s) { $s | ConvertTo-Json | Set-Content -Encoding utf8 $StatePath }
 function Load-State { if (Test-Path $StatePath) { Get-Content $StatePath -Raw | ConvertFrom-Json } }
 
@@ -227,7 +265,11 @@ function Invoke-ToGameplay {
     throw "gameplay not reached within 120 s; last screen $last"
 }
 
-$GameBin = Join-Path ((Get-Content (Join-Path $PSScriptRoot 'gamedir.txt') | Where-Object { $_ -and $_ -notmatch '^\s*#' } | Select-Object -First 1).Trim()) 'UnrealEngine3\Binaries'
+$GameDir = (Get-Content (Join-Path $PSScriptRoot 'gamedir.txt') | Where-Object { $_ -and $_ -notmatch '^\s*#' } | Select-Object -First 1).Trim()
+if ($env:MOHAVR_GAMEDIR) { $GameDir = $env:MOHAVR_GAMEDIR }
+$GameBin = Join-Path $GameDir 'UnrealEngine3\Binaries'
+# D58: the EA app's copy is started directly (its Activation.dll asks the running EA app); Steam's through Steam.
+$IsEA    = Test-Path (Join-Path $GameBin 'Core\Activation.dll')
 $ModLog  = Join-Path $GameBin 'MOHAVR.log'
 
 # Waits for a line in the mod's own log (D9: once the mod exists, progress comes from its log).
@@ -249,7 +291,10 @@ function Save-ModLog {
     # The host (D10) follows the game out; give it a moment, then make sure it's gone.
     $h = Get-Process MOHAVR-host -ErrorAction SilentlyContinue
     if ($h) {
-        if (-not $h.WaitForExit(10000)) { Write-Host '  MOHAVR-host still running 10 s after the game -> killing'; Stop-Process -Id $h.Id -Force }
+        # (WaitForExit can throw "Access is denied" on a host that is exiting: poll instead)
+        $t0 = Get-Date
+        while ((Get-Process -Id $h.Id -ErrorAction SilentlyContinue) -and ((Get-Date) - $t0).TotalSeconds -lt 10) { Start-Sleep -Milliseconds 250 }
+        if (Get-Process -Id $h.Id -ErrorAction SilentlyContinue) { Write-Host '  MOHAVR-host still running 10 s after the game -> killing'; Stop-Process -Id $h.Id -Force }
     }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     New-Item -ItemType Directory -Force (Join-Path $Logs 'modlogs') | Out-Null
@@ -278,8 +323,10 @@ switch ($Action) {
         $backup = (& (Join-Path $PSScriptRoot 'userdata.ps1') backup | Select-Object -Last 1)
         Save-State ([pscustomobject]@{ backup = $backup; restored = $false; launched = (Get-Date).ToString('o'); pid = 0 })
         $mode = if ($Fullscreen) { '-fullscreen' } else { '-windowed' }
-        & $SteamExe -applaunch $AppId @ExtraArgs $mode "ResX=$Width" "ResY=$Height" -log
+        if ($IsEA) { Start-Process (Join-Path $GameBin 'MOHA.exe') -WorkingDirectory $GameBin -ArgumentList (@($ExtraArgs) + @($mode, "ResX=$Width", "ResY=$Height", '-log')) }
+        else { & $SteamExe -applaunch $AppId @ExtraArgs $mode "ResX=$Width" "ResY=$Height" -log }
         $t0 = Get-Date; $p = $null
+        if ($IsEA) { $p = Wait-EAGame 90 }
         while (-not $p -and ((Get-Date) - $t0).TotalSeconds -lt 90) { Start-Sleep -Milliseconds 500; $p = Get-Moha }
         if (-not $p) { throw 'MOHA did not start within 90 s (Steam dialog?) -- user data NOT touched, run restore anyway' }
         while (((Get-Date) - $t0).TotalSeconds -lt 120) {

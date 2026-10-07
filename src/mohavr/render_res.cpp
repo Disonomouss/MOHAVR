@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 
+#include "addresses.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "patch.hpp"
@@ -17,14 +18,11 @@ std::wstring g_cmdLine;  // what the game gets from GetCommandLineW (lives for t
 
 LPWSTR WINAPI Hook_GetCommandLineW() { return g_cmdLine.data(); }
 
-// The EXE's import slot for kernel32!name, found by walking its import table (by name, not ordinal).
+// The EXE's import slot for kernel32!name, found by walking the game's own import table (by name, not ordinal): the one
+// at kGameImportDirRva, which the EA app's exe keeps although its header names the DRM's table (D58).
 void** FindImportSlot(HMODULE exe, const char* dll, const char* name) {
     auto* base = reinterpret_cast<std::uint8_t*>(exe);
-    auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
-    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
-    const auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    if (!dir.VirtualAddress) return nullptr;
-    for (auto* d = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress); d->Name; ++d) {
+    for (auto* d = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + addr::kGameImportDirRva); d->Name; ++d) {
         if (_stricmp(reinterpret_cast<const char*>(base + d->Name), dll) != 0) continue;
         if (!d->OriginalFirstThunk) continue;
         auto* names = reinterpret_cast<IMAGE_THUNK_DATA*>(base + d->OriginalFirstThunk);

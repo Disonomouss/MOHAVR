@@ -33,4 +33,15 @@ bool SwapPointer(std::uintptr_t slot, void* expected, void* replacement) {
     return seen == expected;
 }
 
+bool WriteBytes(std::uintptr_t va, const std::uint8_t* expected, const std::uint8_t* replacement, std::size_t size) {
+    if (!BytesMatch(va, expected, size)) return false;
+    DWORD old = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(va), size, PAGE_EXECUTE_READWRITE, &old)) return false;
+    std::memcpy(reinterpret_cast<void*>(va), replacement, size);
+    DWORD tmp = 0;
+    VirtualProtect(reinterpret_cast<void*>(va), size, old, &tmp);
+    FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(va), size);
+    return true;
+}
+
 }  // namespace mohavr::patch

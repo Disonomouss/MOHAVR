@@ -17,6 +17,14 @@ inline constexpr std::uint32_t  kSizeOfImage   = 0x00F83000;
 inline constexpr std::uint32_t  kCheckSum      = 0x00E9581D;
 inline constexpr std::uint32_t  kEntryRva      = 0x00F2D2ED;  // SteamStub entry in .bind (ENGINE-NOTES 3)
 
+// The EA app's MOHA.exe (D58, ENGINE-NOTES 1b): the same compiled game (same TimeDateStamp; .rdata, .rsrc and .reloc
+// byte-identical; the same section VAs and sizes), its code encrypted on disk under EA's "OOA" wrapper (an .ooa section
+// in place of .bind; only Core/Activation.dll imported). Activation.dll decrypts it before it loads the game's imports,
+// so every signature below already matches when this DLL's DllMain runs (measured 2026-10-07).
+inline constexpr std::uint32_t  kEaSizeOfImage = 0x00F2E000;
+inline constexpr std::uint32_t  kEaCheckSum    = 0x00E402F3;
+inline constexpr std::uint32_t  kEaEntryRva    = 0x00F2D000;  // the OOA stub, in .ooa
+
 // A byte signature at a fixed VA: what the pinned build has there.
 struct Signature {
     const char*          name;
@@ -28,6 +36,13 @@ struct Signature {
 // entry_OEP: call __security_init_cookie; jmp __tmainCRTStartup (ENGINE-NOTES 3-4, decoded payload)
 inline constexpr std::uintptr_t kOep = 0x1112B7EA;
 inline constexpr std::uint8_t   kOepBytes[] = {0xE8, 0xD5, 0x08, 0x00, 0x00, 0xE9, 0x35, 0xFD, 0xFF, 0xFF};
+// D58: the OEP's second instruction, jmp __tmainCRTStartup (0x1112B7EF + 5 + 0xFFFFFD35 = 0x1112B529, ENGINE-NOTES 4). On
+// the EA app's copy the mod's DllMain runs while Activation.dll is still resolving the game's imports (in table order:
+// d3d9's slots are filled, XInput's and kernel32's not yet), so the IAT hooks are installed from here instead, the first
+// game code that runs once every import is resolved.
+inline constexpr std::uintptr_t kOepJmp = kOep + 5;
+inline constexpr std::uint8_t   kOepJmpBytes[] = {0xE9, 0x35, 0xFD, 0xFF, 0xFF};
+inline constexpr std::uintptr_t kTmainCRTStartup = 0x1112B529;
 
 // WinMain prologue: push ebp; mov ebp,esp; push -1; push <SEH> (ENGINE-NOTES 4, Ghidra)
 inline constexpr std::uintptr_t kWinMain = 0x10918200;
@@ -44,6 +59,11 @@ inline constexpr std::uintptr_t kIatDirect3DCreate9 = 0x112C6818;
 // IAT slot for XInputGetState (imported by ordinal 2; ENGINE-NOTES 5a/5k). Verified at install time
 // against the loaded XInput DLL's ordinal-2 export.
 inline constexpr std::uintptr_t kIatXInputGetState = 0x112C6804;
+
+// The game's own import directory (RVA, in .rdata). The Steam exe's header points at it; the EA app's exe (D58) points its
+// header at the DRM's one-entry table (Core/Activation.dll) instead, but keeps these descriptors byte-identical in .rdata
+// (both files compared 2026-10-07) and resolves them at run time.
+inline constexpr std::uint32_t kGameImportDirRva = 0x00CDAB3C;
 
 // Object layout (ENGINE-NOTES 5l): ULocalPlayer+0x40 = Actor (the APlayerController);
 // AActor::Rotation (FRotator: Pitch, Yaw, Roll ints) at +0xF4 -- ULevel::MoveActor (FUN_10B62090,

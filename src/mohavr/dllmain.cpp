@@ -1,5 +1,6 @@
 // MOHAVR entry. Loaded by the Windows loader as MOHA's dinput8.dll (D5), so this runs before
-// the SteamStub entry and before WinMain -- early enough to hook Direct3DCreate9.
+// the SteamStub entry and before WinMain -- early enough to hook Direct3DCreate9. On the EA app's
+// copy (D58) its Activation.dll loads it, after decrypting the game and partway through its imports.
 //
 // DllMain does only loader-lock-safe work: open the log, read the ini, verify the build,
 // patch one IAT slot. No LoadLibrary, no threads.
@@ -7,19 +8,59 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
+#include "addresses.hpp"
 #include "build_check.hpp"
 #include "config.hpp"
 #include "crash_dump.hpp"
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
+#include "patch.hpp"
 #include "render_res.hpp"
 #include "xinput_hook.hpp"
 
-#define MOHAVR_VERSION "0.8.1"
+#define MOHAVR_VERSION "0.8.2"
 
 namespace {
+
+// The hooks that swap slots in the game's IAT: they need the game's imports resolved.
+void InstallImportHooks(const mohavr::Config& cfg) {
+    if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
+    mohavr::render::InstallResolution(cfg);
+    if (cfg.controllers && cfg.bridgeHost) mohavr::xinput::Install();
+}
+
+// D58: the EA app's copy -- the IAT hooks wait for the game's entry point (addresses.hpp kOepJmp).
+mohavr::Config g_entryCfg;
+std::uintptr_t g_crtStartup = mohavr::addr::kTmainCRTStartup;
+
+void __stdcall OnEntry() {
+    MLOG("entry: the game's imports are resolved -- installing the IAT hooks");
+    InstallImportHooks(g_entryCfg);
+    MLOG("init done at the entry point (%.1f ms)", mohavr::log::MsSinceStart());
+}
+
+__declspec(naked) void EntryStub() {
+    __asm {
+        pushad
+        pushfd
+        call OnEntry
+        popfd
+        popad
+        jmp dword ptr [g_crtStartup]
+    }
+}
+
+// Sends the OEP's jmp __tmainCRTStartup through EntryStub. Verified before written (standing rule 4).
+bool RedirectEntry(const mohavr::Config& cfg) {
+    g_entryCfg = cfg;
+    const auto rel = static_cast<std::int32_t>(reinterpret_cast<std::uintptr_t>(&EntryStub) - (mohavr::addr::kOepJmp + 5));
+    std::uint8_t jmp[5] = {0xE9};
+    std::memcpy(jmp + 1, &rel, sizeof(rel));
+    return mohavr::patch::WriteBytes(mohavr::addr::kOepJmp, mohavr::addr::kOepJmpBytes, jmp, sizeof(jmp));
+}
 
 std::wstring ModuleDir(HMODULE self) {
     wchar_t path[MAX_PATH];
@@ -81,9 +122,15 @@ void Init(HMODULE self) {
         }
     }
     mohavr::crashdump::Install(cfg);
-    if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
-    mohavr::render::InstallResolution(cfg);
-    if (cfg.controllers && cfg.bridgeHost) mohavr::xinput::Install();
+    if (!mohavr::IsEaBuild()) {
+        InstallImportHooks(cfg);
+    } else if (RedirectEntry(cfg)) {
+        MLOG("EA app: the game's imports are still being resolved -- the IAT hooks wait for its entry point (0x%08X)",
+             static_cast<unsigned>(mohavr::addr::kOep));
+    } else {
+        MLOG("EA app: the entry point's bytes differ -- the IAT hooks are tried now (some may stand down)");
+        InstallImportHooks(cfg);
+    }
     MLOG("init done in DllMain (%.1f ms)", mohavr::log::MsSinceStart());
 }
 
