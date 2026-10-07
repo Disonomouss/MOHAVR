@@ -163,8 +163,12 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   depth group can't change for the magazine (a bone of the gun), so staying in front of surfaces is the fix. [S]: the test
   path -- open street `landed on TOP` (13 u above the feet' plane), facing the low wall `a WALL ... after 0.68 s`; a
   Thompson magazine ejected beside the wall `meets something under it after 0.13 s -- it rests at 3391 (the feet at 3264)`.
-- [ ] **C4 The StG44's dust cover.** The bolt body and the dust cover are part of the body mesh (round 52). Time box
+- [x] **C4 The StG44's dust cover.** The bolt body and the dust cover are part of the body mesh (round 52). Time box
   1 h: is a separable part or a material trick possible? Otherwise WONTFIX with the reason.
+
+  **WONTFIX** (D70): one material (6,166 faces), and the port's faces are skinned to `RootOffset` (151, the body) or `Bolt`
+  (242, the handle and rod); no bone or art for the cover. It would take in-memory re-skinning of the GPU vertex buffers
+  and bone maps for every LOD plus a hinge pose (days, crash risk), or new art (not shippable).
 
 ## Track D: mounted guns (research first)
 - [ ] **D1 Research** (time box 2 h; D33 and GOAL 2026-09-30 A6 have the background):

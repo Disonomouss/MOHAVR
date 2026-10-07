@@ -1164,3 +1164,15 @@ hud, then hold X."
   - a Thompson's magazine ejected 2 m from it: no hit, the floor as before;
   - walked up to it (the test path stopping after 0.17 s): "the magazine's fall meets something under it after 0.13 s --
     it rests at 3391 (the feet at 3264)", on top of the low wall instead of through it to the feet.
+
+### D70. The StG44's dust cover stays shut -- Decided 2026-10-08 (GOAL C4: WONTFIX)
+- **Why asked:** round 52, "The stg chamber does not open with the bolt ... the chamber clips through the cover."
+- **Found** (within GOAL's 1 h box; `work/research/reload/psk`, `DE_STG44_Rigged`):
+  - The mesh is **one material** (6,166 faces), so there's no material or section trick.
+  - Its only moving action bone is `Bolt`: 194 vertices, the handle and the rod.
+  - The faces around the ejection port's right side are skinned to `RootOffset` (151, the body: the bolt body and the
+    dust cover) or to `Bolt` (242). No bone exists to move the cover, and no art exists of it open.
+- **What it would take:** re-skinning the cover's vertices in memory to a driven bone, in each LOD's GPU vertex buffer and
+  its chunk's bone map, then posing a hinge: days of reverse engineering, with a crash risk in every LOD. The other way
+  is new art, which the mod can't ship (standing rule 1). Out of proportion for one gun's detail.
+- **The README** keeps the known issue.
