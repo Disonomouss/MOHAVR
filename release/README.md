@@ -147,6 +147,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
   - Seated (off by default): sit, then Recentre, and your seated head becomes standing height (true with it off too);
     on, physical crouch needs only a 25 cm lean
+  - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
+    Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
 - **Weapons**
   - Gun fit (fit each gun to your hand and line up its aim)

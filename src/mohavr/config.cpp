@@ -2,9 +2,12 @@
 
 #include <windows.h>
 
+#include <cstring>
 #include <cwchar>
+#include <string>
 
 #include "log.hpp"
+#include "../common/render_presets.hpp"
 
 namespace mohavr {
 
@@ -95,6 +98,43 @@ Config LoadConfig(const std::wstring& dir) {
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
     c.decalFix       = get(L"Render", L"DecalFix", c.decalFix);
+    // D73: a resolution preset -- the player's menu choice (%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini [Render] Preset), else the
+    // shipped [Render] Preset; "custom" keeps ResX/ResY. [Render] UserPreset=0 (the harness's runs) ignores the player's.
+    {
+        wchar_t key[32] = L"", local[MAX_PATH] = L"";
+        GetPrivateProfileStringW(L"Render", L"Preset", L"custom", key, 32, ini.c_str());
+        const bool userPreset = GetPrivateProfileIntW(L"Render", L"UserPreset", 1, ini.c_str()) != 0;
+        const DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+        const std::wstring udir = ln > 0 && ln < MAX_PATH ? std::wstring(local) + L"\\MOHAVR\\" : std::wstring();
+        if (userPreset && !udir.empty()) GetPrivateProfileStringW(L"Render", L"Preset", key, key, 32, (udir + L"MOHAVR.user.ini").c_str());
+        char k8[32] = "";
+        for (int i = 0; i < 31 && key[i]; ++i) k8[i] = static_cast<char>(key[i] < 128 ? key[i] : '?');
+        const int idx = presets::Find(k8);
+        const presets::Preset& p = presets::kPresets[idx];
+        int w = p.eyeW, h = p.eyeH;
+        std::string how = p.label;
+        if (!std::strcmp(p.key, "auto")) {
+            const std::wstring hs = udir + L"MOHAVR.headset.ini";
+            w = static_cast<int>(GetPrivateProfileIntW(L"Headset", L"EyeWidth", 0, hs.c_str()));
+            h = static_cast<int>(GetPrivateProfileIntW(L"Headset", L"EyeHeight", 0, hs.c_str()));
+            wchar_t sys[64] = L"";
+            GetPrivateProfileStringW(L"Headset", L"System", L"", sys, 64, hs.c_str());
+            char s8[64] = "";
+            for (int i = 0; i < 63 && sys[i]; ++i) s8[i] = static_cast<char>(sys[i] < 128 ? sys[i] : '?');
+            how = w > 0 ? std::string("Auto: what \"") + s8 + "\" asked for last time" : "Auto, but no headset seen yet -- Custom this time";
+        }
+        if (w > 0 && h > 0) {
+            if (w > presets::kMaxEye || h > presets::kMaxEye) {
+                const float k = static_cast<float>(presets::kMaxEye) / static_cast<float>(w > h ? w : h);
+                w = static_cast<int>(w * k) & ~1;
+                h = static_cast<int>(h * k) & ~1;
+                how += " (capped at 2560 per eye)";
+            }
+            c.renderResX = 2 * w;
+            c.renderResY = h;
+        }
+        c.renderPreset = how;
+    }
     if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
     c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
     c.aimMode        = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Mode", c.aimMode, ini.c_str()));

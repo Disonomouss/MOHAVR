@@ -1208,3 +1208,29 @@ hud, then hold X."
   so it keeps the game's spent shell there. The knife has no other model: not drawn where the MP40 isn't loaded.
 - **Proven [S]:** the sweep (above); in Husky, the Garand's round pointed at the missing M12 shell threw "a live round
   thrown (RackRoundAlt)" with the Springfield's bullet, and the sweep reports both alternatives found there.
+
+### D73. Render resolution presets for common headsets -- Decided 2026-10-08
+- **Why:** the player (2026-10-08): "Can we have resolution options to match commonly used headsets?" The render size was
+  only `[Render] ResX/ResY` (shipped 2880x1620: 1440x1620 per eye), set by hand.
+- **What:**
+  - `[Render] Preset` and the menu's General tab -> Resolution (saved in the player's ini; the game picks its size at
+    start, so it applies at the next start).
+  - The presets (`src/common/render_presets.hpp`): `custom` (ResX/ResY, the shipped default), `auto`, and the headsets'
+    panels per eye: Quest 2 / 3S 1832x1920, Quest 3 2064x2208, Quest Pro 1800x1920, Pico 4 2160x2160, Index 1440x1600,
+    Reverb G2 2160x2160, Vive Pro 2 2448x2448, Rift S 1280x1440, PS VR2 2000x2040, Bigscreen Beyond 2560x2560. The game
+    renders both eyes side by side: ResX = 2 x the width.
+  - **Auto:** the host saves the runtime's recommended per-eye size each session (`%LOCALAPPDATA%\MOHAVR\MOHAVR.headset.ini`),
+    and the next start uses it (the game picks its size before the host runs). With no headset seen yet it falls back to
+    Custom.
+  - A cap of 2560 per eye.
+  - The game DLL now reads the player's ini for this key: the first setting it takes from there. `[Render] UserPreset=0`
+    ignores the player's choice; `deploy.ps1` adds it to any run that sets `Render.ResX/ResY`, so the harness's
+    1920x1080 screen checks still hold.
+- **Proven [S]** (the EA copy, the 4 GB flag on):
+  - Custom: a harness cycle at 1920x1080 OK;
+  - Auto: 2560x1400 ("what OpenXR Simulator asked for last time");
+  - Quest 3: 4128x2208 in gameplay, the game frame 11.11 ms avg (7 of 900 over 20 ms), no XR frame late, 1.72 GB virtual;
+  - Bigscreen Beyond: 5120x2560 in gameplay, 11.11 ms, 1.72 GB virtual (the larger targets live in the D3D12 device, not
+    the game's address space);
+  - the menu: Custom -> Auto -> Quest 2 / 3S, written to the player's ini and restored after.
+  **[H]:** the sharpness and the frame rate on the player's own PC.

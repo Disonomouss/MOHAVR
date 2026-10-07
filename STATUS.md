@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Resolution presets** (2026-10-08, D73): the menu's General tab -> Resolution, Custom (the shipped default) / Auto / the
+common headsets' panels, at the next start; proven up to 5120x2560 at 90 fps in the simulator.
 **GOAL.md (2026-10-08) DONE:** every item DONE or WONTFIX with its evidence in GOAL.md.
 - **A comfort and stance:** physical crouch (D61), the vignette (D62), seated (D63). All three ship **off**; the menu's
   General tab turns them on.

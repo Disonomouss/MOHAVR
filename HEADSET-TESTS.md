@@ -2210,6 +2210,14 @@ no shotgun is loaded the M12 racks out the game's spent shell.
 **Questions:**
 1. In any mission, did the knife fail to appear, or a gun misbehave, that works elsewhere? (which mission, which gun)
 
+### Resolution presets (menu -> General -> Resolution)
+**Changed:** pick your headset (or Auto: what your headset's runtime asks for) and the game renders at that size from the
+next start. Custom keeps the ini's 2880x1620.
+
+**Questions:**
+1. With your headset's preset (Quest 3: 2064x2208 per eye), is the picture sharper, and does it stay smooth? (yes/no)
+2. Auto: does it pick a sensible size? (`MOHAVR.log`: "render: the game sees ...")
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

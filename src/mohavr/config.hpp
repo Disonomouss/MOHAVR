@@ -47,6 +47,7 @@ struct Config {
     bool  catchUp       = true;   // [Weapon] CatchUp -- the gun, arms and free hand follow the body's move since their view
     int  renderResX     = 2880;      // [Render] ResX/ResY -- the game's resolution (windowed), 0 = the game's own (M9)
     int  renderResY     = 1620;
+    std::string renderPreset;          // D73: how the size was chosen (logged)
     bool lockWindow     = true;   // [Render] LockWindow -- keep the game window at its render size (stereo split)
     bool decalFix       = true;   // [Render] DecalFix -- decals (bullet holes) in the right eye too (ENGINE-NOTES 5r)
     bool aimHeadPitch   = true;   // [Aim] HeadPitch -- the player's pitch (gun, shots) follows the head

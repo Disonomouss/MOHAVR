@@ -254,10 +254,24 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             vv.assign(n, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
             xrEnumerateViewConfigurationViews(instance, system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, n, &n, vv.data());
         }
-        if (!vv.empty())
+        if (!vv.empty()) {
             MLOG("host: the runtime recommends %ux%u per eye (max %ux%u, %u samples)", vv[0].recommendedImageRectWidth,
                  vv[0].recommendedImageRectHeight, vv[0].maxImageRectWidth, vv[0].maxImageRectHeight,
                  vv[0].recommendedSwapchainSampleCount);
+            // D73: kept for the next start's "Auto" resolution (the game picks its size before the host runs).
+            wchar_t local[MAX_PATH] = L"";
+            const DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+            if (ln > 0 && ln < MAX_PATH) {
+                const std::wstring dir = std::wstring(local) + L"\\MOHAVR";
+                CreateDirectoryW(dir.c_str(), nullptr);
+                const std::wstring hs = dir + L"\\MOHAVR.headset.ini";
+                wchar_t sysName[XR_MAX_SYSTEM_NAME_SIZE] = L"";
+                MultiByteToWideChar(CP_UTF8, 0, sp.systemName, -1, sysName, XR_MAX_SYSTEM_NAME_SIZE);
+                WritePrivateProfileStringW(L"Headset", L"System", sysName, hs.c_str());
+                WritePrivateProfileStringW(L"Headset", L"EyeWidth", std::to_wstring(vv[0].recommendedImageRectWidth).c_str(), hs.c_str());
+                WritePrivateProfileStringW(L"Headset", L"EyeHeight", std::to_wstring(vv[0].recommendedImageRectHeight).c_str(), hs.c_str());
+            }
+        }
     }
 
     // --- D3D11 on the runtime's adapter, which must be the game's -------------------------------

@@ -63,8 +63,8 @@ bool InstallResolution(const Config& cfg) {
         MLOG("render: import swap failed -- Render.ResX/ResY not applied");
         return false;
     }
-    MLOG("render: the game sees ResX=%d ResY=%d (windowed): each eye renders %dx%d", cfg.renderResX, cfg.renderResY,
-         cfg.renderResX / 2, cfg.renderResY);
+    MLOG("render: the game sees ResX=%d ResY=%d (windowed): each eye renders %dx%d -- %s", cfg.renderResX, cfg.renderResY,
+         cfg.renderResX / 2, cfg.renderResY, cfg.renderPreset.c_str());
     return true;
 }
 

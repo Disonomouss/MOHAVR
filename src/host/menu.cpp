@@ -14,6 +14,7 @@
 #include <string>
 
 #include "../mohavr/log.hpp"
+#include "../common/render_presets.hpp"
 
 namespace mohavr::host {
 namespace {
@@ -23,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
@@ -33,7 +34,7 @@ constexpr int kTabMax = 24;
 // (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
 // Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
 const int kTabItems[kTabCount][kTabMax] = {
-    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kClose, -1},
+    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kResolution, kClose, -1},
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
      kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
@@ -232,6 +233,18 @@ void Menu::ApplySavedSettings() {
     // Seated (GOAL A3): likewise the shipped [Comfort] Seated; live through crouchMode's bits 2-3.
     const int defSeated = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Seated", 0, shipped.c_str()));
     seated_ = GetPrivateProfileIntW(L"Comfort", L"Seated", defSeated, iniPath_.c_str()) != 0;
+    // The render resolution preset (D73): the shipped [Render] Preset until the player picks one; the game applies it at start.
+    {
+        wchar_t k[32] = L"";
+        GetPrivateProfileStringW(L"Render", L"Preset", L"custom", k, 32, shipped.c_str());
+        GetPrivateProfileStringW(L"Render", L"Preset", k, k, 32, iniPath_.c_str());
+        char k8[32] = "";
+        for (int i = 0; i < 31 && k[i]; ++i) k8[i] = static_cast<char>(k[i] < 128 ? k[i] : '?');
+        resPreset_ = presets::Find(k8);
+        startPreset_ = resPreset_;
+        shippedResX_ = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", 2880, shipped.c_str()));
+        shippedResY_ = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", 1620, shipped.c_str()));
+    }
     if (hdr_) hdr_->crouchMode = CrouchWord();
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
@@ -598,6 +611,16 @@ void Menu::AdjustFit(int item, float dir) {
     MLOG("menu: %s fit -> grip %.1f %.1f %.1f, angle %.0f, aim line up %.1f right %.1f, foregrip %.0f / %.0f / %.0f cm "
          "(forward, up, right)", weaponKey_.c_str(), fit_.grip[0], fit_.grip[1], fit_.grip[2], fit_.angle, fit_.rayUp,
          fit_.rayRight, fit_.foreFwd, fit_.foreUp, fit_.foreRight);
+}
+
+// D73: what the headset's runtime recommended last session (the host saves it; %LOCALAPPDATA%\MOHAVR\MOHAVR.headset.ini).
+void Menu::AutoEye(int& w, int& h) const {
+    wchar_t local[MAX_PATH] = L"";
+    const DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    if (ln == 0 || ln >= MAX_PATH) return;
+    const std::wstring hs = std::wstring(local) + L"\\MOHAVR\\MOHAVR.headset.ini";
+    w = static_cast<int>(GetPrivateProfileIntW(L"Headset", L"EyeWidth", 0, hs.c_str()));
+    h = static_cast<int>(GetPrivateProfileIntW(L"Headset", L"EyeHeight", 0, hs.c_str()));
 }
 
 void Menu::SetHeightOffset(float v, bool save) {
@@ -978,6 +1001,15 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Bridge", L"Pace", pacing_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: frame pacing -> %s", pacing_ ? "on (one game frame per headset frame)" : "off (the game runs uncapped)");
+        } else if (item == kResolution) {
+            resPreset_ = (resPreset_ + (in.right ? 1 : presets::kPresetCount - 1)) % presets::kPresetCount;
+            if (!iniPath_.empty()) {
+                const char* k = presets::kPresets[resPreset_].key;
+                wchar_t w[32] = L"";
+                for (int i = 0; i < 31 && k[i]; ++i) w[i] = static_cast<wchar_t>(k[i]);
+                WritePrivateProfileStringW(L"Render", L"Preset", w, iniPath_.c_str());
+            }
+            MLOG("menu: resolution -> %s (at the next start)", presets::kPresets[resPreset_].label);
         } else if (item == kSeated) {
             seated_ = !seated_;
             if (hdr_) hdr_->crouchMode = CrouchWord();
@@ -1222,6 +1254,21 @@ void Menu::Render() {
                 note("on = one game frame per headset frame");
                 break;
             case kRecenter: ImGui::Selectable("Recentre (face forward, here)", sel); break;
+            case kResolution: {
+                const presets::Preset& p = presets::kPresets[resPreset_];
+                int w = p.eyeW, h = p.eyeH;
+                if (!std::strcmp(p.key, "custom")) w = shippedResX_ / 2, h = shippedResY_;
+                if (!std::strcmp(p.key, "auto")) AutoEye(w, h);
+                char size[32] = "headset not seen yet";
+                if (w > 0 && h > 0) snprintf(size, sizeof(size), "%dx%d per eye", w, h);
+                snprintf(label, sizeof(label), "Resolution       <  %s  >", p.label);
+                ImGui::Selectable(label, sel);
+                char n2[160];
+                snprintf(n2, sizeof(n2), "%s; %s", size,
+                         resPreset_ == startPreset_ ? (hdr_ && hdr_->width ? "as now" : "") : "applies at the next start");
+                note(n2);
+                break;
+            }
             case kSeated:
                 snprintf(label, sizeof(label), "Seated           <  %s  >", seated_ ? "on" : "off");
                 ImGui::Selectable(label, sel);

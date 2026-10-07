@@ -204,6 +204,9 @@ private:
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    crouch_ = false;  // physical crouch (GOAL A1)
     bool                    seated_ = false;  // seated play (GOAL A3)
+    int                     resPreset_ = 0, startPreset_ = 0;  // D73: render_presets.hpp index (the choice; at start)
+    int                     shippedResX_ = 2880, shippedResY_ = 1620;
+    void                    AutoEye(int& w, int& h) const;
     int                     vignette_ = 0;    // the comfort vignette: 0 none, 1 light, 2 strong (GOAL A2)
     bool                    manualReload_ = false;
     bool                    rackEject_ = false, rackEjectKeep_ = false;

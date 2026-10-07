@@ -105,7 +105,8 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   next `launch` refuses to start until then.
 - **The screen checks only work at 1920×1080**, because MOHA's UI is fixed-pixel. The shipped ini renders at
   2880×1620 (`Render.ResX/ResY`), so for harness runs deploy with `-Set 'Render.ResX=0','Render.ResY=0'` (plus
-  the simulator's `OpenXR.RuntimeJson`). **On the EA app's copy** (this PC's, D58) the EA app drops the harness's
+  the simulator's `OpenXR.RuntimeJson`; `deploy.ps1` then adds `Render.UserPreset=0`, so the player's menu preset, D73,
+  doesn't override it). **On the EA app's copy** (this PC's, D58) the EA app drops the harness's
   arguments: deploy with `-Set 'Render.ResX=1920','Render.ResY=1080'` instead. The harness clicks through the game's
   launcher (`moha_setup.exe`) itself.
 - The engine writes no log, so screen state comes from `tools/screen_match.py` checks in
