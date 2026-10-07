@@ -297,4 +297,15 @@ bool BoneFrame(std::uintptr_t comp, int& bone, float (&world)[16]) {
     return false;
 }
 
+std::string CheckSource(std::uintptr_t pawn, const Source& src) {
+    const std::uintptr_t arms = Obj(pawn, "FPArms");
+    const std::uintptr_t cls = arms ? names::ReadPointer(arms + addr::kObjectClass) : 0;
+    const std::wstring path = L"MOHAGameNonNative.Default__" + std::wstring(src.attachment.begin(), src.attachment.end()) + L".WeaponMeshComponent";
+    const std::uintptr_t t = FindByPath(pawn, path, cls);
+    if (!t) return "NOT FOUND (the template)";
+    if (!Obj(t, "SkeletalMesh")) return "NOT FOUND (no mesh on the template)";
+    if (BoneIndex(t, src.bone) < 0) return "NOT FOUND (no bone " + src.bone + ")";
+    return "found (" + names::Name(Obj(t, "SkeletalMesh")) + ")";
+}
+
 }  // namespace mohavr::rackround

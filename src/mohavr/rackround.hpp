@@ -32,6 +32,8 @@ void Configure(const Config& cfg, bool bake);
 // to the gun's brass.
 bool Throw(std::uintptr_t pawn, const Source& src, const float* rows, const float* port, const float* vel, float floorZ,
            float upm);
+// GOAL E (the mission sweep): a fresh look-up of a source's template and bone in this level -- "found", or what is missing.
+std::string CheckSource(std::uintptr_t pawn, const Source& src);
 // Per Draw (game thread): the finished rounds detached; a new pawn starts over.
 void OnDraw();
 // The arm bake: whether `comp` is one of the round carriers; its round bone's index and world frame now (false: nothing

@@ -20,6 +20,8 @@ namespace mohavr::reload {
 // Called by view::Install after armsik::Install; `pipelineHooked` = the Draw hook and the arm bake are installed (the
 // game's own reload is only ever blocked then).
 bool Install(const Config& cfg, bool pipelineHooked);
+// GOAL E: "mohavr sweep" -- the level and every borrowed model found or not (Debug.GameCommands).
+bool SweepCommand(const wchar_t* line);
 // Game thread, once per Draw (vr_view Hook_Draw).
 void OnDraw(shared::Header* hdr);
 // The pouch reload (the player, 2026-10-02: "when a hand with a gun equipped grips the ammo holster, it automatically

@@ -194,7 +194,7 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   (MountedHands) is designed (MOUNTED-DESIGN 3.2), not built: how it should feel goes to the headset first (round 54).
 
 ## Track E: mission sweep (unattended QA)
-- [ ] **E1 Every mission loads with the mod and the guns' extras work.** List the campaign maps (`CookedPC`, the
+- [x] **E1 Every mission loads with the mod and the guns' extras work.** List the campaign maps (`CookedPC`, the
   game's map list). Load each one with `open <map>` through `game_cmd.txt`. In each:
   - reach gameplay;
   - give the knife and a gun with ejected rounds;
@@ -206,6 +206,12 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   Write a table per map (loaded, gameplay, knife, rounds, grenade, errors) into `work/research/goal/sweep.md` and a
   summary in STATUS. Fix what breaks, or record it as a known issue. A script in `work/research/tests/` that reruns the
   sweep.
+
+  **DONE** (D72; `work/research/goal/sweep.md`, `work/research/tests/sweep.ps1`): 7 of 7 maps load with the mod (no
+  stand-down, error or crash); `open` loads only the persistent level, so the live table is a floor, and the packages
+  show every borrowed class in every mission; live Husky lacked the G43 bullet and M12 shell -> `RackRoundAlt` (the
+  StG44 / G43 fall back to the K98's bullet2; tested: `a live round thrown (RackRoundAlt)`); the M12 shell and the knife
+  recorded as known issues where their source isn't loaded.
 
 ## Finish
 - [ ] **F1** After the last change:

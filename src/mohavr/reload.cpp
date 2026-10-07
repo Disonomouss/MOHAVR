@@ -23,6 +23,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
+#include "knife.hpp"
 #include "rackround.hpp"
 #include "script_call.hpp"
 #include "viewmodel.hpp"
@@ -127,6 +128,9 @@ struct GunLine {
     // -- RackRound=<Attachment>.<bone> (the round drawn: that class default mesh's round bone; none / absent: this gun
     // ejects nothing), RackRoundLen (its length along the bone's Z, mesh units), RackRoundScale=along,across.
     rackround::Source        rack;
+    // GOAL E: RackRoundAlt=<Attachment>.<bone>,<len>,<along>,<across> -- used when RackRound's model isn't in the level (the
+    // mission sweep: Husky has no G43 or M12 class mesh cooked in).
+    rackround::Source        rackAlt;
 };
 std::vector<GunLine> g_lines;
 std::string          g_sndTake;  // [ManualReload] SndTake: a magazine from the pouch
@@ -284,6 +288,13 @@ void ParseLines(const std::wstring& ini) {
                 g.rack.bone = rr.substr(rdot + 1);
                 g.rack.len = static_cast<float>(atof(Token(line, "RackRoundLen").c_str()));
                 sscanf_s(Token(line, "RackRoundScale").c_str(), "%f,%f", &g.rack.scaleLen, &g.rack.scaleWidth);
+            }
+            const std::string ra = Token(line, "RackRoundAlt");
+            const size_t adot = ra.find('.'), acomma = ra.find(',');
+            if (adot != std::string::npos && acomma != std::string::npos && acomma > adot) {
+                g.rackAlt.attachment = ra.substr(0, adot);
+                g.rackAlt.bone = ra.substr(adot + 1, acomma - adot - 1);
+                sscanf_s(ra.c_str() + acomma + 1, "%f,%f,%f", &g.rackAlt.len, &g.rackAlt.scaleLen, &g.rackAlt.scaleWidth);
             }
         }
         g.magSeat = static_cast<float>(atof(Token(line, "MagSeat").c_str()));
@@ -734,6 +745,10 @@ const char* ThrowRound(std::uintptr_t pawn, const GunLine& l) {
                 for (float& x : vel) x *= cap / sp;
         }
         if (rackround::Throw(pawn, l.rack, g_port.rows, g_port.f, vel, g_port.floorZ, g_port.upm)) return "a live round thrown";
+        // (GOAL E: the first model isn't in this level -- the alternative, when the line has one)
+        if (!l.rackAlt.attachment.empty() &&
+            rackround::Throw(pawn, l.rackAlt, g_port.rows, g_port.f, vel, g_port.floorZ, g_port.upm))
+            return "a live round thrown (RackRoundAlt)";
     } else {
         MLOG("reload: no fresh port of %s drawn -- the brass instead", l.key.c_str());
     }
@@ -2636,6 +2651,43 @@ void OnDraw(shared::Header* hdr) {
         nextLog = now + 10000;
         MLOG("reload: the game's own reload blocked %ld time(s) so far", g_blocks);
     }
+}
+
+// GOAL E (the mission sweep, work/research/tests/sweep.ps1): "mohavr sweep" -- the level, and every model the mod borrows
+// from other guns found or not here: the knife (the MP40's knife mesh) and each gun line's rack-ejected round.
+bool SweepCommand(const wchar_t* line) {
+    if (std::wcsncmp(line, L"mohavr sweep", 12) != 0) return false;
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!pawn) {
+        MLOG("sweep: no pawn yet");
+        return true;
+    }
+    std::string chain;
+    for (std::uintptr_t o = names::Outer(pawn); o; o = names::Outer(o)) chain += (chain.empty() ? "" : " < ") + names::Name(o);
+    const std::uintptr_t ctrl = script::Obj(pawn, "Controller");
+    MLOG("sweep: level %s; the pawn %s in state %s, weapon %s", chain.c_str(), names::Name(pawn).c_str(), names::StateName(ctrl).c_str(),
+         names::Name(script::Obj(pawn, "Weapon")).c_str());
+    const std::string knife = knife::TemplateStatus(pawn);
+    MLOG("sweep:   the knife's model (Attachment_MP40's KnifeMesh): %s", knife.c_str());
+    int missing = knife.rfind("NOT", 0) == 0 ? 1 : 0, checked = 1;
+    std::vector<std::string> seen;
+    for (const GunLine& g : g_lines) {
+        if (g.rack.attachment.empty()) continue;
+        const std::string id = g.rack.attachment + "." + g.rack.bone;
+        if (std::find(seen.begin(), seen.end(), id) != seen.end()) continue;
+        seen.push_back(id);
+        const std::string st = rackround::CheckSource(pawn, g.rack);
+        ++checked;
+        if (st.rfind("NOT", 0) == 0) ++missing;
+        MLOG("sweep:   the rack-ejected round %s (for %s and others): %s", id.c_str(), g.key.c_str(), st.c_str());
+    }
+    for (const GunLine& g : g_lines) {
+        if (g.rackAlt.attachment.empty()) continue;
+        const std::string st = rackround::CheckSource(pawn, g.rackAlt);
+        MLOG("sweep:   (the alternative %s.%s for %s: %s)", g.rackAlt.attachment.c_str(), g.rackAlt.bone.c_str(), g.key.c_str(), st.c_str());
+    }
+    MLOG("sweep: %d of %d borrowed models found here", checked - missing, checked);
+    return true;
 }
 
 }  // namespace mohavr::reload

@@ -473,6 +473,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (hudtex::TestCommand(player, line)) continue;  // "mohavr hud ..." (the wrist HUD)
         if (falltrace::TestCommand(line)) continue;  // "mohavr falltrace ..." (GOAL C3)
         if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
+        if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }

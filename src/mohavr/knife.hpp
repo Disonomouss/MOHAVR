@@ -5,6 +5,8 @@
 // grip relation (the arms' LeftHand KnifeSocket).
 #pragma once
 #include <cstdint>
+#include <string>
+#include <cstdint>
 
 #include "../common/shared_frame.hpp"
 #include "config.hpp"
@@ -15,6 +17,8 @@ namespace mohavr::knife {
 void Configure(const Config& cfg, bool bake);
 // Debug.GameCommands: "mohavr knife template|carrier on [forward|icepick]|carrier off|status".
 bool TestCommand(const wchar_t* line);
+// GOAL E (the mission sweep): the knife's template in this level -- "found (<mesh>)" or "NOT FOUND".
+std::string TemplateStatus(std::uintptr_t pawn);
 // Per Draw (game thread).
 void OnDraw(shared::Header* hdr);
 // The knife held in the off hand.

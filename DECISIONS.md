@@ -1191,3 +1191,20 @@ hud, then hold X."
   - manned: the MG42 on the wall, the hands on it, in stereo;
   - a soldier 6 m ahead killed (Health 110 -> 0, `MOHAMGDamageType`), the belt 78 -> 60;
   - the head's pitch pitches the gun with the view; the stick turns the mount (`rMGRot` yaw 3632).
+
+### D72. The mission sweep, and a fallback round where the borrowed one isn't loaded -- Decided 2026-10-08 (GOAL E)
+- **Why:** the README's known issue: the knife and the rack-ejected rounds use other guns' models from the game, and they
+  had been checked in the first levels only.
+- **The sweep:** `mohavr sweep` logs the level and does a fresh look-up of every borrowed model (the MP40's knife mesh, each
+  gun line's round template and bone). `work/research/tests/sweep.ps1` opens each campaign map in turn, runs it, screenshots
+  and writes `work/research/goal/sweep.md`. Results:
+  - 7 of 7 maps load with the mod, with no stand-down, error or crash.
+  - `open` loads only the persistent level (an empty grid; the mission's areas stream in only through the campaign's own
+    start), so the live results are a floor.
+  - The cooked packages show every borrowed class somewhere in every mission.
+  - Live Husky gameplay lacked the G43's and the M12's meshes: what is loaded depends on the area.
+- **The fix:** `RackRoundAlt=<Attachment>.<bone>,<len>,<along>,<across>`, tried when RackRound's model isn't loaded. The StG44
+  and the G43 fall back to the K98's `bullet2` (the same 7.92 mm cartridge) at the same size. The M12 has no other shell,
+  so it keeps the game's spent shell there. The knife has no other model: not drawn where the MP40 isn't loaded.
+- **Proven [S]:** the sweep (above); in Husky, the Garand's round pointed at the missing M12 shell threw "a live round
+  thrown (RackRoundAlt)" with the Springfield's bullet, and the sweep reports both alternatives found there.

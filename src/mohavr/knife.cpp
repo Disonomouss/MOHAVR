@@ -365,6 +365,11 @@ void OnDraw(shared::Header* hdr) {
     Publish(hdr, installed, canDraw, buttonKnife);
 }
 
+std::string TemplateStatus(std::uintptr_t pawn) {
+    const std::uintptr_t t = Template(pawn, false);
+    return t && Obj(t, "SkeletalMesh") ? "found (" + names::Name(Obj(t, "SkeletalMesh")) + ")" : "NOT FOUND";
+}
+
 bool TestCommand(const wchar_t* line) {
     if (wcsncmp(line, L"mohavr knife", 12) != 0) return false;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
