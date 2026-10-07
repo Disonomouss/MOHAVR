@@ -414,6 +414,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // --- desktop mirror (Bridge.Mirror) -----------------------------------------------------------
     mohavr::host::Mirror mirror;
     const bool mirrorOk = mirrorMode && mirror.Init(dev, gamePid, mirrorMode);
+    // GOAL C2: the HUD over the mirror in wrist mode ([Bridge] MirrorHud).
+    mirror.SetHud(GetPrivateProfileIntW(L"Bridge", L"MirrorHud", 1, (ExeDir() + L"\\MOHAVR.ini").c_str()) != 0);
 
     XrActionSet menuSet = XR_NULL_HANDLE;
     mohavr::host::Pad pad;  // Input.Controllers (M6)
@@ -1489,7 +1491,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 if (const XrCompositionLayerBaseHeader* ml = menu.Layer(local)) layers[layerCount++] = ml;
             }
         }
-        if (mirrorOk) mirror.Update(ctx, last, lastMeta, shown > 0, lastScope.eyeWidth);
+        if (mirrorOk) mirror.Update(ctx, last, lastMeta, shown > 0, lastScope.eyeWidth, wristOk ? wrist.MirrorHud() : nullptr);
         XrFrameEndInfo fe{XR_TYPE_FRAME_END_INFO};
         fe.displayTime = fs.predictedDisplayTime;
         fe.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;

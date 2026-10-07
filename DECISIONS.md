@@ -1130,3 +1130,13 @@ hud, then hold X."
 - **Proven [S]** (`logs/shots/c1-*.png`): the wrist panels up; the gun hand pointing across between the eyes and the
   wrist logged "the left panel behind the gun -- dimmed", the same for the right; moved away, "clear of the gun again".
   The capture shows the gun over the wrist with the panels faint, then the panels full again.
+
+### D68. The HUD in the desktop mirror in wrist mode -- Decided 2026-10-08 (GOAL C2)
+- **Why:** the README's known issue. In wrist mode the game's HUD pass goes into the mod's own texture (D55), so the frame
+  the mirror shows has no HUD: onlookers and streamers saw none.
+- **What:** when the slot's HUD flags say the eyes are HUD-free and the texture holds this frame's pass (bits 0 and 1;
+  `WristHud::MirrorHud`), the mirror draws that texture over its whole picture with premultiplied blending (a
+  full-screen triangle, linear sampling), as the flat game would. `[Bridge] MirrorHud=1`: a fix, on.
+- **Proven [S]** (`logs/shots/c2-mirror.png`, the mirror in its own window): "mirror: the HUD drawn over the mirror (wrist
+  mode: the frame has none)". The capture shows the compass, health, grenades, weapon icon and 50/90 over the scene, where
+  the flat game draws them.

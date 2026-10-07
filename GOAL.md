@@ -149,9 +149,12 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   **DONE** (D67; `logs/shots/c1-*.png`): the geometric fade (the gun's line, forearm to barrel, within 8 cm of the eye's
   line to a panel -> dimmed to 15%); depth composition rejected (no game depth on the bridge). [S]: the gun hand across the
   wrist -> `the left/right panel behind the gun -- dimmed`, away -> `clear of the gun again`; the captures agree.
-- [ ] **C2 The desktop mirror without the HUD in wrist mode.** In wrist mode the mirror window (`src/host/mirror.cpp`)
+- [x] **C2 The desktop mirror without the HUD in wrist mode.** In wrist mode the mirror window (`src/host/mirror.cpp`)
   shows no HUD. Draw the HUD texture on it: the full-screen HUD, as the flat game shows it. Behind `[Bridge] MirrorHud=1`.
   **[S]:** a capture of the mirror window.
+
+  **DONE** (D68; `logs/shots/c2-mirror.png`): `mirror: the HUD drawn over the mirror (wrist mode: the frame has none)`;
+  the capture shows the compass, health, grenades, the weapon and 50/90 where the flat game draws them.
 - [ ] **C3 Dropped magazines and ejected rounds through walls.** Find why: they're drawn without depth, or they don't
   collide, or they're drawn after the scene. Fix it, or limit it (for example, no ejection inside a wall's distance).
   **[S]:** a scripted ejection next to a wall, from the side.

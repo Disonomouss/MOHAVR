@@ -21,12 +21,16 @@ public:
     bool Init(ID3D11Device* dev, DWORD gamePid, int mode);
     // Per XR frame, after the newest game frame was copied into `frame` (meta = how it was rendered).
     void Update(ID3D11DeviceContext* ctx, ID3D11Texture2D* frame, const shared::SlotMeta& meta, bool haveFrame,
-                std::uint32_t eyeWidth = 0);  // (v24: each eye's width with a scope column)
+                std::uint32_t eyeWidth = 0,  // (v24: each eye's width with a scope column)
+                ID3D11Texture2D* hud = nullptr);  // GOAL C2: the HUD to draw over it (wrist mode; premultiplied)
+    void SetHud(bool on) { hudOn_ = on; }  // [Bridge] MirrorHud
     void Shutdown();
 
 private:
     HWND FindGameWindow() const;
     bool Place();  // mode 1: follow the game's client area; false while it should be hidden
+    bool MakeHudPipeline();
+    void DrawHud(ID3D11DeviceContext* ctx, ID3D11Texture2D* back, ID3D11Texture2D* hud, UINT w, UINT h);
 
     ID3D11Device*    dev_ = nullptr;
     IDXGISwapChain1* swap_ = nullptr;
@@ -39,6 +43,13 @@ private:
     bool             shown_ = false;
     DWORD            nextFind_ = GetTickCount();  // (not 0: past 2^31 ms of uptime the window would never be found)
     unsigned         presents_ = 0;
+    bool             hudOn_ = true, hudLogged_ = false;  // GOAL C2
+    ID3D11VertexShader* hudVs_ = nullptr;
+    ID3D11PixelShader*  hudPs_ = nullptr;
+    ID3D11SamplerState* hudSampler_ = nullptr;
+    ID3D11BlendState*   hudBlend_ = nullptr;
+    ID3D11Texture2D*    hudTex_ = nullptr;
+    ID3D11ShaderResourceView* hudSrv_ = nullptr;
 };
 
 }  // namespace mohavr::host

@@ -72,6 +72,8 @@ public:
     int Layers(XrSpace local, XrSpace view, const XrCompositionLayerBaseHeader** out, int max, bool panelsAllowed = true);
     // Diagnostics: the last HUD texture taken and the composed atlas.
     ID3D11Texture2D* HudTexture() const { return hud_; }
+    // GOAL C2: the HUD for the desktop mirror -- only when this frame's eyes are HUD-free (the wrist pass), else null.
+    ID3D11Texture2D* MirrorHud() const { return haveSlot_ && (slot_.flags & 3u) == 3u ? hud_ : nullptr; }
     ID3D11Texture2D* Atlas() const { return atlas_; }
 
 private:
