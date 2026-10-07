@@ -195,8 +195,9 @@ Most things are in the menu. A few you may want to change in the ini:
   through.
 - **Ejected rounds and objects:** a dropped magazine or an ejected round lands on a table or stops at a wall now; one
   held right against a wall can still show through it.
-- **Levels:** the knife and the ejected rounds use other guns' models from the game. They were checked in the first
-  levels only.
+- **Levels:** the knife and the ejected rounds use other guns' models from the game, so they depend on what the level has
+  loaded. Every mission loads with the mod; the StG44's and G43's rounds fall back to the K98's. Where no shotgun is
+  loaded the M12 throws the game's spent shell, and where no MP40 is loaded the off-hand knife isn't drawn.
 
 ## Uninstall
 
