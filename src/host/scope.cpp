@@ -1,3 +1,4 @@
+#include "formats.hpp"
 #include "scope.hpp"
 
 #include <d3dcompiler.h>
@@ -166,7 +167,7 @@ bool Scope::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession session,
     D3D11_TEXTURE2D_DESC td{};
     td.Width = td.Height = static_cast<UINT>(size_);
     td.MipLevels = td.ArraySize = 1;
-    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.Format = RtFormat(fmt);  // the swapchain's family (GOAL B2)
     td.SampleDesc.Count = 1;
     td.BindFlags = D3D11_BIND_RENDER_TARGET;
     if (FAILED(dev_->CreateTexture2D(&td, nullptr, &rt_)) || FAILED(dev_->CreateRenderTargetView(rt_, nullptr, &rtv_))) {

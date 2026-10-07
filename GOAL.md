@@ -107,12 +107,16 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   Simulator" (vendor 0): orientation tracking yes, position tracking yes; swapchains up to 4096x4096, 16 layers`, `the runtime
   recommends 1280x1400 per eye`, `swapchain formats 29 28 91 87 10 2 24 20 40 45 55; reference spaces VIEW LOCAL STAGE;
   refresh rate not exposed`.
-- [ ] **B2 Image-format fallback.** The host stops with "runtime offers no B8G8R8A8 swapchain format". When only
+- [x] **B2 Image-format fallback.** The host stops with "runtime offers no B8G8R8A8 swapchain format". When only
   R8G8B8A8 (sRGB or not) is offered, use it, with a swizzling copy (a shader blit, not CopyResource) for the game's
   BGRA frames, the menu, the wrist HUD, the reticle and the scope view.
   - `[Debug] ForceRgbaSwapchain=1` takes that path with the simulator.
   - **Proven [S] when** that path renders the same image (colours compared on a capture, red stays red) at the
     same frame time.
+
+  **DONE** (D65; `logs/shots/b2-*`): forced -> `swapchain format 29 (R8G8B8A8, sRGB) -- the game's frames are blitted
+  into it`; against the BGRA run the captures match (gameplay 31.4/30.0/27.1 vs 31.4/30.1/27.1; the menu's highlight
+  31.5/55.5/83.9 vs 31.2/55.2/84.3, title 179/152/87 vs 182/154/88; no swapped red/blue), the XR frame 11.11 ms on both.
 - [ ] **B3 More controller profiles bound directly**, as D59 did for the G2. Each is enabled only if the runtime
   offers its extension, with its paths checked against the OpenXR spec. Each is logged with "bound as", and the
   README's controller line is updated.

@@ -1077,3 +1077,22 @@ hud, then hold X."
 - **Proven [S]:** the simulator: 9 extensions (including `XR_KHR_composition_layer_depth`); orientation and position
   tracking; swapchains up to 4096x4096 and 16 layers; 1280x1400 per eye recommended; formats 29 28 91 87 10 2 24 20 40
   45 55; spaces VIEW LOCAL STAGE; refresh rate "not exposed".
+
+### D65. An R8G8B8A8 swapchain when the runtime offers no B8G8R8A8 -- Decided 2026-10-08 (GOAL B2)
+- **Why:** the host stopped with "runtime offers no B8G8R8A8 swapchain format". SteamVR, Meta and Virtual Desktop offer
+  it, but some runtimes may offer only R8G8B8A8. A raw copy between the two families is invalid, and CPU-packed pixels
+  come out with red and blue swapped.
+- **What:** the format order is BGRA sRGB, BGRA, then RGBA sRGB, RGBA. On the RGBA path:
+  - the game's frame goes through a shader blit (`blit.cpp`: a texel `Load`; a shader read returns logical RGBA) into an
+    R8G8B8A8_UNORM texture, then the raw per-eye copy as before (same family as the sRGB swapchain);
+  - every render target copied into a swapchain is made in the swapchain's family (`formats.hpp` RtFormat): the menu's,
+    the wrist HUD's atlas, the scope's;
+  - CPU-packed pixels follow the format (Pack): the reticle and the rings; the vignette is black.
+  `[Debug] ForceRgbaSwapchain=1` takes the RGBA path where BGRA is offered too. A fix for a hard failure: on (GOAL
+  rule 3), no switch beyond the debug one.
+- **Proven [S]** (the EA copy; `logs/shots/b2-*`): forced, the host took "format 29 (R8G8B8A8, sRGB) -- the game's frames are
+  blitted into it". Against the BGRA run, gameplay / wrist HUD / menu captures matched:
+  - mean RGB 31.4/30.0/27.1 against 31.4/30.1/27.1 in gameplay;
+  - the menu's blue highlight 31.5/55.5/83.9 against 31.2/55.2/84.3, its orange title 179/152/87 against 182/154/88;
+  - no blue pixels where red belongs.
+  The XR frame was 11.11 ms on both, 0 late.

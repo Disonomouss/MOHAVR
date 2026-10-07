@@ -1,3 +1,4 @@
+#include "formats.hpp"
 #include "reticle.hpp"
 
 #include <algorithm>
@@ -40,8 +41,7 @@ bool Reticle::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessio
             const float rim = std::clamp((0.85f - r) / px1, 0.0f, 1.0f);
             const float a = std::max(core, rim * 0.7f);
             const float red = core * 1.0f, gb = core * 0.2f;  // rim is black
-            auto b8 = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
-            px[y * kSize + x] = b8(gb) | (b8(gb) << 8) | (b8(red) << 16) | (b8(a) << 24);
+            px[y * kSize + x] = Pack(fmt, red, gb, gb, a);  // the swapchain's channel order (GOAL B2)
         }
     }
     D3D11_TEXTURE2D_DESC td{};

@@ -68,6 +68,7 @@ else()
         src/host/pad.cpp
         src/host/reticle.cpp
         src/host/vignette.cpp
+        src/host/blit.cpp
         src/host/hands.cpp
         src/host/markers.cpp
         src/host/reload.cpp

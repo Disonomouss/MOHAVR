@@ -1,3 +1,4 @@
+#include "formats.hpp"
 #include "wristhud.hpp"
 
 #include <d3d11_1.h>
@@ -173,7 +174,7 @@ bool WristHud::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessi
     ad.Width = static_cast<UINT>(atlasW_);
     ad.Height = static_cast<UINT>(atlasH_);
     ad.MipLevels = ad.ArraySize = 1;
-    ad.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    ad.Format = RtFormat(fmt);  // the swapchain's family (GOAL B2)
     ad.SampleDesc.Count = 1;
     ad.BindFlags = D3D11_BIND_RENDER_TARGET;
     if (FAILED(dev_->CreateTexture2D(&ad, nullptr, &atlas_)) || FAILED(dev_->CreateRenderTargetView(atlas_, nullptr, &atlasRtv_))) {

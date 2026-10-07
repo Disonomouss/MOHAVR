@@ -1,3 +1,4 @@
+#include "formats.hpp"
 #include "markers.hpp"
 
 #include <algorithm>
@@ -32,7 +33,6 @@ bool Markers::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessio
     // Cells: a pale ring, the same ring lit (green, thicker), a dot -- each with a dark edge for bright scenes.
     // Premultiplied alpha, BGRA.
     std::vector<std::uint32_t> px(static_cast<size_t>(w) * hgt, 0);
-    auto b8 = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
     for (int cell = 0; cell < 3; ++cell) {
         for (int y = 0; y < kCell; ++y) {
             for (int x = 0; x < kCell; ++x) {
@@ -55,7 +55,7 @@ bool Markers::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessio
                 if (cell == 2) { red = 0.95f; grn = 0.95f; blu = 0.95f; }
                 const float k = core * 0.9f;                             // the edge is dark
                 px[static_cast<size_t>(y) * w + cell * kCell + x] =
-                    b8(blu * k) | (b8(grn * k) << 8) | (b8(red * k) << 16) | (b8(a) << 24);
+                    Pack(fmt, red * k, grn * k, blu * k, a);  // the swapchain's channel order (GOAL B2)
             }
         }
     }

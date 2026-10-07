@@ -1,3 +1,4 @@
+#include "formats.hpp"
 #include "menu.hpp"
 
 #include <windows.h>
@@ -135,7 +136,7 @@ bool Menu::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession session, 
     td.Height = static_cast<UINT>(height_);
     td.MipLevels = 1;
     td.ArraySize = 1;
-    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.Format = RtFormat(swapchainFormat);  // the swapchain's family (GOAL B2)
     td.SampleDesc.Count = 1;
     td.BindFlags = D3D11_BIND_RENDER_TARGET;
     if (FAILED(dev_->CreateTexture2D(&td, nullptr, &tex_)) || FAILED(dev_->CreateRenderTargetView(tex_, nullptr, &rtv_))) {

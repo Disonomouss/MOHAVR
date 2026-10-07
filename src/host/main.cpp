@@ -38,6 +38,8 @@
 #include "markers.hpp"
 #include "reticle.hpp"
 #include "vignette.hpp"
+#include "blit.hpp"
+#include "formats.hpp"
 #include "scope.hpp"
 #include "wristhud.hpp"
 
@@ -356,10 +358,31 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         MLOG("host: swapchain formats %s; reference spaces %s; refresh rate %s", f.c_str(), sn.c_str(),
              hz > 0.0f ? (std::to_string(static_cast<int>(hz + 0.5f)) + " Hz").c_str() : "not exposed");
     }
+    // GOAL B2 (D65): B8G8R8A8 first (the game's frames copy straight in); else R8G8B8A8, with the game's frame blitted
+    // (blit.cpp) and every texture copied into a swapchain made in its family (formats.hpp). [Debug] ForceRgbaSwapchain=1
+    // takes the RGBA path where BGRA is offered too (the simulator's tests).
+    const bool forceRgba = GetPrivateProfileIntW(L"Debug", L"ForceRgbaSwapchain", 0, (ExeDir() + L"\\MOHAVR.ini").c_str()) != 0;
     int64_t fmt = 0;
-    for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) { fmt = f; break; }
-    if (!fmt) for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM) { fmt = f; break; }
-    if (!fmt) return Fail("runtime offers no B8G8R8A8 swapchain format");
+    if (!forceRgba) {
+        for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) { fmt = f; break; }
+        if (!fmt) for (int64_t f : fmts) if (f == DXGI_FORMAT_B8G8R8A8_UNORM) { fmt = f; break; }
+    }
+    if (!fmt) for (int64_t f : fmts) if (f == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) { fmt = f; break; }
+    if (!fmt) for (int64_t f : fmts) if (f == DXGI_FORMAT_R8G8B8A8_UNORM) { fmt = f; break; }
+    if (!fmt) return Fail("runtime offers no B8G8R8A8 or R8G8B8A8 swapchain format");
+    const bool rgba = mohavr::host::IsRgba(fmt);
+    mohavr::host::Blit blit;
+    ID3D11Texture2D* lastRgba = nullptr;  // the game's frame in the swapchain's family (rgba only)
+    if (rgba) {
+        D3D11_TEXTURE2D_DESC rd{};
+        last->GetDesc(&rd);
+        rd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rd.BindFlags = D3D11_BIND_RENDER_TARGET;
+        if (!blit.Init(dev) || FAILED(dev->CreateTexture2D(&rd, nullptr, &lastRgba)))
+            return Fail("the RGBA swapchain path (blit shader or texture)");
+        MLOG("host: swapchain format %lld (R8G8B8A8%s) -- the game's frames are blitted into it%s", fmt,
+             fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ? ", sRGB" : "", forceRgba ? " (Debug.ForceRgbaSwapchain)" : "");
+    }
     XrSwapchainCreateInfo swci{XR_TYPE_SWAPCHAIN_CREATE_INFO};
     swci.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
     swci.format = fmt;
@@ -1221,6 +1244,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             InterlockedExchange64(reinterpret_cast<volatile LONG64*>(&g_hdr->ackFrame), static_cast<LONG64>(f));
             ctx->Wait(gameFence, f);
             ctx->CopyResource(last, shared[slot % kRing]);
+            if (rgba) {
+                D3D11_TEXTURE2D_DESC ld{};
+                last->GetDesc(&ld);
+                blit.Run(ctx, last, lastRgba, ld.Width, ld.Height);
+            }
             if (wristOk) wrist.TakeFrame(slot, lastHud);  // (its HUD texture, under the same fence)
             ctx->Signal(hostFence, f);
             shown = f;
@@ -1306,7 +1334,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             wi.timeout = XR_INFINITE_DURATION;
             XR_OK(xrWaitSwapchainImage(swapchain, &wi), "xrWaitSwapchainImage");
             for (UINT slice = 0; slice < 2; ++slice)
-                ctx->CopySubresourceRegion(images[idx].texture, D3D11CalcSubresource(0, slice, 1), 0, 0, 0, last, 0, nullptr);
+                ctx->CopySubresourceRegion(images[idx].texture, D3D11CalcSubresource(0, slice, 1), 0, 0, 0, rgba ? lastRgba : last, 0,
+                                           nullptr);
             XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             XR_OK(xrReleaseSwapchainImage(swapchain, &ri), "xrReleaseSwapchainImage");
 
