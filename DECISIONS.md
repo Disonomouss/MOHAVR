@@ -1005,3 +1005,29 @@ compatible?" -- "Do it".
 - **Also:** `deploy.ps1 -PlayerAgreed` deploys over the player's own install when they've said so (they reinstall after).
 **Why:** the player (2026-10-07): "It worked for them, we need another way to open the mod menu. Lay palm flat to bring up
 hud, then hold X."
+
+### D61. Physical crouch: the game's stance follows the real head -- Decided 2026-10-08 (GOAL A1)
+- **Why:** crouching for real lowered only the view; the pawn stayed standing (too tall for low cover) until the stick
+  click. GOAL.md A1, from the feature review (2026-10-08).
+- **What:** `[Controls] PhysicalCrouch` (shipped **0**: it changes how the game plays; GOAL rule 3), `CrouchDepth`
+  0.40 m, and the menu's General tab ("Physical crouch", live to the game through `hdr->crouchMode`, shared block v29,
+  no layout change).
+  - The game side decides once per frame. The head's drop below the origin is checked against the line, with 10 cm of
+    hysteresis. LOCAL has no floor, so the line is a drop in metres, not GOAL's "share of the eye height". The
+    decision needs the game in gameplay: walking, alive, no menu, no cinematic, no landing, no ladder or mounted-gun
+    state.
+  - The game's stance (the collision height) is the truth. A toggle is asked only when it differs, one at a time
+    (`crouchReqSeq`; the host pulses Xbox X, the game's own crouch), with a retry after 1.2 s. After three failures it
+    waits for the head to cross the line again.
+  - A stance change nobody asked for is the stick's: the stick has the stance until the head crosses the line. Going
+    down with the game already crouched adopts the crouch as the head's.
+  - While the crouch is the head's, the game's own crouch drop is added back to the camera (ENGINE-NOTES 5bt), so the
+    eye is the real head. Without that, the drop would count twice.
+- **Proven [S]** (the EA copy, the simulator's head moved by `sim_pose.py --y`):
+  - head 0.50 m down: crouched, the eye **110.7 cm** above the feet; up: stood, 160.9;
+  - a quick re-crouch: 110.7 again;
+  - the stick: crouch 95.9; a later head crouch adopted (110.7) and stood with the head; a stick stand while low held
+    until the head rose;
+  - the pause menu: no request; backing out with the head low crouched at once;
+  - the menu's off: no request.
+  **[H]** HEADSET-TESTS round 54: does it trigger by accident (leaning in, picking things up, looking down)?

@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 28;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD
+inline constexpr std::uint32_t kVersion = 29;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -399,7 +399,10 @@ struct Header {
     // host -> game, live (the menu; written as they change): 0 = not set, the game's own ini
     volatile std::uint32_t hudPlace;              // 3036 1 screen (the head-locked per-eye panel), 2 wrist
     volatile float         hudScreen[3];          // 3040 the screen panel: distance, width, down (m)
-    std::uint32_t          pad28;                 // 3052
+    // 29, physical crouch (GOAL A1, D61): host -> game, live (the menu): 0 = not set (the game's [Controls] PhysicalCrouch),
+    // 1 off, 2 on; game -> host: bumped once per crouch toggle the game side wants (the host pulses Xbox X, the game's crouch)
+    volatile std::uint16_t crouchMode;            // 3052
+    volatile std::uint16_t crouchReqSeq;          // 3054
     SlotHud                slotHud[kRing];        // 3056 game -> host, per slot, written with slotMeta (before publishedFrame)
 };
 #pragma pack(pop)
@@ -462,6 +465,7 @@ static_assert(offsetof(Header, pistolKey) == 2128, "shared::Header layout must m
 static_assert(offsetof(Header, pistolClip) == 2176, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolState) == 2184, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolEvtAck) == 2196, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, crouchReqSeq) == 3054, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolAimDistance) == 2204, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolRefills) == 2208, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pistolFlags) == 2216, "shared::Header layout must match between x86 and x64");

@@ -2286,6 +2286,24 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   arguments first, so a map argument only works unmodded. With the mod, use the game command `open <map>`.
 - `tools/laa.py status|set|clear`.
 
+## 5bt. Physical crouch: the stance, the crouch input, the eye (D61, 2026-10-08)
+
+- **The stance:** the pawn's `CylinderComponent.CollisionHeight` is 96 standing and 49 crouched (5an); the mod reads
+  crouched as under 72. It flips in the frame the game takes the crouch; the camera then moves smoothly over about a
+  second, from **160.7** to **95.9 cm** above the feet and back (the arms' Cam socket).
+- **The input:** the game's crouch is `Button bCrouch` on `XboxTypeS_X` (`DefaultInput.ini`), a toggle in script. A 0.15 s
+  press of Xbox X from the host's pad answers a request within one or two frames: "the game crouched" 22 ms after the
+  request (simulator, the EA copy). The pause menu's menu layout (`hdr->gameUiMenu`) is excluded.
+- **The eye:** the eye is the game camera plus the head's drop below its origin (5h). With the game crouched by the head,
+  the drop counted twice: 160.7 - 64.8 - 50 = 46 cm for a 50 cm crouch. The game side adds back the game's own crouch
+  drop: the standing camera height (learnt on the ground while standing, not within 1.5 s of a stance change, since the
+  camera is still moving then) less the camera's height now. Measured with the head 0.50 m down: **the eye 110.7 cm above
+  the feet** (the game camera 95.9, the compensation 64.8), i.e. the real head. Standing again: 160.9. A stick crouch
+  with the head up: 95.9, the game's own.
+- **The head's drop:** LOCAL has no floor, so the line is a drop below the position origin (the recentre keeps y; the
+  game side takes its origin, 5h), not a share of the eye height. With the shipped CrouchDepth 0.40 m and 10 cm of
+  hysteresis, it crouches past 0.40 m down and stands above 0.30 m down.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

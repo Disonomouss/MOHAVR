@@ -1,222 +1,172 @@
-# Goal: a manual reload for every accessible gun, and the parachute landing
+# Goal: physical crouch, comfort, compatibility, the known issues, mounted guns and a mission sweep
 
-Set 2026-09-30 by the player. For the Claude Code session that runs `/goal` on it: read `STATUS.md`, then this file.
-Keep the checklist below current (DONE / BLOCKED, with the evidence in one line) and commit this file with each item.
+Set 2026-10-08 by the player ("Write a goal prompt to have you work through items 1-4", after the feature review the same
+day). For the Claude Code session that runs `/goal` on it: read `STATUS.md`, then this file. Keep the checklist below
+current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit this file with each item.
 
 ## Rules for this goal
-1. `CLAUDE.md`'s standing rules and `UNATTENDED-REPORT.md` §5 apply. In particular, never modify game files. Touch the
-   player's data (MOHA `Config\` and `Saved\`, and `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and `MOHAVR.freehand.bin`) only
-   through the harness's backup and restore. Verify every hook's prologue bytes. Addresses go only in `addresses.hpp`.
-2. **Don't ask the player anything and don't wait for answers.** What only the headset can judge goes into
-   HEADSET-TESTS round 36 as a question. If the player does reply mid-goal (round answers, new reports), record the
-   reply in HEADSET-TESTS, add the fixes to this checklist and carry on.
-3. **Every behaviour gets an ini switch.** Rule 7 and §5.2, resolved:
-   - **A gun's manual reload:** its `[ManualReload]` line ships on once the simulator has proven its full cycle (D22's
-     precedent). Each gun can be turned off on its own.
-   - **The landing fix:** ships on once proven, because it removes a fault. Record that in DECISIONS.
-   - **Anything else that changes comfort** (fades, a flat view, moving the view): ships off.
+1. `CLAUDE.md`'s standing rules and `UNATTENDED-REPORT.md` §5 apply:
+   - never modify game files;
+   - touch the player's data (MOHA `Config\` and `Saved\`, `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini` and
+     `MOHAVR.freehand.bin`) only through the harness's backup and restore;
+   - verify every hook's prologue bytes;
+   - addresses go only in `addresses.hpp`.
+2. **Don't ask the player anything and don't wait for answers.** Whatever only the headset can judge becomes a
+   question in HEADSET-TESTS **round 54**. If the player replies mid-goal, record the reply in HEADSET-TESTS, add the
+   fixes to this checklist and carry on.
+3. **Every behaviour gets an ini switch** (rule 7, §5.2), and a menu item where a player would want to change it:
+   - **comfort and feel** (the vignette, seated mode, physical crouch): ship **off**;
+   - **a fix for a fault** (the image-format fallback, the known issues): ships on once the simulator proves it;
+   - **diagnostics** (the capabilities log): on.
+   Record each default in DECISIONS (the next free number is **D61**).
 4. **Research time box: about 2 h per item.** Then write up what's known, mark the item **BLOCKED (reason)** and go to
-   the next. Don't repeat an approach that has failed 3 times.
-5. **Test runs:**
+   the next. Don't repeat an approach that has failed 3 times. **WONTFIX (reason)** is allowed where the research shows
+   the cost is out of proportion (say what it would take).
+5. **This PC's game is the EA app's copy** (D58, `tools/gamedir.txt`). It holds **the player's own install**, from
+   the setup program. The player authorises test deploys over it for this goal, so use `deploy.ps1 -PlayerAgreed`;
+   F3 leaves a working install behind.
+6. **Test runs:**
    - one game launch at a time;
    - copy the game and host logs to `logs/modlogs` before any relaunch;
-   - `tools/deploy.ps1 undeploy` after each run;
+   - `tools/deploy.ps1 undeploy` after each run (it reports the setup's `MOHAVR-README.md` as extra: expected);
    - never leave the game running;
    - after a crash: keep the logs, run `tools/harness.ps1 restore`, note it, and carry on with another item.
-6. **Commit per item:** the code together with STATUS, ENGINE-NOTES, DECISIONS and this file. The message ends with the
-   Co-Authored-By trailer.
-7. **Edits:** make them with the file tools, or with Python scripts in the scratchpad. Bash heredocs mangle backslashes
-   here. Run `deploy.ps1` with `&` in PowerShell so every `-Set` applies.
+7. **Commit per item** on `main`: the code together with STATUS, ENGINE-NOTES, DECISIONS and this file. The message
+   ends with the Co-Authored-By trailer. **Don't push, don't bump the version, don't publish a release:** the player
+   decides that.
+8. **Edits:** make them with the file tools, or with Python scripts in the scratchpad. Bash heredocs mangle backslashes
+   here. Run `deploy.ps1` and `harness.ps1` with `&` in PowerShell, from the repo root (`Set-Location E:\Clause\MOHAVR`
+   first: a relative path from another folder silently runs nothing).
 
 ## Proving it in the simulator
-1. **Deploy the test configuration:** `& .\tools\deploy.ps1 deploy -Set 'Render.ResX=0','Render.ResY=0',"OpenXR.RuntimeJson=$PWD\tools\OpenXR-Simulator\bin\openxr_simulator.json",'Debug.GameCommands=1','Weapon.ManualReload=1','Debug.ReloadTrace=1'`.
-2. **Launch:** `tools/harness.ps1 launch`, then `to-gameplay`. The save resumes mid-parachute.
-3. **Get the gun:** write lines to `%TEMP%\MOHAVR\game_cmd.txt`: `EnableCheats`, `GiveWeapon MOHAGameNonNative.<Class>`, then
-   `NextWeapon` until the log line `trace -- Attachment_X is in state` names the gun. The classes are MOHAM1Garand,
-   MOHAK98, MOHASpringfield, MOHAM12CombatShotgun, MOHAMauser, MOHAPanzerschreck and MOHAM18RecoillessRifle.
-4. **Drive the hands:** `python tools/pad_cmd.py --seq ...`, with `hand=l,@mag|@pouch|@bolt,...`, raw presses and
-   `reload=...`. Add new spots and events there as needed.
-5. **Record:** `harness.ps1 shot`, and read the logs.
+1. **Build:** `tools/build.ps1`. It falls back to Visual Studio's bundled vcpkg; the first build fetches the ports.
+2. **Deploy the test configuration:**
+   `& .\tools\deploy.ps1 deploy -PlayerAgreed -Set 'Render.ResX=1920','Render.ResY=1080',"OpenXR.RuntimeJson=$PWD\tools\OpenXR-Simulator\bin\openxr_simulator.json",'Debug.GameCommands=1'`.
+   Add the item's own switches. The EA app drops command-line arguments, so the resolution comes from `Render.ResX/ResY`.
+3. **Launch:** `tools/harness.ps1 launch` (it clicks through `moha_setup.exe`), then `to-gameplay`. The save resumes
+   mid-parachute over the Flakturm tower. Game commands go in `%TEMP%\MOHAVR\game_cmd.txt`.
+4. **Drive it:**
+   - the head: `python tools/sim_pose.py`;
+   - the hands and raw presses: `python tools/pad_cmd.py --seq ...`;
+   - the menu: `python tools/menu_cmd.py`.
+   CLAUDE.md lists the test poses (the wrist HUD's: `hand=l,0.13,-0.40,0.30,90,0,90` with `--pitch -45`).
+5. **Record:**
+   - screenshots: `harness.ps1 shot`; for the host's quads, `tools/sim_window_shot.ps1`;
+   - read both logs.
 6. **Finish the run:** `harness.ps1 quit`, then `deploy.ps1 undeploy`.
 
-The round 33–35 test scripts are templates: `work/research/tests/`.
+## Track A: quick wins (comfort and stance)
+- [x] **A1 Physical crouch.** Crouching for real today only lowers the camera, and the game's stance stays standing
+  until the stick click (Xbox X, a toggle). Wanted: the game's crouch follows the player's real head height.
+  - **The threshold:** the head below a share of the standing eye height (calibrated from the recentre or the menu,
+    default about 75 %).
+  - **Hysteresis:** no flicker at the threshold.
+  - **The game's stance is the truth:** read it from the game (find or add it in the shared block) and drive the
+    toggle until it matches. Never toggle blind.
+  - **The stick click still works:** a manual stance change takes over until the real height crosses the threshold again.
+  - **Excluded:** menus, ladders, mounted guns, cinematics and the parachute.
+  - **Proven [S] when** `sim_pose.py --y` crouches and stands the pawn (the log, and the eye height from §5an's
+    `Debug.EyeFloor`), the click still works, and no toggle fires in a menu.
+  - `[Controls] PhysicalCrouch=0` and its threshold; the menu (General). Round 54: does it trigger by accident?
 
-The research behind Step 1:
-- `RELOAD-DESIGN.md`;
-- `work/research/reload/`, which is gitignored and local:
-  - `reload_logic.md`: §7 item 10, "Later steps", covers these guns;
-  - `skeletons.md` and `anims.md`: bones and motion;
-  - `nonnative/*.uc`: the weapon classes;
-  - `psa/` and `psk/`: the exports that `tools/reload_grips.py` bakes grips from;
-- the decompressed weapon packages: `work/research/dec/`.
+  **DONE** (D61, ENGINE-NOTES 5bt; `logs/modlogs/20261008-0609*`): head 0.50 m down -> `asking the host to crouch`, `the game
+  crouched` 22 ms later, `settled crouched (the head's) -- the eye 110.7 cm above the feet (the game camera 95.9,
+  compensation 64.8)`; up -> stood, 160.9; a quick re-crouch 110.7; the stick crouch 95.9 (`the stick's`), adopted by
+  the head (110.7), a stick stand while low held (110.9) until the head crossed; the pause menu: no request, backing out
+  crouched at once; the menu's off: no request. The line is a drop in metres (0.40, LOCAL has no floor), not a share.
+- [ ] **A2 Vignette.** A comfort tunnel that darkens the edge of the view while the player moves or turns by stick (not
+  for head motion). Strength none / light / strong; it fades in and out over about 0.2 s.
+  - Drawn by the host: a quad or a mask over the projection layer, both eyes, never over the menu.
+  - `[Comfort] Vignette=0`; the menu (General).
+  - **Proven [S] when** `sim_window_shot` shows it while the stick moves, gone when still; no frame-time cost in the
+    perf lines.
+- [ ] **A3 Seated mode.** A height offset so a seated player gets the standing eye height.
+  - A "Calibrate seated" item in the menu: the current head height becomes the game's standing eye. It's saved in
+    the player's ini.
+  - It works together with A1 (crouch is relative to the calibrated height) and with `MinEyeHeight`.
+  - `[Comfort] Seated=0`. **Proven [S]** with `sim_pose.py --y 1.2`: the eye at the standing height, and crouch,
+    jumps and the landing unchanged.
 
-## Track A: manual reload
-Done, headset rounds 30–35 passed: Thompson, MP40, StG44, BAR, G43, Colt 45, and the C96 from upgrade 1. Every new
-gun gets the same things:
-- a switch;
-- the game's own reload blocked while the manual one is engaged;
-- empty-gun visuals;
-- sounds from the game's cues;
-- grips from the game's reload animation;
-- a pouch for new ammo.
+## Track B: compatibility (other headsets and runtimes)
+- [ ] **B1 Capabilities log.** At start the host logs:
+  - the runtime's instance extensions (one line);
+  - the swapchain formats offered;
+  - the system name and its tracking properties;
+  - the view configuration's recommended size and refresh rate.
+  This is what a remote tester's log must answer. **[S]:** the lines appear with the simulator.
+- [ ] **B2 Image-format fallback.** The host stops with "runtime offers no B8G8R8A8 swapchain format". When only
+  R8G8B8A8 (sRGB or not) is offered, use it, with a swizzling copy (a shader blit, not CopyResource) for the game's
+  BGRA frames, the menu, the wrist HUD, the reticle and the scope view.
+  - `[Debug] ForceRgbaSwapchain=1` takes that path with the simulator.
+  - **Proven [S] when** that path renders the same image (colours compared on a capture, red stays red) at the
+    same frame time.
+- [ ] **B3 More controller profiles bound directly**, as D59 did for the G2. Each is enabled only if the runtime
+  offers its extension, with its paths checked against the OpenXR spec. Each is logged with "bound as", and the
+  README's controller line is updated.
+  - **The HTC Vive Cosmos** (`XR_HTC_vive_cosmos_controller_interaction`): Touch's layout.
+  - **The Pico 4** (`XR_BD_controller_interaction`, `/interaction_profiles/bytedance/pico4_controller`): Touch's
+    layout.
+  - **First-generation WMR** (`/interaction_profiles/microsoft/motion_controller`, core): sticks, a trackpad, a menu
+    button each, no face buttons. Design a mapping (for example, the trackpad's four quadrants as A/B/X/Y) and write
+    it into the README.
+  - **The HTC Vive wands** (`/interaction_profiles/htc/vive_controller`): no sticks. Only if B3's others are done and
+    a trackpad scheme is clear (movement on the left pad, turning on the right); else WONTFIX with the reason.
+  - **[S]:** the simulator still binds Touch; the suggestions for the profiles it offers are accepted. **[H]:** a
+    tester per device (round 54 asks who has one).
 
-Items, in D21's order:
-- [x] **A0 Inventory.** From the scripts and `upgrades.txt`, confirm every gun the player can reach: loadouts,
-  pick-ups, mission-only launchers, and upgrade levels that change the reload. Add any that are missing here.
+## Track C: the known issues (README "Known issues")
+- [ ] **C1 The wrist HUD over the gun or arm.** The panels are composition quads, always on top of the projection
+  layer. Options, cheapest first:
+  - fade the panels while the gun or the gun hand's arm is between the eyes and a panel (geometry from the poses
+    the host already has);
+  - `XR_KHR_composition_layer_depth`, if the runtime offers it;
+  - draw the panels into the game's frame with depth.
+  **Proven [S]** by a capture with the gun hand swept across the wrist.
+- [ ] **C2 The desktop mirror without the HUD in wrist mode.** In wrist mode the mirror window (`src/host/mirror.cpp`)
+  shows no HUD. Draw the HUD texture on it: the full-screen HUD, as the flat game shows it. Behind `[Bridge] MirrorHud=1`.
+  **[S]:** a capture of the mirror window.
+- [ ] **C3 Dropped magazines and ejected rounds through walls.** Find why: they're drawn without depth, or they don't
+  collide, or they're drawn after the scene. Fix it, or limit it (for example, no ejection inside a wall's distance).
+  **[S]:** a scripted ejection next to a wall, from the side.
+- [ ] **C4 The StG44's dust cover.** The bolt body and the dust cover are part of the body mesh (round 52). Time box
+  1 h: is a separable part or a material trick possible? Otherwise WONTFIX with the reason.
 
-  **DONE** (`work/research/goal/inventory.md`): 13 guns with a reload are reachable, exactly `MOHAWeaponIncludeClass`
-  less its grenades. Step 1 converts 7; the rest are A1-A5. Found beyond the list: the **mounted MG42** (47 nests in 6
-  missions; a 100-round belt, infinite belts, the game's reload after every 100 rounds), and the Step 1 guns' lower
-  upgrade levels (never proven). Not reachable: the K98 and G43 snipers, the portable and vehicle MG42s, the tank guns,
-  the cut Carbine/.30 cal/FG42. The Hellbox has no reload. The player's save has every gun at level 2, so the K98 and
-  Springfield load by stripper clip and the C96 has its 20-round magazine; levels -1/0 need a test-only level override.
-- [x] **A1 M1 Garand, en-bloc clip.**
-  - The game's last shot pings and throws the empty clip. Keep that.
-  - The op-rod locks back: `Bolt` Z 13.87 → 1.00, with `bolt_sheath` following.
-  - A clip from the pouch is pushed down (+Y) into the top of the receiver. The `clip` bone's idle position is
-    (0,-5.68,9.00).
-  - Seating the clip closes the bolt on its own (no rack) and loads min(8, reserve).
-  - The game allows a reload only at 0 rounds. Default: B (the clip latch) ejects a partial clip and its rounds go back
-    to the reserve, behind a switch.
+## Track D: mounted guns (research first)
+- [ ] **D1 Research** (time box 2 h; D33 and GOAL 2026-09-30 A6 have the background):
+  - how the player mounts a gun: the controller's `PlayerMountedMG` / `PlayerUsingMG` states;
+  - how the game drives the mounted gun's aim and the camera;
+  - what the mod does there today: the hands, the aim ray, the view;
+  - how to reach a nest in the simulator: another map with `open <map>` through `game_cmd.txt`, or a nest
+    spawned or moved near the save's tower.
+  Write `MOUNTED-DESIGN.md`: what's known, the options (the view locked to the gun or free, both hands on the handles
+  aiming it, or the head aiming as the game does now), a recommendation, and the first phase.
+- [ ] **D2 Phase 1, if D1 found a path:** the view and the hands at a nest are sane (no doubled gun, no aim ray off into
+  the sky, the HUD readable). The gun aims with the hands on its handles if the research makes that feasible, behind
+  `[Weapon] MountedHands=0`. **[S]:** at a nest, firing at a known spot hits it. Otherwise BLOCKED with the reason.
 
-  **DONE** (`logs/modlogs/reload-garand3-*`, `-garand5-*`; ENGINE-NOTES 5ao): the last shot -- the mod's ping, the
-  game throws the clip (from the gun in the hand); pouch clip seated: `INSERT Attachment_M1Garand: clip 0 -> 8, reserve
-  27 -> 19; the action closed on its own`; three shots and the latch: `EJECT ...: clip 5 -> 0, reserve 19 -> 24`; a new
-  clip `clip 0 -> 8, reserve 24 -> 16`; fired empty; with the manual reload off the game reloads (`clip rose 0 -> 8
-  without the mod`). 35 rounds, 19 fired, 16 left. The clip in the hand is the game's right-hand grip mirrored.
-- [x] **A2 K98 and Springfield, bolt actions.**
-  - After each shot the player works the bolt by hand: up, back, forward, down.
-  - The trigger is blocked until that's done.
-  - The game's own rechamber is turned off (`WeaponRechamberAnim='None'` per instance), and the attachment's
-    `Rechamber()` ejects the case.
-  - Loading with the bolt open: a stripper clip pushed down, and/or single rounds, whichever the game's animations show.
-  - Also check the scope and upgrade variants.
-
-  **DONE** (`logs/modlogs/reload-k98a-*`, `-spr2-*`, `-k98r2-*`, `-sprr2-*`; ENGINE-NOTES 5aq): per shot the game's own
-  rechamber is off (`WeaponRechamberAnim -> None`) and the trigger held (`FiringStatesArray[0] -> None`); the off hand
-  works the knob: `BOLT UP`, `BOLT BACK ...; the case ejected` (the game's `EjectRechamberedShell`), `BOLT FORWARD`, `BOLT
-  DOWN`, the trigger back. Emptied, the bolt stays open (HoldOpen). **Clip (level 2):** `INSERT Attachment_K98: clip 0 ->
-  5, reserve 27 -> 22; a stripper clip`, the bolt closed pushes the clip out, it fires (5 -> 4); the same on the
-  Springfield. **Rounds (level -1, forced):** five pouch trips, `INSERT ...: clip 0 -> 1 ... 4 -> 5, reserve 27 -> 22; a
-  round`, on both. Switched off, the game's own `WeaponRechamber` returns. 32 rounds, 7 fired, 25 left (each run). The
-  scope variant changes nothing (the Springfield's scope never meets the knob).
-- [x] **A3 M12 shotgun.**
-  - The pump is worked by hand after each shot, with the trigger blocked until then.
-  - Shells go in one at a time from the pouch into the loading port, up to the tube's maximum.
-
-  **DONE** (`logs/modlogs/reload-m12b-*`; ENGINE-NOTES 5ar): the foregrip is the pump. Per shot the game's rechamber is
-  off and the trigger held (`fired (clip 8 -> 7) -- a spent case in`, `FiringStatesArray[0] -> None`); the off hand slides
-  back 11.5 cm: `PUMP BACK ...: pump back, chamber empty; the case ejected` (the game's `EjectRechamberedShell`), forward:
-  `PUMP FORWARD ...: chamber live; a shell chambered`, the trigger back; drawn `game Z 42.81 -> drawn 31.31` with the
-  support hand riding it (up to 11.5 u). Fired empty (8 shots), pumped: `chamber empty`; eight pouch shells through the
-  port `INSERT ...: clip 0 -> 1 ... 7 -> 8, reserve 40 -> 32; a shell into the tube`, a ninth refused (`the tube is full
-  (clip 8/8)`), one pump chambers (`PUMP BACK ... chamber empty` -- no case -- `PUMP FORWARD ... a shell chambered`), it
-  fires; a top-up (`INSERT 7 -> 8`, chamber live) fires at once. Switched off: `WeaponRechamber`, then `WeaponReload`
-  (`clip rose 6 -> 7 -> 8 without the mod`). 48 shells in all (8 + 40), 11 fired, 8 + 29 left. The held shell sits in
-  the left hand's fingertips (the game's loading grip, mirrored; 6.2 cm from the controller).
-- [x] **A4 C96 below upgrade 1.** A fixed magazine charged from the top with a stripper clip (check its reload
-  animation).
-
-  **DONE** (`logs/modlogs/reload-c96a-*`; ENGINE-NOTES 5as): a line per level range (`Attachment_Mauser@0`, levels -1..0;
-  the box magazine's line stays at 1+). Forced level (`test: weapon type 19's upgrade level 2 -> -1`): `Attachment_Mauser@0
-  on DE_Mauser_Rigged -- ... the RefSkeleton check passed`; ten shots, `fired its last round -- ... (magazine out)`, the
-  bolt held back; a pouch clip seated in the guides: `INSERT Attachment_Mauser: clip 0 -> 0 ...; pending (rack to feed)`
-  (`Mauser.MAUSER_RLD_2_CLIPIN` playing); a tug on the bolt and let go: `RACK ...: clip 0 -> 10` (`MAUSER_RLD_3_SLIDEIN`
-  playing); it fires (10 -> 9); switched off, the game's reload (`clip rose 9 -> 10`). The C96's reserve is infinite
-  (9999), so no count to lose. Grips from the game's clip reload (`mauser_reload_2` f24 hold, f61 bolt).
-- [x] **A5 Panzerschreck and M18 recoilless.** A rocket or shell from the pouch into the tube's rear or the breech,
-  loaded only when empty.
-
-  **The Panzerschreck: DONE** (`logs/modlogs/reload-panzer1-*`; ENGINE-NOTES 5ap): the shot -- "fired its last round";
-  a pouch rocket, its nose to the rear mouth, slides in as the hand pushes ("slid home (84.6 cm in)"): `INSERT
-  Attachment_Panzerschreck: clip 0 -> 1, reserve 9 -> 8`; again `clip 0 -> 1, reserve 8 -> 7`; with the manual reload off
-  the game reloads (`clip rose 0 -> 1`). **The M18: DONE** (`logs/modlogs/reload-m18b-*`; ENGINE-NOTES 5at): the
-  breech is A2's two-stage action with a swing. The shot holds the trigger (`fired (clip 1 -> 0) -- a spent case in`,
-  `FiringStatesArray[0] -> None`); the knob turned up: `BOLT UP ...: bolt lifted` (`M18.Reload_M18_5_handle_turn`
-  playing), the breech swung open: `BOLT BACK ...: bolt open; the case ejected`, `the spent case falls from the breech`
-  (`Reload_M18_2_lid_open` playing); let go it stays open (`s 2.00`); a pouch round nose first into the mouth and pushed:
-  `slid home (43.5 cm in)`, `INSERT Attachment_M18RecoillessRifle: clip 0 -> 1, reserve 9 -> 8; a round`
-  (`Reload_M18_3_shell_in`); swung shut `BOLT FORWARD` (`lid_close`), turned down `BOLT DOWN`, the trigger back; it fires
-  (1 -> 0); switched off, the game reloads (`clip rose 0 -> 1`). 10 rockets, 2 fired, 1 + 7 left. Seen from the hinge
-  side (`logs/shots/*final1d-m18-*`): closed, the block on the tube's end with its handle up; open, the block swung out
-  on its arm and the chamber bare; the round pushed in by the left hand.
-- [x] **A6 Anything A0 found.** The rifle grenade (alt fire) keeps the game's own reload unless everything else is done.
-
-  **DONE / BLOCKED as below.** The rifle grenade keeps the game's own reload (the GOAL's default; a fire mode, not a gun):
-  `logs/modlogs/reload-final1a-*`: the G43 at level 2, LB (alt fire), the grenade fired: `Attachment_G43 is in state WeaponReload` (in alt mode the gun isn't converted: the game's own reload runs), then `AlternateFireModeOut`. The MG42: BLOCKED (D33). The lower levels: DONE.
-  - **The mounted MG42** (A0): a belt reload every 100 rounds, infinite belts, at a nest (not `GiveWeapon`-able in the
-    test level). A manual version would be lid up, a belt, lid down, cock.
-
-    **BLOCKED** (decision D33: the game's own belt reload stays). No simulator path: the class isn't cooked into the
-    test save's level (`Var_Flk_P`), and Der Flakturm's two nests are in `Var_Flk_Exterior_AI`, outside the tower the
-    save lands on. And the mod has no VR handling of a mounted gun yet (never tried in the headset: the view and hands
-    at a nest are unknown), which a manual belt reload would need first. The belts are infinite and the game's reload
-    is automatic, so nothing is lost meanwhile.
-  - **The Step 1 guns at their lower levels** (Thompson stick, MP40 single/taped, StG44 and BAR single, G43 10-round):
-    one scripted pass with the level forced down.
-
-    **DONE** (`logs/modlogs/reload-lvl1-*`; ENGINE-NOTES 5au): the loadout's BAR and G43 thrown away (`ThrowWeapon`), the
-    levels forced (`weapon type 1's upgrade level 2 -> -1`, MP40 -> 0, StG44, BAR, G43 -> -1), the guns given anew. The
-    Thompson's stick (`upgrade_03_hide_magazine` visible): `EJECT 26 -> 0, reserve 350 -> 376`, `INSERT 0 -> 30, 376 -> 346`;
-    the MP40's taped pair (level 0): `INSERT 0 -> 32` (one magazine, as 5am found: the game has no B pose for it); the
-    StG44 single: `EJECT 28 -> 1` (the chambered round kept), `INSERT 1 -> 30`; the BAR single (no taped pair): `INSERT 0 ->
-    20`; the G43's 10-round `magazine`: `EJECT 8 -> 1`, `INSERT 1 -> 10`. No rounds lost or made.
-
-**Done for a gun** means a scripted simulator run shows all of these:
-- the full cycle: empty → open/out → new ammo in → action worked → it fires;
-- the clip and reserve counts right in the log, with no rounds lost or made;
-- with the switch off, the game's reload works again;
-- the visuals and grips right in screenshots;
-- its sound cues in the log.
-
-After any change to shared code, re-check the Step 1 guns with a quick scripted reload of each.
-
-## Track B: the parachute landing
-The player's report: "currently you clip into the ground when landing".
-
-What's known:
-- The save lands about 15 s after Continue, a "Botched Landing" (ENGINE-NOTES §1 notes).
-- The landing roll is a camera animation, which the player chose to keep in 3D.
-- Jumps and falls are covered in §5ai: `Camera.JumpLift=0`, `Weapon.JumpArms=idle`.
-- The eye is the game's view location plus the tracked head, scaled by the world scale.
-
-Items:
-- [x] **B1 Reproduce and measure.** Log every frame, from 2 s before to 5 s after touchdown:
-  - the eye's height above the ground, from a downward trace from the view;
-  - the camera animation's offset;
-  - the pawn's eye height and state.
-
-  Take screenshots at the lowest point. Vary the landing: flared (Space), not flared, and other head heights through the
-  openxr-simulator MCP. Find which term puts the view below the surface.
-
-  **DONE.** `Debug.EyeFloor` logs it per frame, from leaving the ground to 8 s after landing (ENGINE-NOTES 5an). The
-  save's botched landing on the tower roof rolls the game camera to **17.8 cm above the feet** (three runs: 17.8 /
-  17.8 / 17.9 cm; standing 160.7, crouched 95.9). In VR the head's pitch and roll replace the tumble's, so the eye looked out
-  level from ankle height. The roll's view isn't "the player's" (its yaw is off by more than 2048). Two flares
-  (Space, 1 s and 0.3 s before touchdown) still gave the botched landing.
-- [x] **B2 Fix it behind a switch.** Candidates: keep the view a margin above the floor, drop the animation's downward
-  translation, or stop the tracked height from stacking on it. Proven when:
-  - the eye stays at least 10 cm above the ground through every measured landing;
-  - walking, crouching, jumping and the regression cycle are unchanged.
-
-  **DONE.** `[Camera] MinEyeHeight=60`, shipped on (D26): the eye is held at least 60 cm above the feet, raised
-  before the hands' mapping and by the same amount for both eyes. [S] the lowest eye through the landing was
-  **60.0 cm** (was 17.8), in three runs; standing 160.8 and crouched 95.9 unchanged; a jump (0.7 s in the air)
-  never below 160.2 cm and never held; `tools/harness.ps1 cycle` OK (33 s). **Into the ground, measured:** with the
-  head 45 cm below its origin, the botched landing put the eye **27.1 cm below the feet and at the traced ground (0.1
-  cm)** with the fix off, and **60.0 cm above the feet (63.9 above the traced ground)** with it on; a held flare (landing
-  type 5) stays above 70 cm either way (`logs/modlogs/landlow0-*`, `landlow60-*`).
+## Track E: mission sweep (unattended QA)
+- [ ] **E1 Every mission loads with the mod and the guns' extras work.** List the campaign maps (`CookedPC`, the
+  game's map list). Load each one with `open <map>` through `game_cmd.txt`. In each:
+  - reach gameplay;
+  - give the knife and a gun with ejected rounds;
+  - fire and eject;
+  - throw a grenade;
+  - check the logs for the model look-ups (the knife and the rounds borrow other guns' models; the README says they
+    were checked in the first levels only), errors and stand-downs;
+  - take one screenshot.
+  Write a table per map (loaded, gameplay, knife, rounds, grenade, errors) into `work/research/goal/sweep.md` and a
+  summary in STATUS. Fix what breaks, or record it as a known issue. A script in `work/research/tests/` that reruns the
+  sweep.
 
 ## Finish
-- [x] **F1** After the last change: `tools/harness.ps1 cycle` OK, and a final scripted reload of every converted gun.
-
-  **DONE:** `tools/harness.ps1 cycle`: **cycle OK in 33s** (2026-10-01 01:15, after the last code change; the player's data restored, verified identical). The final pass, one scripted reload of every converted gun: `logs/modlogs/reload-final1a-*` (Thompson `EJECT 46 -> 0, reserve 350 -> 396`, `INSERT 0 -> 50, 396 -> 346`; MP40 `INSERT 0 -> 64, 407 -> 343`; StG44 `1 -> 30, 208 -> 179`; BAR `0 -> 20, 195 -> 175`; G43 `1 -> 20, 137 -> 118`; Colt `1 -> 7`; the C96 at level 2 `1 -> 20`; the Garand fired empty, `INSERT 0 -> 8, 118 -> 110; the action closed on its own`), `-final1b-*` (the K98 fired empty with four bolt cycles, `INSERT 0 -> 5, 120 -> 115; a stripper clip`; the Springfield `0 -> 5, 115 -> 110`; the M12 `PUMP BACK ...; the case ejected`, `INSERT 7 -> 8, 80 -> 79`; the Panzerschreck `0 -> 1, 13 -> 12`; the M18 `INSERT 0 -> 1, 18 -> 17`, shut and locked), `-final1c-*` (the C96 at level -1: `INSERT 0 -> 0 ... pending`, `RACK 0 -> 10`; the M18's cycle and its next shot), `-final1d-*` (the M18's breech seen swung open).
-- [x] **F2** HEADSET-TESTS round 36: what changed, how to try it, and [H] questions per gun and for the landing.
-
-  **DONE:** HEADSET-TESTS.md round 36 (every gun's reload, where to find the guns, 9 questions).
-- [x] **F3** STATUS updated, everything committed, and the game not running. Then run `tools/deploy.ps1 undeploy`,
-  then `& .\tools\deploy.ps1 deploy` with no `-Set` (the shipped defaults, for the player), and say so in STATUS.
-
-  **DONE:** the game not running; `tools/deploy.ps1 undeploy` (`Binaries matches its baseline`), then `deploy` with no
-  `-Set`: `dinput8.dll present (MOHAVR), deployed 2026-10-01T01:15:28, ini overrides:` (none) -- the shipped defaults,
-  for the player; STATUS says so. Everything committed.
+- [ ] **F1** After the last change:
+  - `tools/harness.ps1 cycle` OK;
+  - the wrist menu button (D60) A-D and the manual reload's quick pass (one gun of each kind) rerun.
+- [ ] **F2** HEADSET-TESTS round 54: what changed, how to try it, and the [H] questions for each item. Ask in it whether
+  testers have a Cosmos, Pico, WMR first-gen or Vive wands.
+- [ ] **F3** Leave everything in order:
+  - STATUS updated, everything committed, the game not running;
+  - `tools/deploy.ps1 undeploy`, then `& .\tools\deploy.ps1 deploy -PlayerAgreed` with no `-Set`: the shipped
+    defaults, so the player's install works with the new build;
+  - `tools/package.ps1` builds the packages at the current version. Don't bump it and don't publish.
+  - Say all of this in STATUS: the player reruns the setup or publishes after their headset round.

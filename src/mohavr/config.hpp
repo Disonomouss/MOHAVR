@@ -155,6 +155,9 @@ bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: it
     bool  steadyLanding     = true;   // [Camera] SteadyLanding -- the parachute landing's camera animation left out
     float minEyeHeight      = 0.0f;   // [Camera] MinEyeHeight -- cm: the view is kept at least this high above the pawn's
                                       // feet (0 = off; GOAL B: the parachute landing's roll took it into the ground)
+    bool  physicalCrouch    = false;  // [Controls] PhysicalCrouch -- the game's crouch follows the real head (GOAL A1, D61;
+                                      // the menu's General tab overrides it live through hdr->crouchMode)
+    float crouchDepth       = 0.40f;  // [Controls] CrouchDepth -- metres the head must drop below the standing origin
     bool xrEnabled      = false;  // [OpenXR]  Enabled -- start an OpenXR session after device creation (M2)
     std::wstring iniPath;         // MOHAVR.ini next to the DLL (the per-gun [ManualReload] lines)
     std::wstring xrRuntimeJson;   // [OpenXR]  RuntimeJson -- if set, XR_RUNTIME_JSON for this process only (D3)

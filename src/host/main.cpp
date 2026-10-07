@@ -1063,6 +1063,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         }
 
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
+        // Physical crouch (GOAL A1): the game side bumps crouchReqSeq once per stance toggle it wants -- one pulse of the
+        // game's crouch each (its own retry if the stance doesn't change).
+        static std::uint16_t seenCrouchReq = g_hdr->crouchReqSeq;
+        if (controllers && g_hdr->crouchReqSeq != seenCrouchReq) {
+            seenCrouchReq = g_hdr->crouchReqSeq;
+            pad.PulseCrouch();
+            MLOG("host: crouch request %u -- the game's crouch pulsed", static_cast<unsigned>(seenCrouchReq));
+        }
         if (controllers)
             pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
                        menuOk && menu.Visible(), menuOk ? menu.SnapTurnDegrees() : 0, g_hdr);

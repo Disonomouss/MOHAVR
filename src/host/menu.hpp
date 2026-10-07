@@ -199,6 +199,7 @@ private:
     shared::GunFit          fit_{}, fitDefault_{};    // current; the shipped defaults (MOHAVR.ini)
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
+    bool                    crouch_ = false;  // physical crouch (GOAL A1)
     bool                    manualReload_ = false;
     bool                    rackEject_ = false, rackEjectKeep_ = false;
     bool                    offHandNade_ = false;

@@ -26,6 +26,7 @@
 #include "config.hpp"
 #include "crash_dump.hpp"
 #include "reload.hpp"
+#include "script_call.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -1070,6 +1071,133 @@ void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
 }
 
 // --- the view merge hook ------------------------------------------------------------------------
+// [Controls] PhysicalCrouch (GOAL A1, D61): the game's crouch follows the real head. Crouching for real used to lower only
+// the view (the head's drop is added to the game camera); the pawn stayed standing, too tall for cover, until the stick.
+// Eye 0, once per frame: the head's drop below the position origin (metres; LOCAL has no floor, so the line is a drop, not
+// a share of the eye height) against CrouchDepth with 10 cm of hysteresis. The game's stance (the collision cylinder: 96
+// standing, 49 crouched) is the truth: a toggle is asked of the host (hdr->crouchReqSeq: it pulses Xbox X, the game's own
+// crouch) only when the stance differs, one at a time, and the answer is the stance seen to change. A change nobody asked
+// for is the stick's: the stick then has the stance until the head crosses the line again. While the crouch is the head's,
+// the eye must follow the real head, not the game's crouched camera plus the drop (the drop would count twice): the game's
+// own crouch drop (the standing camera height, learnt, less the camera's height now) is added back (g_crouchComp, every eye).
+struct CrouchState {
+    bool  phys = false;        // the game is crouched because the head is low (the compensation applies)
+    bool  manualHold = false;  // the stick changed the stance: no requests until the head crosses the line
+    bool  headLow = false;     // the head below the line (with the hysteresis)
+    bool  haveLast = false, lastCrouched = false;
+    int   pending = -1;        // a request in flight: 1 crouch, 0 stand
+    DWORD pendingSince = 0;
+    int   fails = 0;
+    float standCam = -1.0f;    // the game camera's height above the feet when standing (units, learnt)
+    DWORD settleUntil = 0;     // after the head's stand: the compensation fades with the rising camera
+    DWORD slowAt = 0;
+    bool  slowOk = true;       // no ladder, no mounted gun (the controller's state, at 4 Hz)
+    DWORD logAt = 0;           // a second after a stance change: the eye's height logged (the tests' measure)
+    DWORD learnAt = 0;         // the standing camera isn't learnt until the camera has settled after a stance change
+};
+CrouchState g_crouch;
+float g_crouchComp = 0.0f;     // units added to the camera's height this frame (both eyes)
+
+void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* loc) {
+    CrouchState& c = g_crouch;
+    g_crouchComp = 0.0f;
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    float feet = 0.0f, half = 0.0f;
+    if (!pawn || !g_viewIsPlayers || !PawnFeet(pawn, feet, half)) return;
+    const bool crouched = half < 72.0f;
+    const float camAbove = loc[2] - feet;
+    const int po = names::PropertyOffset(pawn, "Physics");
+    const bool walking = po >= 0 && *reinterpret_cast<const std::uint8_t*>(pawn + po) == 1;  // PHYS_Walking
+    const DWORD now = GetTickCount();
+    if (static_cast<LONG>(now - c.slowAt) >= 0) {
+        c.slowAt = now + 250;
+        const std::string st = names::StateName(script::Obj(pawn, "Controller"));
+        c.slowOk = st.find("Ladder") == std::string::npos && st.find("MG") == std::string::npos;
+    }
+    const bool ctxOk = walking && c.slowOk && !hdr->gameUiMenu && !g_landingHeld && script::Int(pawn, "Health", 0) > 0 &&
+                       !script::Bit(script::Obj(pawn, "Controller"), "bCinematicMode");
+    // The standing camera, learnt on the ground (it bobs a little as the pawn walks).
+    if (!crouched && ctxOk && camAbove > 100.0f && camAbove < 250.0f && static_cast<LONG>(now - c.learnAt) >= 0)
+        c.standCam = c.standCam < 0.0f ? camAbove : c.standCam * 0.98f + camAbove * 0.02f;
+
+    const float drop = (g_cfg.headPosition && g_haveOrigin) ? g_oy - head.py : 0.0f;
+    const float depth = g_cfg.crouchDepth;
+    const bool wasLow = c.headLow;
+    if (!c.headLow && drop > depth) c.headLow = true;
+    else if (c.headLow && drop < depth - 0.10f) c.headLow = false;
+    if (c.headLow != wasLow && c.manualHold) {
+        c.manualHold = false;
+        MLOG("crouch: the head crossed the line (%.2f m down) -- following it again", drop);
+    }
+    // Down past the line with the game already crouched (the stick's): the crouch becomes the head's (the eye follows the
+    // real head, and standing up stands the game up).
+    const std::uint16_t mode0 = hdr->crouchMode;
+    if (c.headLow && !wasLow && crouched && !c.phys && (mode0 == 2 || (mode0 == 0 && g_cfg.physicalCrouch))) {
+        c.phys = true;
+        c.logAt = now + 1000;
+        MLOG("crouch: the head went down with the game already crouched -- the crouch is the head's now");
+    }
+
+    // The stance changed: ours, or the stick's.
+    if (c.haveLast && crouched != c.lastCrouched) {
+        if (c.pending == (crouched ? 1 : 0)) {
+            MLOG("crouch: the game %s (the head %.2f m down)", crouched ? "crouched" : "stood up", drop);
+            c.pending = -1;
+            c.fails = 0;
+            if (!crouched && c.phys) c.settleUntil = now + 1500;
+            c.phys = crouched;
+        } else {
+            if (c.phys && !crouched) c.settleUntil = now + 1500;
+            c.phys = false;
+            c.pending = -1;
+            c.manualHold = true;
+            MLOG("crouch: the stick %s -- it has the stance until the head crosses the line (now %.2f m down)",
+                 crouched ? "crouched" : "stood up", drop);
+        }
+    }
+    if (c.haveLast && crouched != c.lastCrouched) c.logAt = now + 1000, c.learnAt = now + 1500;
+    c.haveLast = true;
+    c.lastCrouched = crouched;
+
+    const std::uint16_t mode = hdr->crouchMode;
+    const bool on = mode == 2 || (mode == 0 && g_cfg.physicalCrouch);
+    if (c.pending >= 0 && static_cast<LONG>(now - c.pendingSince) > 1200) {
+        c.pending = -1;
+        if (++c.fails >= 3) {
+            c.fails = 0;
+            c.manualHold = true;
+            MLOG("crouch: three requests without a stance change -- waiting for the head to cross the line again");
+        }
+    }
+    if (on && ctxOk && c.pending < 0 && !c.manualHold) {
+        int want = -1;
+        if (c.headLow && !crouched) want = 1;
+        else if (!c.headLow && crouched && c.phys) want = 0;
+        if (want >= 0) {
+            c.pending = want;
+            c.pendingSince = now;
+            const std::uint16_t seq = static_cast<std::uint16_t>(hdr->crouchReqSeq + 1);
+            hdr->crouchReqSeq = seq;
+            MLOG("crouch: the head %.2f m down (line %.2f m) -- asking the host to %s (request %u)", drop, depth,
+                 want ? "crouch" : "stand up", seq);
+        }
+    }
+    // The eye follows the real head while the crouch is the head's (and while the camera rises after its stand).
+    if ((c.phys && crouched) || static_cast<LONG>(c.settleUntil - now) > 0) {
+        if (c.standCam > 0.0f) g_crouchComp = std::fmin(std::fmax(c.standCam - camAbove, 0.0f), 100.0f);
+        if (!c.phys && g_crouchComp < 0.5f) c.settleUntil = now;
+    }
+    if (c.logAt && static_cast<LONG>(now - c.logAt) >= 0) {
+        c.logAt = 0;
+        const float live = hdr->unitsPerMeter, s = (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter;
+        const float h = hdr->heightOffset, headUp = (-drop + ((h > -1.0f && h < 1.0f) ? h : 0.0f)) * s;
+        MLOG("crouch: settled %s -- the eye %.1f cm above the feet (the game camera %.1f, compensation %.1f; the head %.2f m "
+             "down; the standing camera %.1f)", crouched ? (c.phys ? "crouched (the head's)" : "crouched (the stick's)") : "standing",
+             (camAbove + g_crouchComp + headUp) * 100.0f / s, camAbove * 100.0f / s, g_crouchComp * 100.0f / s, drop,
+             c.standCam * 100.0f / s);
+    }
+}
+
 void OnViewPoint(SafetyHookContext& ctx) {
     g_thisViewActive = false;
     shared::Header* hdr = bridge::SharedHeader();
@@ -1132,6 +1260,10 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
 
     if (g_cfg.steadyLanding) SteadyLanding(ctx.edi, loc, rot);
+
+    // Physical crouch (GOAL A1): decided once per frame; its compensation raises every eye alike.
+    if (g_thisEye == 0) PhysicalCrouch(hdr, head, loc);
+    if (g_crouchComp > 0.0f) loc[2] += g_crouchComp;
 
     // Camera.MinEyeHeight (GOAL B, "you clip into the ground when landing"): the parachute's botched landing rolls the
     // arms' Cam socket down to the floor, and in VR the view keeps the head's orientation, so the eye looked out from

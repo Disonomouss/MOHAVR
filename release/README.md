@@ -140,6 +140,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - The red dot
   - Frame pacing
   - Recentre
+  - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
 - **Weapons**
   - Gun fit (fit each gun to your hand and line up its aim)
   - Manual reload, Pouch reload

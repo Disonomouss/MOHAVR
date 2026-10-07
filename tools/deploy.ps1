@@ -62,7 +62,9 @@ switch ($Action) {
             $h = Hash $target
             # Ours if it's what we last deployed, or byte-identical to the current build (an interrupted
             # deploy). Anything else belongs to someone else: never overwrite it.
-            if ((-not $s -or $s.dllHash -ne $h) -and $h -ne (Hash $src)) {
+            # With -PlayerAgreed, the player's own MOHAVR install (its dll carries MOHAVR's marker) may be tested over.
+            $mohavrDll = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($target)) -match 'MOHAVR-host\.exe'
+            if ((-not $s -or $s.dllHash -ne $h) -and $h -ne (Hash $src) -and -not ($PlayerAgreed -and $installed -and $mohavrDll)) {
                 throw "a dinput8.dll that MOHAVR did not deploy is already in $bin -- refusing to overwrite it"
             }
         }

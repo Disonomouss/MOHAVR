@@ -2122,6 +2122,23 @@ screen."
 3. Did a grenade ever come out when you meant the menu? (yes/no)
 4. Their `MOHAVR-host.log`: the lines "HP Reverb G2 controller profile:", "bound as", and "the wrist's menu button".
 
+## Round 54: prepared 2026-10-08, GOAL.md (crouch, comfort, compatibility, the known issues, mounted guns, the sweep)
+_Filled in item by item as the goal runs; F2 completes it._
+
+### A1 Physical crouch (menu -> General -> Physical crouch: on)
+**Changed:** crouch for real and the game crouches too: you fit behind low cover and the eye stays where your head is.
+Stand up and the game stands. The stick click still crouches; it has the say until your head crosses the line again.
+Recentre standing first (the line is 40 cm below where your head was at the recentre; `[Controls] CrouchDepth`).
+
+**How to try it:** turn it on, recentre standing, crouch behind a low wall, stand, crouch again. Then try the stick
+click while standing, and while crouched for real.
+
+**Questions:**
+1. Does the game crouch when you crouch, and stand when you stand? (yes/no)
+2. Does it ever crouch by accident: leaning in, looking down, picking something up? (yes/no; when?)
+3. Is 40 cm down the right depth? (deeper / shallower / right)
+4. Does the view stay at your real head height through the crouch (no jump or dip)? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

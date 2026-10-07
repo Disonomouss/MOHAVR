@@ -652,6 +652,9 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         maskedHeld_ = 0;
     }
 
+    // Physical crouch (GOAL A1): the game side asked for a stance toggle -- the game's own crouch, Xbox X, for a moment.
+    if (now_ < crouchUntil_ && !hdr->gameUiMenu && !neutral) p.buttons |= 0x4000;
+
     // Snap turn: a flick past 70% = one step; the stick must come back under 30% before the next.
     if (snapDeg > 0) {
         const float x = static_cast<float>(p.thumbRX) / 32767.0f;
