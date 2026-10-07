@@ -18,8 +18,21 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
-**GOAL.md (2026-10-08, running):** crouch, comfort, compatibility, the known issues, mounted guns, a mission sweep.
-Done: A1 physical crouch (D61, shipped off), A2 the vignette (D62, shipped off), A3 seated (D63, shipped off), B1 the capabilities log (D64), B2 the RGBA swapchain fallback (D65), B3 more controllers bound (D66), C1 the wrist panels dim behind the gun (D67), C2 the HUD in the mirror (D68), C3 falls stop at walls and tables (D69), C4 the StG44's dust cover WONTFIX (D70), D mounted MG42s the game's way (D71, MOUNTED-DESIGN.md), E the mission sweep (D72, work/research/goal/sweep.md: 7 of 7 maps load; a fallback round). Questions for the headset collect in HEADSET-TESTS round 54.
+**GOAL.md (2026-10-08) DONE:** every item DONE or WONTFIX with its evidence in GOAL.md.
+- **A comfort and stance:** physical crouch (D61), the vignette (D62), seated (D63). All three ship **off**; the menu's
+  General tab turns them on.
+- **B compatibility:** the capabilities log (D64), the RGBA swapchain fallback (D65), more controllers bound directly
+  (D66: Vive Cosmos, Pico 4, first-generation WMR, Vive wands).
+- **C the known issues:** the wrist panels dim behind the gun (D67), the HUD in the mirror (D68), falls stop at walls and
+  tables (D69); the StG44's dust cover is WONTFIX (D70).
+- **D mounted MG42s** the game's way, the head aiming (D71, MOUNTED-DESIGN.md; aiming with the hands designed, not
+  built).
+- **E the mission sweep** (D72, work/research/goal/sweep.md): 7 of 7 maps load; a fallback round (RackRoundAlt).
+- **For the player:** HEADSET-TESTS round 54 has the questions. The shipped defaults (this build) are **deployed** over the
+  player's own install (`deploy.ps1 -PlayerAgreed`, no `-Set`); the 4 GB flag stays as their setup left it.
+  `dist\MOHAVR-0.8.3-*` were rebuilt from this build at the same version, so they no longer match the published 0.8.3.
+  Not pushed or published: the player decides, after the headset round. To go back to the released 0.8.3, rerun the
+  setup from GitHub.
 **0.8.2** (published 2026-10-07): the EA copy (D58) and the Reverb G2's controllers bound directly (D59). The tester's G2
 worked. **0.8.3** (published 2026-10-07): the wrist as a menu button (D60: wrist HUD up + hold X = the MOHAVR
 menu, tap = pause), for runtimes that keep the menu button (SteamVR on the G2); HEADSET-TESTS round 53 for the tester.

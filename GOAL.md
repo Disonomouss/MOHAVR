@@ -227,9 +227,13 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
 
   **DONE:** HEADSET-TESTS round 54 -- A1-A3, B (testers' devices and runtimes, their logs), C1-C3, D, E, with what changed,
   how to try it and the questions.
-- [ ] **F3** Leave everything in order:
+- [x] **F3** Leave everything in order:
   - STATUS updated, everything committed, the game not running;
   - `tools/deploy.ps1 undeploy`, then `& .\tools\deploy.ps1 deploy -PlayerAgreed` with no `-Set`: the shipped
     defaults, so the player's install works with the new build;
   - `tools/package.ps1` builds the packages at the current version. Don't bump it and don't publish.
   - Say all of this in STATUS: the player reruns the setup or publishes after their headset round.
+
+  **DONE:** the game not running; `deploy.ps1 undeploy`, then `deploy -PlayerAgreed` with no `-Set`: `dinput8.dll present
+  (MOHAVR) ... ini overrides:` (none), the ini identical to the shipped one, the dll and host identical to the build;
+  `package.ps1` built `MOHAVR-0.8.3.zip` and `MOHAVR-0.8.3-Setup.exe` (not bumped, not published); STATUS says so.
