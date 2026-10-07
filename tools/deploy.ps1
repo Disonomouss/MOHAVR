@@ -22,7 +22,8 @@
 #>
 param(
     [Parameter(Mandatory, Position = 0)][ValidateSet('deploy', 'undeploy', 'status')] [string] $Action,
-    [string[]] $Set = @()
+    [string[]] $Set = @(),
+    [switch] $PlayerAgreed  # deploy over the player's own install (they said so; they reinstall afterwards)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +52,8 @@ switch ($Action) {
             @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
               Where-Object { $_.PSChildName -eq '{546DE66D-2985-4665-AC46-5B89E0AB9D47}_is1' -and
                              (Get-ItemProperty $_.PSPath).InstallLocation.TrimEnd('\') -eq $gameDir.TrimEnd('\') }).Count -gt 0
-        if ($installed) { throw "the player's own MOHAVR install is in $bin (setup or zip) -- not deploying over it; ask the player" }
+        if ($installed -and -not $PlayerAgreed) { throw "the player's own MOHAVR install is in $bin (setup or zip) -- not deploying over it; ask the player (-PlayerAgreed)" }
+        if ($installed) { Write-Host "  over the player's own install (-PlayerAgreed): they reinstall with the setup afterwards" }
         $src = Join-Path $root 'build\x86\dinput8.dll'
         if (-not (Test-Path $src)) { throw 'build\x86\dinput8.dll not found -- run tools\build.ps1' }
         $s = Load-State

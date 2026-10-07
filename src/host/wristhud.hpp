@@ -63,6 +63,9 @@ public:
         HudSettings set;
     };
     void Update(const In& in);
+    // D60: the gate is open this frame (the off hand palm down and looked at, or always; whichever HUD place): the off hand's
+    // lower face button is then the MOHAVR menu's (main.cpp).
+    bool PanelsUp() const { return want_ && panelsOn_; }
     // This frame's layers (the rest quad, then the two panels), at most `max`; returns how many were written.
     int Layers(XrSpace local, XrSpace view, const XrCompositionLayerBaseHeader** out, int max, bool panelsAllowed = true);
     // Diagnostics: the last HUD texture taken and the composed atlas.

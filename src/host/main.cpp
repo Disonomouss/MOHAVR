@@ -486,6 +486,16 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     }();
     float menuBtnHeld = 0.0f;
     bool menuBtnFired = false;
+    // D60: a second way to the MOHAVR menu, for controllers whose menu button the runtime keeps (SteamVR's dashboard on the
+    // Reverb G2): with the wrist HUD up (the off hand palm down, looked at), the off hand's lower face button (X; A in
+    // left-handed mode) works as the menu button does: held for MenuHoldSeconds = the MOHAVR menu, a tap = the game's Start;
+    // while the MOHAVR menu is open, either closes it. A press that starts with the gate open (or the menu open) is kept
+    // from the game (X's grenade) until let go. [Controls] WristMenu=0 turns it off.
+    const bool wristMenuOn = GetPrivateProfileIntW(L"Controls", L"WristMenu", 1, (ExeDir() + L"\\MOHAVR.ini").c_str()) != 0;
+    float wristBtnHeld = 0.0f;
+    bool wristBtnOwned = false, wristBtnFired = false, wristBtnWas = false;
+    int wristHand = 0;      // the off hand, from the last frame's wrist HUD input
+    bool wristGate = false;  // the last frame's wrist gate
     // The flat screen for frames without a view (menus, cutscenes, loading): [Camera] ScreenDistance /
     // ScreenWidth in metres, world-locked in front of LOCAL (follows Recentre).
     auto iniFloat = [&](const wchar_t* key, float def, float lo, float hi) {
@@ -611,6 +621,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 lagN = 0;
             }
         }
+        // The frame's test state first: the wrist's menu button below reads the controllers (D60) as the pad's mapping does.
+        if (controllers) pad.BeginFrame(static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
         mohavr::host::MenuInput mi;
         {
             const XrActiveActionSet active[] = {{menuSet, XR_NULL_PATH}, {pad.Set(), XR_NULL_PATH}};
@@ -643,6 +655,36 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         }
                         menuBtnHeld = 0.0f;
                         menuBtnFired = false;
+                    }
+                    if (wristMenuOn) {
+                        const bool down = pad.FaceButton(session, wristHand, false) > 0.5f;
+                        const bool menuOpen = menuOk && menu.Visible();
+                        if (down && !wristBtnWas && (wristGate || menuOpen)) {
+                            wristBtnOwned = true;
+                            MLOG("host: %s pressed with %s -- the wrist's menu button (held %.1f s toggles the MOHAVR menu)",
+                                 wristHand ? "A" : "X", menuOpen ? "the MOHAVR menu open" : "the wrist HUD up", menuHoldSec);
+                        }
+                        if (down && wristBtnOwned) {
+                            wristBtnHeld += dt;
+                            if (!wristBtnFired && wristBtnHeld >= menuHoldSec) {
+                                mi.toggle = true;
+                                wristBtnFired = true;
+                                MLOG("host: the wrist's menu button held -- MOHAVR menu %s", menuOpen ? "closed" : "opened");
+                            }
+                        }
+                        if (!down) {
+                            // A tap, like the menu button's: the game's Start (its pause menu); the MOHAVR menu closed if open.
+                            if (wristBtnOwned && !wristBtnFired && wristBtnHeld > 0.0f) {
+                                if (menuOpen) mi.toggle = true;
+                                else pad.PulseStart();
+                                MLOG("host: the wrist's menu button tapped -- %s", menuOpen ? "MOHAVR menu closed" : "the game's Start");
+                            }
+                            wristBtnOwned = wristBtnFired = false;
+                            wristBtnHeld = 0.0f;
+                        }
+                        wristBtnWas = down;
+                        pad.SetWristMasked(wristHand, wristBtnOwned);
+                        pad.SetWristMasked(1 - wristHand, false);
                     }
                 } else {
                     mi.toggle = pressed(aToggle);
@@ -696,7 +738,6 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             MLOG("host: test command '%s'", c.c_str());
         }
 
-        if (controllers) pad.BeginFrame(static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
         for (std::uint32_t e : pad.TakeTestReload())
             manualReload.Queue(e, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart));
 
@@ -1180,6 +1221,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             win.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
             if (menuOk) win.set = menu.Hud();
             wrist.Update(win);
+            wristHand = win.offHand;
+            wristGate = wrist.PanelsUp();
         }
 
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};

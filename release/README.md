@@ -1,4 +1,4 @@
-# MOHAVR 0.8.2: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.3: VR for Medal of Honor: Airborne
 
 MOHAVR turns the PC version of *Medal of Honor: Airborne* (Steam or the EA app) into a VR game. You get a stereo,
 head-tracked view, motion controllers with guns held in your hands, and physical interactions: holsters on your body,
@@ -18,7 +18,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 
 ## Install
 
-**Setup program (recommended):** run `MOHAVR-0.8.2-Setup.exe`.
+**Setup program (recommended):** run `MOHAVR-0.8.3-Setup.exe`.
 - It finds the game through Steam or the EA app. If it can't, browse to the game's folder: the one that contains
   `UnrealEngine3\Binaries\MOHA.exe`.
 - It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
@@ -31,7 +31,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 - Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
   "More info", then "Run anyway".
 
-**Zip (manual):** unzip `MOHAVR-0.8.2.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
+**Zip (manual):** unzip `MOHAVR-0.8.3.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
 Steam nor the EA app knows about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag
 (`-Keep2GB` leaves `MOHA.exe` alone). The EA app installs under Program Files: right-click `install.cmd` (and later
 `uninstall.cmd`) and choose "Run as administrator".
@@ -64,6 +64,7 @@ shows the game normally instead of staying white, the mod isn't running: check t
 | X | Throw a grenade (the game's way) |
 | Left menu button (tap) | Pause |
 | Left menu button (hold) | MOHAVR menu |
+| Look at the wrist HUD, then X (tap / hold) | Pause / MOHAVR menu (for controllers whose menu button the VR runtime keeps, like the Reverb G2 under SteamVR) |
 
 You aim by pointing the gun: a red dot shows where shots land. In the game's menus the face buttons work as
 labelled: A selects, B goes back. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
@@ -125,8 +126,9 @@ Switch it to a panel in front of you in the menu's HUD tab.
 
 ## The in-headset menu
 
-Hold the left menu button to open it. The left stick moves and changes values, the trigger or A selects, and B goes
-back or closes. Up from the first item reaches the tabs.
+Hold the left menu button to open it. Or turn the off hand palm down, look at the wrist HUD and hold X (A when the gun
+is in your left hand); while the menu is open, a tap of X closes it. The left stick moves and changes values, the
+trigger or A selects, and B goes back or closes. Up from the first item reaches the tabs.
 
 - **General**
   - World scale (higher = smaller world)

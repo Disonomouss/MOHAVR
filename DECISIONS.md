@@ -985,3 +985,23 @@ with the vr mod?"
   `WaitForExit`, which threw "Access is denied" once.
 **Why:** the player (2026-10-07): "A tester is using Reverb G2 with Oasis drivers (Native SteamVR headset). Will it be
 compatible?" -- "Do it".
+
+### D60. The wrist as a menu button -- Decided 2026-10-07
+- **Why:** the tester's Reverb G2 (D59) works, but its left menu button doesn't reach the game: SteamVR keeps it (its
+  dashboard). Without it there is neither the MOHAVR menu (hold) nor the game's pause (tap). The player: "Lay palm flat to
+  bring up hud, then hold X." Index users had the same gap: the menu's toggle was never bound for Index (no menu button).
+- **What:** while the wrist HUD's gate is open (`WristHud::PanelsUp`: the off hand palm down, facing and looked at, or
+  "always" facing), the off hand's lower face button (X; A in left-handed mode) works as the menu button does. Held for
+  `MenuHoldSeconds` it opens the MOHAVR menu; a tap is the game's Start. While the MOHAVR menu is open, either closes it.
+  The gate works whichever HUD place is chosen. A press that starts with the gate open (or the menu open) is kept from the
+  game until let go (`Pad::SetWristMasked`: X's grenade). A press that starts with the gate closed is the game's as before.
+  `[Controls] WristMenu` (1, shipped). `pad.BeginFrame` (the frame's test state) moved ahead of the menu input, so the
+  wrist button and the pad's mapping read the same state in the same frame. Before this, a test press leaked to the game
+  for one frame; real controllers were never affected. `PulseStart` now also uses this frame's time.
+- **Proven [S]** (simulator, the EA copy, the wrist test pose): A, wrist up, hold X 1 s -> "MOHAVR menu opened", no
+  weapon change. B, menu open, tap X -> closed (X held over the menu kept from the game). C, wrist up, tap X -> "the
+  game's Start", the game's pause menu. D, looking away with the hand down, tap X -> the game's grenade, the gesture not
+  engaged. **[H]:** HEADSET-TESTS round 53 (the tester's G2).
+- **Also:** `deploy.ps1 -PlayerAgreed` deploys over the player's own install when they've said so (they reinstall after).
+**Why:** the player (2026-10-07): "It worked for them, we need another way to open the mod menu. Lay palm flat to bring up
+hud, then hold X."

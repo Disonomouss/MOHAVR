@@ -2100,6 +2100,28 @@ screen."
 
 ---
 
+## Round 53: prepared 2026-10-07, the wrist as a menu button (a tester's Reverb G2)
+**Your request:** "It worked for them, we need another way to open the mod menu. Lay palm flat to bring up hud, then hold X."
+(The tester plays on a Reverb G2 through SteamVR with the Oasis driver; SteamVR keeps the left menu button.)
+
+**Changed (0.8.3):**
+- With the wrist HUD up (the off hand palm down, looked at), **X works as the menu button**: **hold** it = the MOHAVR
+  menu, **tap** it = the game's pause. While the MOHAVR menu is open, a tap or a hold of X closes it. In left-hand mode it's A
+  (the wrist HUD is then on the right wrist). The press doesn't also throw a grenade; X anywhere else still does.
+- `[Controls] WristMenu=0` in MOHAVR.ini turns it off.
+
+**How to try it (the tester):**
+1. In gameplay, turn the left forearm palm down across the chest and look at it: the wrist panels appear.
+2. Hold X: the MOHAVR menu opens after about half a second. Tap X: it closes.
+3. Look at the wrist again and tap X: the game's pause menu.
+4. Look away and press X: a grenade, as before.
+
+**Questions:**
+1. Does holding X at the wrist open the menu every time? (yes/no; if not, what were you doing?)
+2. Does a tap pause the game? (yes/no)
+3. Did a grenade ever come out when you meant the menu? (yes/no)
+4. Their `MOHAVR-host.log`: the lines "HP Reverb G2 controller profile:", "bound as", and "the wrist's menu button".
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
