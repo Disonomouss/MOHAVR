@@ -2146,6 +2146,13 @@ and out in 0.2 s; the menu, the HUD and the red dot stay above it.
 1. Does it help with comfort when walking and turning? (yes/no)
 2. Light or strong: which would you keep on, and is the clear area too small or too large?
 3. Is the fade too quick, too slow, or right?
+### A3 Seated (menu -> General -> Seated: on)
+**Changed:** sit down, then menu -> Recentre: your seated head becomes the game's standing height (that works with
+Seated off too). With Seated on, physical crouch needs only a 25 cm lean from the chair.
+
+**Questions:**
+1. Seated and recentred, is the game's eye height right (a standing soldier)? (yes/no)
+2. With physical crouch on too, does leaning forward/down crouch, and sitting up stand? Too sensitive? (yes/no)
 
 ## Template
 

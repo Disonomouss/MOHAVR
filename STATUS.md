@@ -19,7 +19,7 @@ The build check knows both; on the EA copy the IAT hooks wait for the game's ent
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
 **GOAL.md (2026-10-08, running):** crouch, comfort, compatibility, the known issues, mounted guns, a mission sweep.
-Done: A1 physical crouch (D61, shipped off), A2 the vignette (D62, shipped off). Questions for the headset collect in HEADSET-TESTS round 54.
+Done: A1 physical crouch (D61, shipped off), A2 the vignette (D62, shipped off), A3 seated (D63, shipped off). Questions for the headset collect in HEADSET-TESTS round 54.
 **0.8.2** (published 2026-10-07): the EA copy (D58) and the Reverb G2's controllers bound directly (D59). The tester's G2
 worked. **0.8.3** (published 2026-10-07): the wrist as a menu button (D60: wrist HUD up + hold X = the MOHAVR
 menu, tap = pause), for runtimes that keep the menu button (SteamVR on the G2); HEADSET-TESTS round 53 for the tester.

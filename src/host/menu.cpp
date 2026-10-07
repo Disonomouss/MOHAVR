@@ -22,7 +22,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
@@ -32,7 +32,7 @@ constexpr int kTabMax = 24;
 // (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
 // Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
 const int kTabItems[kTabCount][kTabMax] = {
-    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kClose, -1},
+    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kClose, -1},
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
      kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
@@ -228,7 +228,10 @@ void Menu::ApplySavedSettings() {
     // game through hdr->crouchMode (1 off, 2 on).
     const int defCrouch = static_cast<int>(GetPrivateProfileIntW(L"Controls", L"PhysicalCrouch", 0, shipped.c_str()));
     crouch_ = GetPrivateProfileIntW(L"Controls", L"PhysicalCrouch", defCrouch, iniPath_.c_str()) != 0;
-    if (hdr_) hdr_->crouchMode = crouch_ ? 2 : 1;
+    // Seated (GOAL A3): likewise the shipped [Comfort] Seated; live through crouchMode's bits 2-3.
+    const int defSeated = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Seated", 0, shipped.c_str()));
+    seated_ = GetPrivateProfileIntW(L"Comfort", L"Seated", defSeated, iniPath_.c_str()) != 0;
+    if (hdr_) hdr_->crouchMode = CrouchWord();
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
     vignette_ = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", defVig, iniPath_.c_str())), 0, 2);
@@ -974,13 +977,18 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             if (hdr_) hdr_->pace = pacing_ ? 1u : 0u;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Bridge", L"Pace", pacing_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: frame pacing -> %s", pacing_ ? "on (one game frame per headset frame)" : "off (the game runs uncapped)");
+        } else if (item == kSeated) {
+            seated_ = !seated_;
+            if (hdr_) hdr_->crouchMode = CrouchWord();
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Comfort", L"Seated", seated_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: seated -> %s", seated_ ? "on (a shallower crouch line; recentre seated)" : "off");
         } else if (item == kVignette) {
             vignette_ = (vignette_ + (in.right ? 1 : 2)) % 3;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Comfort", L"Vignette", std::to_wstring(vignette_).c_str(), iniPath_.c_str());
             MLOG("menu: vignette -> %s", vignette_ == 0 ? "none" : vignette_ == 1 ? "light" : "strong");
         } else if (item == kCrouch) {
             crouch_ = !crouch_;
-            if (hdr_) hdr_->crouchMode = crouch_ ? 2 : 1;
+            if (hdr_) hdr_->crouchMode = CrouchWord();
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Controls", L"PhysicalCrouch", crouch_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: physical crouch -> %s", crouch_ ? "on (the game crouches when you do)" : "off (the stick crouches)");
         } else if (item == kReload) {
@@ -1213,6 +1221,11 @@ void Menu::Render() {
                 note("on = one game frame per headset frame");
                 break;
             case kRecenter: ImGui::Selectable("Recentre (face forward, here)", sel); break;
+            case kSeated:
+                snprintf(label, sizeof(label), "Seated           <  %s  >", seated_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("sit, then Recentre: your seated head becomes standing height");
+                break;
             case kVignette:
                 snprintf(label, sizeof(label), "Vignette         <  %s  >", vignette_ == 0 ? "none" : vignette_ == 1 ? "light" : "strong");
                 ImGui::Selectable(label, sel);

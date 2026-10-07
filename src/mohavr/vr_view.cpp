@@ -192,6 +192,7 @@ void ForceVrSettings() {
 
 // Translation origin (OpenXR LOCAL), taken from the first TRACKED head pose (see OnViewPoint).
 bool  g_haveOrigin = false;
+bool  g_originTaken = false;  // set with each new origin (the crouch's settled line logs the eye after it: GOAL A3)
 float g_ox = 0, g_oy = 0, g_oz = 0;
 
 // M7: how the player's last head-tracked view mapped LOCAL into the world (game thread; PoseToWorld).
@@ -243,6 +244,7 @@ void UpdateOrigin(const shared::Header* hdr, std::uint32_t recenterSeq, const sh
         MLOG("view: head position origin %s at (%.3f %.3f %.3f) m", g_haveOrigin ? "RECENTRED (head >1 m from origin)" : "set",
              head.px, head.py, head.pz);
         g_haveOrigin = true;
+        g_originTaken = true;
         g_ox = head.px; g_oy = head.py; g_oz = head.pz;
     }
 }
@@ -1121,7 +1123,16 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
         c.standCam = c.standCam < 0.0f ? camAbove : c.standCam * 0.98f + camAbove * 0.02f;
 
     const float drop = (g_cfg.headPosition && g_haveOrigin) ? g_oy - head.py : 0.0f;
-    const float depth = g_cfg.crouchDepth;
+    // Seated (GOAL A3, D63; hdr->crouchMode bits 2-3 from the menu, 0 = the ini's [Comfort] Seated): a shallower line --
+    // from a chair the head can't drop 40 cm.
+    const std::uint16_t seatedMode = static_cast<std::uint16_t>((hdr->crouchMode >> 2) & 3u);
+    const bool seated = seatedMode == 2 || (seatedMode == 0 && g_cfg.seated);
+    const float depth = seated ? g_cfg.seatedCrouchDepth : g_cfg.crouchDepth;
+    if (g_originTaken) {
+        g_originTaken = false;
+        c.logAt = now + 1000;  // the eye's height after a recentre (the tests' measure)
+        c.headLow = false;
+    }
     const bool wasLow = c.headLow;
     if (!c.headLow && drop > depth) c.headLow = true;
     else if (c.headLow && drop < depth - 0.10f) c.headLow = false;
@@ -1131,7 +1142,7 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
     }
     // Down past the line with the game already crouched (the stick's): the crouch becomes the head's (the eye follows the
     // real head, and standing up stands the game up).
-    const std::uint16_t mode0 = hdr->crouchMode;
+    const std::uint16_t mode0 = static_cast<std::uint16_t>(hdr->crouchMode & 3u);
     if (c.headLow && !wasLow && crouched && !c.phys && (mode0 == 2 || (mode0 == 0 && g_cfg.physicalCrouch))) {
         c.phys = true;
         c.logAt = now + 1000;
@@ -1159,7 +1170,7 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
     c.haveLast = true;
     c.lastCrouched = crouched;
 
-    const std::uint16_t mode = hdr->crouchMode;
+    const std::uint16_t mode = static_cast<std::uint16_t>(hdr->crouchMode & 3u);
     const bool on = mode == 2 || (mode == 0 && g_cfg.physicalCrouch);
     if (c.pending >= 0 && static_cast<LONG>(now - c.pendingSince) > 1200) {
         c.pending = -1;
@@ -1192,9 +1203,9 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
         const float live = hdr->unitsPerMeter, s = (live > 1.0f && live < 1000.0f) ? live : g_cfg.unitsPerMeter;
         const float h = hdr->heightOffset, headUp = (-drop + ((h > -1.0f && h < 1.0f) ? h : 0.0f)) * s;
         MLOG("crouch: settled %s -- the eye %.1f cm above the feet (the game camera %.1f, compensation %.1f; the head %.2f m "
-             "down; the standing camera %.1f)", crouched ? (c.phys ? "crouched (the head's)" : "crouched (the stick's)") : "standing",
+             "down; the standing camera %.1f%s)", crouched ? (c.phys ? "crouched (the head's)" : "crouched (the stick's)") : "standing",
              (camAbove + g_crouchComp + headUp) * 100.0f / s, camAbove * 100.0f / s, g_crouchComp * 100.0f / s, drop,
-             c.standCam * 100.0f / s);
+             c.standCam * 100.0f / s, seated ? "; seated" : "");
     }
 }
 

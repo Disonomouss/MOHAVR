@@ -1046,3 +1046,20 @@ hud, then hold X."
   "vignette: in (moving by stick)" then "out". The captures' edge brightness was 30.7 still, **3.3 moving** and 30.5 after;
   the centre stayed lit, in both eyes. The XR frame stayed 11.11 ms (0 of 900 late). **[H]** round 54: the strength and the
   fade.
+
+### D63. Seated play -- Decided 2026-10-08 (GOAL A3)
+- **Found:** most of seated play was already there. The game side takes its height origin from the first tracked head
+  pose and again at every Recentre (the host's recentre keeps y; ENGINE-NOTES 5h). Sitting, then Recentre, makes the
+  seated head the game's standing eye, and the menu's Height still offsets it. GOAL's "Calibrate seated" item is
+  therefore the existing Recentre, not a second calibration. A saved offset wouldn't transfer between sessions anyway:
+  LOCAL's origin moves with each session.
+- **What's new:** `[Comfort] Seated` (shipped **0**) and the menu's General tab ("Seated", live through `crouchMode`
+  bits 2-3, no layout change). Seated, physical crouch (D61) uses `[Controls] SeatedCrouchDepth` (0.25 m): from a
+  chair the head can't drop 40 cm. The eye's height is logged a second after each new origin (the crouch's
+  "settled" line). The README and the menu's note say to sit, then Recentre.
+- **Proven [S]** (the EA copy, Seated=1, PhysicalCrouch=1):
+  - sitting down mid-game (the head 0.5 m down) crouched on the seated line (expected: sitting looks like a crouch);
+  - Recentre seated: the origin taken at 1.20 m, the game stood, the eye **160.9 cm** above the feet;
+  - leaning 0.30 m from the chair crouched (the eye 130.8, the real head), and sitting up stood;
+  - a jump: 711 ms in the air, the camera within 0.5 cm of the body, no crouch action.
+  The landing's MinEyeHeight is unchanged: the compensation is 0 when standing. **[H]** round 54.

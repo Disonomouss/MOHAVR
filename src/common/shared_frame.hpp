@@ -400,7 +400,7 @@ struct Header {
     volatile std::uint32_t hudPlace;              // 3036 1 screen (the head-locked per-eye panel), 2 wrist
     volatile float         hudScreen[3];          // 3040 the screen panel: distance, width, down (m)
     // 29, physical crouch (GOAL A1, D61): host -> game, live (the menu): 0 = not set (the game's [Controls] PhysicalCrouch),
-    // 1 off, 2 on; game -> host: bumped once per crouch toggle the game side wants (the host pulses Xbox X, the game's crouch)
+    // 1 off, 2 on; bits 2-3 seated (GOAL A3: the same values); game -> host: bumped once per crouch toggle the game side wants (the host pulses Xbox X, the game's crouch)
     volatile std::uint16_t crouchMode;            // 3052
     volatile std::uint16_t crouchReqSeq;          // 3054
     SlotHud                slotHud[kRing];        // 3056 game -> host, per slot, written with slotMeta (before publishedFrame)

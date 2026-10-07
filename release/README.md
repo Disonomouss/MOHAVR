@@ -141,6 +141,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Frame pacing
   - Recentre
   - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
+  - Seated (off by default): sit, then Recentre, and your seated head becomes standing height (true with it off too);
+    on, physical crouch needs only a 25 cm lean
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
 - **Weapons**
   - Gun fit (fit each gun to your hand and line up its aim)

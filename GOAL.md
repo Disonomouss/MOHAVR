@@ -83,12 +83,17 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
 
   **DONE** (D62; `logs/shots/vig-*.png`): strong, a 3 s stick walk -> `vignette: in (moving by stick)` / `out`; the edge
   brightness 30.7 still, 3.3 moving, 30.5 after, the centre lit in both eyes; the XR frame 11.11 ms (0 of 900 late).
-- [ ] **A3 Seated mode.** A height offset so a seated player gets the standing eye height.
+- [x] **A3 Seated mode.** A height offset so a seated player gets the standing eye height.
   - A "Calibrate seated" item in the menu: the current head height becomes the game's standing eye. It's saved in
     the player's ini.
   - It works together with A1 (crouch is relative to the calibrated height) and with `MinEyeHeight`.
   - `[Comfort] Seated=0`. **Proven [S]** with `sim_pose.py --y 1.2`: the eye at the standing height, and crouch,
     jumps and the landing unchanged.
+
+  **DONE** (D63): the origin already makes a seated head the standing eye after a Recentre (the "Calibrate" is the existing
+  Recentre); new: Seated (menu, ini) with SeatedCrouchDepth 0.25 m. [S]: sat (0.5 m down) -> crouched on the seated line;
+  Recentre seated -> `origin set at (0.000 1.200 0.000)`, stood, the eye 160.9 cm; a 0.30 m lean -> crouched (130.8, the
+  real head), up -> stood; a jump 711 ms, no crouch action; the landing path unchanged (no compensation standing).
 
 ## Track B: compatibility (other headsets and runtimes)
 - [ ] **B1 Capabilities log.** At start the host logs:
