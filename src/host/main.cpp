@@ -1351,6 +1351,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             win.offPose = handPose[win.offHand];
             win.offTracked = handsOk && (pad.TrackedBits() & (1u << win.offHand)) != 0;
             win.foregrip = handsOk && handsOut.twoHanded && handsOut.gunHand != win.offHand;
+            win.gunOk = handsOk && handsOut.gunValid && (handBits & (1u << handsOut.gunHand)) != 0;
+            if (win.gunOk) win.gunPose = handPose[handsOut.gunHand];
             win.head = menuHead;
             win.headOk = menuHeadOk;
             win.now = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);

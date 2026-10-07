@@ -1117,3 +1117,16 @@ hud, then hold X."
 - **Proven [S]:** the simulator accepted every suggestion (no "bindings not accepted"), still bound Touch ("bound as
   .../oculus/touch_controller"), and a harness cycle passed. SteamVR's `vrclient_x64.dll` on this PC names the Cosmos,
   WMR and Vive profiles and the Cosmos extension. **[H]:** a tester per device (round 54).
+
+### D67. The wrist panels dim behind the gun -- Decided 2026-10-08 (GOAL C1)
+- **Why:** the README's known issue: the panels draw over the gun or arm when those pass in front of the wrist. The panels
+  are composition quads, always over the game's image. `XR_KHR_composition_layer_depth` would need the game's depth
+  buffer, which the bridge doesn't share (only colour), and drawing the panels into the game's frame is a far larger change.
+- **What:** geometry the host already has. For each panel, samples along the gun hand's aim line, from 30 cm behind the
+  hand (the forearm) to 60 cm ahead (the barrel), every 5 cm, are tested against the eye's line to the panel's centre. A
+  sample within 8 cm of that line, between 5 % and 95 % of the way along it, puts the panel behind the gun. It dims to
+  15 % (not hidden: still readable through) at the panels' fade rates, and comes back when clear. `[HUD] WristOcclusion=1`:
+  a fix, on (GOAL rule 3).
+- **Proven [S]** (`logs/shots/c1-*.png`): the wrist panels up; the gun hand pointing across between the eyes and the
+  wrist logged "the left panel behind the gun -- dimmed", the same for the right; moved away, "clear of the gun again".
+  The capture shows the gun over the wrist with the panels faint, then the panels full again.

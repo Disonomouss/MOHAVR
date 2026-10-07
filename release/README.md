@@ -188,8 +188,8 @@ Most things are in the menu. A few you may want to change in the ini:
 
 - **StG44:** working the cocking handle doesn't open the ejection port. The game's model has the bolt and the dust
   cover built into the gun's body, so only the handle and its rod move.
-- **Wrist HUD:** the panels draw over the gun or arm when they pass in front of the wrist. The desktop mirror shows no
-  HUD in wrist mode.
+- **Wrist HUD:** the panels dim when the gun passes in front of them, but the off hand's own fingers can still show
+  through. The desktop mirror shows no HUD in wrist mode.
 - **Ejected rounds and objects:** a dropped magazine or an ejected round can show through a wall or table close by.
 - **Levels:** the knife and the ejected rounds use other guns' models from the game. They were checked in the first
   levels only.

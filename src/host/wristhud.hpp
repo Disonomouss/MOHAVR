@@ -57,6 +57,8 @@ public:
         XrPosef     offPose{};           // the off hand's aim pose now (LOCAL)
         bool        offTracked = false;  // really tracked
         bool        foregrip = false;    // the off hand holds the gun's foregrip (no pop-up then unless looked at)
+        XrPosef     gunPose{};           // GOAL C1: the gun hand's aim pose (LOCAL) -- the gun's line, the forearm behind it
+        bool        gunOk = false;       //   a gun in that hand, tracked
         XrPosef     head{};
         bool        headOk = false;
         double      now = 0.0;
@@ -119,6 +121,9 @@ private:
     float                     angleCos_ = 0.0f, lookCos_ = 0.0f;  // WristAngle, WristLook (deg -> cos)
     bool                      followDrawn_ = true;  // WristFollow=drawn (the arms' pose) | controller
     float                     fadeIn_ = 0.12f, fadeOut_ = 0.25f;
+    bool                      occlusion_ = true;          // [HUD] WristOcclusion (GOAL C1)
+    float                     occ_[2] = {1.0f, 1.0f};     // each panel's dimming behind the gun (1 clear)
+    bool                      occBehind_[2] = {};
 };
 
 }  // namespace mohavr::host

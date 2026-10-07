@@ -138,13 +138,17 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   and Vive profiles.
 
 ## Track C: the known issues (README "Known issues")
-- [ ] **C1 The wrist HUD over the gun or arm.** The panels are composition quads, always on top of the projection
+- [x] **C1 The wrist HUD over the gun or arm.** The panels are composition quads, always on top of the projection
   layer. Options, cheapest first:
   - fade the panels while the gun or the gun hand's arm is between the eyes and a panel (geometry from the poses
     the host already has);
   - `XR_KHR_composition_layer_depth`, if the runtime offers it;
   - draw the panels into the game's frame with depth.
   **Proven [S]** by a capture with the gun hand swept across the wrist.
+
+  **DONE** (D67; `logs/shots/c1-*.png`): the geometric fade (the gun's line, forearm to barrel, within 8 cm of the eye's
+  line to a panel -> dimmed to 15%); depth composition rejected (no game depth on the bridge). [S]: the gun hand across the
+  wrist -> `the left/right panel behind the gun -- dimmed`, away -> `clear of the gun again`; the captures agree.
 - [ ] **C2 The desktop mirror without the HUD in wrist mode.** In wrist mode the mirror window (`src/host/mirror.cpp`)
   shows no HUD. Draw the HUD texture on it: the full-screen HUD, as the flat game shows it. Behind `[Bridge] MirrorHud=1`.
   **[S]:** a capture of the mirror window.

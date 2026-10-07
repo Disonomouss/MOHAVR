@@ -136,6 +136,7 @@ bool WristHud::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessi
     gapCm_ = IniF(ini, L"WristGap", 1.0f, 0.0f, 20.0f);
     angleCos_ = std::cos(IniF(ini, L"WristAngle", 55.0f, 5.0f, 90.0f) * 0.0174533f);
     lookCos_ = std::cos(IniF(ini, L"WristLook", 40.0f, 5.0f, 90.0f) * 0.0174533f);
+    occlusion_ = GetPrivateProfileIntW(L"HUD", L"WristOcclusion", 1, ini.c_str()) != 0;  // GOAL C1
     if (!hdr_ || !(hdr_->hudCaps & 1u) || !hdr_->hudTexW || !hdr_->hudTexH) {
         MLOG("wristhud: the game has no HUD texture ring (HUD.Redirect off, HUD.Mode 0 or its hooks stood down) -- no wrist HUD");
         return false;
@@ -380,6 +381,32 @@ void WristHud::Update(const In& in) {
         fade_ = in.wristPage ? 1.0f : std::clamp(fade_ + rate, 0.0f, 1.0f);
     }
     panelsOn_ = !why && fade_ > 0.001f;
+    // GOAL C1 (D67, [HUD] WristOcclusion): the panels are quads, always over the game's image, so the gun or the gun hand's
+    // forearm passing in front of the wrist was drawn behind them. A panel with the gun's line (from the barrel back
+    // along the forearm) within 8 cm of the eye's line to it, in front of it, dims to 15% (and comes back) at the fades' rates.
+    for (int p = 0; p < 2; ++p) {
+        bool behind = false;
+        if (occlusion_ && !why && in.gunOk && in.headOk) {
+            const V3 e = P(in.head.position), d = Sub(centre[p], e);
+            const float dd = Dot(d, d);
+            const V3 g = P(in.gunPose.position), gf = Rot(in.gunPose.orientation, {0, 0, -1});
+            for (float t = -0.30f; t <= 0.60f + 1e-3f && !behind && dd > 1e-4f; t += 0.05f) {
+                const V3 s = Add(g, Mul(gf, t));
+                const float along = Dot(Sub(s, e), d) / dd;
+                if (along < 0.05f || along > 0.95f) continue;
+                const V3 off = Sub(s, Add(e, Mul(d, along)));
+                behind = Dot(off, off) < 0.08f * 0.08f;
+            }
+        }
+        const float target = behind ? 0.15f : 1.0f;
+        const float step = behind ? (fadeOut_ > 0.0f ? dt / fadeOut_ : 1.0f) : (fadeIn_ > 0.0f ? dt / fadeIn_ : 1.0f);
+        occ_[p] = occ_[p] > target ? std::max(target, occ_[p] - step * 0.85f) : std::min(target, occ_[p] + step * 0.85f);
+        if (behind != occBehind_[p] && panelsOn_) {
+            static int logged = 0;
+            if (logged++ < 100) MLOG("wristhud: the %s panel %s", p ? "right" : "left", behind ? "behind the gun -- dimmed" : "clear of the gun again");
+        }
+        occBehind_[p] = behind;
+    }
     // Logged as it changes.
     const char* note = why ? why : want ? (in.wristPage ? "the Wrist panels page" : always ? "always, facing you" : "looked at")
                                         : (set_.show == 1 ? (in.foregrip ? "the foregrip held, not looked at" : "always, but not facing you")
@@ -471,7 +498,7 @@ void WristHud::Compose(bool rest, bool panels) {
             cb.cell[3] = cropNow_[p][3] - cropNow_[p][1];
             cb.crop[0] = cropNow_[p][0];
             cb.crop[1] = cropNow_[p][1];
-            cb.crop[2] = fade_;
+            cb.crop[2] = fade_ * occ_[p];  // (GOAL C1: dimmed behind the gun)
             cb.crop[3] = kPlate[std::clamp(set_.backing, 0, 2)];
             cb.info[1] = 8.0f;
             if (cb.cell[2] > 0.0f && cb.cell[3] > 0.0f) draw(cb);
