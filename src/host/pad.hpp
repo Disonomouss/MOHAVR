@@ -39,6 +39,8 @@ public:
     void PulseStart() { startUntil_ = now_ + 0.15; }
     // Holds Xbox X (the game's crouch toggle) for a moment: physical crouch's request (GOAL A1; main.cpp).
     void PulseCrouch() { crouchUntil_ = now_ + 0.15; }
+    // The vignette's signal (GOAL A2): 0..1, how much the sticks moved or turned the player in the last Update.
+    float Motion() const { return motion_; }
     // Per XR frame after xrSyncActions with Set() active. `neutral` (the MOHAVR menu is open) publishes
     // a centred pad with nothing pressed, so the game neither moves nor sees a disconnect.
     // `snapDeg` > 0: the right stick's X snaps by that many degrees per flick (hdr->snapYawTotal) instead
@@ -216,7 +218,8 @@ private:
     double      flickUntil_[2] = {0.0, 0.0};
     int         leftStick_ = 0, rightStick_ = 1;  // which thumbstick feeds each Xbox stick (-1 = none)
     bool        rightY_ = false;
-    double      now_ = 0.0, startUntil_ = 0.0, crouchUntil_ = 0.0;
+    double      now_ = 0.0, startUntil_ = 0.0, crouchUntil_ = 0.0, snapMotionUntil_ = 0.0;
+    float       motion_ = 0.0f;
     shared::PadState last_{};
     bool        published_ = false;
     std::wstring testPath_;

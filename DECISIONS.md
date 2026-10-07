@@ -1031,3 +1031,18 @@ hud, then hold X."
   - the pause menu: no request; backing out with the head low crouched at once;
   - the menu's off: no request.
   **[H]** HEADSET-TESTS round 54: does it trigger by accident (leaning in, picking things up, looking down)?
+
+### D62. The comfort vignette -- Decided 2026-10-08 (GOAL A2)
+- **Why:** comfort for stick locomotion. GOAL.md A2, from the feature review: the roadmap's M9 vignette was never built.
+- **What:** `[Comfort] Vignette` (shipped **0**, comfort: GOAL rule 3; 1 light, 2 strong) and `VignetteFade` 0.2 s; the
+  menu's General tab ("Vignette", saved in the player's ini). The host draws it (`vignette.cpp`):
+  - a head-locked quad 1 m ahead and 4 m square, black, with premultiplied alpha rising from a clear centre to the edge
+    (a smoothstep: light from 0.42 to 0.80 half-widths at 75 % at most, strong from 0.28 to 0.62 at full);
+  - 16 pre-baked levels, copied into its swapchain only while shown;
+  - layered right after the game's image, so the reticle, the scope, the wrist HUD, the rings and the menu stay above it.
+  The signal (`Pad::Motion`) is the move stick's deflection or the smooth turn past XInput's usual 24 % dead zone, or a
+  snap step for 0.3 s. Head motion doesn't count, and nothing counts in menus (the pad is neutral there).
+- **Proven [S]** (the EA copy, `logs/shots/vig-*.png`): with strong, a 3 s walk (`pad_cmd.py --seq "ly=1 dur=3"`) logged
+  "vignette: in (moving by stick)" then "out". The captures' edge brightness was 30.7 still, **3.3 moving** and 30.5 after;
+  the centre stayed lit, in both eyes. The XR frame stayed 11.11 ms (0 of 900 late). **[H]** round 54: the strength and the
+  fade.

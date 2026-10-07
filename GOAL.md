@@ -74,12 +74,15 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   compensation 64.8)`; up -> stood, 160.9; a quick re-crouch 110.7; the stick crouch 95.9 (`the stick's`), adopted by
   the head (110.7), a stick stand while low held (110.9) until the head crossed; the pause menu: no request, backing out
   crouched at once; the menu's off: no request. The line is a drop in metres (0.40, LOCAL has no floor), not a share.
-- [ ] **A2 Vignette.** A comfort tunnel that darkens the edge of the view while the player moves or turns by stick (not
+- [x] **A2 Vignette.** A comfort tunnel that darkens the edge of the view while the player moves or turns by stick (not
   for head motion). Strength none / light / strong; it fades in and out over about 0.2 s.
   - Drawn by the host: a quad or a mask over the projection layer, both eyes, never over the menu.
   - `[Comfort] Vignette=0`; the menu (General).
   - **Proven [S] when** `sim_window_shot` shows it while the stick moves, gone when still; no frame-time cost in the
     perf lines.
+
+  **DONE** (D62; `logs/shots/vig-*.png`): strong, a 3 s stick walk -> `vignette: in (moving by stick)` / `out`; the edge
+  brightness 30.7 still, 3.3 moving, 30.5 after, the centre lit in both eyes; the XR frame 11.11 ms (0 of 900 late).
 - [ ] **A3 Seated mode.** A height offset so a seated player gets the standing eye height.
   - A "Calibrate seated" item in the menu: the current head height becomes the game's standing eye. It's saved in
     the player's ini.

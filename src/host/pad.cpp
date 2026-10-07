@@ -652,6 +652,14 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         maskedHeld_ = 0;
     }
 
+    // The vignette's signal (GOAL A2): how much the sticks move or turn the player -- past XInput's usual dead zone (24%),
+    // the move stick's deflection or the smooth turn's; a snap step counts for 0.3 s (below). Nothing in menus.
+    {
+        auto dz = [](float v) { return std::clamp((v - 0.24f) / 0.76f, 0.0f, 1.0f); };
+        const float mv = std::sqrt(static_cast<float>(p.thumbLX) * p.thumbLX + static_cast<float>(p.thumbLY) * p.thumbLY) / 32767.0f;
+        const float tn = snapDeg > 0 ? 0.0f : std::fabs(static_cast<float>(p.thumbRX)) / 32767.0f;
+        motion_ = (neutral || hdr->gameUiMenu) ? 0.0f : std::max({dz(mv), dz(tn), now_ < snapMotionUntil_ ? 1.0f : 0.0f});
+    }
     // Physical crouch (GOAL A1): the game side asked for a stance toggle -- the game's own crouch, Xbox X, for a moment.
     if (now_ < crouchUntil_ && !hdr->gameUiMenu && !neutral) p.buttons |= 0x4000;
 
@@ -665,6 +673,7 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
             const LONG step = static_cast<LONG>(std::lround(snapDeg * 65536.0 / 360.0)) * (x > 0.0f ? 1 : -1);
             const LONG total = InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(&hdr->snapYawTotal), step) + step;
             MLOG("pad: snap %s %d deg (total %ld)", x > 0.0f ? "right" : "left", snapDeg, total);
+            snapMotionUntil_ = now_ + 0.3;
         }
         p.thumbRX = 0;
     }

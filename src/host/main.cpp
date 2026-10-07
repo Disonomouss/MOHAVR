@@ -36,6 +36,7 @@
 #include "offpistol.hpp"
 #include "markers.hpp"
 #include "reticle.hpp"
+#include "vignette.hpp"
 #include "scope.hpp"
 #include "wristhud.hpp"
 
@@ -421,6 +422,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             reticleOk = reticle.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
             reticleOffOk = reticleOff.Init(dev, ctx, session, fmt, deg > 0.1f && deg < 10.0f ? deg : 0.8f);
         }
+    }
+    // The comfort vignette (GOAL A2): the strength is the menu's ([Comfort] Vignette by default), the fade the ini's.
+    mohavr::host::Vignette vignette;
+    bool vignetteOk = false;
+    if (controllers) {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Comfort", L"VignetteFade", L"0.2", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        vignetteOk = vignette.Init(dev, ctx, session, fmt, static_cast<float>(_wtof(v)));
     }
     // Scopes (SCOPE-DESIGN): the scope raised to an eye -- the lens and the scope view the game renders for it.
     mohavr::host::Scope scope;
@@ -1074,6 +1083,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (controllers)
             pad.Update(session, static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart),
                        menuOk && menu.Visible(), menuOk ? menu.SnapTurnDegrees() : 0, g_hdr);
+        if (vignetteOk) {
+            if (menuOk) vignette.SetStrength(menu.VignetteStrength());
+            vignette.Update(dt, controllers ? pad.Motion() : 0.0f);
+        }
         static std::uint32_t allWeaponsPawn = 0;  // the pawn "Give all weapons" was for
         if (menuOk && menu.TakeGiveAllRequest() && g_hdr) {
             // The game runs its own cheats for it (vr_view.cpp RunHostCommand: EnableCheats, a GiveWeapon per
@@ -1307,6 +1320,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
             }
             layerCount = 1;
+            // The comfort vignette (GOAL A2): right over the game's image, under everything the host draws.
+            if (vignetteOk && lastMeta.hasView)
+                if (const XrCompositionLayerBaseHeader* vl = vignette.Layer(viewSpace)) layers[layerCount++] = vl;
             // M7: the reticle where the shot will land, along the aiming hand's ray (gameplay only).
             // Shown with the menu open too, so the Gun fit page can line the barrel up with it.
             if (reticleOk && lastMeta.hasView && menuHeadOk && (!menuOk || menu.RedDot())) {

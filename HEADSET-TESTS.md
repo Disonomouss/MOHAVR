@@ -2138,6 +2138,14 @@ click while standing, and while crouched for real.
 2. Does it ever crouch by accident: leaning in, looking down, picking something up? (yes/no; when?)
 3. Is 40 cm down the right depth? (deeper / shallower / right)
 4. Does the view stay at your real head height through the crouch (no jump or dip)? (yes/no)
+### A2 Vignette (menu -> General -> Vignette: light or strong)
+**Changed:** while the stick moves or turns you, the edges of the view darken (not when you move your head). It fades in
+and out in 0.2 s; the menu, the HUD and the red dot stay above it.
+
+**Questions:**
+1. Does it help with comfort when walking and turning? (yes/no)
+2. Light or strong: which would you keep on, and is the clear area too small or too large?
+3. Is the fade too quick, too slow, or right?
 
 ## Template
 

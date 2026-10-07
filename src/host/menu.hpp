@@ -61,6 +61,7 @@ public:
     bool SwapSticks() const { return swapSticks_; }
     bool MoveByHead() const { return moveByHead_; }
     bool RedDot() const { return redDot_; }  // the reticle shown (the player's; default the shipped [Aim] Reticle)
+    int  VignetteStrength() const { return vignette_; }  // GOAL A2: 0 none, 1 light, 2 strong
     bool Pacing() const { return pacing_; }  // frame pacing (the player's once toggled; default the shipped [Bridge] Pace)
     // The manual reload (D21; the player's once toggled, default the shipped [Weapon] ManualReload).
     bool ManualReloadOn() const { return manualReload_; }
@@ -200,6 +201,7 @@ private:
     bool                    gunInHand_ = false;       // Weapon.ViewModel=2 (the fit applies)
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    crouch_ = false;  // physical crouch (GOAL A1)
+    int                     vignette_ = 0;    // the comfort vignette: 0 none, 1 light, 2 strong (GOAL A2)
     bool                    manualReload_ = false;
     bool                    rackEject_ = false, rackEjectKeep_ = false;
     bool                    offHandNade_ = false;
