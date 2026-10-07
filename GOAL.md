@@ -214,11 +214,19 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   recorded as known issues where their source isn't loaded.
 
 ## Finish
-- [ ] **F1** After the last change:
+- [x] **F1** After the last change:
   - `tools/harness.ps1 cycle` OK;
   - the wrist menu button (D60) A-D and the manual reload's quick pass (one gun of each kind) rerun.
-- [ ] **F2** HEADSET-TESTS round 54: what changed, how to try it, and the [H] questions for each item. Ask in it whether
+
+  **DONE** (the final build): `cycle OK in 54s`; D60 A `MOHAVR menu opened`, B `MOHAVR menu closed`, C `the game's Start` (a
+  game menu), D X looking away reached the game (the grenade); the Thompson `EJECT 50 -> 0`, `INSERT 0 -> 50`; the K98 fired
+  and worked by hand (`BOLT UP`, `BOLT BACK ... the case ejected`, `BOLT FORWARD ... a round chambered`, `BOLT DOWN`); the
+  Garand emptied, `INSERT 0 -> 8 ... the action closed on its own`. (The M12's class isn't loaded in the save's Husky.)
+- [x] **F2** HEADSET-TESTS round 54: what changed, how to try it, and the [H] questions for each item. Ask in it whether
   testers have a Cosmos, Pico, WMR first-gen or Vive wands.
+
+  **DONE:** HEADSET-TESTS round 54 -- A1-A3, B (testers' devices and runtimes, their logs), C1-C3, D, E, with what changed,
+  how to try it and the questions.
 - [ ] **F3** Leave everything in order:
   - STATUS updated, everything committed, the game not running;
   - `tools/deploy.ps1 undeploy`, then `& .\tools\deploy.ps1 deploy -PlayerAgreed` with no `-Set`: the shipped

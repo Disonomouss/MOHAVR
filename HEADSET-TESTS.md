@@ -2123,7 +2123,13 @@ screen."
 4. Their `MOHAVR-host.log`: the lines "HP Reverb G2 controller profile:", "bound as", and "the wrist's menu button".
 
 ## Round 54: prepared 2026-10-08, GOAL.md (crouch, comfort, compatibility, the known issues, mounted guns, the sweep)
-_Filled in item by item as the goal runs; F2 completes it._
+**Deployed for you:** the shipped defaults (your install, rebuilt; run the setup again any time to get the released one).
+The new comfort features ship **off**: turn them on in the menu's General tab to try them (Physical crouch, Vignette,
+Seated). The fixes (wrist panels behind the gun, the HUD in the desktop mirror, magazines and rounds stopping at walls and
+tables, the RGBA fallback, mounted MG42s) are on.
+
+How to answer: the questions below, item by item (a word or a line each is enough), and your `MOHAVR.log` /
+`MOHAVR-host.log` after the session.
 
 ### A1 Physical crouch (menu -> General -> Physical crouch: on)
 **Changed:** crouch for real and the game crouches too: you fit behind low cover and the eye stays where your head is.
@@ -2163,6 +2169,29 @@ BGRA swapchains (some Pimax / Varjo setups) now works too.
 1. Which headset and controllers, and which runtime (SteamVR, the headset's own, Virtual Desktop)?
 2. Does every button do what the README's table says? Which doesn't?
 3. Send `MOHAVR-host.log` after a session.
+### C1 The wrist panels behind the gun
+**Changed:** when the gun (or your gun arm) passes between your eyes and the wrist panels, they dim to a faint outline
+instead of drawing over the gun.
+
+**Questions:**
+1. Hold the gun across your wrist while looking at the panels: do they fade behind the gun and come back after? (yes/no)
+2. Do they ever fade when nothing is in front of them? (yes/no)
+
+### C2 The HUD in the desktop mirror
+**Changed:** with the HUD on your wrist, the desktop mirror now shows the HUD too (as the flat game draws it), for
+onlookers and streams.
+
+**Questions:**
+1. Does the monitor show the health, compass and ammo while you play? (yes/no)
+
+### C3 Magazines and rounds stop at walls and tables
+**Changed:** a dropped magazine, a spent case or a racked-out round now lands on a table or stops at a wall instead of
+falling through it (and showing through it).
+
+**Questions:**
+1. Drop a magazine over a table or crate: does it land on top? (yes/no)
+2. Rack a round out next to a wall: does it bounce off rather than vanish into it? (yes/no)
+
 ### D Mounted MG42s
 **Changed:** manning an MG42 nest (walk up, press use), the gun now stays on its mount and you aim it with your head,
 as the flat game aims with the mouse; the stick turns it. Before, the gun jumped into your hand. Every MG42 nest
@@ -2172,6 +2201,14 @@ mission (Husky, Avalanche, Neptune, Market Garden, Varsity, the Flakturm) has so
 1. Does manning a nest work, and does the gun sit right on the wall or sandbags? (yes/no)
 2. Aiming with your head: fine, or would you rather hold the handles and aim with your hands? (head / hands)
 3. Getting off the gun (use again): does it work and give your own gun back? (yes/no)
+
+### E Every mission
+**Changed:** every campaign mission loads with the mod (checked by a sweep). The rounds the StG44 and G43 rack out now use
+the K98's round where the G43 isn't loaded (Husky). Where no MP40 is around the off-hand knife can't be drawn, and where
+no shotgun is loaded the M12 racks out the game's spent shell.
+
+**Questions:**
+1. In any mission, did the knife fail to appear, or a gun misbehave, that works elsewhere? (which mission, which gun)
 
 ## Template
 
