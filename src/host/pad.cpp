@@ -154,7 +154,12 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
     ok = ok && make(aim_[0], "left_aim", "Left hand aim", XR_ACTION_TYPE_POSE_INPUT) &&
          make(aim_[1], "right_aim", "Right hand aim", XR_ACTION_TYPE_POSE_INPUT) &&
          make(haptic_[0], "left_haptic", "Left vibration", XR_ACTION_TYPE_VIBRATION_OUTPUT) &&
-         make(haptic_[1], "right_haptic", "Right vibration", XR_ACTION_TYPE_VIBRATION_OUTPUT);
+         make(haptic_[1], "right_haptic", "Right vibration", XR_ACTION_TYPE_VIBRATION_OUTPUT) &&
+         // GOAL B3: the trackpads of first-generation WMR controllers and Vive wands (TrackpadSrc).
+         make(trackpad_[0], "left_trackpad", "Left trackpad", XR_ACTION_TYPE_VECTOR2F_INPUT) &&
+         make(trackpad_[1], "right_trackpad", "Right trackpad", XR_ACTION_TYPE_VECTOR2F_INPUT) &&
+         make(trackClick_[0], "left_trackpad_click", "Left trackpad click", XR_ACTION_TYPE_BOOLEAN_INPUT) &&
+         make(trackClick_[1], "right_trackpad_click", "Right trackpad click", XR_ACTION_TYPE_BOOLEAN_INPUT);
     if (!ok) return false;
 
     wchar_t tmp[MAX_PATH];
@@ -184,9 +189,51 @@ bool Pad::Init(XrInstance instance, const std::wstring& ini) {
 void Pad::AppendBindings(const std::string& profile, const std::function<XrPath(const char*)>& path,
                          std::vector<XrActionSuggestedBinding>& out) const {
     auto add = [&](XrAction a, const char* p) { out.push_back({a, path(p)}); };
-    // D59: the HP Reverb G2's controllers have Touch's layout (X/Y, A/B, grip, trigger, stick) and the same paths.
+    // D59: the HP Reverb G2's controllers have Touch's layout (X/Y, A/B, grip, trigger, stick) and the same paths; so do
+    // the Pico 4's (GOAL B3).
     const bool touchLayout = profile == "/interaction_profiles/oculus/touch_controller" ||
-                             profile == "/interaction_profiles/hp/mixed_reality_controller";
+                             profile == "/interaction_profiles/hp/mixed_reality_controller" ||
+                             profile == "/interaction_profiles/bytedance/pico4_controller";
+    const bool cosmos = profile == "/interaction_profiles/htc/vive_cosmos_controller";
+    const bool wmr1 = profile == "/interaction_profiles/microsoft/motion_controller";
+    const bool wands = profile == "/interaction_profiles/htc/vive_controller";
+    if (cosmos || wmr1 || wands) {
+        // GOAL B3: the aim, the vibration, the triggers; the grip is a click on all three.
+        add(aim_[0], "/user/hand/left/input/aim/pose");
+        add(aim_[1], "/user/hand/right/input/aim/pose");
+        add(haptic_[0], "/user/hand/left/output/haptic");
+        add(haptic_[1], "/user/hand/right/output/haptic");
+        add(src_[kLGrip], "/user/hand/left/input/squeeze/click");
+        add(src_[kRGrip], "/user/hand/right/input/squeeze/click");
+        add(src_[kLTrig], "/user/hand/left/input/trigger/value");
+        add(src_[kRTrig], "/user/hand/right/input/trigger/value");
+    }
+    if (cosmos) {  // Touch's buttons (X/Y left, A/B right) and sticks
+        add(stick_[0], "/user/hand/left/input/thumbstick");
+        add(stick_[1], "/user/hand/right/input/thumbstick");
+        add(src_[kA], "/user/hand/right/input/a/click");
+        add(src_[kB], "/user/hand/right/input/b/click");
+        add(src_[kX], "/user/hand/left/input/x/click");
+        add(src_[kY], "/user/hand/left/input/y/click");
+        add(src_[kLThumb], "/user/hand/left/input/thumbstick/click");
+        add(src_[kRThumb], "/user/hand/right/input/thumbstick/click");
+    }
+    if (wmr1) {  // sticks; no face buttons: the trackpads' clicks stand in (TrackpadSrc)
+        add(stick_[0], "/user/hand/left/input/thumbstick");
+        add(stick_[1], "/user/hand/right/input/thumbstick");
+        add(src_[kLThumb], "/user/hand/left/input/thumbstick/click");
+        add(src_[kRThumb], "/user/hand/right/input/thumbstick/click");
+    }
+    if (wmr1 || wands) {
+        add(trackpad_[0], "/user/hand/left/input/trackpad");
+        add(trackpad_[1], "/user/hand/right/input/trackpad");
+        add(trackClick_[0], "/user/hand/left/input/trackpad/click");
+        add(trackClick_[1], "/user/hand/right/input/trackpad/click");
+    }
+    if (wands) {  // no sticks: the left pad's touch moves, the right pad's turns
+        add(stick_[0], "/user/hand/left/input/trackpad");
+        add(stick_[1], "/user/hand/right/input/trackpad");
+    }
     if (touchLayout || profile == "/interaction_profiles/valve/index_controller") {
         add(aim_[0], "/user/hand/left/input/aim/pose");
         add(aim_[1], "/user/hand/right/input/aim/pose");
@@ -244,6 +291,15 @@ void Pad::ReadRaw(XrSession s, Raw& r) const {
             (w ? r.rx : r.lx) = v.currentState.x;
             (w ? r.ry : r.ly) = v.currentState.y;
         }
+    }
+    // GOAL B3: a trackpad click is a button; meanwhile that hand's stick reads still (on Vive wands the stick IS the
+    // trackpad's touch: a click low on the right pad must not also flick the stick down).
+    for (int h = 0; h < 2; ++h) {
+        const Src d = TrackpadSrc(s, h);
+        if (d == kNone) continue;
+        r.src[d] = 1.0f;
+        (h ? r.rx : r.lx) = 0.0f;
+        (h ? r.ry : r.ly) = 0.0f;
     }
 }
 
@@ -836,9 +892,27 @@ bool Pad::GripActive(XrSession s, int hand) const {
     return XR_SUCCEEDED(xrGetActionStateFloat(s, &gi, &f)) && f.isActive;
 }
 
+// GOAL B3: a trackpad click as a button, on controllers without face buttons (first-generation WMR, Vive wands): the
+// upper half = that hand's upper face button (B / Y), the lower half = its lower one (A / X), the centre = its stick click.
+// Unbound (every other controller): kNone.
+Pad::Src Pad::TrackpadSrc(XrSession s, int hand) const {
+    if (!trackClick_[hand] || !trackpad_[hand]) return kNone;
+    XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
+    gi.action = trackClick_[hand];
+    XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
+    if (XR_FAILED(xrGetActionStateBoolean(s, &gi, &b)) || !b.isActive || !b.currentState) return kNone;
+    gi.action = trackpad_[hand];
+    XrActionStateVector2f v{XR_TYPE_ACTION_STATE_VECTOR2F};
+    if (XR_FAILED(xrGetActionStateVector2f(s, &gi, &v)) || !v.isActive) return kNone;
+    const float x = v.currentState.x, y = v.currentState.y;
+    if (x * x + y * y < 0.35f * 0.35f) return hand ? kRThumb : kLThumb;
+    return FaceSrc(hand, y > 0.0f);
+}
+
 float Pad::FaceButton(XrSession s, int hand, bool upper) const {
     const Src src = FaceSrc(hand, upper);
     if (testActive_ && test_.raw) return test_.rawIn.src[src];
+    if (TrackpadSrc(s, hand) == src) return 1.0f;
     if (!src_[src]) return 0.0f;
     XrActionStateGetInfo gi{XR_TYPE_ACTION_STATE_GET_INFO};
     gi.action = src_[src];

@@ -117,7 +117,7 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
   **DONE** (D65; `logs/shots/b2-*`): forced -> `swapchain format 29 (R8G8B8A8, sRGB) -- the game's frames are blitted
   into it`; against the BGRA run the captures match (gameplay 31.4/30.0/27.1 vs 31.4/30.1/27.1; the menu's highlight
   31.5/55.5/83.9 vs 31.2/55.2/84.3, title 179/152/87 vs 182/154/88; no swapped red/blue), the XR frame 11.11 ms on both.
-- [ ] **B3 More controller profiles bound directly**, as D59 did for the G2. Each is enabled only if the runtime
+- [x] **B3 More controller profiles bound directly**, as D59 did for the G2. Each is enabled only if the runtime
   offers its extension, with its paths checked against the OpenXR spec. Each is logged with "bound as", and the
   README's controller line is updated.
   - **The HTC Vive Cosmos** (`XR_HTC_vive_cosmos_controller_interaction`): Touch's layout.
@@ -130,6 +130,12 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
     a trackpad scheme is clear (movement on the left pad, turning on the right); else WONTFIX with the reason.
   - **[S]:** the simulator still binds Touch; the suggestions for the profiles it offers are accepted. **[H]:** a
     tester per device (round 54 asks who has one).
+
+  **DONE** (D66): the Cosmos and Pico 4 (Touch's layout; their extensions when offered), first-generation WMR and the Vive
+  wands (the trackpad scheme: upper / lower half = upper / lower face button, centre = stick click; the wands' pads are
+  the sticks) -- the wands done, not WONTFIX. [S]: `actions attached (... Touch, Index, WMR, Vive wands ...)`, no
+  `bindings not accepted`, `bound as .../oculus/touch_controller`, `cycle OK in 54s`; SteamVR here names the Cosmos, WMR
+  and Vive profiles.
 
 ## Track C: the known issues (README "Known issues")
 - [ ] **C1 The wrist HUD over the gun or arm.** The panels are composition quads, always on top of the projection

@@ -216,9 +216,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     auto has = [&](const char* name) { return std::find(offered.begin(), offered.end(), name) != offered.end(); };
     const bool hpControllers = has(XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME);
     const bool fbRefresh = has(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);  // B1: the refresh rate, logged
+    // GOAL B3: more controllers bound directly where the runtime offers their profiles (the WMR and Vive wand ones are core).
+    const bool cosmosControllers = has("XR_HTC_vive_cosmos_controller_interaction");
+    const bool picoControllers = has("XR_BD_controller_interaction");
     std::vector<const char*> exts = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
     if (hpControllers) exts.push_back(XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME);
     if (fbRefresh) exts.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
+    if (cosmosControllers) exts.push_back("XR_HTC_vive_cosmos_controller_interaction");
+    if (picoControllers) exts.push_back("XR_BD_controller_interaction");
     XrInstanceCreateInfo ici{XR_TYPE_INSTANCE_CREATE_INFO};
     strcpy_s(ici.applicationInfo.applicationName, "MOHAVR");
     strcpy_s(ici.applicationInfo.engineName, "Unreal Engine 3 (MOHA)");
@@ -465,6 +470,40 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 {aSelect, path("/user/hand/right/input/a/click")},
                 {aBack, path("/user/hand/right/input/b/click")},
             });
+        // GOAL B3: the Vive Cosmos and Pico 4 (Touch's layout), first-generation WMR and the Vive wands (no face buttons: back
+        // is the right menu button; the wands navigate with the left trackpad).
+        if (cosmosControllers)
+            suggest("/interaction_profiles/htc/vive_cosmos_controller", {
+                {aToggle, path("/user/hand/left/input/menu/click")},
+                {aStick, path("/user/hand/left/input/thumbstick")},
+                {aSelect, path("/user/hand/left/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/a/click")},
+                {aBack, path("/user/hand/right/input/b/click")},
+            });
+        if (picoControllers)
+            suggest("/interaction_profiles/bytedance/pico4_controller", {
+                {aToggle, path("/user/hand/left/input/menu/click")},
+                {aStick, path("/user/hand/left/input/thumbstick")},
+                {aSelect, path("/user/hand/left/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/trigger/value")},
+                {aSelect, path("/user/hand/right/input/a/click")},
+                {aBack, path("/user/hand/right/input/b/click")},
+            });
+        suggest("/interaction_profiles/microsoft/motion_controller", {
+            {aToggle, path("/user/hand/left/input/menu/click")},
+            {aStick, path("/user/hand/left/input/thumbstick")},
+            {aSelect, path("/user/hand/left/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/trigger/value")},
+            {aBack, path("/user/hand/right/input/menu/click")},
+        });
+        suggest("/interaction_profiles/htc/vive_controller", {
+            {aToggle, path("/user/hand/left/input/menu/click")},
+            {aStick, path("/user/hand/left/input/trackpad")},
+            {aSelect, path("/user/hand/left/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/trigger/value")},
+            {aBack, path("/user/hand/right/input/menu/click")},
+        });
         suggest("/interaction_profiles/khr/simple_controller", {
             {aToggle, path("/user/hand/left/input/menu/click")},
             {aSelect, path("/user/hand/right/input/select/click")},
@@ -474,8 +513,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         attach.countActionSets = controllers ? 2 : 1;
         attach.actionSets = sets;
         XR_OK(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
-        MLOG("host: actions attached (menu%s; Touch, Index%s, simple controller)", controllers ? " + gameplay pad" : "",
-             hpControllers ? ", HP Reverb G2" : "");
+        MLOG("host: actions attached (menu%s; Touch, Index%s%s%s, WMR, Vive wands, simple controller)",
+             controllers ? " + gameplay pad" : "", hpControllers ? ", HP Reverb G2" : "", cosmosControllers ? ", Vive Cosmos" : "",
+             picoControllers ? ", Pico 4" : "");
     }
     // M7: the aim poses (for the game's aim) and the reticle (ReticleSize in degrees; shown per the menu's Red dot,
     // whose default is the shipped [Aim] Reticle).

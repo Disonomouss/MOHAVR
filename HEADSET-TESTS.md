@@ -2153,6 +2153,16 @@ Seated off too). With Seated on, physical crouch needs only a 25 cm lean from th
 **Questions:**
 1. Seated and recentred, is the game's eye height right (a standing soldier)? (yes/no)
 2. With physical crouch on too, does leaning forward/down crouch, and sitting up stand? Too sensitive? (yes/no)
+### B Other headsets and controllers (for testers)
+**Changed:** the log names everything the runtime offers (`MOHAVR-host.log`: "runtime extensions", "system", "swapchain
+formats") and which controller profile each hand got ("bound as"). Bound directly now: Touch, Index, the Reverb G2, the
+Vive Cosmos, the Pico 4, first-generation WMR and Vive wands (the trackpad scheme is in the README). A runtime without
+BGRA swapchains (some Pimax / Varjo setups) now works too.
+
+**Questions (testers):**
+1. Which headset and controllers, and which runtime (SteamVR, the headset's own, Virtual Desktop)?
+2. Does every button do what the README's table says? Which doesn't?
+3. Send `MOHAVR-host.log` after a session.
 
 ## Template
 

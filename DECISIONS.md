@@ -1096,3 +1096,24 @@ hud, then hold X."
   - the menu's blue highlight 31.5/55.5/83.9 against 31.2/55.2/84.3, its orange title 179/152/87 against 182/154/88;
   - no blue pixels where red belongs.
   The XR frame was 11.11 ms on both, 0 late.
+
+### D66. More controllers bound directly -- Decided 2026-10-08 (GOAL B3)
+- **Why:** after D59 (the Reverb G2), the controllers testers may bring. Without their own bindings they depend on the
+  runtime remapping Touch's.
+- **What** (the paths from the OpenXR spec; each suggestion logged if refused):
+  - **The Vive Cosmos** (`XR_HTC_vive_cosmos_controller_interaction`, enabled when offered: SteamVR does): Touch's
+    buttons and sticks, the grip a click.
+  - **The Pico 4** (`XR_BD_controller_interaction`, when offered: Pico's own runtime, not SteamVR): Touch's layout.
+  - **First-generation WMR** (`microsoft/motion_controller`, core): sticks, the grip a click; no face buttons.
+  - **The Vive wands** (`htc/vive_controller`, core): no sticks. The left trackpad's touch is the move stick, the
+    right's the turn stick.
+  - **The trackpads** (WMR and wands; `Pad::TrackpadSrc`): a click on the upper half is that hand's upper face button
+    (B / Y), on the lower half its lower one (A / X), in the centre (under 35 %) its stick click. While a pad is
+    clicked, that hand's stick reads still: on the wands the stick is the pad, so a low click mustn't also flick it.
+    `FaceButton` sees the derived buttons too: the manual reload's release, and D60's wrist menu button (X = the left
+    pad's lower half).
+  - The MOHAVR menu on WMR and wands: the left menu button toggles; the left stick (wands: the left pad) navigates;
+    the triggers select; the right menu button backs out.
+- **Proven [S]:** the simulator accepted every suggestion (no "bindings not accepted"), still bound Touch ("bound as
+  .../oculus/touch_controller"), and a harness cycle passed. SteamVR's `vrclient_x64.dll` on this PC names the Cosmos,
+  WMR and Vive profiles and the Cosmos extension. **[H]:** a tester per device (round 54).

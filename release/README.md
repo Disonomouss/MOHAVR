@@ -12,9 +12,13 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 - 64-bit Windows 10 (1703 or later) or Windows 11, and a graphics card with Direct3D 12.
 - A PC VR headset with an OpenXR runtime: Virtual Desktop, SteamVR, or Meta Quest Link. MOHAVR uses whichever OpenXR
   runtime is active.
-  - Controllers: Meta Touch and Valve Index are bound directly. The HP Reverb G2's are too (for example through SteamVR
-    with the Oasis driver; SteamVR must be the active OpenXR runtime: SteamVR Settings > OpenXR). Others go through
-    the runtime's remapping.
+  - Controllers bound directly: Meta Touch, Valve Index, the HP Reverb G2's (for example through SteamVR with the Oasis
+    driver; SteamVR must be the active OpenXR runtime: SteamVR Settings > OpenXR), the Vive Cosmos, the Pico 4, and
+    the first-generation Windows Mixed Reality controllers and Vive wands. Others go through the runtime's remapping.
+  - **WMR (first generation) and Vive wands** have no A/B/X/Y: click a trackpad's upper half for that hand's upper
+    button (B right, Y left), its lower half for the lower one (A right, X left), its centre for the stick click. On
+    the Vive wands, touching the left trackpad moves you and the right one turns you. The right menu button backs out
+    of the MOHAVR menu.
 
 ## Install
 

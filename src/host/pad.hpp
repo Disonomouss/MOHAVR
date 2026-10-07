@@ -139,6 +139,7 @@ private:
     // pulses when the right stick is flicked down/up (derived from its Y, which isn't a stick axis by default).
     enum Src { kNone, kA, kB, kX, kY, kLGrip, kRGrip, kLTrig, kRTrig, kLThumb, kRThumb, kMenu, kRFlickDown, kRFlickUp,
                kSrcCount };
+    Src   TrackpadSrc(XrSession s, int hand) const;  // GOAL B3
     enum Target { tA, tB, tX, tY, tLB, tRB, tLS, tRS, tStart, tBack, tUp, tDown, tLeft, tRight, tLT, tRT, tCount };
     static Src FaceSrc(int hand, bool upper) { return hand ? (upper ? kB : kA) : (upper ? kY : kX); }
     static constexpr int kMaxSources = 4;  // per Xbox control ("A=b,rgrip")
@@ -165,6 +166,7 @@ private:
     XrAction    aim_[2]{};             // left, right aim pose
     XrSpace     aimSpace_[2]{};
     XrAction    haptic_[2]{};          // left, right vibration
+    XrAction    trackpad_[2]{}, trackClick_[2]{};  // GOAL B3: trackpads (first-generation WMR, Vive wands)
     struct TestPose { bool on; float x, y, z, yaw, pitch, roll; int target = -1; bool align = false, pin = false; };  // pad_cmd.txt "aim=" / "hand=" (heading frame)
     mutable TestPose testPose_[2]{};   // (mutable: LocateHands turns a pinned spot into a plain pose)
     // pad_cmd.txt "hand=l|r,x,y,z,yaw,pitch[,roll] dur=S [ease=smooth]": a keyframe the hand's test pose moves to over S
