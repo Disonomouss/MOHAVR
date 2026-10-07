@@ -1140,3 +1140,27 @@ hud, then hold X."
 - **Proven [S]** (`logs/shots/c2-mirror.png`, the mirror in its own window): "mirror: the HUD drawn over the mirror (wrist
   mode: the frame has none)". The capture shows the compass, health, grenades, weapon icon and 50/90 over the scene, where
   the flat game draws them.
+
+### D69. Falling magazines, cases and rounds stop at what is in their way -- Decided 2026-10-08 (GOAL C3)
+- **Why:** the README's known issue, dropped magazines and ejected rounds showing through walls and tables. The cause, in
+  two parts:
+  - **No collision:** the falls (the magazine and the M18's spent case in `reload.cpp`, the rack-ejected round in
+    `rackround.cpp`) were ballistic paths down to the feet's height, so they passed straight through anything in the way.
+  - **The depth group:** they're drawn in the first-person foreground group, the magazine as a bone of the gun's mesh
+    and the round as a carrier with the arms' settings. So once inside or behind a surface they still showed in front
+    of it. The magazine can't take another depth group apart from its gun.
+- **What:** `falltrace.cpp` traces each fall's path once, at the drop, on the game thread (`aim::WorldTrace`, ignoring the
+  pawn, in 20 ms steps):
+  - a step that hits mostly going down has landed on what it hit (it rests there);
+  - a step that hits mostly sideways has met a wall: the sideways motion stops 3 units short, and it drops to what is
+    under that point.
+  In left-hand mode the points are mapped through the frame's mirror for the traces; the times and heights carry over
+  (the mirror is a vertical plane). A start at or under the feet' plane rests there as before. Objects so stay in front
+  of surfaces, and the eye's line to them is clear. `[ManualReload] FallTrace=1`: a fix, on. A test command, `mohavr
+  falltrace <m/s> [up]`, throws a path from the eye along the heading.
+- **Proven [S]** (the EA copy, the save's street):
+  - the test path, open street: "landed on TOP of something", the ground 13 units above the feet' plane; facing the
+    low wall: "a WALL, the sideways motion stops after 0.68 s";
+  - a Thompson's magazine ejected 2 m from it: no hit, the floor as before;
+  - walked up to it (the test path stopping after 0.17 s): "the magazine's fall meets something under it after 0.13 s --
+    it rests at 3391 (the feet at 3264)", on top of the low wall instead of through it to the feet.

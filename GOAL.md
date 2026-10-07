@@ -155,9 +155,14 @@ current (DONE / BLOCKED / WONTFIX, with the evidence in one line) and commit thi
 
   **DONE** (D68; `logs/shots/c2-mirror.png`): `mirror: the HUD drawn over the mirror (wrist mode: the frame has none)`;
   the capture shows the compass, health, grenades, the weapon and 50/90 where the flat game draws them.
-- [ ] **C3 Dropped magazines and ejected rounds through walls.** Find why: they're drawn without depth, or they don't
+- [x] **C3 Dropped magazines and ejected rounds through walls.** Find why: they're drawn without depth, or they don't
   collide, or they're drawn after the scene. Fix it, or limit it (for example, no ejection inside a wall's distance).
   **[S]:** a scripted ejection next to a wall, from the side.
+
+  **DONE** (D69): the falls traced at the drop (falltrace.cpp) -- they land on what is under them or stop at a wall; the
+  depth group can't change for the magazine (a bone of the gun), so staying in front of surfaces is the fix. [S]: the test
+  path -- open street `landed on TOP` (13 u above the feet' plane), facing the low wall `a WALL ... after 0.68 s`; a
+  Thompson magazine ejected beside the wall `meets something under it after 0.13 s -- it rests at 3391 (the feet at 3264)`.
 - [ ] **C4 The StG44's dust cover.** The bolt body and the dust cover are part of the body mesh (round 52). Time box
   1 h: is a separable part or a material trick possible? Otherwise WONTFIX with the reason.
 

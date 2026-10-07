@@ -190,7 +190,8 @@ Most things are in the menu. A few you may want to change in the ini:
   cover built into the gun's body, so only the handle and its rod move.
 - **Wrist HUD:** the panels dim when the gun passes in front of them, but the off hand's own fingers can still show
   through.
-- **Ejected rounds and objects:** a dropped magazine or an ejected round can show through a wall or table close by.
+- **Ejected rounds and objects:** a dropped magazine or an ejected round lands on a table or stops at a wall now; one
+  held right against a wall can still show through it.
 - **Levels:** the knife and the ejected rounds use other guns' models from the game. They were checked in the first
   levels only.
 

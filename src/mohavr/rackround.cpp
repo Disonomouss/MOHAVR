@@ -11,6 +11,7 @@
 
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "falltrace.hpp"
 #include "carrier.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -36,6 +37,7 @@ struct Round {
     float       axis[3] = {0, 0, 1};         // the tumble's axis (unit)
     float       len = 0.0f, spin = 0.0f, g = 0.0f, floorC = 0.0f;  // floorC: the centre's height at rest
     float       tLand = 0.0f, tEnd = 0.0f;   // seconds after the throw (the slow motion applied)
+    float       stopT = 1e9f;                // GOAL C3: the sideways motion stops (a wall)
     bool        landed = false;              // its impact sound played
     bool        drawnLogged = false;         // (the first bake that draws it, logged)
     std::string what;
@@ -113,7 +115,9 @@ void FrameAt(const Round& r, float t, float (&m)[16]) {
     float rows[9];
     for (int k = 0; k < 3; ++k) Turn(r.axis, r.spin * tt, r.rows0 + 3 * k, rows + 3 * k);
     float c[3];
-    for (int i = 0; i < 3; ++i) c[i] = r.c0[i] + r.v0[i] * tt;
+    const float ts = std::min(tt, r.stopT);  // (GOAL C3: stopped by a wall)
+    for (int i = 0; i < 2; ++i) c[i] = r.c0[i] + r.v0[i] * ts;
+    c[2] = r.c0[2] + r.v0[2] * tt;
     c[2] -= 0.5f * r.g * tt * tt;
     if (t >= r.tLand) {
         c[2] = r.floorC;
@@ -205,6 +209,16 @@ bool Throw(std::uintptr_t pawn, const Source& src, const float* rows, const floa
     n.spin = g_cfg.rackRoundSpin;
     n.g = 9.8f * upm;
     // At rest its centre is its half-width above the floor (a round's radius is ~0.6 of its bone's units across).
+    // GOAL C3: the throw's path traced into the world (the round lives in the real world): a table or a wall stops it.
+    if (g_cfg.fallTrace) {
+        const float p0[3] = {n.c0[0], n.c0[1], n.c0[2]}, v0[3] = {n.v0[0], n.v0[1], n.v0[2]};
+        const falltrace::Result ft = falltrace::Trace(pawn, p0, v0, n.g, floorZ, nullptr);
+        if (ft.wall || ft.top)
+            MLOG("rackround: the round's flight meets %s after %.2f s -- it rests at %.0f (the feet at %.0f)",
+                 ft.top ? "something under it" : "a wall", ft.stopT, ft.floorZ, floorZ);
+        floorZ = ft.floorZ;
+        n.stopT = ft.stopT;
+    }
     n.floorC = floorZ + 0.6f * Len3(n.rows0);
     const float z0 = n.c0[2], vz = n.v0[2];
     const float disc = vz * vz + 2.0f * n.g * (z0 - n.floorC);

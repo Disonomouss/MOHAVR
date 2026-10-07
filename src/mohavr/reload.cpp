@@ -16,6 +16,7 @@
 #include "../common/shared_frame.hpp"
 #include "addresses.hpp"
 #include "aim.hpp"
+#include "falltrace.hpp"
 #include "arms_ik.hpp"
 #include "bridge.hpp"
 #include "config.hpp"
@@ -1369,6 +1370,7 @@ struct Fall {
     DWORD       start = 0;
     float       f0[16] = {}, v0[3] = {}, pre[16] = {};
     float       floorZ = 0.0f, upm = 100.0f;
+    float       stopT = 1e9f;  // GOAL C3: the sideways motion stops (a wall)
 } g_fall;
 float g_flipU = 0.0f;       // the held pair's drawn flip (0 = A .. 1 = B), eased toward the half the host says
 std::string g_flipKey;
@@ -1596,6 +1598,20 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         if (ho >= 0) std::memcpy(&h, reinterpret_cast<const void*>(cyl + ho), sizeof(h));
         return loc[2] - (h > 1.0f && h < 200.0f ? h : 50.0f);
     };
+    // GOAL C3: the fall's path traced into the world -- it lands on a table or stops at a wall, not through them.
+    auto traceFall = [&](const char* what) {
+        g_fall.stopT = 1e9f;
+        if (!g_cfg.fallTrace) return;
+        float mir[16];
+        const bool mm = viewmodel::DrawMirror(mir);
+        const float p0[3] = {g_fall.f0[12], g_fall.f0[13], g_fall.f0[14]}, v0[3] = {g_fall.v0[0], g_fall.v0[1], g_fall.v0[2]};
+        const falltrace::Result ft = falltrace::Trace(pawn, p0, v0, 9.8f * g_fall.upm, g_fall.floorZ, mm ? mir : nullptr);
+        if (ft.wall || ft.top)
+            MLOG("reload: the %s's fall meets %s after %.2f s -- it rests at %.0f (the feet at %.0f)", what,
+                 ft.top ? "something under it" : "a wall", ft.stopT, ft.floorZ, g_fall.floorZ);
+        g_fall.floorZ = ft.floorZ;
+        g_fall.stopT = ft.stopT;
+    };
     // Round 31 (and GOAL A5's case): the magazine falling -- ballistic from f0 until it reaches the floor, then at rest; a
     // tumble about its own right axis while it falls. False (and the fall off) once it is over.
     auto fallDraw = [&]() {
@@ -1617,8 +1633,9 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
             f[4 + k] = g_fall.f0[4 + k];
             f[8 + k] = g_fall.f0[8 + k] * ca - g_fall.f0[0 + k] * sa;
         }
-        f[12] = g_fall.f0[12] + g_fall.v0[0] * tl;
-        f[13] = g_fall.f0[13] + g_fall.v0[1] * tl;
+        const float ts = std::min(tl, g_fall.stopT);  // (GOAL C3: stopped by a wall)
+        f[12] = g_fall.f0[12] + g_fall.v0[0] * ts;
+        f[13] = g_fall.f0[13] + g_fall.v0[1] * ts;
         f[14] = std::max(floor, z0 + vz * tl + 0.5f * gz * tl * tl);
         f[15] = 1.0f;
         float fgrabInv[16], m1[16], m2[16], move[16];
@@ -1656,6 +1673,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
         }
         g_fall.upm = upm;
         g_fall.floorZ = feetZ();
+        traceFall("magazine");
         if (g_cfg.debugReloadTrace)
             MLOG("reload: trace -- the magazine falls from %.0f %.0f %.0f at %.0f %.0f %.0f u/s to the floor at %.0f",
                  g_fall.f0[12], g_fall.f0[13], g_fall.f0[14], g_fall.v0[0], g_fall.v0[1], g_fall.v0[2], g_fall.floorZ);
@@ -1740,6 +1758,7 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
                 g_fall.v0[2] = o.z * push;
                 g_fall.upm = upm;
                 g_fall.floorZ = feetZ();
+                traceFall("spent case");
                 if (g_cfg.debugReloadTrace)
                     MLOG("reload: trace -- the spent case falls from the breech at %.0f %.0f %.0f to the floor at %.0f",
                          g_fall.f0[12], g_fall.f0[13], g_fall.f0[14], g_fall.floorZ);
