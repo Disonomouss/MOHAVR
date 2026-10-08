@@ -35,6 +35,7 @@ struct Config {
     float kick = 1.0f;            // [Weapon] Kick: the gun's muzzle rise per shot in the hand, x the game's view kick (D76; 0 off;
                                   // the menu's hdr->kickMode overrides)
     bool  kickAim = false;        // [Weapon] KickAim: the shots follow the kicked barrel (D76)
+    bool  loadoutList = true;     // [Controls] LoadoutList: the mission loadout's weapon list moved by the pad (D79; a fix)
     bool  grabPickup = true;      // [Controls] GrabPickup: a free grip on a weapon takes it (D77; the menu's hdr->pickupMode)
     bool  holdOpen = true;     // [ManualReload] HoldOpen -- an emptied bolt action stays open (the follower) until loaded (GOAL A2)
     bool  reloadGrips = true;     // [ManualReload] Grips: the reload animations' hand on the magazine / handle (round 31)

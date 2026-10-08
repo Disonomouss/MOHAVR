@@ -30,6 +30,7 @@
 #include "falltrace.hpp"
 #include "mounted.hpp"
 #include "pickup.hpp"
+#include "loadout.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -484,6 +485,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (falltrace::TestCommand(line)) continue;  // "mohavr falltrace ..." (GOAL C3)
         if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
         if (pickup::TestCommand(line)) continue;   // "mohavr pickup ..." (D77)
+        if (loadout::TestCommand(line)) continue;  // "mohavr ui" (D79)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         const bool ok = gexec::Run(player, line);
@@ -586,6 +588,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     knife::OnDraw(hdr);
     pickup::OnDraw(hdr);  // D77
     mounted::OnDraw(hdr);  // D78
+    loadout::OnDraw(hdr);  // D79
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);

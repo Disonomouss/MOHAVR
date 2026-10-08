@@ -12,6 +12,7 @@
 #include "addresses.hpp"
 #include "mounted.hpp"
 #include "pickup.hpp"
+#include "loadout.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
 #include "bridge.hpp"
@@ -264,7 +265,8 @@ void OnActivityTick(SafetyHookContext& ctx) {
 bool Install(const Config& cfg) {
     g_cfg = cfg;
     mounted::Configure(cfg.mountedGame, cfg.mountedHands);
-    pickup::Configure(cfg.grabPickup);  // D77 (the grab pickup; here with the mounted gun's, both read once at start)
+    pickup::Configure(cfg.grabPickup);
+    loadout::Configure(cfg.loadoutList);  // D79  // D77 (the grab pickup; here with the mounted gun's, both read once at start)
     // Weapon.SprintArms, WalkArms and JumpArms are their own switches: they work whatever Weapon.ViewModel is (the game
     // camera's sprint shake, walk sway and landing dip come from the arms too).
     if (cfg.sprintArms != 0 || cfg.walkArms || cfg.jumpArms) {

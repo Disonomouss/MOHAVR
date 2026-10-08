@@ -7,6 +7,7 @@
 #include "../common/shared_frame.hpp"
 #include "addresses.hpp"
 #include "bridge.hpp"
+#include "loadout.hpp"
 #include "log.hpp"
 #include "patch.hpp"
 
@@ -34,6 +35,7 @@ DWORD WINAPI Hook_XInputGetState(DWORD index, XState* state) {
             if (shared::ReadPad(h, p, seq) || shared::ReadPad(h, p, seq)) {
                 state->packet = seq;
                 state->pad = p;
+                loadout::FilterPad(state->pad);  // D79
                 if (!g_loggedFirst) {
                     g_loggedFirst = true;
                     MLOG("xinput: pad 0 now driven by the host (first poll, packet %u)", seq);
@@ -42,7 +44,9 @@ DWORD WINAPI Hook_XInputGetState(DWORD index, XState* state) {
             }
         }
     }
-    return g_real(index, state);
+    const DWORD r = g_real(index, state);
+    if (r == ERROR_SUCCESS && index == 0 && state) loadout::FilterPad(state->pad);  // D79 (a real pad)
+    return r;
 }
 
 }  // namespace
