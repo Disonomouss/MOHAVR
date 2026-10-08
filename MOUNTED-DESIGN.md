@@ -64,3 +64,17 @@ While a `MOHAMountedGunWeapon` is in hand (`mounted::GameHandles`):
   78 -> 60;
 - the head pitched 15 deg: the gun pitches with the view;
 - the stick: the mount turns (`rMGRot` yaw 3632, `fAimRightBlend` 0.44).
+
+## 5. Phase 2 (D78): the hands aim it
+
+Built behind `[Weapon] MountedHands` (shipped 0; the menu's Weapons tab -> Mounted MG42).
+- **The aim:** per Draw (`mounted::OnDraw`), the host's aim line (the gun hand, or the line to the foregrip hand) in the
+  world gives yaw against the controller's yaw and pitch against level. Clamped to the weapon's `fMaxYaw` / `fMaxPitch`
+  (45 / 30 deg), it is written to `rMGRot` and `fAimRightBlend` / `fAimUpBlend`. The game turns, draws and fires the gun
+  from them, so the gun stays the game's, on its mount, and no drawing change was needed.
+- **The camera turns with the gun** (yaw and pitch, ENGINE-NOTES 5bv), so:
+  - the eyes keep the controller's yaw, read that frame (a frame-late rMGRot made it oscillate);
+  - the controller's pitch is held at 0 (the hand's pitch is all of the gun's);
+  - the eyes stay where the camera was with the gun level (the Cam socket drops 15 units at 15 deg up).
+- **[S]:** the barrel within 0.2 deg of the hand's line; bursts 25 deg off miss, on the soldier kill (D78).
+- Not done: the hands' IK on the handles; a heavy gun's lag (for the headset to ask for).

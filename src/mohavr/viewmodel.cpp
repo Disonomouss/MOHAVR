@@ -11,6 +11,7 @@
 
 #include "addresses.hpp"
 #include "mounted.hpp"
+#include "pickup.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
 #include "bridge.hpp"
@@ -262,7 +263,8 @@ void OnActivityTick(SafetyHookContext& ctx) {
 
 bool Install(const Config& cfg) {
     g_cfg = cfg;
-    mounted::Configure(cfg.mountedGame);
+    mounted::Configure(cfg.mountedGame, cfg.mountedHands);
+    pickup::Configure(cfg.grabPickup);  // D77 (the grab pickup; here with the mounted gun's, both read once at start)
     // Weapon.SprintArms, WalkArms and JumpArms are their own switches: they work whatever Weapon.ViewModel is (the game
     // camera's sprint shake, walk sway and landing dip come from the arms too).
     if (cfg.sprintArms != 0 || cfg.walkArms || cfg.jumpArms) {
@@ -498,6 +500,127 @@ shared::GunFit CurrentFit(const shared::Header* hdr) {
     return fit;
 }
 
+// D76, the recoil ([Weapon] Kick; the menu's hdr->kickMode): per shot of the main gun (hdr->gunShots, its muzzle flashes)
+// the gun's muzzle rises in the hand by the weapon's own view kick (EALASmallArms.KickParams from DefaultWeapon.ini, per
+// shot: the K98 8 deg, the M12 7, the Garand 6.5, the Springfield 6, the Colt 3, the StG44 2.2, the Thompson 1.5, the
+// MP40 0.8), turns a little aside (YawDistance, YawRandomness) and comes back at the game's PitchRecenterRate (the kick
+// gone in 0.3 s at the least). In VR the game's view kick was lost (the head turns the view); this puts it on the gun,
+// pivoting about the gun hand. The game's fire animation's own shove (~5 cm back, measured) stays as it is.
+struct KickTune {
+    float pitch = 0.0f, pitchRand = 0.0f, pitchCut = 0.0f, recenter = 0.0f, yaw = 0.0f, yawRand = 0.0f;
+};
+struct KickState {
+    std::uintptr_t weapon = 0;
+    KickTune       t;
+    bool           tuneOk = false, init = false;
+    std::uint32_t  seenShots = 0;
+    float          target = 0.0f, rise = 0.0f, yawTarget = 0.0f, yaw = 0.0f;
+    double         lastT = 0.0;
+    unsigned       logged = 0;
+} g_kick;
+
+float Rand01() {
+    static std::uint32_t s = 0x9E3779B9u ^ GetTickCount();
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return static_cast<float>(s & 0xFFFFFFu) / 16777216.0f;
+}
+
+float KickScale(const shared::Header* hdr) {
+    const std::uint32_t m = hdr ? hdr->kickMode : 0u;
+    if (m == 0u || m > 1000u) return g_cfg.kick;
+    return static_cast<float>(m - 1u) / 100.0f;
+}
+
+// The weapon in the pawn's hands and its kick tuning (read once per weapon; the struct's floats in declaration order).
+void KickTuning() {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const int wo = pawn ? names::PropertyOffset(pawn, "Weapon") : -1;
+    const std::uintptr_t weapon = wo >= 0 ? names::ReadPointer(pawn + wo) : 0;
+    if (weapon == g_kick.weapon) return;
+    g_kick.weapon = weapon;
+    g_kick.tuneOk = false;
+    if (!weapon || !names::IsA(weapon, "EALASmallArms")) return;
+    const int ko = names::PropertyOffset(weapon, "KickParams");
+    if (ko < 0) return;
+    const float* f = reinterpret_cast<const float*>(weapon + ko);
+    KickTune t;
+    t.pitch = f[0];
+    t.pitchRand = f[1];
+    t.pitchCut = f[2];
+    t.recenter = f[3];
+    t.yaw = f[4];
+    t.yawRand = f[5];
+    const bool sane = t.pitch >= 0.0f && t.pitch <= 30.0f && t.pitchCut >= 0.0f && t.pitchCut <= 90.0f && t.recenter >= 0.0f &&
+                      t.recenter <= 500.0f && std::fabs(t.yaw) <= 10.0f && t.yawRand >= 0.0f && t.yawRand <= 20.0f;
+    if (sane) {
+        g_kick.t = t;
+        g_kick.tuneOk = true;
+    }
+    if (g_kick.logged < 30) {
+        ++g_kick.logged;
+        MLOG("viewmodel: recoil -- %s's kick: pitch %.2f (random %.2f, cutoff %.1f, back at %.1f deg/s), yaw %.2f (random %.2f)%s",
+             names::ClassName(weapon).c_str(), t.pitch, t.pitchRand, t.pitchCut, t.recenter, t.yaw, t.yawRand,
+             sane ? "" : " -- out of range: no recoil for it");
+    }
+}
+
+// This frame's kick (degrees): the muzzle's rise and its turn aside.
+void KickStep(const shared::Header* hdr, float& rise, float& yaw) {
+    LARGE_INTEGER q, f;
+    QueryPerformanceCounter(&q);
+    QueryPerformanceFrequency(&f);
+    const double now = static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
+    const float dt = g_kick.lastT > 0.0 ? static_cast<float>(std::fmin(0.1, std::fmax(0.0, now - g_kick.lastT))) : 0.0f;
+    const bool gap = g_kick.lastT <= 0.0 || now - g_kick.lastT > 0.25;  // no gun drawn meanwhile (the MG42, the parachute)
+    g_kick.lastT = now;
+    const std::uint32_t shots = hdr ? hdr->gunShots : 0u;
+    if (!g_kick.init) {
+        g_kick.init = true;
+        g_kick.seenShots = shots;
+    }
+    KickTuning();
+    const float scale = KickScale(hdr);
+    const KickTune& t = g_kick.t;
+    std::uint32_t n = shots - g_kick.seenShots;
+    g_kick.seenShots = shots;
+    if (n > 3u) n = 3u;  // (never a pile-up)
+    if (gap) n = 0u;     // shots fired while no gun was drawn here (a mounted gun's) kick nothing on its return
+    if (g_kick.tuneOk && scale > 0.0f) {
+        const float cap = std::fmax(t.pitch, t.pitchCut > 0.0f ? std::fmin(t.pitchCut, 15.0f) : t.pitch) * scale;
+        for (std::uint32_t i = 0; i < n; ++i) {
+            const float r = 1.0f + (Rand01() - 0.5f) * 0.5f * std::fmin(t.pitchRand, 1.0f);
+            g_kick.target = std::fmin(cap, g_kick.target + t.pitch * r * scale);
+            g_kick.yawTarget += (t.yaw + (Rand01() - 0.5f) * 0.5f * t.yawRand) * scale;
+            g_kick.yawTarget = std::fmax(-5.0f, std::fmin(5.0f, g_kick.yawTarget));
+        }
+    } else {
+        g_kick.target = g_kick.yawTarget = 0.0f;
+    }
+    // Back at the game's rate, the kick gone in 0.3 s at the least; aside as fast, in proportion.
+    const float rate = std::fmax(t.recenter, t.pitch / 0.3f) * (scale > 0.0f ? scale : 1.0f);
+    const float before = g_kick.target;
+    g_kick.target = std::fmax(0.0f, g_kick.target - rate * dt);
+    g_kick.yawTarget = before > 1e-4f ? g_kick.yawTarget * (g_kick.target / before) : 0.0f;
+    // Up fast (the kick's ~18 ms), down as the target comes back.
+    const float k = dt > 0.0f ? 1.0f - std::exp(-dt / 0.018f) : 0.0f;
+    g_kick.rise = g_kick.target > g_kick.rise ? g_kick.rise + (g_kick.target - g_kick.rise) * k : g_kick.target;
+    g_kick.yaw = std::fabs(g_kick.yawTarget) > std::fabs(g_kick.yaw) ? g_kick.yaw + (g_kick.yawTarget - g_kick.yaw) * k : g_kick.yawTarget;
+    rise = g_kick.rise;
+    yaw = g_kick.yaw;
+}
+
+// The kick in the gun hand's frame (rows: forward, right, up): the muzzle turned up by `rise` and aside by `yaw`, about the
+// hand.
+M4 KickLocal(float riseDeg, float yawDeg) {
+    const float a = riseDeg * 0.0174533f, b = yawDeg * 0.0174533f;
+    const float ca = std::cos(a), sa = std::sin(a), cb = std::cos(b), sb = std::sin(b);
+    // Pitched: X' = (ca, 0, sa), Z' = (-sa, 0, ca); then turned about Z': X'' = cb X' + sb Y, Y'' = -sb X' + cb Y.
+    const float x[3] = {cb * ca, sb, cb * sa}, y[3] = {-sb * ca, cb, -sb * sa}, z[3] = {-sa, 0.0f, ca}, t[3] = {0.0f, 0.0f, 0.0f};
+    return Frame(x, y, z, t);
+}
+
 }  // namespace
 
 void OnPlayerView() {
@@ -580,6 +703,17 @@ void OnPlayerView() {
             ctrlFrame = MirrorFrame(ctrlFrame, mirror);
             mirroredNow = true;
         }
+        // D76: the recoil, about the gun hand (in the mirror world for the left hand, as the gun is drawn).
+        float kickRise = 0.0f, kickYaw = 0.0f;
+        KickStep(hdr, kickRise, kickYaw);
+        M4 kickWorld = d;  // the kick's move in the world (the real one: for the aim line)
+        const bool kicked = kickRise > 0.01f || std::fabs(kickYaw) > 0.01f;
+        if (kicked) {
+            const M4 unkicked = ctrlFrame;
+            ctrlFrame = Mul(KickLocal(kickRise, kickYaw), ctrlFrame);
+            kickWorld = Mul(RigidInverse(unkicked), ctrlFrame);
+            if (mirroredNow) kickWorld = Mul(Mul(mirror, kickWorld), mirror);
+        }
         // The camera-frame grip point lands on the controller: the gun frame is the controller's, its origin moved back by
         // the grip -- in the mirror world for the left hand, where the fit (tuned on the right hand) applies as it is and
         // comes out mirrored (round 26: put on before the mirror, its sideways part landed on the wrong side, 2 x 11 cm).
@@ -591,12 +725,63 @@ void OnPlayerView() {
         float rpos[3], rdir[3], rupm = 100.0f;
         g_line.valid = false;
         if (view::PoseToWorld(ray, rpos, rdir, rupm)) {
+            if (kicked && g_cfg.kickAim) {  // D76 KickAim: the shots along the kicked barrel
+                float kp[3], kd[3];
+                for (int j = 0; j < 3; ++j) {
+                    kp[j] = rpos[0] * kickWorld.m[0][j] + rpos[1] * kickWorld.m[1][j] + rpos[2] * kickWorld.m[2][j] + kickWorld.m[3][j];
+                    kd[j] = rdir[0] * kickWorld.m[0][j] + rdir[1] * kickWorld.m[1][j] + rdir[2] * kickWorld.m[2][j];
+                }
+                for (int j = 0; j < 3; ++j) {
+                    rpos[j] = kp[j];
+                    rdir[j] = kd[j];
+                }
+            }
             for (int i = 0; i < 3; ++i) {
                 g_line.pos[i] = rpos[i];
                 g_line.dir[i] = rdir[i];
             }
             g_line.upm = rupm;
             g_line.valid = true;
+            // D76 proof: per shot (the first 12), the most the drawn barrel (mesh +Z through the move) turned off the aim line
+            // in the 300 ms after it, against where it was just before.
+            {
+                static std::uint32_t seenShots = hdr->gunShots;
+                static DWORD openAt = 0;
+                static bool open = false;
+                static float base = 0.0f, peak = 0.0f;
+                static unsigned logged = 0;
+                const std::uintptr_t gc = g_gunComp;
+                const int glo = gc ? names::PropertyOffset(gc, "LocalToWorld") : -1;
+                if (glo >= 0 && logged < 12) {
+                    M4 l2w;
+                    std::memcpy(l2w.m, reinterpret_cast<const void*>(gc + glo), sizeof(l2w.m));
+                    const M4 drawn = Mul(l2w, d);
+                    const float z[3] = {drawn.m[2][0], drawn.m[2][1], drawn.m[2][2]};
+                    const float zn = std::sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
+                    const float c = (z[0] * rdir[0] + z[1] * rdir[1] + z[2] * rdir[2]) / (zn > 1e-6f ? zn : 1.0f);
+                    const float off = std::acos(c > 1.0f ? 1.0f : c < -1.0f ? -1.0f : c) * 57.2958f;
+                    const DWORD now = GetTickCount();
+                    if (hdr->gunShots != seenShots) {
+                        seenShots = hdr->gunShots;
+                        if (!open) {
+                            open = true;
+                            openAt = now;
+                            peak = 0.0f;
+                        }
+                    }
+                    if (open) {
+                        peak = std::fmax(peak, off - base);
+                        if (now - openAt > 300) {
+                            open = false;
+                            ++logged;
+                            MLOG("viewmodel: recoil -- shot %u (%s): the drawn barrel turned up to %.1f deg off its line (kick %.1f up %.1f "
+                                 "aside now; Kick x%.2f)", seenShots, hdr->weaponKey, peak, kickRise, kickYaw, KickScale(hdr));
+                        }
+                    } else {
+                        base = off;
+                    }
+                }
+            }
             // Research (round 40): once per weapon, settled 3 s, the drawn barrel (mesh +Z through the move) against the
             // aim line: the angle between them ([BarrelDir] should bring it to ~0).
             static std::uintptr_t checked = 0, seen = 0;

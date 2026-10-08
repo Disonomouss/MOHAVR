@@ -697,6 +697,62 @@ void CommitSprintSample(const M4& hand, bool moving, bool running, float upm) {
     s.before = hand;
 }
 
+// D76 research: per shot of the main gun (hdr->gunShots), how far the drawn gun hand moves in its controller's frame in
+// the 300 ms after it, from the frame before -- whether the game's fire animation still kicks the gun in VR.
+void TraceShot(const M4& hand, float upm) {
+    static std::uint32_t seen = 0;
+    static bool init = false, open = false, haveLast = false;
+    static M4 before, last;
+    static DWORD start = 0;
+    static float maxOff = 0.0f, maxDeg = 0.0f, at[3] = {0, 0, 0};
+    static DWORD peakMs = 0;
+    static float maxRise = 0.0f;
+    static unsigned logged = 0;
+    const shared::Header* hdr = bridge::SharedHeader();
+    if (!hdr) return;
+    const std::uint32_t shots = hdr->gunShots;
+    if (!init) {
+        init = true;
+        seen = shots;
+    }
+    const DWORD now = GetTickCount();
+    if (shots != seen) {
+        seen = shots;
+        if (!open && haveLast) {
+            open = true;
+            before = last;
+            start = now;
+            maxOff = maxDeg = maxRise = 0.0f;
+        }
+    }
+    if (open) {
+        const V3 dv = Sub(Origin(hand), Origin(before));
+        const float off = Len(dv) * 100.0f / upm;
+        if (off > maxOff) {
+            maxOff = off;
+            peakMs = now - start;
+            at[0] = dv.x * 100.0f / upm;
+            at[1] = dv.y * 100.0f / upm;
+            at[2] = dv.z * 100.0f / upm;
+        }
+        maxDeg = std::fmax(maxDeg, AngleBetween(before, hand));
+        // The muzzle's rise: the hand's forward (row 0) turned up (+Z of the controller frame), in degrees.
+        const V3 f0 = Unit(Row(before, 0)), f1 = Unit(Row(hand, 0));
+        maxRise = std::fmax(maxRise, (std::asin(std::fmax(-1.0f, std::fmin(1.0f, f1.z))) - std::asin(std::fmax(-1.0f, std::fmin(1.0f, f0.z)))) * 57.29578f);
+        if (now - start > 300) {
+            open = false;
+            if (logged < 10) {
+                ++logged;
+                MLOG("armik: shot %u (%.47s) -- the drawn gun hand moved up to %.1f cm (%.1f %.1f %.1f) at %u ms, %.1f cm at 300 ms, "
+                     "and turned up to %.1f deg (rise %.1f) in its controller's frame", shots, hdr->weaponKey, maxOff, at[0], at[1], at[2],
+                     static_cast<unsigned>(peakMs), Len(Sub(Origin(hand), Origin(before))) * 100.0f / upm, maxDeg, maxRise);
+            }
+        }
+    }
+    last = hand;
+    haveLast = true;
+}
+
 void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     const int co = names::PropertyOffset(pawn, "CurrentActivity");
     const std::uint8_t act = co >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + co) : 0;
@@ -716,6 +772,7 @@ void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
         float head[3], yaw = 0.0f, upm = 100.0f;
         view::HeadInWorld(head, yaw, upm);
         CommitSprintSample(s.pending, s.pendingSprint, s.pendingRun, upm > 1.0f ? upm : 100.0f);
+        TraceShot(s.pending, upm > 1.0f ? upm : 100.0f);
     }
     s.pending = handInCtrl;
     s.pendingSprint = sprinting;

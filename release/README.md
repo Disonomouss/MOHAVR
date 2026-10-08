@@ -122,6 +122,12 @@ holster puts it back.
 
 **Melee.** Swing the gun: its butt (or a bayonet, a pistol's grip) striking an enemy does the game's melee.
 
+**Picking up.** Reach for a weapon on the ground (or a rack, or an ammo or grenade crate) and squeeze a free hand's grip
+on it: you take it, swapped for the gun of its kind you carry. A light buzz tells you it's within reach.
+
+**Recoil.** Each shot kicks the muzzle up in your hand, by the gun's own kick in the game (a K98 a lot, an SMG a little
+per shot); the shots stay on your hand's line.
+
 **Scopes.** Hold a scoped gun with both hands and bring the scope up to your eye: that eye looks through it. This
 covers the Springfield, the G43, the StG44 and the M18. The zoom is realistic, or the game's, set in the menu.
 
@@ -166,6 +172,9 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Off-hand knife and Knife grip
   - Reload grip and Reload spots (per gun)
   - Rack ejects a round, and whether the ejected round is lost or kept
+  - Recoil (off, 50-200 %; 100 % = the game's own kick)
+  - Grab pickup (on by default)
+  - Mounted MG42: head (default; aim it with your view, as the flat game) or hands (your gun hand swings it on its mount)
 - **Hands**
   - Holsters and pouch (move, size, choose what each holds, show or hide each ring)
   - The hand point (the white dot)
@@ -194,8 +203,8 @@ Most things are in the menu. A few you may want to change in the ini:
 
 ## Known issues
 
-- **Mounted MG42s:** you aim a manned MG42 with your head (and turn it with the stick), as the flat game does; the gun
-  stays on its mount.
+- **Mounted MG42s:** by default you aim a manned MG42 with your head (and turn it with the stick), as the flat game does;
+  the menu's Weapons tab can switch it to your gun hand. It keeps the game's belt reload.
 
 - **StG44:** working the cocking handle doesn't open the ejection port. The game's model has the bolt and the dust
   cover built into the gun's body, so only the handle and its rod move.

@@ -31,6 +31,11 @@ struct Config {
     bool  dropFall = true;        // [ManualReload] DropFall: a dropped magazine falls (round 31)
     bool  fallTrace = true;       // [ManualReload] FallTrace: falls stop at tables and walls (GOAL C3, D69)
     bool  mountedGame = true;     // [Weapon] MountedGame: a manned MG42 is drawn and aimed by the game (GOAL D2, D71)
+    bool  mountedHands = false;   // [Weapon] MountedHands: the hands aim a manned MG42 (D78; the menu's hdr->mgMode overrides)
+    float kick = 1.0f;            // [Weapon] Kick: the gun's muzzle rise per shot in the hand, x the game's view kick (D76; 0 off;
+                                  // the menu's hdr->kickMode overrides)
+    bool  kickAim = false;        // [Weapon] KickAim: the shots follow the kicked barrel (D76)
+    bool  grabPickup = true;      // [Controls] GrabPickup: a free grip on a weapon takes it (D77; the menu's hdr->pickupMode)
     bool  holdOpen = true;     // [ManualReload] HoldOpen -- an emptied bolt action stays open (the follower) until loaded (GOAL A2)
     bool  reloadGrips = true;     // [ManualReload] Grips: the reload animations' hand on the magazine / handle (round 31)
     float debugReloadSlowMo = 1.0f;  // [Debug] ReloadSlowMo: the fall and the flip this many times slower (captures)

@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
@@ -36,7 +36,7 @@ constexpr int kTabMax = 24;
 const int kTabItems[kTabCount][kTabMax] = {
     {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kResolution, kChute, kClose, -1},
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
-     kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
+     kSpotPage, kRackEject, kRackKeep, kGiveAll, kRecoil, kGrabPickup, kMgHands, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
     {kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kClose, -1},
 };
@@ -249,6 +249,19 @@ void Menu::ApplySavedSettings() {
         shippedResY_ = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", 1620, shipped.c_str()));
     }
     if (hdr_) hdr_->crouchMode = CrouchWord();
+    // D76-D78: the recoil, the grab pickup and the mounted MG42 by hand -- the shipped [Weapon] Kick, [Controls] GrabPickup and
+    // [Weapon] MountedHands until the player changes them; live to the game through hdr->kickMode, pickupMode and mgMode.
+    {
+        wchar_t v[32] = L"";
+        GetPrivateProfileStringW(L"Weapon", L"Kick", L"1", v, 32, shipped.c_str());
+        GetPrivateProfileStringW(L"Weapon", L"Kick", v, v, 32, iniPath_.c_str());
+        kickPct_ = std::clamp(static_cast<int>(std::lround(_wtof(v) * 100.0)), 0, 200);
+        const int defGrab = static_cast<int>(GetPrivateProfileIntW(L"Controls", L"GrabPickup", 1, shipped.c_str()));
+        grabPickup_ = GetPrivateProfileIntW(L"Controls", L"GrabPickup", defGrab, iniPath_.c_str()) != 0;
+        const int defMg = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"MountedHands", 0, shipped.c_str()));
+        mgHands_ = GetPrivateProfileIntW(L"Weapon", L"MountedHands", defMg, iniPath_.c_str()) != 0;
+        PublishWeaponModes();
+    }
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
     vignette_ = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", defVig, iniPath_.c_str())), 0, 2);
@@ -1013,6 +1026,27 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                 WritePrivateProfileStringW(L"Render", L"Preset", w, iniPath_.c_str());
             }
             MLOG("menu: resolution -> %s (at the next start)", presets::kPresets[resPreset_].label);
+        } else if (item == kRecoil) {
+            if (in.left) kickPct_ = std::max(0, kickPct_ - 50);
+            else if (in.right) kickPct_ = std::min(200, kickPct_ + 50);
+            else kickPct_ = kickPct_ >= 200 ? 0 : kickPct_ + 50;  // a select steps up, and from 200 % wraps to off
+            if (!iniPath_.empty()) {
+                wchar_t v[16];
+                swprintf_s(v, L"%.1f", kickPct_ / 100.0);
+                WritePrivateProfileStringW(L"Weapon", L"Kick", v, iniPath_.c_str());
+            }
+            PublishWeaponModes();
+            MLOG("menu: recoil -> %d%% of the game's kick", kickPct_);
+        } else if (item == kGrabPickup) {
+            grabPickup_ = !grabPickup_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Controls", L"GrabPickup", grabPickup_ ? L"1" : L"0", iniPath_.c_str());
+            PublishWeaponModes();
+            MLOG("menu: grab pickup -> %s", grabPickup_ ? "on (close a free grip on a weapon to take it)" : "off");
+        } else if (item == kMgHands) {
+            mgHands_ = !mgHands_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"MountedHands", mgHands_ ? L"1" : L"0", iniPath_.c_str());
+            PublishWeaponModes();
+            MLOG("menu: mounted MG42 -> %s", mgHands_ ? "the gun hand aims it" : "the head aims it (the game's way)");
         } else if (item == kChute) {
             chuteHands_ = !chuteHands_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Controls", L"ChuteHands", chuteHands_ ? L"1" : L"0", iniPath_.c_str());
@@ -1276,6 +1310,22 @@ void Menu::Render() {
                 note(n2);
                 break;
             }
+            case kRecoil:
+                if (kickPct_ == 0) snprintf(label, sizeof(label), "Recoil           <  off  >");
+                else snprintf(label, sizeof(label), "Recoil           <  %d%%  >", kickPct_);
+                ImGui::Selectable(label, sel);
+                note("the muzzle rises in your hand per shot (100% = the game's own kick)");
+                break;
+            case kGrabPickup:
+                snprintf(label, sizeof(label), "Grab pickup      <  %s  >", grabPickup_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("reach for a weapon or a crate and close a free grip on it to take it");
+                break;
+            case kMgHands:
+                snprintf(label, sizeof(label), "Mounted MG42     <  %s  >", mgHands_ ? "hands" : "head");
+                ImGui::Selectable(label, sel);
+                note("hands: your gun hand swings it on its mount; head: it follows your view");
+                break;
             case kChute:
                 snprintf(label, sizeof(label), "Parachute        <  %s  >", chuteHands_ ? "hands" : "stick");
                 ImGui::Selectable(label, sel);

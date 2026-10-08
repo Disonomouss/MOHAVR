@@ -1279,3 +1279,57 @@ hud, then hold X."
   - both half pulled: slowing to 22-48 forward;
   - a fast pull of both: "flare", the game's phase 2 -> 3 -> 2, then slowing (266 -> 140 -> 44), never backwards.
   **[H]:** the feel, the depths, whether holding the risers for a whole descent is comfortable.
+
+### D76. The recoil: the game's view kick on the gun in the hand -- Decided 2026-10-08
+- **Why:** the player ("Do all 3", the feature list's item 6).
+- **Measured first (ENGINE-NOTES 5bv):** the game's fire animations already shove the drawn gun ~5 cm back (the Colt
+  also flips 17 deg). The game's view kick, the muzzle climb, was lost in VR, because the head turns the view.
+- **What:** per shot of the main gun (`gunShots`), the gun turns up about the gun hand by the weapon's own
+  `KickParams.PitchDistance`, a little aside (YawDistance, YawRandomness), capped at its cutoff (15 deg at most). It
+  rises in ~18 ms and comes back at the game's `PitchRecenterRate`, but always within 0.3 s.
+  - The arms follow (the IK's target is the kicked controller frame); the game's own shove stays.
+  - `[Weapon] Kick` (shipped **1** = the game's; 0 off, up to 2) and the menu's Weapons tab -> Recoil (off / 50-200 %,
+    live through shared block v32 `kickMode`).
+  - `[Weapon] KickAim` (shipped 0): the shots follow the kicked barrel. Off by default: the aim stays on the hand's line,
+    and the reticle with it.
+- **Proven [S]:**
+  - the drawn barrel's turn off its line per shot: Thompson 0.2 deg at Kick 0, 0.8-2.0 at 1 and 2.8 at 2;
+  - the Garand 4.9;
+  - the Colt 19 (17 of it the game's flip).
+  **[H]:** the feel, and whether aiming down the sights tolerates it.
+
+### D77. Taking weapons and crates by hand -- Decided 2026-10-08
+- **Why:** the player (the feature list's item 4).
+- **What:** a free grip closing within 35 cm of a weapon or a crate the game offers (its swap prompt) takes it, through
+  the game's own `UsedBy`. A free grip is one no gesture took: not a holster, the pouch, the foregrip or the off hand's
+  items.
+  - A weapon is swapped for the gun of its kind you carry, which is dropped there. A crate gives its ammo or grenades.
+  - Only what the game would take counts as in reach (`IsUsableBy`, asked at most every 0.5 s). A light tick when a hand
+    comes within reach, a pulse when it's taken.
+  - Either hand works; the game's hold-to-swap stays.
+  - Shared block v32: `pickupNear` (game -> host), `pickupReqHand`/`pickupReqSeq` (host -> game), `pickupDone`,
+    `pickupMode`.
+  - `[Controls] GrabPickup` (shipped **1**) and the menu's Weapons tab -> Grab pickup.
+  - Test commands: `mohavr pickup list | drop | take`.
+- **Proven [S]:**
+  - an M1 Garand dropped 1 m ahead (`mohavr pickup drop`): both hands "within reach" from 0.18 m;
+  - the left hand on it, the grip: "taken", the Garand in hand, the Thompson left lying there and offered in turn;
+  - a Thompson while carrying one: refused (IsUsableBy false), and no longer offered.
+  **[H]:** the reach, and whether a stray grip ever takes something.
+
+### D78. The mounted MG42 aimed by the hands -- Decided 2026-10-08
+- **Why:** the player (the feature list's item 5; MOUNTED-DESIGN 3.2).
+- **What:** while a manned MG42 is in hand and `[Weapon] MountedHands` is on (shipped **0**; the menu's Weapons tab ->
+  Mounted MG42: head / hands, live through `mgMode`), the game side writes the pawn's `rMGRot` and its aim blends each Draw.
+  They come from the host's aim line, against the body's heading and level, within the gun's 45 / 30 deg.
+  - The game turns and fires the gun on its mount.
+  - The camera turns with the gun (ENGINE-NOTES 5bv), so the eyes keep the controller's yaw, and their position is held
+    where it was with the gun level. The controller's pitch is held at 0 meanwhile.
+  - Fixed for D71 too: past 11 deg of the stick's mount turn the view was taken for a cutscene's (no head pitch on the
+    gun).
+- **Proven [S]** (Husky's street, a soldier 6 m ahead):
+  - the hand line 25 deg right and left -> the barrel along it (0.0 deg off), two bursts miss (Health 110 -> 110);
+  - the hand on him -> one burst kills him (110 -> 0);
+  - pitch 15 deg -> rMGRot 2730, the barrel 0.2 deg off;
+  - the view doesn't move as the gun swings (`logs/shots/d78-*.png`).
+  **[H]:** whether a heavy gun swinging freely under the hand feels right; head or hands.

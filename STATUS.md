@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Recoil, grab pickup, the MG42 by hand** (2026-10-08, D76-D78, ENGINE-NOTES 5bv): the menu's Weapons tab -> Recoil (on, the
+game's kick), Grab pickup (on), Mounted MG42: head (the default) / hands. Shared block v32.
 **The parachute by hand** (2026-10-08, D75, ENGINE-NOTES 5bu): the menu's General tab -> Parachute: hands (shipped off).
 **Pause and shot haptics** (2026-10-08, D74): the game pauses when the headset loses focus in gameplay; a pulse per shot of
 the main gun ([Controls] ShotHaptics).

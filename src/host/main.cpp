@@ -1203,6 +1203,40 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                             }
                         }
                     }
+                    // D77: the grab pickup. A grip closing that no gesture took (handsOut.consumed: a holster, the pouch, the
+                    // foregrip, the off hand's items) with that hand within reach of a weapon or a crate the game lists
+                    // (hdr->pickupNear) asks the game to take it; a light tick as a hand comes within reach, a pulse when it's
+                    // taken.
+                    {
+                        static bool gripWas[2] = {false, false};
+                        static std::uint32_t nearWas = 0, doneSeen = g_hdr->pickupDone;
+                        static int lastHand = 1;
+                        const std::uint32_t nearNow = g_hdr->pickupNear;
+                        const bool menus = (menuOk && menu.Visible()) || g_hdr->gameUiMenu != 0;
+                        for (int h = 0; h < 2; ++h) {
+                            const float gv = pad.GripValue(session, h);
+                            const bool grip = gripWas[h] ? gv > 0.4f : gv > 0.6f;  // (pressed, with some hysteresis)
+                            if (grip && !gripWas[h] && !handsOut.consumed[h] && !menus && ((nearNow >> h) & 1u)) {
+                                g_hdr->pickupReqHand = static_cast<std::uint32_t>(h);
+                                MemoryBarrier();
+                                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->pickupReqSeq));
+                                lastHand = h;
+                                MLOG("host: pickup -- the %s hand's grip closed within reach: take it", h ? "right" : "left");
+                            }
+                            gripWas[h] = grip;
+                            if (((nearNow >> h) & 1u) && !((nearWas >> h) & 1u) && !menus) {
+                                handsOut.pulseAmp[h] = std::max(handsOut.pulseAmp[h], 0.15f);
+                                handsOut.pulseMs[h] = std::max(handsOut.pulseMs[h], 12.0f);
+                            }
+                        }
+                        nearWas = nearNow;
+                        if (g_hdr->pickupDone != doneSeen) {
+                            doneSeen = g_hdr->pickupDone;
+                            handsOut.pulseAmp[lastHand] = std::max(handsOut.pulseAmp[lastHand], 0.6f);
+                            handsOut.pulseMs[lastHand] = std::max(handsOut.pulseMs[lastHand], 60.0f);
+                            MLOG("host: pickup -- taken (a pulse in the %s hand)", lastHand ? "right" : "left");
+                        }
+                    }
                     for (int h = 0; h < 2; ++h) {
                         if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);
                         else if (handsOut.pulse[h]) pad.Pulse(session, h);

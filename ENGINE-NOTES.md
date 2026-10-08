@@ -2322,7 +2322,36 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   pawn (`ClientSetLocation`), then call `CreateParachute(true)`, `AirDrop_DeployChuteEvent()` and the controller's
   `SpawnParachute()` (Physics 11, the `Airdrop` state). `mohavr chute [m]`; 60 m lands in ~6 s, 300 m gives ~30 s.
 
-## 6. Content and UnrealScript
+## 5bv. The recoil, the swap prompts, the mounted gun's camera (D76-D78, 2026-10-08)
+
+- **The fire animations kick the gun in VR already** (measured, the drawn gun hand in its controller's frame per shot):
+  the Thompson and the Garand ~5 cm straight back, <1 deg of turn, at 150-170 ms, gone by 300 ms (held back 6-7 cm in a
+  burst); the Colt 6.5 cm back and a 17-19 deg flip.
+- **The game's view kick is lost in VR** (the head turns the view). It is `EALASmallArms.KickParams` (`ViewKickTuning`,
+  config from `DefaultWeapon.ini`), read by reflection: the floats PitchDistance, PitchRandomness, PitchCutoffDistance,
+  PitchRecenterRate, YawDistance, YawRandomness, PushDistance ... in declaration order. Verified against the ini (the
+  Thompson 1.5 / 1 / 25 / 20 / 0.08 / 4, the Colt 3 / 1 / 4 / 18 / 0 / 1.5). Per shot: the K98 8 deg, the M12 7, the
+  Garand 6.5, the Springfield 6, the Colt 3, the StG44 2.2, the Thompson 1.5, the MP40 0.8. The push (PushDistance, 0.4-3
+  units) is added to the camera in `MOHAPlayerPawn.CalcCamera` (`ProcessViewPush`).
+- **Swap prompts:** a dropped weapon (`MOHAWeaponDroppedPickup`, at most 20; `WorldInfo.WeaponDroppedPickups` +0x7E8)
+  spawns a `MOHAWeaponCSA` once it settles. A placed one (`MOHAWeaponPickupFactory`) has its own, and a crate
+  (`MOHAPickupCrate`) a `MOHAPickupCrateCSA`. Touching the cylinder puts it in the controller's `csaList`.
+  `IsUsableBy(PC)` refuses a weapon the player carries. `UsedBy(pawn)` swaps (`MOHAInventoryManager.SwapWeapon`: the gun
+  of its kind is dropped where the new one lay) or gives the crate's contents.
+  - Soldiers drop by chance only (`MOHAInventoryManager`, the level's drop table, when the player kills them; the AI's
+    `TossWeapon` is empty).
+  - `mohavr pickup drop` uses `EALAWeapon.DropFrom` for a pickup every time.
+- **A manned MG42's camera:**
+  - **Yaw:** the controller's yaw plus `rMGRot.Yaw` (measured: rMGRot 1750 -> camera -169.2 with the controller at
+    -178.8).
+  - **Pitch:** the controller's pitch plus `rMGRot.Pitch` (2500 -> 13.73 deg).
+  - **Position:** the arms' Cam socket, which moves with the aim pose (15 units down at 15 deg up).
+  - **The barrel** (the first-person mesh's +Z) follows the camera with the arms' aim blends: it ran 0.0-0.2 deg off the
+    commanded line. The shots go along it.
+  - **Bug since D71:** the mod's "the player's own view" test (the view's yaw within 2048 of the controller's) failed past
+    11 deg of mount turn; it now allows the mount's 45 deg.
+
+
 
 | Fact | Value | Evidence |
 |---|---|---|

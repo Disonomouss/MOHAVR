@@ -29,6 +29,7 @@
 #include "script_call.hpp"
 #include "falltrace.hpp"
 #include "mounted.hpp"
+#include "pickup.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -209,7 +210,12 @@ WorldMap g_world{};
 // Debug.MuzzleFreeze: the left eye's final view location and rotation, last stereo frame.
 float g_eye0Loc[3] = {};
 int   g_eye0Rot[3] = {};
-float g_gameCam[3] = {};  // the game's own camera at the player's last view (its shots start there)
+float g_gameCam[3] = {};
+// D78: while the hands aim a manned MG42, the camera (the arms' Cam socket) rises and drops with the gun's pitch (15 units at
+// 15 deg): the eyes stay where it was with the gun level.
+bool  g_mgEyeOk = false;
+int   g_ctrlYaw = 0;  // the controller's yaw at this view (eye 0)
+float g_mgEye[3] = {};  // the game's own camera at the player's last view (its shots start there)
 
 float UnitsPerMeter(const shared::Header* hdr) {
     const float live = hdr ? hdr->unitsPerMeter : 0.0f;
@@ -477,6 +483,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (hudtex::TestCommand(player, line)) continue;  // "mohavr hud ..." (the wrist HUD)
         if (falltrace::TestCommand(line)) continue;  // "mohavr falltrace ..." (GOAL C3)
         if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
+        if (pickup::TestCommand(line)) continue;   // "mohavr pickup ..." (D77)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         const bool ok = gexec::Run(player, line);
@@ -577,6 +584,8 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     melee::OnDraw(hdr);
     scope::OnDraw(hdr);
     knife::OnDraw(hdr);
+    pickup::OnDraw(hdr);  // D77
+    mounted::OnDraw(hdr);  // D78
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1316,12 +1325,21 @@ void OnViewPoint(SafetyHookContext& ctx) {
         if (ctrl) {
             const int cyaw = *reinterpret_cast<const int*>(ctrl + addr::kActorRotation + 4);
             const int diff = static_cast<std::int16_t>(static_cast<std::uint16_t>((cyaw - rot[1]) & 0xFFFF));
-            g_viewIsPlayers = diff >= -2048 && diff <= 2048;
+            // (D78: on a manned MG42 the camera's yaw is the controller's plus the mount's turn, rMGRot.Yaw, up to 45 deg;
+            // before, past 11 deg of it the player's own view was taken for a cutscene's.)
+            const int lim = mounted::Manned() ? 2048 + 8192 : 2048;
+            g_viewIsPlayers = diff >= -lim && diff <= lim;
+            g_ctrlYaw = cyaw;
             // Aim.HeadPitch: the controller's pitch follows the head. The view takes its pitch from the head
             // anyway, but the gun model and the shot direction follow the controller rotation (ENGINE-NOTES
             // 5o); left alone, stray mouse movement (tab-out, dragging the window) tilted the gun up in front
             // of the eyes (headset round 5). Only for the player's own view, never a cutscene camera.
-            if (g_cfg.aimHeadPitch && !g_cinema && g_viewIsPlayers) {
+            if (g_viewIsPlayers && mounted::HandsNow()) {
+                // D78: the hands aim the MG42 -- the camera's pitch is the controller's plus rMGRot's (its yaw stays the
+                // controller's: the arms' aim blend turns the gun), so the controller is held level and the hand's pitch is
+                // all of it.
+                *reinterpret_cast<int*>(ctrl + addr::kActorRotation) = 0;
+            } else if (g_cfg.aimHeadPitch && !g_cinema && g_viewIsPlayers) {
                 const Vec3 f = QuatRotate(head, 0.0f, 0.0f, -1.0f);  // LOCAL is gravity-aligned: +Y up
                 const float pitch = std::atan2(f.y, std::sqrt(f.x * f.x + f.z * f.z));
                 *reinterpret_cast<int*>(ctrl + addr::kActorRotation) = RadToUnr(pitch) & 0xFFFF;
@@ -1349,6 +1367,22 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
+    if (g_viewIsPlayers && mounted::HandsNow()) {
+        const std::uintptr_t pawn = aim::LocalPlayerPawn();
+        const int ro = pawn ? names::PropertyOffset(pawn, "rMGRot") : -1;
+        const int mgPitch = ro >= 0 ? static_cast<std::int16_t>(reinterpret_cast<const int*>(pawn + ro)[0] & 0xFFFF) : 0;
+        const int mgYaw = ro >= 0 ? static_cast<std::int16_t>(reinterpret_cast<const int*>(pawn + ro)[1] & 0xFFFF) : 0;
+        if (!g_mgEyeOk || (mgPitch > -150 && mgPitch < 150 && mgYaw > -150 && mgYaw < 150)) {
+            if (g_thisEye == 0) {
+                std::memcpy(g_mgEye, loc, sizeof(g_mgEye));
+                g_mgEyeOk = true;
+            }
+        } else {
+            std::memcpy(loc, g_mgEye, sizeof(g_mgEye));
+        }
+    } else if (g_thisEye == 0) {
+        g_mgEyeOk = false;
+    }
     if (g_cfg.steadyLanding) SteadyLanding(ctx.edi, loc, rot);
 
     // Physical crouch (GOAL A1): decided once per frame; its compensation raises every eye alike.
@@ -1387,7 +1421,9 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
-    const float gameYaw = UnrToRad(rot[1]);
+    // D78: while the hands aim a manned MG42 the camera turns with the gun (the mount's turn on top of the body's heading);
+    // the eyes keep the body's heading -- the controller's yaw, read this frame -- or the world would swing with the hand.
+    const float gameYaw = (g_viewIsPlayers && mounted::HandsNow()) ? UnrToRad(g_ctrlYaw) : UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
         g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};

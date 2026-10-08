@@ -2237,6 +2237,31 @@ both up to dive; a quick hard pull of both flares (do it just before landing for
 3. Does the hard pull flare when you mean it, and never by accident? (yes/no)
 4. Holding your hands up for the whole descent: comfortable enough? (yes/no)
 
+### Recoil (menu -> Weapons -> Recoil)
+**Changed:** each shot kicks the muzzle up in your hand by the gun's own kick from the game (the K98 most; the Thompson a
+little per shot, climbing on a burst), and back within a third of a second. Your shots stay on your hand's line.
+
+**Questions:**
+1. Does the kick feel like the gun's? (too much / too little / right; try 50 % and 150 %)
+2. Aiming down the sights: does the kick get in the way? (yes/no)
+
+### Picking up weapons (menu -> Weapons -> Grab pickup)
+**Changed:** reach for a weapon an enemy dropped (or one on a rack, or an ammo / grenade crate) and squeeze the grip of a
+free hand on it: you take it (swapped for your gun of that kind). A light buzz when the hand is close enough, a stronger
+one when it's taken.
+
+**Questions:**
+1. Can you pick up a dropped gun by reaching for it? (yes/no)
+2. Did a squeeze ever take something you didn't mean to? (yes/no)
+
+### The MG42 by hand (menu -> Weapons -> Mounted MG42: hands)
+**Changed:** with "hands", a manned MG42 swings on its mount where your gun hand points (both hands on it: along the line
+between them); your view stays yours. "Head" is the game's way, as before.
+
+**Questions:**
+1. Hands or head: which do you prefer? (hands / head)
+2. Does the gun swing smoothly and stay on its mount? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

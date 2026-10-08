@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 31;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change); 30: the main gun's shots (D74); 31: the airdrop phase (D75)
+inline constexpr std::uint32_t kVersion = 32;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change); 30: the main gun's shots (D74); 31: the airdrop phase (D75); 32: the recoil, the grab pickup, the MG42 by hand (D76-D78)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -408,6 +408,19 @@ struct Header {
     volatile std::uint32_t gunShots;              // 3860
     // 31 (D75): game -> host, the airdrop: 0 none, 1 freefall, 2 the chute open (steered by the move stick), 3 flaring
     volatile std::uint32_t airdrop;               // 3864
+    // 32 (D76-D78), host -> game, live (the menu; written as they change), 0 = not set (the game's own ini):
+    volatile std::uint32_t kickMode;              // 3868 D76 the recoil: 1 + percent of the game's kick (1 = off)
+    volatile std::uint32_t pickupMode;            // 3872 D77 the grab pickup: 1 off, 2 on
+    volatile std::uint32_t mgMode;                // 3876 D78 the mounted MG42: 1 the head aims (the game's way), 2 the hands
+    // D77: game -> host, per Draw: bit h = hand h (0 left, 1 right) is within reach of a weapon it can take
+    volatile std::uint32_t pickupNear;            // 3880
+    // host -> game: pickupReqHand written, then pickupReqSeq bumped (a free grip closed with the hand in reach)
+    volatile std::uint32_t pickupReqHand;         // 3884
+    volatile std::uint32_t pickupReqSeq;          // 3888
+    // game -> host: +1 per weapon taken by hand (the host's pulse)
+    volatile std::uint32_t pickupDone;            // 3892
+    // D78: game -> host: bit0 on a mounted gun, bit1 the hands aim it
+    volatile std::uint32_t mgState;               // 3896
 };
 #pragma pack(pop)
 
@@ -502,7 +515,9 @@ static_assert(offsetof(Header, hudScreen) == 3040, "shared::Header layout must m
 static_assert(offsetof(Header, slotHud) == 3056, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, gunShots) == 3860, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, airdrop) == 3864, "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 3872, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, kickMode) == 3868 && offsetof(Header, mgState) == 3896,
+              "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 3904, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).
