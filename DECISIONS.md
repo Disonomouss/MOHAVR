@@ -1396,3 +1396,21 @@ hud, then hold X."
   - hand 10 cm left / right / down -> the gun's line +14.0 / -14.0 deg yaw, +14.0 pitch, back to 0 at the start;
   - let go, the hand moved: the gun stayed; taken again there and 10 cm left: +14.0;
   - holding the handle, a burst at a soldier 6 m ahead: Health 110 -> 0, still on the gun.
+
+### D83. Simple grenades, the new default -- Decided 2026-10-08
+- **Why:** the player: "I think I overcomplicated grenades. Make a new option that will be the default. Hold grip to grab
+  from holster, press right trigger once to start cooking, then throw by letting go of the grip in a throwing motion."
+- **What:** `[OffHand] GrenadeStyle=simple` (shipped; the menu's Hands tab -> Grenades: simple / classic):
+  - **Off hand:** hold the grip at the grenade holster to take one; it stays while the grip is held, and let go with the
+    pin in it goes back. One press of that hand's trigger pulls the pin and starts the fuse together (PIN and COOK). Let
+    go of the grip with the throw.
+  - **Gun hand:** the grip held when the trigger pulls the pin makes letting go the throw. Simple covers the gun hand
+    whatever "Hand grenades" says.
+  - **Classic** keeps everything as it was (GrenadeHold, Pin, Cook, Hand grenades); with simple on, the menu hides the
+    classic-only items.
+  - "That hand's trigger": the grenade's own hand (the left trigger for the off hand with the gun in the right). The
+    player said "right trigger"; to be confirmed in the headset.
+- **Proven [S]:**
+  - off hand: the grip held 1 s and let go -> TAKE, PUT BACK; held, one trigger press, let go with a throw -> TAKE,
+    PIN + COOK, THROW (a cooked stick grenade, the fuse 2.69 s);
+  - gun hand (the player's GrenadePin=0): the grip held, one press, let go -> PIN + COOK, THROW, the next one in hand.

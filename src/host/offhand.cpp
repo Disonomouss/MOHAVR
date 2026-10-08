@@ -21,6 +21,8 @@ void OffHandGrenade::Init(const std::wstring& ini) {
     wchar_t b[32] = L"";
     GetPrivateProfileStringW(L"OffHand", L"GrenadeHold", L"grip", b, 32, ini.c_str());
     click_ = !_wcsicmp(b, L"click");
+    GetPrivateProfileStringW(L"OffHand", L"GrenadeStyle", L"simple", b, 32, ini.c_str());
+    simple_ = _wcsicmp(b, L"classic") != 0;
     GetPrivateProfileStringW(L"OffHand", L"Pin", L"trigger", b, 32, ini.c_str());
     pinAuto_ = !_wcsicmp(b, L"auto");
     GetPrivateProfileStringW(L"OffHand", L"Cook", L"spoon", b, 32, ini.c_str());
@@ -36,9 +38,18 @@ void OffHandGrenade::Init(const std::wstring& ini) {
     maxHand_ = std::clamp(iniFloat(L"MaxHandSpeed", 12.0f), 2.0f, 30.0f);
     haptics_ = GetPrivateProfileIntW(L"OffHand", L"Haptics", 1, ini.c_str()) != 0;
     static const char* kCook[] = {"off", "a 2nd trigger squeeze lets the spoon go", "from the pin pull"};
+    MLOG("offhand: grenades %s", simple_ ? "simple (GrenadeStyle; the default): hold the grip, one trigger press pulls the pin and "
+                                          "lights the fuse, let go to throw" : "classic (GrenadeStyle=classic)");
     MLOG("offhand: OffHand.Grenade=%d (the default; the menu's toggle is the player's); pin by %s, cooking %s, a release under "
          "%.1f m/s is %s, hand speed at most %.0f m/s, haptics %d", on_ ? 1 : 0, pinAuto_ ? "the take (auto)" : "the trigger",
          kCook[cook_], minThrow_, slowToss_ ? "tossed along the view" : "dropped with the hand's own velocity", maxHand_, haptics_ ? 1 : 0);
+}
+
+void OffHandGrenade::SetSimple(bool on) {
+    if (on == simple_) return;
+    simple_ = on;
+    throwGrip_ = false;
+    MLOG("offhand: grenades -> %s", on ? "simple (hold the grip, one trigger press cooks, let go to throw)" : "classic");
 }
 
 void OffHandGrenade::SetClick(bool on) {
@@ -65,7 +76,7 @@ bool OffHandGrenade::HeldPress(const In& in, bool atHolster) {
         }
         return true;
     }
-    if (state_ == kNone || !click_ || frozen_) return true;
+    if (state_ == kNone || !Click() || frozen_) return true;
     offHand_ = in.offHand;
     if (state_ == kHeld) {
         if (!atHolster) return true;  // the pin in: only a holster takes it back
@@ -211,7 +222,7 @@ bool OffHandGrenade::TakePress(const In& in, std::uint32_t type) {
     Queue(shared::kNadeTake, t, zero, zero, in.now);
     To(kHeld, "taken at the holster");
     Pulse(offHand_, 0.5f, 30.0f);
-    if (pinAuto_) {
+    if (pinAuto_ && !simple_) {
         Queue(shared::kNadePin, t, zero, zero, in.now);
         To(kArmed, "Pin=auto");
         if (cook_ == 2) {
@@ -358,8 +369,8 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
                     Queue(shared::kNadePutBack, type_, pos, zero, in.now);
                     To(kNone, "put back: the game made it unavailable");
                 }
-            } else if (click_ || main_ ? (throwGrip_ && !in.gripHeld) : !in.gripHeld) {
-                if (state_ == kHeld || (state_ == kArmed && wasFrozen && !click_ && !main_)) {
+            } else if (Click() || main_ ? (throwGrip_ && !in.gripHeld) : !in.gripHeld) {
+                if (state_ == kHeld || (state_ == kArmed && wasFrozen && !Click() && !main_)) {
                     // Let go with the pin in -- or found let go after a freeze, the pin out but the spoon still on.
                     const Sample& last = hist_[(histNext_ + 23) % 24];
                     float at[3] = {pos[0], pos[1], pos[2]};
@@ -377,11 +388,14 @@ void OffHandGrenade::Frame(const In& in, Out& out) {
                 Queue(shared::kNadePin, type_, zero, zero, in.now);
                 To(kArmed, "the pin pulled");
                 Pulse(offHand_, 0.6f, 20.0f);
-                if (cook_ == 2) {
+                if (cook_ == 2 || simple_) {
                     Queue(shared::kNadeCook, type_, zero, zero, in.now);
-                    To(kCooking, "Cook=pin: the fuse burns");
+                    To(kCooking, simple_ ? "one press: the pin out and the fuse burning (simple)" : "Cook=pin: the fuse burns");
+                    if (simple_) Pulse(offHand_, 0.8f, 40.0f);
                 }
-            } else if (press && state_ == kArmed && cook_ == 1) {
+                // Simple: the gun hand's grip held at the pull is the throw's -- letting go throws.
+                if (simple_ && main_ && in.gripHeld) throwGrip_ = true;
+            } else if (press && state_ == kArmed && cook_ == 1 && !simple_) {
                 Queue(shared::kNadeCook, type_, zero, zero, in.now);
                 To(kCooking, "the spoon let go: the fuse burns");
                 Pulse(offHand_, 0.8f, 40.0f);

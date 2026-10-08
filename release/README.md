@@ -107,12 +107,13 @@ Racking a loaded closed-bolt gun throws its live round out, and that round is sp
 
 **Pouch reload** (on by default): grip the pouch with the hand holding a gun, and it reloads at once.
 
-**Grenades.** Take one with the free hand from the grenade holster while the gun stays in your other hand:
-1. The free hand's trigger pulls the pin.
-2. A second squeeze lets the spoon go (the fuse burns).
-3. Swing and let go of the grip to throw.
+**Grenades.** With the gun in your other hand, take one with the free hand from the grenade holster:
+1. Hold the grip at the holster: the grenade is in your hand while you hold it (let go with the pin in and it goes back).
+2. Press that hand's trigger once: the pin comes out and the fuse starts burning.
+3. Let go of the grip in a throwing motion to throw.
 
-The gun hand's grenades work the same way.
+A grenade in your gun hand works the same way: hold its grip, press its trigger once, let go to throw. The menu's
+Hands tab can switch to the classic way (the pin, then a second pull to cook).
 
 **Off-hand pistol.** Draw it with the free hand from a pistol holster; its trigger fires it. A squeeze at any holster
 puts it back. With the pistol in your gun hand, the free hand draws its twin.
@@ -164,7 +165,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Recoil (off, 50-200 %; 100 % = the game's own kick)
   - Scopes and Scope zoom
   - Physical melee
-  - Hand grenades (the gun hand's: pin and grip)
+  - Hand grenades (classic grenades only: the gun hand's by pin and grip, or the game's)
   - Grab pickup (on by default)
   - Mounted MG42: head (default; your head raises and lowers it, the stick turns it) or hands (squeeze the gun hand's
     grip on the handle and push it as you would the real gun; let go and it stays; B gets you off)
@@ -175,7 +176,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Rack ejects a round, and whether the ejected round is lost or kept
 - **Hands**
   - Holsters and pouch (move, size, choose what each holds, show or hide each ring)
-  - Off-hand grenade and Grenade hold, Off-hand pistol, Off-hand knife and Knife grip
+  - Grenades: simple (default; hold the grip, trigger once, let go to throw) or classic
+  - Off-hand grenade (and, classic only, Grenade hold), Off-hand pistol, Off-hand knife and Knife grip
   - The free hand's pose
   - The hand point (the white dot), the foregrip and reload ring sizes
 - **HUD**

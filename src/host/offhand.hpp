@@ -41,7 +41,14 @@ public:
     // (or puts back with the pin in); click = a click takes it and it stays, a squeeze-and-release throws once the pin is
     // out, a click at a holster puts it back with the pin in.
     void SetClick(bool on);
-    bool Click() const { return click_; }
+    bool Click() const { return click_ && !simple_; }
+    // D83 ([OffHand] GrenadeStyle=simple, the default; the player: "I think I overcomplicated grenades"): hold the grip to
+    // take one from the holster (it stays while the grip is held, let go with the pin in it goes back), one press of its
+    // trigger pulls the pin and the fuse starts, let go of the grip in a throwing motion to throw. The gun hand's grenade the
+    // same: the grip held when the trigger pulls the pin, letting go throws. GrenadeHold, Pin and Cook apply to the classic
+    // style only.
+    void SetSimple(bool on);
+    bool Simple() const { return simple_; }
     // Start of the XR frame, before Hands::Update: the game's status (caps, counts, its state, acknowledgements, the
     // countdown ticks, a grenade gone off in the hand, a new pawn) and the reconcile.
     void Poll(shared::Header* hdr, double now);
@@ -101,6 +108,7 @@ private:
 
     bool          on_ = false;
     bool          click_ = false;        // GrenadeHold=click
+    bool          simple_ = true;        // GrenadeStyle=simple (D83)
     bool          main_ = false;         // the gun hand's grenade (InitMain)
     bool          throwGrip_ = false;    // (click) the grip squeezed to throw: letting go throws
     // [OffHand]

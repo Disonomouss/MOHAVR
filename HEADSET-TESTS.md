@@ -2290,6 +2290,15 @@ right, down raises it); let go and it stays where it points. B gets you off the 
 1. Head mode: does the gun now follow your head up and down? (yes/no)
 2. Hands mode: does pushing the handle feel right? Too much or too little swing for your hand's move? (right / more / less)
 
+### Simple grenades (D83, the new default; menu -> Hands -> Grenades)
+**Changed:** hold the grip at the grenade holster to take one (let go with the pin in and it goes back), press that hand's
+trigger once (the pin out and the fuse burning), let go of the grip in a throwing motion. A grenade in the gun hand: hold
+its grip, trigger once, let go.
+
+**Questions:**
+1. Does it work the way you wanted? (yes/no)
+2. The trigger: is the grenade hand's own trigger right, or did you mean the right trigger whichever hand holds it?
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

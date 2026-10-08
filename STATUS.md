@@ -18,6 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Simple grenades** (2026-10-08, D83, the default): hold the grip, the trigger once, let go to throw; classic in the menu.
 **The MG42 fixed after the headset round** (2026-10-08, D82): head mode pitches with the head; hands mode is a lever on the
 handle (grip and push). The player's round: 1, 4-7, 9, 17 work; 10 and 16 fixed; the rest untested.
 **The menu in six tabs** (2026-10-08, D81): General / Comfort / Weapons / Reload / Hands / HUD; tests use

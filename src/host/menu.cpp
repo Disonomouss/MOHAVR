@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -43,7 +43,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     // Reload: the manual reload and its pages.
     {kReload, kPouchReload, kGripPage, kSpotPage, kRackEject, kRackKeep, kClose, -1},
     // Hands: the holsters, the off hand's items, the hand point and rings.
-    {kHolsterPage, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
+    {kHolsterPage, kNadeStyle, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
      kRingScale, kClose, -1},
     {kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kClose, -1},
 };
@@ -53,11 +53,17 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
-bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
+// D83: with the simple grenades, the classic style's own items (the gun hand's grenade, the hold) are hidden.
+bool g_nadeSimple = true;
+bool Shown(int item) {
+    if (item == kGiveAll) return g_giveAllMenu;
+    if (item == kGunNade || item == kNadeHold) return !g_nadeSimple;
+    return true;
+}
 // Tab t's i-th shown item (-1 past the end), and how many it shows.
 int ItemAt(int t, int i) {
     for (int k = 0; k < kTabMax && kTabItems[t][k] >= 0; ++k)
@@ -305,6 +311,13 @@ void Menu::ApplySavedSettings() {
         GetPrivateProfileStringW(L"OffHand", L"GrenadeHold", d, u, 16, iniPath_.c_str());
         nadeClick_ = !_wcsicmp(u, L"click");
         MLOG("menu: grenade hold %s", nadeClick_ ? "click" : "grip");
+        // D83: the grenade style -- the shipped [OffHand] GrenadeStyle (simple) until the player picks.
+        wchar_t st[32] = L"";
+        GetPrivateProfileStringW(L"OffHand", L"GrenadeStyle", L"simple", st, 32, shipped.c_str());
+        GetPrivateProfileStringW(L"OffHand", L"GrenadeStyle", st, st, 32, iniPath_.c_str());
+        nadeSimple_ = _wcsicmp(st, L"classic") != 0;
+        g_nadeSimple = nadeSimple_;
+        MLOG("menu: grenades %s", nadeSimple_ ? "simple" : "classic");
         const int defPin = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"GrenadePin", 0, shipped.c_str()));
         gunNadePin_ = GetPrivateProfileIntW(L"Weapon", L"GrenadePin", defPin, iniPath_.c_str()) != 0;
         MLOG("menu: the gun hand's grenade %s", gunNadePin_ ? "by pin, cook and grip" : "the game's own");
@@ -1148,6 +1161,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             gunNadePin_ = !gunNadePin_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"GrenadePin", gunNadePin_ ? L"1" : L"0", iniPath_.c_str());
             MLOG("menu: the gun hand's grenade -> %s", gunNadePin_ ? "pin, cook and grip" : "the game's own");
+        } else if (item == kNadeStyle) {
+            nadeSimple_ = !nadeSimple_;
+            g_nadeSimple = nadeSimple_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"OffHand", L"GrenadeStyle", nadeSimple_ ? L"simple" : L"classic", iniPath_.c_str());
+            MLOG("menu: grenades -> %s", nadeSimple_ ? "simple" : "classic");
         } else if (item == kNadeHold) {
             nadeClick_ = !nadeClick_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"OffHand", L"GrenadeHold", nadeClick_ ? L"click" : L"grip", iniPath_.c_str());
@@ -1418,6 +1436,12 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "  Ejected round   <  %s  >", rackEjectKeep_ ? "kept" : "lost");
                 ImGui::Selectable(label, sel);
                 note(rackEjectKeep_ ? "kept: it goes back to your reserve" : "lost: it counts as a round spent");
+                break;
+            case kNadeStyle:
+                snprintf(label, sizeof(label), "Grenades         <  %s  >", nadeSimple_ ? "simple" : "classic");
+                ImGui::Selectable(label, sel);
+                note(nadeSimple_ ? "hold the grip to take one, trigger once to cook, let go to throw"
+                                 : "trigger pulls the pin, a 2nd pull cooks; hold as set below");
                 break;
             case kOffNade:
                 snprintf(label, sizeof(label), "Off-hand grenade <  %s  >", offHandNade_ ? "on" : "off");
