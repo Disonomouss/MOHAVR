@@ -1,4 +1,4 @@
-# MOHAVR 0.8.3: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.4: VR for Medal of Honor: Airborne
 
 MOHAVR turns the PC version of *Medal of Honor: Airborne* (Steam or the EA app) into a VR game. You get a stereo,
 head-tracked view, motion controllers with guns held in your hands, and physical interactions: holsters on your body,
@@ -22,7 +22,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 
 ## Install
 
-**Setup program (recommended):** run `MOHAVR-0.8.3-Setup.exe`.
+**Setup program (recommended):** run `MOHAVR-0.8.4-Setup.exe`.
 - It finds the game through Steam or the EA app. If it can't, browse to the game's folder: the one that contains
   `UnrealEngine3\Binaries\MOHA.exe`.
 - It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
@@ -35,7 +35,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 - Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
   "More info", then "Run anyway".
 
-**Zip (manual):** unzip `MOHAVR-0.8.3.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
+**Zip (manual):** unzip `MOHAVR-0.8.4.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
 Steam nor the EA app knows about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag
 (`-Keep2GB` leaves `MOHA.exe` alone). The EA app installs under Program Files: right-click `install.cmd` (and later
 `uninstall.cmd`) and choose "Run as administrator".
