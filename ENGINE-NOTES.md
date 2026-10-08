@@ -24,6 +24,11 @@ should check it at start-up and stand down on a mismatch.
 | Header | TimeDateStamp **0x47BFE8F8** (= Steam's), SizeOfImage `0xF2E000`, CheckSum `0xE402F3`, entry RVA `0xF2D000` (in `.ooa`) |
 | Wrapper | EA "OOA": an `.ooa` section where Steam has `.bind`; the header's import directory names only `Core/Activation.dll` |
 
+**The CheckSum is not part of the build's identity** (D80, a tester's EA copy): theirs had `0xE458F7` with the
+timestamp, SizeOfImage, entry point and all 39 code signatures matching. The header's CheckSum is the file's checksum, so a
+re-signed exe (the signature is in the file) or a header patcher that recomputes it changes it with the code untouched.
+The build check only logs it.
+
 Evidence that it is the same compiled game (the files compared section by section):
 - the same section VAs and virtual sizes;
 - `.rdata`, `.rsrc` and `.reloc` byte-identical, including the game's own import descriptors (RVA `0xCDAB3C`) and IAT;

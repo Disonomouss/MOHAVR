@@ -1348,3 +1348,14 @@ hud, then hold X."
   - Primary's list: down, down -> MP40 highlighted with the list open, up / down, A -> Primary = MP40;
   - Secondary's list: down -> Thompson, A -> Secondary = Thompson.
   The keyboard keeps the game's behaviour.
+
+### D80. The build check no longer stands down on the PE CheckSum alone -- Decided 2026-10-08
+- **Why:** a tester's EA copy logged "build check: FAIL -- CheckSum is 0x00E458F7, expected 0x00E402F3" and stood down.
+  It was the only mismatch: the timestamp, SizeOfImage, entry point and all 39 code signatures matched.
+- **Cause:** the CheckSum is the whole file's checksum. Re-signing the exe or a header patcher (a third-party 4 GB tool
+  recomputes it) changes it while the code is identical. Our own 4 GB step doesn't touch it (this PC's flagged exe still
+  has 0xE402F3).
+- **What:** a CheckSum difference is logged as a note. The other header fields and the signatures (every patched site's
+  bytes, plus each hook's own prologue check, standing rule 4) still decide. `[Debug] TestWrongBuild=2` simulates it.
+- **Proven [S]:** with TestWrongBuild=2, "build check: note -- the header's CheckSum is 0x00E454F7 ...", then
+  "build check: OK", every hook installed, and the harness cycle reached gameplay.

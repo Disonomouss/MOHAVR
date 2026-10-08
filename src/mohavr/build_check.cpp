@@ -13,7 +13,8 @@ bool g_ea = false;
 
 bool IsEaBuild() { return g_ea; }
 
-bool CheckBuild(bool forceFail) {
+bool CheckBuild(int testMode) {
+    const bool forceFail = testMode == 1;
     const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     if (base != addr::kImageBase) {
         MLOG("build check: FAIL -- exe loaded at 0x%08X, expected 0x%08X", base, addr::kImageBase);
@@ -31,7 +32,6 @@ bool CheckBuild(bool forceFail) {
     struct Field { const char* name; std::uint32_t have, want; } fields[] = {
         {"TimeDateStamp", nt->FileHeader.TimeDateStamp,          wantStamp},
         {"SizeOfImage",   nt->OptionalHeader.SizeOfImage,        ea ? addr::kEaSizeOfImage : addr::kSizeOfImage},
-        {"CheckSum",      nt->OptionalHeader.CheckSum,           ea ? addr::kEaCheckSum : addr::kCheckSum},
         {"EntryPoint",    nt->OptionalHeader.AddressOfEntryPoint, ea ? addr::kEaEntryRva : addr::kEntryRva},
     };
     bool ok = true;
@@ -40,6 +40,17 @@ bool CheckBuild(bool forceFail) {
             MLOG("build check: FAIL -- %s is 0x%08X, expected 0x%08X", f.name, f.have, f.want);
             ok = false;
         }
+    }
+    // D80 (a tester's EA copy stood down on this alone): the header's CheckSum is the file's checksum, not the code's -- a
+    // re-signed exe (the Authenticode signature is part of the file) or a header patcher that recomputes it (a 4 GB tool)
+    // changes it with the code untouched. Logged, never a reason to stand down: the fields above and the signatures below
+    // (every patched site's bytes) decide.
+    {
+        const std::uint32_t have = testMode == 2 ? (nt->OptionalHeader.CheckSum ^ 0x5604u) : nt->OptionalHeader.CheckSum;
+        const std::uint32_t known = ea ? addr::kEaCheckSum : addr::kCheckSum;
+        if (have != known)
+            MLOG("build check: note -- the header's CheckSum is 0x%08X, not the known 0x%08X (a re-signed or header-patched exe: "
+                 "the code is checked below)%s", have, known, testMode == 2 ? " [Debug.TestWrongBuild=2: simulated]" : "");
     }
     for (const auto& s : addr::kSignatures) {
         if (!patch::BytesMatch(s.va, s.bytes, s.size)) {

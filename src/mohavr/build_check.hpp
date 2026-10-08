@@ -6,7 +6,7 @@ namespace mohavr {
 
 // Logs each check. Returns true only if everything matches. `forceFail` simulates a
 // mismatch (Debug.TestWrongBuild) to prove the stand-down path.
-bool CheckBuild(bool forceFail);
+bool CheckBuild(int testMode);  // 1: a timestamp mismatch simulated; 2: a CheckSum-only one (D80)
 
 // D58: is this the EA app's copy (the OOA wrapper) rather than Steam's? Valid once CheckBuild has passed.
 bool IsEaBuild();

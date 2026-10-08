@@ -25,7 +25,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.bridgeHost     = get(L"Bridge", L"Host", c.bridgeHost);
     c.bridgeMirror   = static_cast<int>(GetPrivateProfileIntW(L"Bridge", L"Mirror", c.bridgeMirror, ini.c_str()));
     if (c.bridgeMirror < 0 || c.bridgeMirror > 2) c.bridgeMirror = 0;
-    c.testWrongBuild = get(L"Debug", L"TestWrongBuild", c.testWrongBuild);
+    c.testWrongBuild = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"TestWrongBuild", c.testWrongBuild, ini.c_str()));
     c.controllers    = get(L"Input", L"Controllers", c.controllers);
     c.debugViewState = get(L"Debug", L"ViewState", c.debugViewState);
     c.debugEyeFloor  = get(L"Debug", L"EyeFloor", c.debugEyeFloor);
