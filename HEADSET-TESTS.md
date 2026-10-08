@@ -2124,14 +2124,14 @@ screen."
 
 ## Round 54: prepared 2026-10-08, GOAL.md (crouch, comfort, compatibility, the known issues, mounted guns, the sweep)
 **Deployed for you:** the shipped defaults (your install, rebuilt; run the setup again any time to get the released one).
-The new comfort features ship **off**: turn them on in the menu's General tab to try them (Physical crouch, Vignette,
+The new comfort features ship **off**: turn them on in the menu's Comfort tab to try them (Physical crouch, Vignette,
 Seated). The fixes (wrist panels behind the gun, the HUD in the desktop mirror, magazines and rounds stopping at walls and
 tables, the RGBA fallback, mounted MG42s) are on.
 
 How to answer: the questions below, item by item (a word or a line each is enough), and your `MOHAVR.log` /
 `MOHAVR-host.log` after the session.
 
-### A1 Physical crouch (menu -> General -> Physical crouch: on)
+### A1 Physical crouch (menu -> Comfort -> Physical crouch: on)
 **Changed:** crouch for real and the game crouches too: you fit behind low cover and the eye stays where your head is.
 Stand up and the game stands. The stick click still crouches; it has the say until your head crosses the line again.
 Recentre standing first (the line is 40 cm below where your head was at the recentre; `[Controls] CrouchDepth`).
@@ -2144,7 +2144,7 @@ click while standing, and while crouched for real.
 2. Does it ever crouch by accident: leaning in, looking down, picking something up? (yes/no; when?)
 3. Is 40 cm down the right depth? (deeper / shallower / right)
 4. Does the view stay at your real head height through the crouch (no jump or dip)? (yes/no)
-### A2 Vignette (menu -> General -> Vignette: light or strong)
+### A2 Vignette (menu -> Comfort -> Vignette: light or strong)
 **Changed:** while the stick moves or turns you, the edges of the view darken (not when you move your head). It fades in
 and out in 0.2 s; the menu, the HUD and the red dot stay above it.
 
@@ -2152,7 +2152,7 @@ and out in 0.2 s; the menu, the HUD and the red dot stay above it.
 1. Does it help with comfort when walking and turning? (yes/no)
 2. Light or strong: which would you keep on, and is the clear area too small or too large?
 3. Is the fade too quick, too slow, or right?
-### A3 Seated (menu -> General -> Seated: on)
+### A3 Seated (menu -> Comfort -> Seated: on)
 **Changed:** sit down, then menu -> Recentre: your seated head becomes the game's standing height (that works with
 Seated off too). With Seated on, physical crouch needs only a 25 cm lean from the chair.
 
@@ -2227,7 +2227,7 @@ sets the strength (0 = off).
 1. Take the headset off mid-fight: is the game paused when you put it back on? (yes/no)
 2. The pulse per shot: too weak, too strong, or right? On automatic fire too? (weaker / stronger / right)
 
-### The parachute by hand (menu -> General -> Parachute: hands)
+### The parachute by hand (menu -> Comfort -> Parachute: hands)
 **Changed:** under the open chute, hold both grips (the risers): pull one hand down to turn that way, both down to slow,
 both up to dive; a quick hard pull of both flares (do it just before landing for a soft landing). The stick still works.
 
