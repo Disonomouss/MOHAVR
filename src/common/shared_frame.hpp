@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 29;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change)
+inline constexpr std::uint32_t kVersion = 30;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change); 30: the main gun's shots (D74)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -404,6 +404,8 @@ struct Header {
     volatile std::uint16_t crouchMode;            // 3052
     volatile std::uint16_t crouchReqSeq;          // 3054
     SlotHud                slotHud[kRing];        // 3056 game -> host, per slot, written with slotMeta (before publishedFrame)
+    // 30 (D74): game -> host, +1 per muzzle flash of the player's weapon (a shot): the host's haptic pulse
+    volatile std::uint32_t gunShots;              // 3860
 };
 #pragma pack(pop)
 
@@ -496,6 +498,7 @@ static_assert(offsetof(Header, hudCaps) == 3032, "shared::Header layout must mat
 static_assert(offsetof(Header, hudPlace) == 3036, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, hudScreen) == 3040, "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, slotHud) == 3056, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, gunShots) == 3860, "shared::Header layout must match between x86 and x64");
 static_assert(sizeof(Header) == 3864, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.

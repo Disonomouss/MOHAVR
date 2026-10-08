@@ -669,6 +669,32 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     bool running = false;
     bool loggedViews = false, loggedProjection = false, loggedStereo = false;
     mohavr::shared::SlotMeta lastMeta{};  // render pose/fov of the frame in `last`
+    // D74: the headset taken off or the runtime's dashboard opened (the session leaves FOCUSED) mid-gameplay -- the game's
+    // pause menu (its Start's "showmenu", through the console-command channel: the game runs it even while the host isn't
+    // drawing). [Bridge] PauseOnFocusLoss.
+    const bool pauseOnFocusLoss =
+        GetPrivateProfileIntW(L"Bridge", L"PauseOnFocusLoss", 1, (ExeDir() + L"\\MOHAVR.ini").c_str()) != 0;
+    bool wasFocused = false;
+    auto pauseForFocusLoss = [&](const char* why) {
+        if (!pauseOnFocusLoss || !g_hdr) return;
+        if (!lastMeta.hasView || g_hdr->gameUiMenu) {
+            MLOG("host: focus lost (%s) -- not in gameplay, no pause", why);
+            return;
+        }
+        static const char kPause[] = "showmenu";
+        std::memcpy(g_hdr->cmd, kPause, sizeof(kPause));
+        InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
+        MLOG("host: focus lost (%s) -- the game paused (its pause menu)", why);
+    };
+    // D74: the main gun's shots (hdr->gunShots, the player's muzzle flashes) -- a pulse in the gun hand, and the off hand
+    // when it holds the foregrip. [Controls] ShotHaptics: the strength, 0 = off.
+    const float shotHaptics = [&] {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Controls", L"ShotHaptics", L"0.6", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        const float f = static_cast<float>(_wtof(v));
+        return f >= 0.0f && f <= 1.0f ? f : 0.6f;
+    }();
+    std::uint32_t seenShots = g_hdr ? g_hdr->gunShots : 0;
     mohavr::shared::SlotScope lastScope{};  // v24: where its eyes and scope view are
     std::uint64_t shown = 0;  // last game frame copied into `last`
     // Recentre (menu): `local` is re-created at the head's heading and floor position. Frames the game
@@ -689,6 +715,11 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (ev.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 const XrSessionState st = reinterpret_cast<XrEventDataSessionStateChanged*>(&ev)->state;
                 MLOG("host: session state -> %s", StateName(st));
+                if (st == XR_SESSION_STATE_FOCUSED) wasFocused = true;
+                else if (wasFocused) {
+                    wasFocused = false;
+                    pauseForFocusLoss(StateName(st));
+                }
                 if (st == XR_SESSION_STATE_READY) {
                     XrSessionBeginInfo bi{XR_TYPE_SESSION_BEGIN_INFO};
                     bi.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
@@ -869,6 +900,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             else if (c == "right") mi.right = true;
             else if (c == "select") mi.select = true;
             else if (c == "back") mi.back = true;
+            else if (c == "unfocus") pauseForFocusLoss("test command");  // D74 (the simulator keeps its focus)
             MLOG("host: test command '%s'", c.c_str());
         }
 
@@ -1149,6 +1181,27 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         MLOG("host: melee strike %u (%s) -- pulse %.2f for %.0f ms%s", seen,
                              (kind & 0xFFu) == 1u ? "a soldier" : (kind & 0xFFu) == 2u ? "an actor" : "the world", amp, ms,
                              offKnife ? ", the off hand (the knife)" : handsOut.twoHanded ? ", both hands" : "");
+                    }
+                    // D74: the main gun's shots.
+                    const std::uint32_t shots = g_hdr->gunShots;
+                    if (shots != seenShots) {
+                        const std::uint32_t n = shots - seenShots;
+                        seenShots = shots;
+                        if (shotHaptics > 0.0f && handsOut.gunValid) {
+                            const int gh = handsOut.gunHand, oh = 1 - gh;
+                            handsOut.pulseAmp[gh] = std::max(handsOut.pulseAmp[gh], shotHaptics);
+                            handsOut.pulseMs[gh] = std::max(handsOut.pulseMs[gh], 35.0f);
+                            if (handsOut.twoHanded) {
+                                handsOut.pulseAmp[oh] = std::max(handsOut.pulseAmp[oh], 0.7f * shotHaptics);
+                                handsOut.pulseMs[oh] = std::max(handsOut.pulseMs[oh], 35.0f);
+                            }
+                            static int logged = 0;
+                            if (logged < 40) {
+                                ++logged;
+                                MLOG("host: %u shot(s) -- a %.2f pulse in the %s hand%s", n, shotHaptics, gh ? "right" : "left",
+                                     handsOut.twoHanded ? " (and the foregrip hand)" : "");
+                            }
+                        }
                     }
                     for (int h = 0; h < 2; ++h) {
                         if (handsOut.pulseAmp[h] > 0.0f) pad.Pulse(session, h, handsOut.pulseAmp[h], handsOut.pulseMs[h]);

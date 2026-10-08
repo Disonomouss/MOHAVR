@@ -2218,6 +2218,15 @@ next start. Custom keeps the ini's 2880x1620.
 1. With your headset's preset (Quest 3: 2064x2208 per eye), is the picture sharper, and does it stay smooth? (yes/no)
 2. Auto: does it pick a sensible size? (`MOHAVR.log`: "render: the game sees ...")
 
+### Pause and shot haptics
+**Changed:** taking the headset off (or opening the Quest / SteamVR dashboard) in gameplay opens the game's pause menu. Each
+shot of your gun now pulses the gun hand (and the foregrip hand when you hold it two-handed); `[Controls] ShotHaptics`
+sets the strength (0 = off).
+
+**Questions:**
+1. Take the headset off mid-fight: is the game paused when you put it back on? (yes/no)
+2. The pulse per shot: too weak, too strong, or right? On automatic fire too? (weaker / stronger / right)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

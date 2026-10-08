@@ -1,3 +1,5 @@
+#include "bridge.hpp"
+#include "../common/shared_frame.hpp"
 #include "muzzle.hpp"
 
 #include <windows.h>
@@ -165,7 +167,11 @@ void __fastcall Hook_ExecActivateSystem(std::uintptr_t psc, void* /*edx*/, void*
     }
     g_hook.thiscall<void>(psc, stack, result);
     if (kind == kNone) return;
-    if (kind == kFlash) ArmFreeze(psc);
+    if (kind == kFlash) {
+        ArmFreeze(psc);
+        // D74: a shot -- the host's haptic pulse.
+        if (shared::Header* hdr = bridge::SharedHeader()) InterlockedIncrement(reinterpret_cast<volatile LONG*>(&hdr->gunShots));
+    }
     if (mode == 0) {
         // hide: ActivateSystem cleared it; with it set the emitters skip spawning (bursts too) until the next shot.
         int so = -1;

@@ -1234,3 +1234,27 @@ hud, then hold X."
     the game's address space);
   - the menu: Custom -> Auto -> Quest 2 / 3S, written to the player's ini and restored after.
   **[H]:** the sharpness and the frame rate on the player's own PC.
+
+### D74. Pause when the headset loses focus; a pulse per shot -- Decided 2026-10-08
+- **Why:** the player (2026-10-08, "Do it", after the feature list).
+  - The host only reacted to a stopped session: taking the headset off or opening the runtime's dashboard left the game
+    running.
+  - Only the off-hand pistol pulsed per shot.
+- **The pause:**
+  - When the session leaves FOCUSED during gameplay (a head-tracked frame, no game menu open), the host sends the game
+    `showmenu`, the game's own Start binding, through the console-command channel. The game runs it even while the host
+    isn't drawing.
+  - With a game menu already open it does nothing, since a second `showmenu` would close it.
+  - `[Bridge] PauseOnFocusLoss=1` (a fix, on). The simulator never loses focus, so a host test command (`unfocus`, in
+    host_cmd.txt) runs the same path.
+- **The pulse:**
+  - `muzzle.cpp` counts the player's weapon's muzzle flashes into the new `gunShots` counter (shared block v30, at 3860).
+    The flash is re-activated per shot, so the count is per shot for every gun, the mounted MG42 too.
+  - The host pulses the gun hand (`[Controls] ShotHaptics` = the strength, 0.6 shipped; 0 = off), and the foregrip hand at
+    70 % when two-handed.
+  - It needs the muzzle hook, installed unless `Weapon.MuzzleFlash` and `Brass` are both "game".
+- **Proven [S]** (the EA copy):
+  - a 1 s Thompson burst: ammo 50 -> 35, 15 shots seen, 15 pulses in the right hand;
+  - `unfocus` in gameplay: "the game paused (its pause menu)", the screen check "pausemenu"; again with it open: "not in
+    gameplay, no pause".
+  **[H]:** the pulse's strength, and the pause when the headset really comes off.

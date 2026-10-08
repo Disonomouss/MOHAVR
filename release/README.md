@@ -73,6 +73,10 @@ shows the game normally instead of staying white, the mod isn't running: check t
 You aim by pointing the gun: a red dot shows where shots land. In the game's menus the face buttons work as
 labelled: A selects, B goes back. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
+
+The game pauses when you take the headset off or open the headset's dashboard. Each shot vibrates the gun hand
+(`[Controls] ShotHaptics` in `MOHAVR.ini`: 0 = off).
+
 ## Your hands
 
 Either hand can hold the gun: the hand that draws from a holster holds it, and the other hand is free. A short buzz
