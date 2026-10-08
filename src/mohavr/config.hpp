@@ -159,6 +159,7 @@ bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: it
     bool  stereoViewState   = true;   // [Camera] StereoViewState -- give the right eye its own FSceneViewState (fixes flicker)
     float unitsPerMeter     = 100.0f; // [Camera] UnitsPerMeter -- 100 per the player in stereo (round 4; ENGINE-NOTES 5i)
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
+    bool  damageTint        = true;   // [Camera] DamageTint -- the game's damage flash and its other screen tints (D84)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
     bool  jumpLift          = false;  // [Camera] JumpLift -- the game's camera lift on a jump (fJumpCameraOffset) in the view
     bool  steadyLanding     = true;   // [Camera] SteadyLanding -- the parachute landing's camera animation left out

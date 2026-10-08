@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -37,7 +37,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     // General: the view and the setup.
     {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kClose, -1},
     // Comfort: moving, turning, stance.
-    {kTurn, kMove, kSticks, kVignette, kSeated, kCrouch, kChute, kClose, -1},
+    {kTurn, kMove, kSticks, kVignette, kDamageTint, kSeated, kCrouch, kChute, kClose, -1},
     // Weapons: the gun in hand.
     {kGunFit, kRedDot, kRecoil, kScope, kScopeZoom, kMelee, kGunNade, kGrabPickup, kMgHands, kGiveAll, kClose, -1},
     // Reload: the manual reload and its pages.
@@ -53,7 +53,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -282,6 +282,10 @@ void Menu::ApplySavedSettings() {
         const int defMg = static_cast<int>(GetPrivateProfileIntW(L"Weapon", L"MountedHands", 0, shipped.c_str()));
         mgHands_ = GetPrivateProfileIntW(L"Weapon", L"MountedHands", defMg, iniPath_.c_str()) != 0;
         PublishWeaponModes();
+        // D84: the damage flash -- the shipped [Camera] DamageTint until the player toggles it (live: hdr->damageTint).
+        const int defTint = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"DamageTint", 1, shipped.c_str()));
+        damageTint_ = GetPrivateProfileIntW(L"Camera", L"DamageTint", defTint, iniPath_.c_str()) != 0;
+        if (hdr_) hdr_->damageTint = damageTint_ ? 2u : 1u;
     }
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
@@ -1083,6 +1087,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                 WritePrivateProfileStringW(L"Render", L"Preset", w, iniPath_.c_str());
             }
             MLOG("menu: resolution -> %s (at the next start)", presets::kPresets[resPreset_].label);
+        } else if (item == kDamageTint) {
+            damageTint_ = !damageTint_;
+            if (hdr_) hdr_->damageTint = damageTint_ ? 2u : 1u;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Camera", L"DamageTint", damageTint_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: damage flash -> %s", damageTint_ ? "on" : "off");
         } else if (item == kRecoil) {
             if (in.left) kickPct_ = std::max(0, kickPct_ - 50);
             else if (in.right) kickPct_ = std::min(200, kickPct_ + 50);
@@ -1375,6 +1384,11 @@ void Menu::Render() {
                 note(n2);
                 break;
             }
+            case kDamageTint:
+                snprintf(label, sizeof(label), "Damage flash     <  %s  >", damageTint_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("the screen goes red when you're hit (and the game's other screen tints)");
+                break;
             case kRecoil:
                 if (kickPct_ == 0) snprintf(label, sizeof(label), "Recoil           <  off  >");
                 else snprintf(label, sizeof(label), "Recoil           <  %d%%  >", kickPct_);

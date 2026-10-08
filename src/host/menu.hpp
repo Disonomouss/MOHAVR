@@ -214,6 +214,7 @@ private:
     bool                    grabPickup_ = true;   // D77
     bool                    mgHands_ = false;     // D78
     bool                    nadeSimple_ = true;   // D83
+    bool                    damageTint_ = true;   // D84
     void PublishWeaponModes() {
         if (!hdr_) return;
         hdr_->kickMode = 1u + static_cast<std::uint32_t>(kickPct_);

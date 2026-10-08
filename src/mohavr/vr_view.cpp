@@ -171,26 +171,63 @@ bool g_loggedStereo = false;
 // Motion blur / depth of field off while head tracking (FSystemSettings ints, ENGINE-NOTES 5i).
 // Re-asserted every view because the game re-applies its scalability options. Only ever writes
 // 0 over a value that is 0 or 1 -- anything else means the address is wrong: stop touching it.
+// D84 (the player: "When I take damage now, the screen no longer goes red"): the game's damage flash -- and its other
+// screen tints: low health, an explosion, a melee hit, dying, a medkit, a pickup -- is the player controller's
+// MOHAPostProcessComponent writing WorldInfo.GameModified_Scene_* (highlights, midtones, shadows, desaturation), which the
+// uber post-process pass applies. That pass is the depth-of-field one: with bAllowDepthOfField forced off it never ran,
+// and the tint with it (measured: a held bullet hit, the image's mean red 31 -> 169 with it allowed, unchanged without).
+// So while one of those effects runs ([Camera] DamageTint, the menu's hdr->damageTint), depth of field is allowed again.
+bool DamageTintRunning() {
+    const shared::Header* hdr = bridge::SharedHeader();
+    const std::uint32_t mode = hdr ? hdr->damageTint : 0u;
+    if (mode == 1u || (mode == 0u && !g_cfg.damageTint)) return false;
+    const auto engine = *reinterpret_cast<const std::uintptr_t*>(addr::kGEngine);
+    const auto* arr = engine ? reinterpret_cast<const std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
+    const std::uintptr_t player = (arr && arr[1] >= 1 && arr[0]) ? *reinterpret_cast<const std::uintptr_t*>(arr[0]) : 0;
+    const std::uintptr_t ctrl = player ? *reinterpret_cast<const std::uintptr_t*>(player + addr::kLocalPlayerActor) : 0;
+    const int co = ctrl ? names::PropertyOffset(ctrl, "PostProcessComponent") : -1;
+    const std::uintptr_t ppc = co >= 0 ? names::ReadPointer(ctrl + co) : 0;
+    if (!ppc) return false;
+    for (const char* flag : {"ColorCorrectionRunning", "bBulletHit", "bMeleeHit", "bLowHealth", "bExplosion", "bDying", "bMedkit",
+                             "bItemPickup", "bGeneric"}) {
+        int off = -1;
+        std::uint32_t mask = 0;
+        if (names::BoolProperty(ppc, flag, off, mask) && (*reinterpret_cast<const std::uint32_t*>(ppc + off) & mask)) return true;
+    }
+    return false;
+}
+
 void ForceVrSettings() {
     static bool disabled = false;
     if (disabled) return;
-    auto force = [](std::uintptr_t va, bool want, const char* what) {
-        if (!want) return true;
+    auto force = [](std::uintptr_t va, bool off, const char* what) {
         auto* p = reinterpret_cast<volatile int*>(va);
         const int v = *p;
         if (v != 0 && v != 1) {
             MLOG("view: %s at 0x%08X holds %d (expected 0/1) -- not touching FSystemSettings", what, static_cast<unsigned>(va), v);
             return false;
         }
-        if (v == 1) {
+        if (off && v == 1) {
             *p = 0;
             static int logged = 0;
             if (logged++ < 4) MLOG("view: %s forced off (FSystemSettings 0x%08X)", what, static_cast<unsigned>(va));
+        } else if (!off && v == 0) {
+            *p = 1;
         }
         return true;
     };
-    if (!force(addr::kSysAllowMotionBlur, g_cfg.noMotionBlur, "motion blur") ||
-        !force(addr::kSysAllowDepthOfField, g_cfg.noDepthOfField, "depth of field"))
+    // (Once per frame: eye 0's view.)
+    static bool tint = false;
+    if (g_thisEye == 0 && g_cfg.noDepthOfField) {
+        const bool now = DamageTintRunning();
+        if (now != tint) {
+            static int logged = 0;
+            if (logged++ < 20) MLOG("view: the game's screen tint %s", now ? "runs -- its pass (depth of field's) allowed (Camera.DamageTint)" : "ended");
+            tint = now;
+        }
+    }
+    if ((g_cfg.noMotionBlur && !force(addr::kSysAllowMotionBlur, true, "motion blur")) ||
+        (g_cfg.noDepthOfField && !force(addr::kSysAllowDepthOfField, !tint, "depth of field")))
         disabled = true;
 }
 

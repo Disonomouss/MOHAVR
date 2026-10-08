@@ -1414,3 +1414,18 @@ hud, then hold X."
   - off hand: the grip held 1 s and let go -> TAKE, PUT BACK; held, one trigger press, let go with a throw -> TAKE,
     PIN + COOK, THROW (a cooked stick grenade, the fuse 2.69 s);
   - gun hand (the player's GrenadePin=0): the grip held, one press, let go -> PIN + COOK, THROW, the next one in hand.
+
+### D84. The damage flash back, as a switch (on) -- Decided 2026-10-08
+- **Why:** the player: "When I take damage now, the screen no longer goes red. Is that a toggle somewhere now? If it isn't
+  make it one. On by default."
+- **Found (ENGINE-NOTES 5bx):** not a toggle. The game draws its damage tint in the depth-of-field (uber post-process)
+  pass, which the mod has forced off since M2 (`Camera.DisableDepthOfField`, against the game's focus blur in VR). The
+  tint was computed every hit and never drawn.
+- **What:** `[Camera] DamageTint` (shipped **1**; the menu's Comfort tab -> Damage flash, live through shared block v33
+  `damageTint`). While one of the game's screen tints runs (the post-process component's flags: a bullet or melee hit,
+  low health, an explosion, dying, a medkit, a pickup), depth of field is allowed, so the pass draws the tint. Otherwise
+  it stays off as before, so the normal image is unchanged.
+- **Proven [S]** (a bullet hit held, the backbuffer's mean R / G / B):
+  - on: 31.3 / 29.9 / 26.9 before, 148 / 63 / 62 during, 31.3 / 29.9 / 26.9 after;
+  - off: unchanged throughout.
+  **[H]:** whether the depth-of-field blur during a hit's ~1 s is noticeable.

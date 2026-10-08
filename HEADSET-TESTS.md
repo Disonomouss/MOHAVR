@@ -2299,6 +2299,14 @@ its grip, trigger once, let go.
 1. Does it work the way you wanted? (yes/no)
 2. The trigger: is the grenade hand's own trigger right, or did you mean the right trigger whichever hand holds it?
 
+### The damage flash (D84; menu -> Comfort -> Damage flash)
+**Changed:** the screen goes red again when you're hit (and at low health, explosions, medkits), as in the flat game. It
+was the game's own effect, never drawn in VR.
+
+**Questions:**
+1. Does the screen flash red when you take damage? (yes/no)
+2. During the flash, does the world look blurred or out of focus? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

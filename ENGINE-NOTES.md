@@ -2372,6 +2372,25 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
     closing. With the notification skipped, the index moves but the highlight doesn't.
   - The next A or Enter submits index n.
 
+## 5bx. The damage flash and the depth-of-field pass (D84, 2026-10-08)
+
+- **The game's screen tints:** the player controller's `PostProcessComponent` (a `MOHAPostProcessComponent`) runs the
+  bullet hit (`NotifyTakeHit -> UpdatePostProcessEffects -> startBulletHit`), the melee hit, explosions, low health,
+  dying, medkits and pickups.
+  - Each tick it writes `WorldInfo.GameModified_Scene_HighLights / MidTones / Shadows / Desaturation`. A bullet hit's
+    first frame: highlights 0.04, midtones 1.19 1.00 1.00, shadows -0.05 0.05 0.05, desaturation 0.39, back to identity
+    in ~1.2 s.
+  - Colour curves go through `WorldInfo.CurveTextureMain / Secondary / CurveBlendValue` (`bCalcCurves`).
+- **They are drawn by the depth-of-field pass** (the uber post-process). With `FSystemSettings` bAllowDepthOfField at 0
+  (`0x116F56D4`, the mod's `Camera.DisableDepthOfField` since M2) the pass doesn't run and no tint shows.
+  Measured, a bullet hit re-started every 0.25 s, the image's mean R / G / B:
+  - DoF forced off: 31 / 30 / 27 throughout (also with head tracking or stereo off);
+  - DoF allowed: 169 / 73 / 73;
+  - motion blur allowed: no change.
+  The same pass also adds a little bloom: the "before" image is 35.5 with it on, against 31.3.
+- `mohavr pp bullet | melee | hold | state`: research test commands (the component's own starts, a 1.2 s trace of the
+  GameModified values).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

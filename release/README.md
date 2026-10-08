@@ -155,6 +155,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
 - **Comfort**
   - Turning (smooth, snap 30 or 45 degrees), Move direction (where you look, or your body), Sticks (swap them)
   - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
+  - Damage flash (on by default): the screen goes red when you're hit, as in the flat game
   - Seated (off by default): sit, then Recentre, and your seated head becomes standing height; on, physical crouch needs
     only a 25 cm lean
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.

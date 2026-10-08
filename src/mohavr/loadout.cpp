@@ -88,7 +88,35 @@ bool SetIndex(std::uintptr_t list, int index, bool notify) {
 
 void Configure(bool fixList) { g_fix = fixList; }
 
+// Research (the damage tint): WorldInfo's GameModified scene colours, per Draw, for a second after "mohavr pp bullet".
+DWORD g_ppTraceUntil = 0;
+std::uintptr_t g_ppWorld = 0;
+void PpTrace() {
+    if (!g_ppTraceUntil || static_cast<LONG>(GetTickCount() - g_ppTraceUntil) > 0 || !g_ppWorld) return;
+    auto vec = [&](const char* n, float (&v)[3]) {
+        const int o = names::PropertyOffset(g_ppWorld, n);
+        v[0] = v[1] = v[2] = -1.0f;
+        if (o >= 0) names::ReadVector(g_ppWorld + o, v);
+    };
+    float hi[3], mid[3], sh[3];
+    vec("GameModified_Scene_HighLights", hi);
+    vec("GameModified_Scene_MidTones", mid);
+    vec("GameModified_Scene_Shadows", sh);
+    MLOG("pp: trace -- highlights %.2f %.2f %.2f midtones %.2f %.2f %.2f shadows %.2f %.2f %.2f desaturation %.2f", hi[0], hi[1], hi[2],
+         mid[0], mid[1], mid[2], sh[0], sh[1], sh[2], Float(g_ppWorld, "GameModified_Scene_Desaturation", -1.0f));
+}
+
+DWORD g_ppHoldUntil = 0, g_ppNext = 0;
+std::uintptr_t g_ppComp = 0;
+
 void OnDraw(shared::Header* /*hdr*/) {
+    PpTrace();
+    if (g_ppHoldUntil && static_cast<LONG>(GetTickCount() - g_ppHoldUntil) < 0 && g_ppComp &&
+        static_cast<LONG>(GetTickCount() - g_ppNext) >= 0) {
+        g_ppNext = GetTickCount() + 250;
+        Call c(g_ppComp, "startBulletHit", true);
+        if (c.ok) c.Run();
+    }
     if (!g_fix) return;
     std::uintptr_t scene = 0;
     const std::uintptr_t list = FocusedList(&scene);
@@ -138,6 +166,36 @@ void FilterPad(shared::PadState& pad) {
 }
 
 bool TestCommand(const wchar_t* line) {
+    // Research (the damage tint): "mohavr pp bullet|melee|state" -- the player controller's MOHAPostProcessComponent's own
+    // effects started, and WorldInfo's colour-curve state logged.
+    if (!std::wcsncmp(line, L"mohavr pp", 9)) {
+        const auto engine = *reinterpret_cast<const std::uintptr_t*>(addr::kGEngine);
+        const auto* arr = engine ? reinterpret_cast<const std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
+        const std::uintptr_t player = (arr && arr[1] >= 1 && arr[0]) ? *reinterpret_cast<const std::uintptr_t*>(arr[0]) : 0;
+        const std::uintptr_t ctrl = player ? Obj(player, "Actor") : 0;
+        const std::uintptr_t ppc = ctrl ? Obj(ctrl, "PostProcessComponent") : 0;
+        const std::uintptr_t wi = ctrl ? Obj(ctrl, "WorldInfo") : 0;
+        const char* fn = !std::wcscmp(line, L"mohavr pp bullet") ? "startBulletHit" : !std::wcscmp(line, L"mohavr pp melee") ? "startMeleeHit" : nullptr;
+        bool ran = false;
+        g_ppWorld = wi;
+        if (fn) g_ppTraceUntil = GetTickCount() + 1200;
+        if (!std::wcscmp(line, L"mohavr pp hold")) {  // the bullet hit re-started every 0.25 s for 6 s (captures)
+            g_ppComp = ppc;
+            g_ppHoldUntil = GetTickCount() + 6000;
+            g_ppNext = 0;
+        }
+        if (fn && ppc) {
+            Call c(ppc, fn);
+            ran = c.ok && c.Run();
+        }
+        MLOG("pp: test -- %s%s; the component %s: ColorCorrectionRunning %d bBulletHit %d bMeleeHit %d bLowHealth %d bDoingCurve %d; "
+             "WorldInfo bCalcCurves %d, curve main %s secondary %s blend %.2f", fn ? fn : "state", fn ? (ran ? " ran" : " FAILED") : "",
+             names::Name(ppc).c_str(), Bit(ppc, "ColorCorrectionRunning") ? 1 : 0, Bit(ppc, "bBulletHit") ? 1 : 0, Bit(ppc, "bMeleeHit") ? 1 : 0,
+             Bit(ppc, "bLowHealth") ? 1 : 0, Bit(ppc, "bDoingCurve") ? 1 : 0, Bit(wi, "bCalcCurves") ? 1 : 0,
+             names::Name(Obj(wi, "CurveTextureMain")).c_str(), names::Name(Obj(wi, "CurveTextureSecondary")).c_str(),
+             Float(wi, "CurveBlendValue", -1.0f));
+        return true;
+    }
     if (std::wcsncmp(line, L"mohavr ui", 9) != 0) return false;
     int idx = 0;
     wchar_t mode[16] = L"";
