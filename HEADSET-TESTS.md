@@ -2269,6 +2269,13 @@ open), pick with A. Before, any input picked straight away.
 **Questions:**
 1. Can you choose any gun in each slot? (yes/no)
 
+### The menu, tidied
+**Changed:** six tabs now: General (recentre, scale, height, resolution), Comfort (turning, movement, vignette, seated,
+crouch, parachute), Weapons, Reload, Hands (holsters and the off hand's items), HUD. It opens on Recentre.
+
+**Questions:**
+1. Can you find things where you expect them? (yes / which one wasn't)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

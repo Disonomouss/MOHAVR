@@ -145,41 +145,38 @@ is in your left hand); while the menu is open, a tap of X closes it. The left st
 trigger or A selects, and B goes back or closes. Up from the first item reaches the tabs.
 
 - **General**
-  - World scale (higher = smaller world)
-  - Height (seated or standing)
-  - Turning (smooth, snap 30 or 45 degrees)
-  - Sticks (swap them)
-  - Move direction (where you look, or your body)
-  - The starting gun hand
-  - The red dot
-  - Frame pacing
   - Recentre
-  - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
-  - Seated (off by default): sit, then Recentre, and your seated head becomes standing height (true with it off too);
-    on, physical crouch needs only a 25 cm lean
+  - World scale (higher = smaller world), Height (seated or standing), Reset world scale
+  - The starting gun hand
   - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
     Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
+  - Frame pacing
+- **Comfort**
+  - Turning (smooth, snap 30 or 45 degrees), Move direction (where you look, or your body), Sticks (swap them)
+  - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
+  - Seated (off by default): sit, then Recentre, and your seated head becomes standing height; on, physical crouch needs
+    only a 25 cm lean
+  - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
   - Parachute: stick (default) or hands -- hold both grips (the risers), pull one down to turn, both to slow, a quick hard
     pull of both to flare before landing
-  - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
 - **Weapons**
-  - Gun fit (fit each gun to your hand and line up its aim)
-  - Manual reload, Pouch reload
-  - Physical melee
-  - Scopes and Scope zoom
-  - Grenades (Hand grenades, Off-hand grenade, Grenade hold)
-  - Off-hand pistol
-  - Off-hand knife and Knife grip
-  - Reload grip and Reload spots (per gun)
-  - Rack ejects a round, and whether the ejected round is lost or kept
+  - Gun fit (fit each gun to your hand and line up its aim), Red dot
   - Recoil (off, 50-200 %; 100 % = the game's own kick)
+  - Scopes and Scope zoom
+  - Physical melee
+  - Hand grenades (the gun hand's: pin and grip)
   - Grab pickup (on by default)
   - Mounted MG42: head (default; aim it with your view, as the flat game) or hands (your gun hand swings it on its mount)
+  - Give all weapons
+- **Reload**
+  - Manual reload, Pouch reload
+  - Reload grip and Reload spots (per gun)
+  - Rack ejects a round, and whether the ejected round is lost or kept
 - **Hands**
   - Holsters and pouch (move, size, choose what each holds, show or hide each ring)
-  - The hand point (the white dot)
-  - The foregrip and reload ring sizes
+  - Off-hand grenade and Grenade hold, Off-hand pistol, Off-hand knife and Knife grip
   - The free hand's pose
+  - The hand point (the white dot), the foregrip and reload ring sizes
 - **HUD**
   - Wrist or screen
   - When the wrist panels show

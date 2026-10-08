@@ -61,10 +61,10 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 
 ## In-headset menu (host)
 - `src/host/menu.cpp`: Dear ImGui into its own quad layer. Left Touch menu button toggles; the left
-  stick navigates and adjusts; the trigger or A selects. The main page is in tabs (General / Weapons / Hands / HUD; up past
-  the first item reaches the tab row, where left / right switch); Weapons has the Reload grip page (per gun
-  `[ReloadGrip]`, published as shared block v16) and the Reload spots page (per gun `[ReloadSpot]`, host-only). The first item is World Scale, live to the
-  game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
+  stick navigates and adjusts; the trigger or A selects. The main page is in six tabs (D81: General / Comfort / Weapons /
+  Reload / Hands / HUD; up past the first item reaches the tab row, where left / right switch); Reload has the Reload grip
+  page (per gun `[ReloadGrip]`, published as shared block v16) and the Reload spots page (per gun `[ReloadSpot]`,
+  host-only). The menu opens on Recentre; World Scale (General) is live to the game via shared block v4 (`unitsPerMeter`). The Gun fit page (v8) adjusts the gun in hand per weapon
   (`[GunFit]` in the player's ini, keyed by the weapon's class name, e.g. `Attachment_Stg44`). The Holsters page moves
   and sizes the holster spots and the manual reload's magazine pouch (`[Holsters] <Name>Spot`, `MagPouchSpot` in the
   player's ini), the rings (`[Hands] Rings`), the hand point (the white dot: `[Hands] HandPoint`) and the foregrip / reload
@@ -72,8 +72,10 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - **The player's settings** live in `%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini`, beside the free hand's hold the mod
   keeps (`MOHAVR.freehand.bin`, D25). `tools/userdata.ps1` backs both up and restores them with the MOHA user folder
   (a test that creates one has it removed).
-- Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back`
-  (one command per call, about 0.3 s apart).
+- Test without controllers: `python tools/menu_cmd.py toggle|up|down|left|right|select|back|goto=<key>`
+  (one command per call, about 0.3 s apart). `goto=<key>` (D81) selects an item by its key (menu.cpp `kItemKeys`, listed
+  in menu_cmd.py), or `goto=<tab>` a tab's row: use it rather than counting steps (the scripts in work/research/tests
+  from before D81 count steps through the old layout).
 - Manual reload tests: `pad_cmd.py --seq "hand=l,@mag|@pouch|@bolt[,dx,dy,dz,yaw,pitch,roll]"` puts the off hand at a
   reload spot (a hand line applies at once; raw grip states queue), `reload=eject|take|insert|rack|drop` sends an event. `hand=l,@magin,dx,dy,dz,align` also turns the hand so the held
   magazine sits exactly as seated (any grip). The writers wait until the host has taken the previous command.
@@ -91,7 +93,7 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - Scope tests (SCOPE-DESIGN 3): the simulator reports both eyes at the head's centre, so a test puts the eyepiece before the
   head's centre (`work/research/tests/scope3.ps1 -Gun -Key -Ex -Ey -Ez -Pitch -Zoom`); the host logs "scope: looking
   through" and "the lens shown"; `Debug.ScopeView=1` renders the scope view always (from the right eye).
-- Wrist HUD tests (WRISTHUD-DESIGN 5; the menu's HUD tab, the fourth, after Hands): the off hand palm down across the chest
+- Wrist HUD tests (WRISTHUD-DESIGN 5; the menu's HUD tab, the last; `goto=hudplace`): the off hand palm down across the chest
   is `hand=l,0.13,-0.40,0.30,90,0,90` with `sim_pose.py --pitch -45` (the right hand: mirrored signs); the host logs
   "wristhud: panels shown / hidden (why)"; `python work/research/wristhud/host_capture.py --out-prefix P` saves the host's
   frame, HUD texture and atlas, `check_atlas.py P host.log` checks the crops; `mohavr hud hit <yaw> | objective | status`.

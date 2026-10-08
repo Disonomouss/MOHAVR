@@ -901,6 +901,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             else if (c == "select") mi.select = true;
             else if (c == "back") mi.back = true;
             else if (c == "unfocus") pauseForFocusLoss("test command");  // D74 (the simulator keeps its focus)
+            else if (c.rfind("goto=", 0) == 0 && menuOk) menu.Goto(c.substr(5));  // D81: an item by its key
             MLOG("host: test command '%s'", c.c_str());
         }
 

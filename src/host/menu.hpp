@@ -52,6 +52,8 @@ public:
     bool TakeGiveAllRequest() { const bool r = giveAllRequested_; giveAllRequested_ = false; return r; }
     // After a recentre the panel's old pose is meaningless: close it.
     void Close();
+    // D81, tests: select the item with this key (or a tab by its name) in the open menu.
+    bool Goto(const std::string& key);
     // Turning (Comfort): 0 = smooth, else the snap step in degrees. Used by the virtual pad.
     int SnapTurnDegrees() const { return snapDeg_; }
     // The gun fit in use (the weapon in hand's saved fit, or the defaults): the reticle follows the same aim line.

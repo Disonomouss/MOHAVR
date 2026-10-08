@@ -1,13 +1,18 @@
 """Send test commands to MOHAVR-host's in-headset menu (the simulator can't press controller buttons).
 
     python tools/menu_cmd.py toggle
-    python tools/menu_cmd.py right right right      # world scale +15 (when World scale is selected)
-    python tools/menu_cmd.py toggle down down down select   # open, move to Recentre, select it
+    python tools/menu_cmd.py goto=worldscale right right right   # world scale +15 (the menu open)
+    python tools/menu_cmd.py toggle select                       # open, Recentre (the first item)
 
-Commands: toggle up down left right select back. The host reads and deletes
-%TEMP%\\MOHAVR\\host_cmd.txt once per XR frame and queues its lines, applying ONE per frame
-(one button press each). Items: World scale, Height, Turning, Recentre, Reset world scale, Close;
-the menu opens on World scale.
+Commands: toggle up down left right select back, and goto=<key> (D81): the open menu's item with that key
+selected in its tab (or goto=<tab name>: that tab's row), e.g. "toggle goto=recoil left". Keys: menu.cpp kItemKeys
+(recentre worldscale height resetscale gunhand resolution pacing | turning movedir sticks vignette seated crouch chute |
+gunfit reddot recoil scope scopezoom melee gunnade grabpickup mghands giveall | manualreload pouchreload reloadgrip
+reloadspots rackeject rackkeep | holsters offnade nadehold offpistol offknife knifegrip freehand handfwd handup handin
+foresize rings | hudplace hudshow hudlayout hudbacking hudwrist hudscreen). The host reads and deletes
+%TEMP%\\MOHAVR\\host_cmd.txt once per XR frame and queues its lines, applying ONE per frame (one button press each).
+The menu opens on General's first item, Recentre. Older test scripts (work/research/tests) count steps through the
+layout before D81; use goto= instead.
 """
 import os
 import time
@@ -19,7 +24,7 @@ VALID = {"toggle", "up", "down", "left", "right", "select", "back"}
 
 
 def main(cmds):
-    bad = [c for c in cmds if c not in VALID]
+    bad = [c for c in cmds if c not in VALID and not c.startswith("goto=")]
     if bad:
         print(f"unknown command(s): {bad}; valid: {sorted(VALID)}")
         return 2

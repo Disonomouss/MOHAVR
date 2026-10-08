@@ -1359,3 +1359,19 @@ hud, then hold X."
   bytes, plus each hook's own prologue check, standing rule 4) still decide. `[Debug] TestWrongBuild=2` simulates it.
 - **Proven [S]:** with TestWrongBuild=2, "build check: note -- the header's CheckSum is 0x00E454F7 ...", then
   "build check: OK", every hook installed, and the harness cycle reached gameplay.
+
+### D81. The menu reorganised into six tabs -- Decided 2026-10-08
+- **Why:** the player ("Do it", to cleaning up the menu). Since round 32's four tabs, General had grown to 15 items and
+  Weapons to 21, the newest added at the bottom.
+- **What:** six tabs, each item where a player would look for it and the ones changed most first:
+  - **General:** the view and the setup;
+  - **Comfort:** moving, turning, stance, the parachute;
+  - **Weapons:** the gun in hand;
+  - **Reload:** the manual reload and its pages;
+  - **Hands:** the holsters, the off hand's items, the hand point and rings;
+  - **HUD:** unchanged.
+  The tab row has its own line, at a smaller size, to fit six. The menu opens on Recentre. No setting changed.
+- **Tests:** `menu_cmd.py goto=<key>` (the item keys in `kItemKeys`) or `goto=<tab>` selects directly, so tests no longer
+  count steps through the layout. The older scripts in work/research/tests count steps through the old one.
+- **Proven [S]:** each tab captured (`logs/shots/d81-*.png`); `goto=recoil` -> the Weapons tab, row 2, and left / right
+  changed it; `goto=hud` -> the HUD tab's row; an unknown key is logged and ignored.

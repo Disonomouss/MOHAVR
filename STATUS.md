@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The menu in six tabs** (2026-10-08, D81): General / Comfort / Weapons / Reload / Hands / HUD; tests use
+`menu_cmd.py goto=<key>`.
 **A tester's EA copy stood down** (2026-10-08, D80): only its PE CheckSum differed (re-signed or header-patched); the
 build check now logs that and goes on. Needs a release for them.
 **The loadout list fixed for the controllers** (2026-10-08, D79, ENGINE-NOTES 5bw): the game's own bug (its list took the

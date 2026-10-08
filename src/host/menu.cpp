@@ -27,19 +27,34 @@ enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPac
             kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
-// The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
-enum Tab { tGeneral, tWeapons, tHands, tHud, kTabCount };
-const char* kTabNames[kTabCount] = {"General", "Weapons", "Hands", "HUD"};
+// D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
+// a player would look for it and the ones changed most first. Tests reach an item by its key ("goto=recoil", kItemKeys),
+// not by counting steps.
+enum Tab { tGeneral, tComfort, tWeapons, tReload, tHands, tHud, kTabCount };
+const char* kTabNames[kTabCount] = {"General", "Comfort", "Weapons", "Reload", "Hands", "HUD"};
 constexpr int kTabMax = 24;
-// (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
-// Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
 const int kTabItems[kTabCount][kTabMax] = {
-    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kResolution, kChute, kClose, -1},
-    {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
-     kSpotPage, kRackEject, kRackKeep, kGiveAll, kRecoil, kGrabPickup, kMgHands, kClose, -1},
-    {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
+    // General: the view and the setup.
+    {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kClose, -1},
+    // Comfort: moving, turning, stance.
+    {kTurn, kMove, kSticks, kVignette, kSeated, kCrouch, kChute, kClose, -1},
+    // Weapons: the gun in hand.
+    {kGunFit, kRedDot, kRecoil, kScope, kScopeZoom, kMelee, kGunNade, kGrabPickup, kMgHands, kGiveAll, kClose, -1},
+    // Reload: the manual reload and its pages.
+    {kReload, kPouchReload, kGripPage, kSpotPage, kRackEject, kRackKeep, kClose, -1},
+    // Hands: the holsters, the off hand's items, the hand point and rings.
+    {kHolsterPage, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
+     kRingScale, kClose, -1},
     {kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kClose, -1},
 };
+// D81: each item's key for tests (menu_cmd.py "goto=<key>"), in Item order.
+const char* kItemKeys[kItemCount] = {
+    "worldscale", "height", "turning", "sticks", "movedir", "gunhand", "reddot", "pacing", "manualreload", "gunfit", "holsters",
+    "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
+    "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
+    "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands"};
+static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
 bool Shown(int item) { return item != kGiveAll || g_giveAllMenu; }
@@ -606,6 +621,35 @@ void Menu::PublishGrips() {
 
 // Stick right = the gun forward / right / up, muzzle up, the aim line up / right. (The grip is the gun's point put
 // on the controller, so moving the gun forward moves that point back.)
+// D81, tests: the item with this key (kItemKeys) selected in its tab, or a tab's row by its name; the menu must be open.
+bool Menu::Goto(const std::string& key) {
+    if (!visible_) {
+        MLOG("menu: test goto '%s' -- the menu isn't open", key.c_str());
+        return false;
+    }
+    for (int t = 0; t < kTabCount; ++t) {
+        if (!_stricmp(key.c_str(), kTabNames[t])) {
+            page_ = 0;
+            tab_ = t;
+            selected_ = -1;
+            MLOG("menu: test goto -- the %s tab", kTabNames[t]);
+            return true;
+        }
+        for (int i = 0; i < TabCount(t); ++i) {
+            const int it = ItemAt(t, i);
+            if (it >= 0 && it != kClose && key == kItemKeys[it]) {
+                page_ = 0;
+                tab_ = t;
+                selected_ = i;
+                MLOG("menu: test goto '%s' -- the %s tab, row %d", key.c_str(), kTabNames[t], i);
+                return true;
+            }
+        }
+    }
+    MLOG("menu: test goto '%s' -- no such item", key.c_str());
+    return false;
+}
+
 void Menu::AdjustFit(int item, float dir) {
     if (weaponKey_.empty()) return;
     switch (item) {
@@ -1232,16 +1276,19 @@ void Menu::Render() {
         RenderScreenHudPage();
     } else {
     ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.45f, 1.0f), "MOHAVR");
-    // The tab row: the current tab lit; framed while the row itself is selected (left / right switch).
+    // The tab row: the current tab lit; framed while the row itself is selected (left / right switch). D81: its own line,
+    // smaller, for six tabs.
+    ImGui::PushFont(nullptr, 31.0f);
     for (int t = 0; t < kTabCount; ++t) {
-        ImGui::SameLine(t == 0 ? 220.0f : 0.0f, 28.0f);
+        if (t > 0) ImGui::SameLine(0.0f, 10.0f);
         const bool cur = t == tab_;
         const ImVec4 col = cur ? (selected_ < 0 ? ImVec4(0.95f, 0.8f, 0.45f, 1.0f) : ImVec4(0.85f, 0.85f, 0.85f, 1.0f))
                                : ImVec4(0.45f, 0.45f, 0.45f, 1.0f);
         char tl[48];
-        snprintf(tl, sizeof(tl), cur && selected_ < 0 ? "< %s >" : cur ? "[ %s ]" : "  %s  ", kTabNames[t]);
+        snprintf(tl, sizeof(tl), cur && selected_ < 0 ? "<%s>" : cur ? "[%s]" : " %s ", kTabNames[t]);
         ImGui::TextColored(col, "%s", tl);
     }
+    ImGui::PopFont();
     ImGui::Separator();
 
     const float ipdMm = hdr_ ? 1000.0f * std::sqrt(std::pow(hdr_->eye[1].px - hdr_->eye[0].px, 2.0f) +
