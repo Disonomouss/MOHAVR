@@ -2304,6 +2304,24 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   game side takes its origin, 5h), not a share of the eye height. With the shipped CrouchDepth 0.40 m and 10 cm of
   hysteresis, it crouches past 0.40 m down and stands above 0.30 m down.
 
+## 5bu. The airdrop: steering, the flare, a jump on demand (D75, 2026-10-08)
+
+- **The physics** is native (`MOHAAirdropComponent.Tick`): a pendulum with lateral drag. Script only sets its parameters
+  for freefall, the open chute and the flare. Under the chute the pawn has Physics 11 (PHYS_Parachute) and is in
+  `AirDropControlledFall`; the controller is in `Airdrop`.
+- **Steering is the move stick:** the pawn's state reads `fRawJoyUp` / `fRawJoyRight` (`SetAirdropMoveDirection`), and the
+  controller's `ProcessMove` acceleration drives the drift.
+  - Measured with the host's stick: forward 0.6 glides **800 u/s** forward; full right drifts **~800 u/s** right as the
+    heading turns.
+  - At 0 the forward speed decays to near nothing.
+  - Back flies backwards (-800 u/s), which the hand steering never asks for.
+  - The descent is ~900 u/s throughout.
+- **The flare** is Xbox A (`FlareChute`, ended by `AirdropTimerChuteFlare`): CurrentActivity 40, phase 3 for its duration;
+  a flare at touchdown gives the flared landing (`AIRDROP_LANDING_FLARED`).
+- **A jump on demand** (the missions' `SeqAct_SpawnParachuteAndAttach`, `MOHAPlayerPawn.OnSpawnParachuteAndAttach`): lift the
+  pawn (`ClientSetLocation`), then call `CreateParachute(true)`, `AirDrop_DeployChuteEvent()` and the controller's
+  `SpawnParachute()` (Physics 11, the `Airdrop` state). `mohavr chute [m]`; 60 m lands in ~6 s, 300 m gives ~30 s.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

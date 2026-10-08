@@ -153,6 +153,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
     on, physical crouch needs only a 25 cm lean
   - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
     Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
+  - Parachute: stick (default) or hands -- hold both grips (the risers), pull one down to turn, both to slow, a quick hard
+    pull of both to flare before landing
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
 - **Weapons**
   - Gun fit (fit each gun to your hand and line up its aim)

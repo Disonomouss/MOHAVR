@@ -716,6 +716,16 @@ void Pad::Update(XrSession session, double now, bool neutral, int snapDeg, share
         const float tn = snapDeg > 0 ? 0.0f : std::fabs(static_cast<float>(p.thumbRX)) / 32767.0f;
         motion_ = (neutral || hdr->gameUiMenu) ? 0.0f : std::max({dz(mv), dz(tn), now_ < snapMotionUntil_ ? 1.0f : 0.0f});
     }
+    // D75: the parachute steered by the hands -- the move stick from the risers unless the real one is pushed; the flare (A).
+    if (chuteOn_ && !neutral && !hdr->gameUiMenu) {
+        const float sx = p.thumbLX / 32767.0f, sy = p.thumbLY / 32767.0f;
+        if (sx * sx + sy * sy < 0.09f) {
+            p.thumbLX = static_cast<std::int16_t>(std::clamp(chuteX_, -1.0f, 1.0f) * 32767.0f);
+            p.thumbLY = static_cast<std::int16_t>(std::clamp(chuteY_, -1.0f, 1.0f) * 32767.0f);
+        }
+    }
+    if (now_ < flareUntil_ && !neutral && !hdr->gameUiMenu) p.buttons |= 0x1000;  // XINPUT_GAMEPAD_A
+
     // Physical crouch (GOAL A1): the game side asked for a stance toggle -- the game's own crouch, Xbox X, for a moment.
     if (now_ < crouchUntil_ && !hdr->gameUiMenu && !neutral) p.buttons |= 0x4000;
 

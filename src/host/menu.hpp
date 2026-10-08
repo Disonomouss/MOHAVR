@@ -63,6 +63,7 @@ public:
     bool RedDot() const { return redDot_; }  // the reticle shown (the player's; default the shipped [Aim] Reticle)
     // shared crouchMode: bits 0-1 physical crouch, bits 2-3 seated (1 off, 2 on; GOAL A1/A3)
     std::uint16_t CrouchWord() const { return static_cast<std::uint16_t>((crouch_ ? 2 : 1) | ((seated_ ? 2 : 1) << 2)); }
+    bool ChuteHands() const { return chuteHands_; }  // D75: the parachute steered by the hands
     int  VignetteStrength() const { return vignette_; }  // GOAL A2: 0 none, 1 light, 2 strong
     bool Pacing() const { return pacing_; }  // frame pacing (the player's once toggled; default the shipped [Bridge] Pace)
     // The manual reload (D21; the player's once toggled, default the shipped [Weapon] ManualReload).
@@ -204,6 +205,7 @@ private:
     bool                    swapSticks_ = false, startLeft_ = false, redDot_ = true, pacing_ = false, moveByHead_ = true;
     bool                    crouch_ = false;  // physical crouch (GOAL A1)
     bool                    seated_ = false;  // seated play (GOAL A3)
+    bool                    chuteHands_ = false;  // D75
     int                     resPreset_ = 0, startPreset_ = 0;  // D73: render_presets.hpp index (the choice; at start)
     int                     shippedResX_ = 2880, shippedResY_ = 1620;
     void                    AutoEye(int& w, int& h) const;

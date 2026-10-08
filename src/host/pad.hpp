@@ -39,6 +39,10 @@ public:
     void PulseStart() { startUntil_ = now_ + 0.15; }
     // Holds Xbox X (the game's crouch toggle) for a moment: physical crouch's request (GOAL A1; main.cpp).
     void PulseCrouch() { crouchUntil_ = now_ + 0.15; }
+    // D75, the parachute steered by the hands (main.cpp): the move stick's x / y while `on` (the real stick still wins when
+    // pushed), and the flare -- Xbox A, the game's FlareChute -- for a moment.
+    void SetChute(bool on, float x, float y) { chuteOn_ = on; chuteX_ = x; chuteY_ = y; }
+    void PulseFlare() { flareUntil_ = now_ + 0.2; }
     // The vignette's signal (GOAL A2): 0..1, how much the sticks moved or turned the player in the last Update.
     float Motion() const { return motion_; }
     // Per XR frame after xrSyncActions with Set() active. `neutral` (the MOHAVR menu is open) publishes
@@ -222,6 +226,9 @@ private:
     bool        rightY_ = false;
     double      now_ = 0.0, startUntil_ = 0.0, crouchUntil_ = 0.0, snapMotionUntil_ = 0.0;
     float       motion_ = 0.0f;
+    bool        chuteOn_ = false;
+    float       chuteX_ = 0.0f, chuteY_ = 0.0f;
+    double      flareUntil_ = 0.0;
     shared::PadState last_{};
     bool        published_ = false;
     std::wstring testPath_;

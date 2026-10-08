@@ -2227,6 +2227,16 @@ sets the strength (0 = off).
 1. Take the headset off mid-fight: is the game paused when you put it back on? (yes/no)
 2. The pulse per shot: too weak, too strong, or right? On automatic fire too? (weaker / stronger / right)
 
+### The parachute by hand (menu -> General -> Parachute: hands)
+**Changed:** under the open chute, hold both grips (the risers): pull one hand down to turn that way, both down to slow,
+both up to dive; a quick hard pull of both flares (do it just before landing for a soft landing). The stick still works.
+
+**Questions:**
+1. Can you steer to where you want to land? (yes/no)
+2. Is the pull depth right (about 35 cm below your head is full)? (deeper / shallower / right)
+3. Does the hard pull flare when you mean it, and never by accident? (yes/no)
+4. Holding your hands up for the whole descent: comfortable enough? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

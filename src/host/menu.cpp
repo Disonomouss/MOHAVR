@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // The wrist HUD (WRISTHUD-DESIGN): a fourth tab, after Hands (the regression scripts' "right right" still reach Hands).
@@ -34,7 +34,7 @@ constexpr int kTabMax = 24;
 // (D54's review: new items go after the ones the regression scripts count down to -- the rack eject's two after the
 // Reload spots page, with the reload pages -- so menu_cmd step counts stay valid.)
 const int kTabItems[kTabCount][kTabMax] = {
-    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kResolution, kClose, -1},
+    {kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kRecenter, kResetScale, kCrouch, kVignette, kSeated, kResolution, kChute, kClose, -1},
     {kGunFit, kReload, kPouchReload, kMelee, kScope, kScopeZoom, kGunNade, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kGripPage,
      kSpotPage, kRackEject, kRackKeep, kGiveAll, kClose, -1},
     {kHolsterPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kFreeHandPage, kClose, -1},
@@ -233,6 +233,9 @@ void Menu::ApplySavedSettings() {
     // Seated (GOAL A3): likewise the shipped [Comfort] Seated; live through crouchMode's bits 2-3.
     const int defSeated = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Seated", 0, shipped.c_str()));
     seated_ = GetPrivateProfileIntW(L"Comfort", L"Seated", defSeated, iniPath_.c_str()) != 0;
+    // D75: the parachute steered by the hands -- the shipped [Controls] ChuteHands until the player toggles it.
+    const int defChute = static_cast<int>(GetPrivateProfileIntW(L"Controls", L"ChuteHands", 0, shipped.c_str()));
+    chuteHands_ = GetPrivateProfileIntW(L"Controls", L"ChuteHands", defChute, iniPath_.c_str()) != 0;
     // The render resolution preset (D73): the shipped [Render] Preset until the player picks one; the game applies it at start.
     {
         wchar_t k[32] = L"";
@@ -1010,6 +1013,10 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                 WritePrivateProfileStringW(L"Render", L"Preset", w, iniPath_.c_str());
             }
             MLOG("menu: resolution -> %s (at the next start)", presets::kPresets[resPreset_].label);
+        } else if (item == kChute) {
+            chuteHands_ = !chuteHands_;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Controls", L"ChuteHands", chuteHands_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: parachute -> %s", chuteHands_ ? "hands (hold both grips: the risers)" : "stick");
         } else if (item == kSeated) {
             seated_ = !seated_;
             if (hdr_) hdr_->crouchMode = CrouchWord();
@@ -1269,6 +1276,11 @@ void Menu::Render() {
                 note(n2);
                 break;
             }
+            case kChute:
+                snprintf(label, sizeof(label), "Parachute        <  %s  >", chuteHands_ ? "hands" : "stick");
+                ImGui::Selectable(label, sel);
+                note("hands: hold both grips, pull one down to turn, both to slow, a hard pull flares");
+                break;
             case kSeated:
                 snprintf(label, sizeof(label), "Seated           <  %s  >", seated_ ? "on" : "off");
                 ImGui::Selectable(label, sel);

@@ -1258,3 +1258,24 @@ hud, then hold X."
   - `unfocus` in gameplay: "the game paused (its pause menu)", the screen check "pausemenu"; again with it open: "not in
     gameplay, no pause".
   **[H]:** the pulse's strength, and the pause when the headset really comes off.
+
+### D75. The parachute steered by the hands -- Decided 2026-10-08
+- **Why:** the player ("Do it", after the feature list's item 3). Every mission starts with the jump, and steering was the
+  stick only.
+- **What:** the menu's General tab -> Parachute (`[Controls] ChuteHands`, shipped **0**: how it should feel is for the
+  headset to say).
+  - **Hands:** with the chute open (`airdrop` >= 2: shared block v31, game -> host) and both grips held (on the risers),
+    each hand's pull below the head (0 at 10 cm above the head, 1 at 35 cm below it) steers through the move stick, the
+    game's own steering (ENGINE-NOTES 5bu). The difference between the hands turns (x = 1.5 x the difference); the
+    average dives or slows (y = 0.6 - 1.2 x the average, never below 0: a canopy never flies backwards).
+  - **The flare:** a quick deep pull of both, from under half to past 85 % within 0.4 s, pulses Xbox A, the game's
+    FlareChute.
+  - **The grips:** while the chute is open they are the risers', so they don't also press their mapped buttons (the
+    right grip's A would flare by itself).
+  - **The real stick** still wins when pushed.
+- **Proven [S]** (the EA copy, `mohavr chute 300`):
+  - hands up: 800 u/s forward;
+  - the right riser pulled: ~800 u/s right, the heading turning;
+  - both half pulled: slowing to 22-48 forward;
+  - a fast pull of both: "flare", the game's phase 2 -> 3 -> 2, then slowing (266 -> 140 -> 44), never backwards.
+  **[H]:** the feel, the depths, whether holding the risers for a whole descent is comfortable.

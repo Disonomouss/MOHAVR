@@ -1252,6 +1252,50 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
         // Physical crouch (GOAL A1): the game side bumps crouchReqSeq once per stance toggle it wants -- one pulse of the
         // game's crouch each (its own retry if the stance doesn't change).
+        // D75: the parachute steered by the hands (the menu's Parachute: hands; [Controls] ChuteHands). With the chute open and
+        // both grips held (on the risers), each hand's pull below the head turns that way; both pulled brake, both up dive (the
+        // move stick, the game's own steering); a quick deep pull of both flares (Xbox A). The grips are the risers' while the
+        // chute is open, so they don't also press their mapped buttons (the right grip's A would flare).
+        {
+            static bool steering = false, flareArmed = true;
+            static float pullWas = 0.0f;
+            static double pullWasT = 0.0;
+            const double tNow = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
+            const bool chuteOpen = controllers && handsOk && menuOk && menu.ChuteHands() && g_hdr->airdrop >= 2 && menuHeadOk;
+            bool on = false;
+            float x = 0.0f, y = 0.0f;
+            if (chuteOpen) {
+                pad.SetConsumed(true, true);
+                const bool both = (handBits & 3u) == 3u && pad.GripValue(session, 0) > 0.5f && pad.GripValue(session, 1) > 0.5f;
+                if (both) {
+                    auto pull = [&](int h) {
+                        return std::clamp((menuHead.position.y + 0.10f - handPose[h].position.y) / 0.45f, 0.0f, 1.0f);
+                    };
+                    const float pl = pull(0), pr = pull(1), avg = 0.5f * (pl + pr);
+                    x = std::clamp(1.5f * (pr - pl), -1.0f, 1.0f);
+                    y = std::clamp(0.6f - 1.2f * avg, 0.0f, 1.0f);  // (a canopy never flies backwards: fully pulled = slowest)
+                    on = true;
+                    // The flare: both from above halfway to past 85% within 0.4 s.
+                    if (avg < 0.5f) {
+                        pullWas = avg;
+                        pullWasT = tNow;
+                        flareArmed = true;
+                    } else if (flareArmed && std::min(pl, pr) > 0.85f && tNow - pullWasT < 0.4) {
+                        flareArmed = false;
+                        pad.PulseFlare();
+                        MLOG("host: chute -- both risers pulled hard (%.2f -> %.2f in %.2f s): flare", pullWas, avg, tNow - pullWasT);
+                    }
+                    static int logged = 0;
+                    if (logged < 30 && (!steering || static_cast<int>(tNow * 2.0) % 4 == 0)) {
+                        ++logged;
+                        MLOG("host: chute -- the hands steer: pull left %.2f right %.2f -> the move stick x %.2f y %.2f", pl, pr, x, y);
+                    }
+                }
+            }
+            if (on != steering) MLOG("host: chute -- %s", on ? "steering by the risers (both grips held)" : "the risers let go: the stick's");
+            steering = on;
+            pad.SetChute(on, x, y);
+        }
         static std::uint16_t seenCrouchReq = g_hdr->crouchReqSeq;
         if (controllers && g_hdr->crouchReqSeq != seenCrouchReq) {
             seenCrouchReq = g_hdr->crouchReqSeq;

@@ -417,6 +417,10 @@ void ApplyLandingBody(const std::uintptr_t* players) {
 
 // Debug.GameCommands: console commands for scripted tests (e.g. "Suicide" for the death/reload test),
 // one per line in %TEMP%\MOHAVR\game_cmd.txt, read and deleted twice a second on the game thread.
+// D75 (defined below, with the physical crouch).
+void PublishAirdrop(shared::Header* hdr);
+bool ChuteTestCommand(const wchar_t* line);
+
 void RunTestCommands(const std::uintptr_t* players) {
     if (!g_cfg.debugGameCommands || !players || players[1] < 1 || !players[0]) return;
     static DWORD next = GetTickCount();
@@ -474,6 +478,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (falltrace::TestCommand(line)) continue;  // "mohavr falltrace ..." (GOAL C3)
         if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
+        if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -575,6 +580,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
+    if (hdr) PublishAirdrop(hdr);  // D75
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera
         CommitCinemaFrame();
@@ -1104,6 +1110,74 @@ struct CrouchState {
 };
 CrouchState g_crouch;
 float g_crouchComp = 0.0f;     // units added to the camera's height this frame (both eyes)
+
+// D75: the airdrop's phase for the host (its hand steering): the pawn's Physics and CurrentActivity (ENGINE-NOTES 5an: 2 falling
+// with activity 35 = freefall, 11 the parachute, activity 40 flaring).
+void PublishAirdrop(shared::Header* hdr) {
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    std::uint32_t phase = 0;
+    if (pawn) {
+        const int po = names::PropertyOffset(pawn, "Physics"), ao = names::PropertyOffset(pawn, "CurrentActivity");
+        const std::uint8_t physics = po >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + po) : 0;
+        const std::uint8_t act = ao >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + ao) : 0;
+        if (physics == 11) phase = act == 40 ? 3u : 2u;
+        else if (physics == 2 && act == 35) phase = 1u;
+    }
+    if (phase >= 2) {  // once a second under the chute: how it flies (the tests' measure of the steering)
+        static DWORD next = 0;
+        const DWORD now = GetTickCount();
+        if (static_cast<LONG>(now - next) >= 0) {
+            next = now + 1000;
+            const int vo = names::PropertyOffset(pawn, "Velocity"), mo = names::PropertyOffset(pawn, "eAirMoveDirection");
+            float v[3] = {0, 0, 0};
+            if (vo >= 0) names::ReadVector(pawn + vo, v);
+            const int yaw = reinterpret_cast<const int*>(pawn + addr::kActorRotation)[1];
+            const float a = static_cast<float>(yaw & 0xFFFF) * 6.2831853f / 65536.0f;
+            const float fwd = v[0] * std::cos(a) + v[1] * std::sin(a), right = -v[0] * std::sin(a) + v[1] * std::cos(a);
+            MLOG("airdrop: under the chute -- forward %.0f right %.0f down %.0f u/s, heading %d, eAirMoveDirection %d", fwd, right,
+                 -v[2], yaw & 0xFFFF, mo >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + mo) : -1);
+        }
+    }
+    if (hdr->airdrop != phase) {
+        static int logged = 0;
+        if (logged++ < 40) MLOG("airdrop: phase %u -> %u (%s)", hdr->airdrop, phase,
+                                phase == 0 ? "none" : phase == 1 ? "freefall" : phase == 2 ? "the chute open" : "flaring");
+        hdr->airdrop = phase;
+    }
+}
+
+// Tests (Debug.GameCommands): "mohavr chute [metres]" -- the player lifted that high (30 by default) and a chute opened, as the
+// missions' SpawnParachuteAndAttach does (CreateParachute(true), AirDrop_DeployChuteEvent) with the controller's SpawnParachute
+// (PHYS_Parachute, its Airdrop state).
+bool ChuteTestCommand(const wchar_t* line) {
+    if (std::wcsncmp(line, L"mohavr chute", 12) != 0) return false;
+    float m = 30.0f;
+    swscanf_s(line + 12, L"%f", &m);
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const std::uintptr_t ctrl = pawn ? script::Obj(pawn, "Controller") : 0;
+    if (!pawn || !ctrl) {
+        MLOG("airdrop: test -- no pawn");
+        return true;
+    }
+    float spot[3];
+    names::ReadVector(pawn + addr::kActorLocation, spot);
+    spot[2] += m * 100.0f;
+    const int* r = reinterpret_cast<const int*>(ctrl + addr::kActorRotation);
+    const int rot[3] = {0, r[1], 0};
+    script::Call mv(pawn, "ClientSetLocation");
+    const bool moved = mv.ok && mv.Set("NewLocation", spot, sizeof(spot)) && mv.Set("NewRotation", rot, sizeof(rot)) && mv.Run();
+    script::Call create(pawn, "CreateParachute");
+    const int skip = 1;
+    const bool created = create.ok && create.Set("SkipITP", &skip, sizeof(skip)) && create.Run();
+    script::Call deploy(pawn, "AirDrop_DeployChuteEvent");
+    const bool deployed = deploy.ok && deploy.Run();
+    script::Call spawn(ctrl, "SpawnParachute");
+    const bool spawned = spawn.ok && spawn.Run();
+    MLOG("airdrop: test -- lifted %.0f m (%s), CreateParachute %s, AirDrop_DeployChuteEvent %s, SpawnParachute %s; the controller "
+         "in %s, the pawn in %s", m, moved ? "moved" : "NOT moved", created ? "ran" : "FAILED", deployed ? "ran" : "FAILED",
+         spawned ? "ran" : "FAILED", names::StateName(ctrl).c_str(), names::StateName(pawn).c_str());
+    return true;
+}
 
 void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* loc) {
     CrouchState& c = g_crouch;

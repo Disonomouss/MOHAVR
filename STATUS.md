@@ -18,6 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The parachute by hand** (2026-10-08, D75, ENGINE-NOTES 5bu): the menu's General tab -> Parachute: hands (shipped off).
 **Pause and shot haptics** (2026-10-08, D74): the game pauses when the headset loses focus in gameplay; a pulse per shot of
 the main gun ([Controls] ShotHaptics).
 **Resolution presets** (2026-10-08, D73): the menu's General tab -> Resolution, Custom (the shipped default) / Auto / the
