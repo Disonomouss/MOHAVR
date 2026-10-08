@@ -2351,7 +2351,23 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   - **Bug since D71:** the mod's "the player's own view" test (the view's yaw within 2048 of the controller's) failed past
     11 deg of mount turn; it now allows the mount's 45 deg.
 
+## 5bw. The mission loadout's weapon list (D79, 2026-10-08)
 
+- **The way in:** `GEngine.GamePlayers[0]` (a LocalPlayer) `.ViewportClient.UIController.SceneClient.ActiveScenes`. The
+  loadout is the UIScene `WeaponsLoadout`. `GetFocusedControl(bRecurse)` gives `Primary_Button` (a UILabelButton) on the
+  slots and `WeaponList` (a UIList: Index, Items = 0 1 2) with a slot's list open.
+- **The game's own bug (the unmodded game, the same):** the open list submits its index on the first input of any kind
+  and closes:
+  - Down moves the index to 1 first, so it picks the next gun;
+  - Enter, A, a mouse move or a click picks the gun at index 0;
+  - Up takes the highlight off and doesn't close; Left / Right on the slots do nothing.
+  With a pad or the keyboard the third gun (the MP40) was never reachable.
+- **What works:**
+  - `UIList.SetIndex(n, bClampValue, bSkipNotification=false)` moves the highlight, the gun image and the stats without
+    closing. With the notification skipped, the index moves but the highlight doesn't.
+  - The next A or Enter submits index n.
+
+## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
 |---|---|---|

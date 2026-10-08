@@ -2262,6 +2262,13 @@ between them); your view stays yours. "Head" is the game's way, as before.
 1. Hands or head: which do you prefer? (hands / head)
 2. Does the gun swing smoothly and stay on its mount? (yes/no)
 
+### The mission loadout
+**Changed:** in the loadout before a mission, open a slot's list with A, move with the left stick (the list now stays
+open), pick with A. Before, any input picked straight away.
+
+**Questions:**
+1. Can you choose any gun in each slot? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

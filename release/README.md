@@ -203,6 +203,9 @@ Most things are in the menu. A few you may want to change in the ini:
 
 ## Known issues
 
+- **The mission loadout:** with a gun's list open, move with the left stick and pick with A. (The game's own list took
+  the first input as the pick; the mod moves it for you. The keyboard still behaves as the game's.)
+
 - **Mounted MG42s:** by default you aim a manned MG42 with your head (and turn it with the stick), as the flat game does;
   the menu's Weapons tab can switch it to your gun hand. It keeps the game's belt reload.
 

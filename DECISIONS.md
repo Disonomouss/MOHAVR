@@ -1333,3 +1333,18 @@ hud, then hold X."
   - pitch 15 deg -> rMGRot 2730, the barrel 0.2 deg off;
   - the view doesn't move as the gun swings (`logs/shots/d78-*.png`).
   **[H]:** whether a heavy gun swinging freely under the hand feels right; head or hands.
+
+### D79. The mission loadout's list, workable with the controllers -- Decided 2026-10-08
+- **Why:** the player: "When you start a new mission and get to the load out screen, you select the gun you want to swap
+  out, it opens a list of guns to choose. Then any input just goes back to the load out screen."
+- **Found (ENGINE-NOTES 5bw):** the game's own bug, the same without the mod. Its list takes its first input as the pick:
+  Down gave the next gun, anything else the first one, and the third was never reachable. The flat game's mouse click
+  hides it.
+- **What:** `[Controls] LoadoutList` (shipped **1**, a fix). While a loadout scene's list has the focus, up and down (the
+  D-pad and the left stick, repeating while held) are taken out of the pad state the game sees (the XInput hook, the
+  host's pad or a real one). The list's index is moved with `UIList.SetIndex(..., notify)`, which moves the highlight and
+  the stats. A picks the gun (the game's own submit), and B goes back.
+- **Proven [S]** (Husky's loadout, the controller path through the host):
+  - Primary's list: down, down -> MP40 highlighted with the list open, up / down, A -> Primary = MP40;
+  - Secondary's list: down -> Thompson, A -> Secondary = Thompson.
+  The keyboard keeps the game's behaviour.
