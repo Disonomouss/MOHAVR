@@ -1337,11 +1337,15 @@ void OnViewPoint(SafetyHookContext& ctx) {
             // anyway, but the gun model and the shot direction follow the controller rotation (ENGINE-NOTES
             // 5o); left alone, stray mouse movement (tab-out, dragging the window) tilted the gun up in front
             // of the eyes (headset round 5). Only for the player's own view, never a cutscene camera.
-            if (g_viewIsPlayers && mounted::HandsNow()) {
-                // D78: the hands aim the MG42 -- the camera's pitch is the controller's plus rMGRot's (its yaw stays the
-                // controller's: the arms' aim blend turns the gun), so the controller is held level and the hand's pitch is
-                // all of it.
+            if (g_viewIsPlayers && mounted::Manned()) {
+                // On a manned MG42 the camera's pitch is the controller's plus rMGRot's, so the controller is held level:
+                // the hands aim it (D78), or the head's pitch is written to rMGRot as the stick would turn it (D82: the
+                // controller's pitch didn't reach the gun in the headset -- "only goes side to side").
                 *reinterpret_cast<int*>(ctrl + addr::kActorRotation) = 0;
+                if (!mounted::HandsNow() && g_cfg.aimHeadPitch) {
+                    const Vec3 f = QuatRotate(head, 0.0f, 0.0f, -1.0f);
+                    mounted::SetPitch(aim::LocalPlayerPawn(), std::atan2(f.y, std::sqrt(f.x * f.x + f.z * f.z)));
+                }
             } else if (g_cfg.aimHeadPitch && !g_cinema && g_viewIsPlayers) {
                 const Vec3 f = QuatRotate(head, 0.0f, 0.0f, -1.0f);  // LOCAL is gravity-aligned: +Y up
                 const float pitch = std::atan2(f.y, std::sqrt(f.x * f.x + f.z * f.z));
@@ -1370,7 +1374,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
     }
 
-    if (g_viewIsPlayers && mounted::HandsNow()) {
+    if (g_viewIsPlayers && mounted::Manned()) {  // (D82: the head's pitch moves the gun now too)
         const std::uintptr_t pawn = aim::LocalPlayerPawn();
         const int ro = pawn ? names::PropertyOffset(pawn, "rMGRot") : -1;
         const int mgPitch = ro >= 0 ? static_cast<std::int16_t>(reinterpret_cast<const int*>(pawn + ro)[0] & 0xFFFF) : 0;

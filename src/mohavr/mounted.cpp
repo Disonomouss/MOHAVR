@@ -62,6 +62,22 @@ void Configure(bool mountedGame, bool mountedHands) {
 bool HandsNow() { return g_handsNow; }
 bool Manned() { return g_manned; }
 
+void SetPitch(std::uintptr_t pawn, float radians) {
+    if (!pawn || !g_manned) return;
+    const int ro = names::PropertyOffset(pawn, "rMGRot");
+    if (ro < 0) return;
+    const float maxPitch = Float(Obj(pawn, "Weapon"), "fMaxPitch", 5461.0f);
+    const float p = std::fmax(-maxPitch, std::fmin(maxPitch, radians * (32768.0f / 3.14159265f)));
+    reinterpret_cast<int*>(pawn + ro)[0] = static_cast<int>(p);
+    const int ub = names::PropertyOffset(pawn, "fAimUpBlend");
+    if (ub >= 0) *reinterpret_cast<float*>(pawn + ub) = maxPitch > 0.0f ? p / maxPitch : 0.0f;
+    static int logged = 0;
+    if (logged < 6) {
+        ++logged;
+        MLOG("mounted: the head aims -- pitch %+.1f deg -> rMGRot pitch %d", radians * 57.2958f, static_cast<int>(p));
+    }
+}
+
 void OnDraw(shared::Header* hdr) {
     if (!hdr) return;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();

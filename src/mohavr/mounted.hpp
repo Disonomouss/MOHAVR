@@ -23,5 +23,7 @@ void OnDraw(shared::Header* hdr);
 bool HandsNow();
 // A mounted gun manned now (its camera turns with the mount).
 bool Manned();
+// D82: rMGRot's pitch (and the aim blend) set to `radians`, within the gun's limit -- the head aims it.
+void SetPitch(std::uintptr_t pawn, float radians);
 
 }  // namespace mohavr::mounted

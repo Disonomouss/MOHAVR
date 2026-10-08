@@ -2276,6 +2276,20 @@ crouch, parachute), Weapons, Reload, Hands (holsters and the off hand's items), 
 **Questions:**
 1. Can you find things where you expect them? (yes / which one wasn't)
 
+### Results so far (the player, 2026-10-08)
+Works: recoil, pause on headset removal, shot haptics, the menu's tabs, the wrist panels behind the gun, magazines and
+rounds at walls and tables, resolution presets. Mounted MG42 head aiming "only goes side to side" and "hand aim is
+inverted": both changed (D82), try again below. The rest untested.
+
+### The MG42 again (D82)
+**Changed:** head mode: your head raises and lowers the gun (the stick still turns it). Hands mode (Weapons -> Mounted
+MG42: hands): squeeze the gun hand's grip on the handle and push it as you would the real gun (left swings the muzzle
+right, down raises it); let go and it stays where it points. B gets you off the gun.
+
+**Questions:**
+1. Head mode: does the gun now follow your head up and down? (yes/no)
+2. Hands mode: does pushing the handle feel right? Too much or too little swing for your hand's move? (right / more / less)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

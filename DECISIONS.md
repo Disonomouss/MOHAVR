@@ -1375,3 +1375,24 @@ hud, then hold X."
   count steps through the layout. The older scripts in work/research/tests count steps through the old one.
 - **Proven [S]:** each tab captured (`logs/shots/d81-*.png`); `goto=recoil` -> the Weapons tab, row 2, and left / right
   changed it; `goto=hud` -> the HUD tab's row; an unknown key is logged and ignored.
+
+### D82. The mounted MG42: the head's pitch, and the hand as a lever -- Decided 2026-10-08
+- **Why:** the player's headset round:
+  - "10. Only goes side to side": with the head aiming, the gun didn't pitch with the head;
+  - "16. Hand aim is inverted".
+- **Found:**
+  - **Head:** the head's pitch reached the controller (Aim.HeadPitch), which didn't move the manned gun in the headset.
+  - **Hands:** the session log showed the barrel within ~1 deg of the hand's pointing line, so the mapping did what D78
+    designed. The design was wrong for a gun held by its rear handle: turning the wrist right swung the drawn handle
+    away to the left. The right grip also pressed the game's use, which twice took the player off the gun.
+- **What:**
+  - **Head mode:** the controller is held level on a manned gun, and the head's pitch is written to `rMGRot` and the aim
+    blend, the way D78's hands drive it. The eye stays where it was with the gun level, as in hands mode.
+  - **Hands mode** (host): the gun hand's grip takes the handle. The pivot is put 40 cm along the gun's line from the
+    hand, and while held the gun points from the hand through it: pushed left, the muzzle swings right; pushed down, it
+    rises. Let go and it stays. While manned that grip is the handle's, not use; B still gets off.
+- **Proven [S]:**
+  - head pitch 20 / -15 deg -> rMGRot pitch 3640 / -2730, the camera pitch 20.00 / -14.99, the eye's height unchanged;
+  - hand 10 cm left / right / down -> the gun's line +14.0 / -14.0 deg yaw, +14.0 pitch, back to 0 at the start;
+  - let go, the hand moved: the gun stayed; taken again there and 10 cm left: +14.0;
+  - holding the handle, a burst at a soldier 6 m ahead: Health 110 -> 0, still on the gun.

@@ -166,7 +166,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Physical melee
   - Hand grenades (the gun hand's: pin and grip)
   - Grab pickup (on by default)
-  - Mounted MG42: head (default; aim it with your view, as the flat game) or hands (your gun hand swings it on its mount)
+  - Mounted MG42: head (default; your head raises and lowers it, the stick turns it) or hands (squeeze the gun hand's
+    grip on the handle and push it as you would the real gun; let go and it stays; B gets you off)
   - Give all weapons
 - **Reload**
   - Manual reload, Pouch reload

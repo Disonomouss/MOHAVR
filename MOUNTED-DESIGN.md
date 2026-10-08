@@ -78,3 +78,10 @@ Built behind `[Weapon] MountedHands` (shipped 0; the menu's Weapons tab -> Mount
   - the eyes stay where the camera was with the gun level (the Cam socket drops 15 units at 15 deg up).
 - **[S]:** the barrel within 0.2 deg of the hand's line; bursts 25 deg off miss, on the soldier kill (D78).
 - Not done: the hands' IK on the handles; a heavy gun's lag (for the headset to ask for).
+
+## 6. The headset's verdict and the lever (D82)
+
+- Head mode pitched no more in the headset ("only goes side to side"): the head's pitch now goes to `rMGRot` directly.
+- Hands mode felt inverted: the gun had pointed where the controller pointed. It is now a lever: grip the handle, and the
+  gun points from the hand through a pivot 40 cm along its line; let go and it stays. The grip is the handle's while
+  manned (it had pressed use and dismounted the player).

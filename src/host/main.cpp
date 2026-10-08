@@ -1136,6 +1136,59 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     if (handsOk && offhandKnife.Holding())
                         g_hdr->meleeOn |= 8u | ((real >> oh) & 1u ? 16u : 0u) | (handsOut.knifeBusy ? 32u : 0u) | ((offEpoch & 0xFFu) << 16);
                 }
+                // D82: the MG42 by hand as a lever (the player: "hand aim is inverted" -- the gun had pointed where the
+                // controller pointed, so turning the wrist right swung the handle away to the left). The gun hand's grip
+                // takes the handle: the pivot is then put 40 cm along the gun's line from the hand, and while held the gun
+                // points from the hand through it (the handle pushed left swings the muzzle right, pushed down raises it);
+                // let go and it stays. While manned that grip is the handle's, not the game's use (which got the player
+                // off the gun); B still is.
+                static bool mgWas = false, mgHeld = false;
+                static XrVector3f mgDir{0.0f, 0.0f, -1.0f}, mgPivot{};
+                if (handsOk && (g_hdr->mgState & 2u)) {
+                    bool& wasMg = mgWas;
+                    bool& held = mgHeld;
+                    XrVector3f& dir = mgDir;
+                    XrVector3f& pivot = mgPivot;
+                    const int gh = handsOut.gunHand;
+                    const XrVector3f hp = handPose[gh].position;
+                    if (!wasMg) {
+                        // Start level, the way the head faces.
+                        dir = {0.0f, 0.0f, -1.0f};
+                        if (menuHeadOk) {
+                            const auto& q = menuHead.orientation;
+                            float fx = -(2.0f * (q.x * q.z + q.w * q.y)), fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
+                            const float l = std::sqrt(fx * fx + fz * fz);
+                            if (l > 1e-3f) dir = {fx / l, 0.0f, fz / l};
+                        }
+                        held = false;
+                        MLOG("host: mg -- the gun hand's grip takes the MG42's handle (a lever about its mount)");
+                    }
+                    wasMg = true;
+                    const float gv = pad.GripValue(session, gh);
+                    const bool grip = held ? gv > 0.4f : gv > 0.6f;
+                    if (grip && !held) {
+                        constexpr float kLever = 0.40f;
+                        pivot = {hp.x + dir.x * kLever, hp.y + dir.y * kLever, hp.z + dir.z * kLever};
+                        MLOG("host: mg -- the handle taken");
+                    } else if (!grip && held) {
+                        MLOG("host: mg -- the handle let go");
+                    }
+                    held = grip;
+                    if (held) {
+                        const XrVector3f d{pivot.x - hp.x, pivot.y - hp.y, pivot.z - hp.z};
+                        const float l = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+                        if (l > 0.05f) dir = {d.x / l, d.y / l, d.z / l};
+                    }
+                    // The aim line along dir (-Z forward): yaw about +Y, then pitch about +X.
+                    const float pitch = std::asin(std::clamp(dir.y, -1.0f, 1.0f));
+                    const float yaw = std::atan2(-dir.x, -dir.z);
+                    const float cy = std::cos(yaw * 0.5f), sy = std::sin(yaw * 0.5f), cp = std::cos(pitch * 0.5f), sp = std::sin(pitch * 0.5f);
+                    handsOut.aimRay.position = hp;
+                    handsOut.aimRay.orientation = {cy * sp, sy * cp, -sy * sp, cy * cp};
+                    handsOut.consumed[gh] = true;
+                } else if (!(g_hdr->mgState & 2u)) {
+                    mgWas = mgHeld = false;
+                }
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;
                     g_hdr->gunPose = toPose(handsOut.gun);

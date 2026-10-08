@@ -1371,7 +1371,7 @@ void Menu::Render() {
             case kMgHands:
                 snprintf(label, sizeof(label), "Mounted MG42     <  %s  >", mgHands_ ? "hands" : "head");
                 ImGui::Selectable(label, sel);
-                note("hands: your gun hand swings it on its mount; head: it follows your view");
+                note("hands: grip the handle and push it (B gets off); head: it follows your view");
                 break;
             case kChute:
                 snprintf(label, sizeof(label), "Parachute        <  %s  >", chuteHands_ ? "hands" : "stick");
