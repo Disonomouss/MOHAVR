@@ -1429,3 +1429,12 @@ hud, then hold X."
   - on: 31.3 / 29.9 / 26.9 before, 148 / 63 / 62 during, 31.3 / 29.9 / 26.9 after;
   - off: unchanged throughout.
   **[H]:** whether the depth-of-field blur during a hit's ~1 s is noticeable.
+
+### D85. The Valve Index's controllers work the MOHAVR menu -- Decided 2026-10-09
+- **Why:** an Index player: the mod menu "does not respond to controls".
+- **Found:** the menu's own actions (navigate, select, back) had bindings for every supported controller except the
+  Index, whose suggestion list was empty. The menu opened (the wrist and the left A, D60) and nothing moved it.
+- **What:** the Index's menu bindings, Touch's layout: the left stick navigates, either trigger or the right A selects, the
+  right B backs out. The toggle stays the wrist's (the Index has no menu button for the game).
+- **Proven [S]:** the bindings accepted (no "not accepted"), the harness cycle OK. The simulator emulates Touch only:
+  **[H]** the Index player's confirmation.

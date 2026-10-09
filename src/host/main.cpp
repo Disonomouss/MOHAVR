@@ -475,7 +475,17 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             {aSelect, path("/user/hand/right/input/a/click")},
             {aBack, path("/user/hand/right/input/b/click")},
         });
-        suggest("/interaction_profiles/valve/index_controller", {});
+        // D85 (an Index player: "the menu does not respond to controls"): the Index had no menu bindings at all -- it opened
+        // (the wrist and its left A, D60) but nothing moved it. Its layout is Touch's (A / B on both hands, no menu
+        // button for the toggle: the wrist's): the left stick navigates, either trigger or the right A selects, the right B
+        // backs out.
+        suggest("/interaction_profiles/valve/index_controller", {
+            {aStick, path("/user/hand/left/input/thumbstick")},
+            {aSelect, path("/user/hand/left/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/trigger/value")},
+            {aSelect, path("/user/hand/right/input/a/click")},
+            {aBack, path("/user/hand/right/input/b/click")},
+        });
         // D59: the G2's controllers: Touch's layout (X/Y, A/B, a menu button on each), bound the same.
         if (hpControllers)
             suggest("/interaction_profiles/hp/mixed_reality_controller", {

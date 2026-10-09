@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); fixed,
+unreleased.
 **Release 0.8.4** (published 2026-10-08): everything since 0.8.3 (D61-D84), `MOHAVR-0.8.4-Setup.exe` and the zip on GitHub.
 **The damage flash back** (2026-10-08, D84): the red on a hit returns (the DoF pass allowed while a tint runs);
 the menu's Comfort tab -> Damage flash (on).
