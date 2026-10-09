@@ -87,7 +87,7 @@ back. Push up past the first item to reach the tabs.
 | General | Recentre, world scale, height, starting gun hand, resolution (headset presets), frame pacing, holster and reload rings |
 | Comfort | Smooth / snap turning, room-scale walking, move direction, sticks, vignette, damage flash, firing shake, seated play, physical crouch, parachute |
 | Weapons | Gun fit, red dot, recoil, scopes, physical melee, grab pickup, mounted MG42 |
-| Reload | Manual reload, pouch reload, reload grips and spots, racking out a round |
+| Reload | Manual reload, pouch reload, a spare magazine shown in the pouch, reload grips and spots, racking out a round |
 | Hands | Holsters, grenades (simple / classic), the off-hand pistol and knife, the hand point |
 | HUD | Wrist or a floating panel, and its layout |
 

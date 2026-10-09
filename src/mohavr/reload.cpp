@@ -25,6 +25,7 @@
 #include "patch.hpp"
 #include "knife.hpp"
 #include "rackround.hpp"
+#include "pouchmag.hpp"
 #include "script_call.hpp"
 #include "viewmodel.hpp"
 
@@ -1585,6 +1586,13 @@ void OverrideBones(std::uintptr_t comp, const float* saved, float* bones, int nu
     const Vec3 outMesh = Norm(PerVariant(l->magOut, v, Vec3{0, 1, 0}));
     const Vec3 grabMesh = PerVariant(l->magGrab, v, Vec3{0, 0, 0});
     const float magR = PerVariant(l->magR, v, 7.0f);
+    // D89: the spare in the pouch while this gun's magazine is out (the host drives it) -- its look: the seated magazine bone.
+    {
+        const bool spare = hostState && magState == 3 && v >= 0 && v < static_cast<int>(l->mag.size()) && r->mag[v] >= 0 && r->mag[v] < num;
+        const float g3[3] = {grabMesh.x, grabMesh.y, grabMesh.z};
+        const float sc = std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+        pouchmag::Want(spare, key, spare ? l->mag[static_cast<size_t>(v)] : std::string(), spare ? saved + 16 * r->mag[v] : saved, g3, sc);
+    }
     const Vec3 grabW = Xform(grabMesh, 1.0f, a);
     float pullCm = 0.0f, heldGap = -1.0f, heldTurn = -1.0f, grabSlide = 0.0f;
     // The in-gun grab frame (G's axes at the grab point) and, held, the magazine's frame: where a drop falls from.
@@ -2320,6 +2328,7 @@ bool InstantReload(std::uintptr_t pawn) {
 bool Install(const Config& cfg, bool pipelineHooked) {
     g_cfg = cfg;
     rackround::Configure(cfg, pipelineHooked);  // (D54: the arm bake draws a rack-ejected round)
+    pouchmag::Configure(cfg.pouchMag, pipelineHooked);  // (D89: and the spare in the pouch)
     if (!cfg.manualReload && !cfg.debugReloadProbe) return false;
     ParseLines(cfg.iniPath);
     if (cfg.manualReload)
@@ -2440,6 +2449,7 @@ void OnDraw(shared::Header* hdr) {
     if (g_cfg.debugReloadProbe) ProbeDraw(pawn);
     if (!g_cfg.manualReload) return;
     rackround::OnDraw();  // (D54: the rack-ejected rounds at rest go)
+    pouchmag::OnDraw(hdr);  // (D89: the spare in the pouch)
     CheckCue();
     g_lastDraw = GetTickCount();
     g_flags = hdr ? hdr->reloadFlags : 0;

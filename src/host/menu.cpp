@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -41,7 +41,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     // Weapons: the gun in hand.
     {kGunFit, kRedDot, kRecoil, kScope, kScopeZoom, kMelee, kGunNade, kGrabPickup, kMgHands, kGiveAll, kClose, -1},
     // Reload: the manual reload and its pages.
-    {kReload, kPouchReload, kGripPage, kSpotPage, kRackEject, kRackKeep, kClose, -1},
+    {kReload, kPouchReload, kPouchMag, kGripPage, kSpotPage, kRackEject, kRackKeep, kClose, -1},
     // Hands: the holsters, the off hand's items, the hand point and rings.
     {kHolsterPage, kNadeStyle, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
      kRingScale, kClose, -1},
@@ -53,7 +53,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -295,6 +295,10 @@ void Menu::ApplySavedSettings() {
         const int defRoom = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"RoomScale", 1, shipped.c_str()));
         roomScale_ = GetPrivateProfileIntW(L"Comfort", L"RoomScale", defRoom, iniPath_.c_str()) != 0;
         if (hdr_) hdr_->roomScale = roomScale_ ? 2u : 1u;
+        // D89: the spare magazine in the pouch -- the shipped [ManualReload] PouchMag until the player toggles it.
+        const int defPouchMag = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"PouchMag", 1, shipped.c_str()));
+        pouchMag_ = GetPrivateProfileIntW(L"ManualReload", L"PouchMag", defPouchMag, iniPath_.c_str()) != 0;
+        if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
     }
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
@@ -1110,6 +1114,11 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             m = (m + (in.right ? 1 : 2)) % 3;
             Save();
             MLOG("menu: %s rings -> %ls", item == kHolsterRings ? "holster" : "reload", kRingModes[m]);
+        } else if (item == kPouchMag) {
+            pouchMag_ = !pouchMag_;
+            if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"ManualReload", L"PouchMag", pouchMag_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: the spare magazine in the pouch -> %s", pouchMag_ ? "shown" : "hidden");
         } else if (item == kRoomScale) {
             roomScale_ = !roomScale_;
             if (hdr_) hdr_->roomScale = roomScale_ ? 2u : 1u;
@@ -1426,6 +1435,11 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Reload rings     <  %s  >", kRingLabels[reloadRings_]);
                 ImGui::Selectable(label, sel);
                 note("rings at the gun's magazine, bolt, pump and foregrip");
+                break;
+            case kPouchMag:
+                snprintf(label, sizeof(label), "Magazine in pouch <  %s  >", pouchMag_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("with your gun's magazine out, a fresh one shows in the belt pouch");
                 break;
             case kRoomScale:
                 snprintf(label, sizeof(label), "Room-scale walk  <  %s  >", roomScale_ ? "on" : "off");

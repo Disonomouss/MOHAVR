@@ -2323,6 +2323,12 @@ you keep walking into a wall the view fades to black until you step back.
 1. Does walking in the room feel natural (no lag, no drift while standing still)? (yes/no)
 2. At a wall: is the fade at the right point, too early or too late? (right / earlier / later)
 
+### The spare magazine in the pouch (D89; menu -> Reload -> Magazine in pouch)
+**Changed:** with your gun's magazine out, a fresh one shows in the belt pouch, where you grab it.
+
+**Questions:**
+1. Does it sit where your hand goes for it, and look right (the right magazine, upright)? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

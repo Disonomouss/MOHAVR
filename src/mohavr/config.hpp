@@ -44,6 +44,7 @@ struct Config {
     float rackRoundSpeed = 1.5f;  // RackRoundSpeed -- m/s it leaves the port (plus the port's own speed)
     float rackRoundUp    = 0.6f;  // RackRoundUp -- how steeply up: 0 straight out to the side, 1 = 45 deg up
     float rackRoundSpin  = 12.0f; // RackRoundSpin -- rad/s it tumbles while it falls
+    bool  pouchMag       = true;  // PouchMag -- a spare magazine shows in the belt pouch while the gun's is out (D89)
     float rackRoundRest  = 1.0f;  // RackRoundRest -- s it lies at your feet before it is gone
     bool  brassMirror   = true;   // [Weapon] BrassMirror -- with the gun in the left hand, the brass thrown mirrored too
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored

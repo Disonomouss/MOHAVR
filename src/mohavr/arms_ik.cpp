@@ -21,6 +21,7 @@
 #include "offpistol.hpp"
 #include "knife.hpp"
 #include "rackround.hpp"
+#include "pouchmag.hpp"
 #include "reload.hpp"
 #include "patch.hpp"
 #include "viewmodel.hpp"
@@ -797,10 +798,10 @@ void BakeCarrier(std::uintptr_t comp) {
     sv->bones.assign(bones, bones + num);
     // D54, the rack eject's round: only its round bone, put in the world where its fall has it (no catch-up: it is in the
     // world, not in a hand); every other bone collapsed (a zero 3x3), and all of them once it is gone.
-    if (rackround::IsCarrier(comp)) {
+    if (rackround::IsCarrier(comp) || pouchmag::IsCarrier(comp)) {  // (D89: the spare in the pouch, the same way)
         float rw[16];
         int rb = -1;
-        const bool on = rackround::BoneFrame(comp, rb, rw);
+        const bool on = rackround::IsCarrier(comp) ? rackround::BoneFrame(comp, rb, rw) : pouchmag::BoneFrame(comp, rb, rw);
         M4 l2w, F;
         std::memcpy(l2w.m, reinterpret_cast<const void*>(comp + l2wo), sizeof(l2w.m));
         std::memcpy(F.m, rw, sizeof(F.m));
@@ -879,7 +880,8 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     const float fov = *reinterpret_cast<const float*>(comp + addr::kMohaSkelMeshFov);
     if (fov == 0.0f) return;  // not a first-person part
     if (comp == offhand::CarrierComponent() || comp == offpistol::CarrierComponent() || comp == knife::CarrierComponent() ||
-        rackround::IsCarrier(comp)) {  // the off hand's item (and the rack eject's round): before the move test
+        rackround::IsCarrier(comp) || pouchmag::IsCarrier(comp)) {  // the off hand's item (the rack eject's round, the
+                                                                    // pouch's spare): before the move test
         BakeCarrier(comp);
         return;
     }

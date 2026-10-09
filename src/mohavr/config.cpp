@@ -149,6 +149,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.rackRoundSpeed = getf(L"ManualReload", L"RackRoundSpeed", c.rackRoundSpeed, 0.0f, 10.0f);
     c.rackRoundUp    = getf(L"ManualReload", L"RackRoundUp", c.rackRoundUp, -1.0f, 5.0f);
     c.rackRoundSpin  = getf(L"ManualReload", L"RackRoundSpin", c.rackRoundSpin, 0.0f, 100.0f);
+    c.pouchMag       = get(L"ManualReload", L"PouchMag", c.pouchMag);
     c.rackRoundRest  = getf(L"ManualReload", L"RackRoundRest", c.rackRoundRest, 0.0f, 30.0f);
     c.aimSpread      = getf(L"Aim", L"Spread", c.aimSpread, 0.0f, 1.0f);
     c.aimShotFromGun = get(L"Aim", L"ShotFromGun", c.aimShotFromGun);

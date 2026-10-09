@@ -1487,3 +1487,19 @@ hud, then hold X."
   - into a house wall: "blocked", "slid along a wall", the view faded at 25 cm and cleared when back, and no step
     through the wall (before the 8 cm cap: a 60 cm step went through).
   **[H]:** the feel; whether the 4 cm dead zone and the fade distance are right.
+
+### D89. A spare magazine shows in the belt pouch while the gun's is out -- Decided 2026-10-10
+- **Why:** the player: "Have option for the ammo model to appear in the ammo holster when gun unloaded. On by default."
+- **What:** `[ManualReload] PouchMag` (shipped **1**; the menu's Reload tab -> Magazine in pouch, live through shared block v36
+  `pouchMagMode`).
+  - While the manual reload drives the gun in hand and its magazine is out (the host's state: dropped or ejected, not
+    yet in a hand), a spare stands in the belt pouch until a magazine is taken.
+  - The spare is the gun's own magazine bone (the visible upgrade variant: the Thompson's drum) of a clone of the gun's
+    class default WeaponMeshComponent, attached as a carrier and drawn by the arm bake with every other bone collapsed,
+    as the rack eject's round (D54).
+  - It sits as in the gun, held upright and facing the body's way, scaled as the gun is drawn, with the magazine's grab
+    point (MagGrab) on the pouch's centre: the host's pouch spot (`pouchPos`).
+- **Proven [S]** (the Thompson):
+  - eject: "a spare Attachment_Thompson.upgrade_03_drum in the pouch", the drum drawn at the belt;
+  - the off hand's grip at the pouch: "taken from the pouch", the spare gone, one drum in the hand;
+  - let fall again: a fresh spare.

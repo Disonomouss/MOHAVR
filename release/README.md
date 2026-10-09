@@ -177,7 +177,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
     grip on the handle and push it as you would the real gun; let go and it stays; B gets you off)
   - Give all weapons
 - **Reload**
-  - Manual reload, Pouch reload
+  - Manual reload, Pouch reload, Magazine in pouch (on: with the gun's magazine out, a fresh one shows in the pouch)
   - Reload grip and Reload spots (per gun)
   - Rack ejects a round, and whether the ejected round is lost or kept
 - **Hands**

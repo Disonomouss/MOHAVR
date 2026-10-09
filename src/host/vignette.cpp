@@ -13,7 +13,7 @@ constexpr float kDistance = 1.0f, kWidth = 4.0f;
 struct Shape { float inner, outer, alpha; };
 constexpr Shape kShapes[4] = {{1.0f, 1.0f, 0.0f}, {0.42f, 0.80f, 0.75f}, {0.28f, 0.62f, 1.0f},  // none, light, strong,
                               {-2.0f, -1.0f, 1.0f}};                                           // solid (D88: the wall fade)
-const char* kNames[3] = {"none", "light", "strong"};
+const char* kNames[4] = {"none", "light", "strong", "solid (the wall fade)"};
 }  // namespace
 
 bool Vignette::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession session, int64_t fmt, float fadeSeconds) {
@@ -90,7 +90,7 @@ void Vignette::SetStrength(int s) {
     if (s == strength_ && (s == 0 || tex_[kLevels])) return;
     strength_ = s;
     if (swapchain_) Build();
-    MLOG("vignette: %s", kNames[strength_]);
+    MLOG("%s: %s", name_, kNames[strength_]);
 }
 
 void Vignette::Update(float dt, float motion) {
