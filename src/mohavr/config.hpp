@@ -159,6 +159,7 @@ bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: it
     bool  stereoViewState   = true;   // [Camera] StereoViewState -- give the right eye its own FSceneViewState (fixes flicker)
     float unitsPerMeter     = 100.0f; // [Camera] UnitsPerMeter -- 100 per the player in stereo (round 4; ENGINE-NOTES 5i)
     bool  noMotionBlur      = true;   // [Camera] DisableMotionBlur -- while head tracking (head motion = camera motion)
+    bool  roomScale         = true;   // [Comfort] RoomScale -- the soldier walks where you walk in the room (D88)
     bool  fireShake         = true;   // [Camera] FireShake -- the game's view kick and push per shot (D87; 0 = steady)
     bool  damageTint        = true;   // [Camera] DamageTint -- the game's damage flash and its other screen tints (D84)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking

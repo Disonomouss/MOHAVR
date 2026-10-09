@@ -2391,6 +2391,18 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - `mohavr pp bullet | melee | hold | state`: research test commands (the component's own starts, a 1.2 s trace of the
   GameModified values).
 
+## 5by. Moving the soldier with collision from the mod (D88, 2026-10-10)
+
+- `Actor.Move`, `MoveSmooth` and `SetLocation` are numbered natives (266, 3969, 267); the mod's ProcessEvent calls refuse them.
+  `Controller.ClientSetLocation(NewLocation, NewRotation)` is script: SetRotation (controller and pawn), then the pawn's
+  native `SetLocation`, which refuses a spot where the pawn's cylinder overlaps the world. Called with the controller's own
+  rotation it is a collision-checked teleport.
+- It checks the destination only, not the way there. Measured: steps refused at 20 and 40 cm into a house wall, then a 60 cm
+  step landed beyond it. Steps are therefore capped at 8 cm a Draw (7 m/s at 90 fps), shorter than any wall plus the
+  cylinder. When the whole step is refused, half of it, or its part along each world axis (sliding along the wall), is
+  tried.
+- Physics stays the game's: the next tick's walking settles the height (a slope: the camera rose 58 units over 5.5 m).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

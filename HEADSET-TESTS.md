@@ -2315,6 +2315,14 @@ always). Comfort -> Firing shake: off keeps the view steady when you fire (the g
 1. With the rings off, can you still find the holsters by the buzz? (yes/no)
 2. Firing shake off: is the view steady on automatic fire? (yes/no)
 
+### Room-scale walking (D88; menu -> Comfort -> Room-scale walk)
+**Changed:** walk around your room and your soldier walks with you; turning around works as before. Walls stop him, and if
+you keep walking into a wall the view fades to black until you step back.
+
+**Questions:**
+1. Does walking in the room feel natural (no lag, no drift while standing still)? (yes/no)
+2. At a wall: is the fade at the right point, too early or too late? (right / earlier / later)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -74,6 +74,7 @@ hand is at a holster or grab spot (rings showing them can be turned on in the me
 | Steer the parachute by hand | Menu: Comfort -> Parachute: hands. Hold both grips, pull one down to turn, both to slow, a quick hard pull of both to flare |
 | Fire a mounted MG42 | Use it as in the game. Your head aims it; or menu: Weapons -> Mounted MG42: hands, then grip the handle and push it. B gets you off |
 | Choose your loadout | In the loadout screen: A opens a slot's list, the left stick moves, A picks |
+| Walk around your room | Your soldier walks with you (walls stop him; the view fades if you keep going into one). Turn around for real or with the right stick |
 
 ### The MOHAVR menu
 
@@ -84,7 +85,7 @@ back. Push up past the first item to reach the tabs.
 | Tab | Settings |
 |---|---|
 | General | Recentre, world scale, height, starting gun hand, resolution (headset presets), frame pacing, holster and reload rings |
-| Comfort | Smooth / snap turning, move direction, sticks, vignette, damage flash, firing shake, seated play, physical crouch, parachute |
+| Comfort | Smooth / snap turning, room-scale walking, move direction, sticks, vignette, damage flash, firing shake, seated play, physical crouch, parachute |
 | Weapons | Gun fit, red dot, recoil, scopes, physical melee, grab pickup, mounted MG42 |
 | Reload | Manual reload, pouch reload, reload grips and spots, racking out a round |
 | Hands | Holsters, grenades (simple / classic), the off-hand pistol and knife, the hand point |

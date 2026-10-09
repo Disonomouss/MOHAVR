@@ -561,10 +561,22 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     // The comfort vignette (GOAL A2): the strength is the menu's ([Comfort] Vignette by default), the fade the ini's.
     mohavr::host::Vignette vignette;
     bool vignetteOk = false;
+    // D88: room-scale walking's wall fade -- the view to black while the head is more than [Comfort] RoomFadeStart (cm) out
+    // of the soldier's body where a wall stopped it (hdr->roomBlocked).
+    mohavr::host::Vignette wallFade;
+    bool wallFadeOk = false;
+    float roomFadeStart = 25.0f;
     if (controllers) {
         wchar_t v[16] = L"";
         GetPrivateProfileStringW(L"Comfort", L"VignetteFade", L"0.2", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
         vignetteOk = vignette.Init(dev, ctx, session, fmt, static_cast<float>(_wtof(v)));
+        wallFadeOk = wallFade.Init(dev, ctx, session, fmt, 0.15f);
+        if (wallFadeOk) {
+            wallFade.SetStrength(3);
+            wallFade.SetName("roomscale", "the view faded (the head is in a wall)");
+        }
+        GetPrivateProfileStringW(L"Comfort", L"RoomFadeStart", L"25", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        roomFadeStart = std::clamp(static_cast<float>(_wtof(v)), 5.0f, 200.0f);
     }
     // Scopes (SCOPE-DESIGN): the scope raised to an eye -- the lens and the scope view the game renders for it.
     mohavr::host::Scope scope;
@@ -1409,6 +1421,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             if (menuOk) vignette.SetStrength(menu.VignetteStrength());
             vignette.Update(dt, controllers ? pad.Motion() : 0.0f);
         }
+        if (wallFadeOk) wallFade.Update(dt, g_hdr && g_hdr->roomBlocked > roomFadeStart ? 1.0f : 0.0f);
         static std::uint32_t allWeaponsPawn = 0;  // the pawn "Give all weapons" was for
         if (menuOk && menu.TakeGiveAllRequest() && g_hdr) {
             // The game runs its own cheats for it (vr_view.cpp RunHostCommand: EnableCheats, a GiveWeapon per
@@ -1653,6 +1666,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             // The comfort vignette (GOAL A2): right over the game's image, under everything the host draws.
             if (vignetteOk && lastMeta.hasView)
                 if (const XrCompositionLayerBaseHeader* vl = vignette.Layer(viewSpace)) layers[layerCount++] = vl;
+                if (wallFadeOk)
+                    if (const XrCompositionLayerBaseHeader* wl = wallFade.Layer(viewSpace)) layers[layerCount++] = wl;
             // M7: the reticle where the shot will land, along the aiming hand's ray (gameplay only).
             // Shown with the menu open too, so the Gun fit page can line the barrel up with it.
             if (reticleOk && lastMeta.hasView && menuHeadOk && (!menuOk || menu.RedDot())) {

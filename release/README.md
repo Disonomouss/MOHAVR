@@ -156,6 +156,8 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Holster rings and Reload rings (off by default; near = when a hand comes close, or always)
 - **Comfort**
   - Turning (smooth, snap 30 or 45 degrees), Move direction (where you look, or your body), Sticks (swap them)
+  - Room-scale walk (on by default): walk around your room and your soldier walks with you; walls stop him, and the
+    view fades if you walk on into one
   - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
   - Damage flash (on by default): the screen goes red when you're hit, as in the flat game
   - Firing shake (on by default): the view jolts with each shot, as in the flat game; off keeps the view steady

@@ -218,6 +218,7 @@ private:
     bool                    nadeSimple_ = true;   // D83
     bool                    damageTint_ = true;   // D84
     bool                    fireShake_ = true;    // D87
+    bool                    roomScale_ = true;    // D88
     void PublishWeaponModes() {
         if (!hdr_) return;
         hdr_->kickMode = 1u + static_cast<std::uint32_t>(kickPct_);

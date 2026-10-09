@@ -463,6 +463,7 @@ void ApplyLandingBody(const std::uintptr_t* players) {
 // one per line in %TEMP%\MOHAVR\game_cmd.txt, read and deleted twice a second on the game thread.
 // D75 (defined below, with the physical crouch).
 void PublishAirdrop(shared::Header* hdr);
+void RoomScaleStep(shared::Header* hdr);  // D88 (with the physical crouch)
 bool ChuteTestCommand(const wchar_t* line);
 
 void RunTestCommands(const std::uintptr_t* players) {
@@ -626,6 +627,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     pickup::OnDraw(hdr);  // D77
     mounted::OnDraw(hdr);  // D78
     loadout::OnDraw(hdr);  // D79
+    if (hdr) RoomScaleStep(hdr);  // D88
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -1133,6 +1135,98 @@ void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
 }
 
 // --- the view merge hook ------------------------------------------------------------------------
+// D88 (the player: "some users like to physically move around the room and turn around. Roomscale options?"): room-scale
+// walking ([Comfort] RoomScale; the menu's hdr->roomScale). Before, the head's room position only moved the eyes away from
+// the soldier: a step and you were out of your body (through walls, shot where the body stood). Now, per Draw, while the
+// soldier walks (PHYS_Walking, no mounted gun, not seated), the head's horizontal offset from the room origin -- past 4 cm --
+// moves the soldier there (the controller's ClientSetLocation: the engine's SetLocation, which refuses a spot that
+// overlaps the world), and the origin moves with it, so the eyes stay over the body. A refused step is tried at half
+// length; what a wall stops stays as the eyes' offset, as before, and the host fades the view to black past
+// [Comfort] RoomFadeStart (hdr->roomBlocked).
+bool  g_seatedNow = false;  // (PhysicalCrouch: seated play this frame)
+float g_roomBlocked = 0.0f;
+
+void RoomScaleStep(shared::Header* hdr) {
+    const std::uint32_t mode = hdr ? hdr->roomScale : 0u;
+    const bool on = mode == 2u || (mode == 0u && g_cfg.roomScale);
+    float blocked = 0.0f;
+    auto publish = [&](float b) {
+        g_roomBlocked = b;
+        if (hdr) hdr->roomBlocked = b;
+    };
+    if (!on || !hdr || !g_cfg.headPosition || !g_haveOrigin || !g_world.valid || !g_viewIsPlayers || g_cinema || g_seatedNow ||
+        mounted::Manned()) {
+        publish(0.0f);
+        return;
+    }
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const int po = pawn ? names::PropertyOffset(pawn, "Physics") : -1;
+    if (po < 0 || *reinterpret_cast<const std::uint8_t*>(pawn + po) != 1) {  // PHYS_Walking only (not falling, ladders, chutes)
+        publish(0.0f);
+        return;
+    }
+    shared::Pose head, eye[2];
+    shared::Fov fov[2];
+    if (!shared::ReadViews(hdr, head, eye, fov)) return;
+    const float dx = head.px - g_ox, dz = head.pz - g_oz;
+    const float off = std::sqrt(dx * dx + dz * dz);
+    if (off < 0.04f) {
+        publish(0.0f);
+        return;
+    }
+    const float s = UnitsPerMeter(hdr);
+    const std::uintptr_t ctrl = names::ReadPointer(pawn + names::PropertyOffset(pawn, "Controller"));
+    if (!ctrl) return;
+    const int* rot = reinterpret_cast<const int*>(ctrl + addr::kActorRotation);
+    const int keep[3] = {rot[0], rot[1], 0};
+    // At most 8 cm a Draw (7 m/s at 90 fps): a refused step never piles up into a jump through a wall (measured: a 60 cm
+    // step after two refused ones landed beyond the wall).
+    constexpr float kMaxStep = 0.08f;
+    const float k = off > kMaxStep ? kMaxStep / off : 1.0f;
+    const float rx = dx * k, rz = dz * k;  // the step, in the room (OpenXR x, z)
+    // A step in the world (Unreal units) from a room step, and back (world -> room: XrToUe and the yaw undone).
+    auto toWorld = [&](float x, float z) { const Vec3 w = YawRotate(XrToUe(x, 0.0f, z), g_world.yaw); return Vec3{w.x * s, w.y * s, 0.0f}; };
+    auto toRoom = [&](const Vec3& w, float& x, float& z) {
+        const Vec3 v = YawRotate(Vec3{w.x / s, w.y / s, 0.0f}, -g_world.yaw);
+        x = v.y;
+        z = -v.x;
+    };
+    float from[3];
+    names::ReadVector(pawn + addr::kActorLocation, from);
+    auto tryStep = [&](const Vec3& w) {
+        const float to[3] = {from[0] + w.x, from[1] + w.y, from[2]};
+        script::Call mv(ctrl, "ClientSetLocation", true);
+        if (!mv.ok || !mv.Set("NewLocation", to, sizeof(to)) || !mv.Set("NewRotation", keep, sizeof(keep)) || !mv.Run()) return false;
+        float now[3];
+        names::ReadVector(pawn + addr::kActorLocation, now);
+        return std::fabs(now[0] - from[0]) > 0.01f || std::fabs(now[1] - from[1]) > 0.01f;
+    };
+    const Vec3 full = toWorld(rx, rz);
+    // The whole step, half of it, or -- along a wall -- its part along each world axis (sliding).
+    const Vec3 tries[4] = {full, {full.x * 0.5f, full.y * 0.5f, 0.0f}, {full.x, 0.0f, 0.0f}, {0.0f, full.y, 0.0f}};
+    int took = -1;
+    for (int t = 0; t < 4 && took < 0; ++t)
+        if ((t < 2 || (t == 2 ? std::fabs(full.x) : std::fabs(full.y)) > 0.05f * s / 100.0f) && tryStep(tries[t])) took = t;
+    float sx = 0.0f, sz = 0.0f;
+    if (took >= 0) toRoom(tries[took], sx, sz);
+    g_ox += sx;  // the origin follows the step, so the eyes come back over the body
+    g_oz += sz;
+    const float moved = off > 0.0f ? std::sqrt(sx * sx + sz * sz) / off : 0.0f;
+    const float rest = std::sqrt((dx - sx) * (dx - sx) + (dz - sz) * (dz - sz));
+    blocked = took == 0 ? 0.0f : rest * 100.0f;  // (only where a step was refused: a body catching up isn't blocked)
+    publish(blocked);
+    static int logged = 0, lastTook = -2;
+    if (logged < 40 && took != lastTook) {
+        ++logged;
+        static const char* kHow[] = {"blocked (a wall)", "stepped with it", "stepped half (the rest blocked)",
+                                     "slid along a wall (x)", "slid along a wall (y)"};
+        MLOG("roomscale: the head %.0f cm out -> the soldier %s; %.0f cm out of the body where it was refused", off * 100.0f,
+             kHow[took + 1], blocked);
+    }
+    lastTook = took;
+    (void)moved;
+}
+
 // [Controls] PhysicalCrouch (GOAL A1, D61): the game's crouch follows the real head. Crouching for real used to lower only
 // the view (the head's drop is added to the game camera); the pawn stayed standing, too tall for cover, until the stick.
 // Eye 0, once per frame: the head's drop below the position origin (metres; LOCAL has no floor, so the line is a drop, not
@@ -1255,6 +1349,7 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
     // from a chair the head can't drop 40 cm.
     const std::uint16_t seatedMode = static_cast<std::uint16_t>((hdr->crouchMode >> 2) & 3u);
     const bool seated = seatedMode == 2 || (seatedMode == 0 && g_cfg.seated);
+    g_seatedNow = seated;  // (D88: no room-scale walking seated)
     const float depth = seated ? g_cfg.seatedCrouchDepth : g_cfg.crouchDepth;
     if (g_originTaken) {
         g_originTaken = false;

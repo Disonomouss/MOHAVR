@@ -259,6 +259,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.noDepthOfField = get(L"Camera", L"DisableDepthOfField", c.noDepthOfField);
     c.damageTint     = get(L"Camera", L"DamageTint", c.damageTint);
     c.fireShake      = get(L"Camera", L"FireShake", c.fireShake);
+    c.roomScale      = get(L"Comfort", L"RoomScale", c.roomScale);
     c.jumpLift       = get(L"Camera", L"JumpLift", c.jumpLift);
     c.minEyeHeight   = getf(L"Camera", L"MinEyeHeight", c.minEyeHeight, 0.0f, 150.0f);
     c.steadyLanding  = get(L"Camera", L"SteadyLanding", c.steadyLanding);

@@ -1466,3 +1466,24 @@ hud, then hold X."
 - **Proven [S]** (a 1.2 s Thompson burst; `mohavr shake trace`: the controller and the game camera per Draw):
   - on: the heading moved over 0.83 deg, the camera 2.5 units;
   - off: 0.00 deg and 0.5 units, the idle level.
+
+### D88. Room-scale walking -- Decided 2026-10-10
+- **Why:** the player: "some users like to physically move around the room and turn around. Roomscale options?" Before,
+  the head's room position only moved the eyes away from the soldier: a step and you were out of your body, seeing
+  through walls and shot where the body stood.
+- **What:** `[Comfort] RoomScale` (shipped **1**; the menu's Comfort tab -> Room-scale walk, live through shared block v35
+  `roomScale`).
+  - Per Draw, while the soldier walks (PHYS_Walking; not on a mounted gun, not seated, not falling or parachuting), the
+    head's horizontal offset from the room origin, past 4 cm, moves the soldier: `ClientSetLocation`, at most 8 cm a
+    Draw (ENGINE-NOTES 5by). Refused, it tries half, then the step's part along each world axis (sliding).
+  - The origin moves by what was taken, so the eyes come back over the body.
+  - What a wall stops stays as the eyes' offset. Past `[Comfort] RoomFadeStart` (25 cm) the host fades the view to black
+    (`roomBlocked`, game -> host; the vignette's quad at a solid level, 0.15 s).
+  - Turning around was already the player's own: the view, the stick's direction (Move direction) and the hands follow
+    the head.
+- **Proven [S]** (the simulator's head moved in 10-20 cm steps):
+  - 1 m forward -> the soldier 98-100 units forward;
+  - 5.5 m sideways in an open street -> 548 units;
+  - into a house wall: "blocked", "slid along a wall", the view faded at 25 cm and cleared when back, and no step
+    through the wall (before the 8 cm cap: a 60 cm step went through).
+  **[H]:** the feel; whether the 4 cm dead zone and the fade distance are right.

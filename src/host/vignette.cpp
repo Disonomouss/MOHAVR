@@ -11,7 +11,8 @@ namespace {
 // half-widths (1 = 2 m off centre = 63 degrees); the clear centre ends at `inner`, full at `outer`.
 constexpr float kDistance = 1.0f, kWidth = 4.0f;
 struct Shape { float inner, outer, alpha; };
-constexpr Shape kShapes[3] = {{1.0f, 1.0f, 0.0f}, {0.42f, 0.80f, 0.75f}, {0.28f, 0.62f, 1.0f}};  // none, light, strong
+constexpr Shape kShapes[4] = {{1.0f, 1.0f, 0.0f}, {0.42f, 0.80f, 0.75f}, {0.28f, 0.62f, 1.0f},  // none, light, strong,
+                              {-2.0f, -1.0f, 1.0f}};                                           // solid (D88: the wall fade)
 const char* kNames[3] = {"none", "light", "strong"};
 }  // namespace
 
@@ -85,7 +86,7 @@ void Vignette::Build() {
 }
 
 void Vignette::SetStrength(int s) {
-    s = std::clamp(s, 0, 2);
+    s = std::clamp(s, 0, 3);
     if (s == strength_ && (s == 0 || tex_[kLevels])) return;
     strength_ = s;
     if (swapchain_) Build();
@@ -103,7 +104,7 @@ const XrCompositionLayerBaseHeader* Vignette::Layer(XrSpace view) {
     const bool shown = swapchain_ && strength_ > 0 && level > 0 && tex_[level];
     if (shown != shownLast_ && logged_ < 40) {
         ++logged_;
-        MLOG("vignette: %s", shown ? "in (moving by stick)" : "out");
+        MLOG("%s: %s", name_, shown ? why_ : "out");
     }
     shownLast_ = shown;
     if (!shown) return nullptr;
