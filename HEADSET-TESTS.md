@@ -2307,6 +2307,14 @@ was the game's own effect, never drawn in VR.
 1. Does the screen flash red when you take damage? (yes/no)
 2. During the flash, does the world look blurred or out of focus? (yes/no)
 
+### Rings and the firing shake (D86-D87)
+**Changed:** the holster and reload rings are off by default (General -> Holster rings / Reload rings: off, near,
+always). Comfort -> Firing shake: off keeps the view steady when you fire (the gun still kicks in your hand).
+
+**Questions:**
+1. With the rings off, can you still find the holsters by the buzz? (yes/no)
+2. Firing shake off: is the view steady on automatic fire? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -80,7 +80,8 @@ The game pauses when you take the headset off or open the headset's dashboard. E
 ## Your hands
 
 Either hand can hold the gun: the hand that draws from a holster holds it, and the other hand is free. A short buzz
-tells you a hand is at a holster or a grab spot. Rings show where the spots are (green = a squeeze there acts).
+tells you a hand is at a holster or a grab spot. Rings can show where the spots are (green = a squeeze there acts): they
+are off by default; turn on Holster rings and Reload rings in the menu's General tab.
 
 **Holsters.** Squeeze the grip with a hand at a spot on your body:
 
@@ -152,10 +153,12 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
     Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
   - Frame pacing
+  - Holster rings and Reload rings (off by default; near = when a hand comes close, or always)
 - **Comfort**
   - Turning (smooth, snap 30 or 45 degrees), Move direction (where you look, or your body), Sticks (swap them)
   - Vignette (none by default; light, strong): darkens the edges while the stick moves or turns you
   - Damage flash (on by default): the screen goes red when you're hit, as in the flat game
+  - Firing shake (on by default): the view jolts with each shot, as in the flat game; off keeps the view steady
   - Seated (off by default): sit, then Recentre, and your seated head becomes standing height; on, physical crouch needs
     only a 25 cm lean
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.

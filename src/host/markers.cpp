@@ -82,7 +82,7 @@ bool Markers::Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession sessio
     return true;
 }
 
-int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, Mode mode, bool showAll,
+int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, Mode holsterMode, Mode reloadMode, bool showAll,
                     const XrCompositionLayerBaseHeader** out, int max) {
     if (!swapchain_ || !tex_) return 0;
     struct Draw { XrVector3f pos; float size; int cell; };
@@ -92,6 +92,7 @@ int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, 
     for (int i = 0; i < h.spotCount; ++i) {
         const Hands::Spot& s = h.spots[i];
         if (s.hidden && !showAll) continue;  // (the player hid this one; the Holsters page shows them all)
+        const Mode mode = (s.kind == Hands::kHolster || s.kind == Hands::kPouch) ? holsterMode : reloadMode;
         const bool show = mode == kAlways || (showAll && (s.kind == Hands::kHolster || s.kind == Hands::kPouch || s.kind == Hands::kMagWell)) ||
                           (mode == kNear && s.close);
         if (!show) continue;
@@ -99,7 +100,7 @@ int Markers::Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, 
         draws[n++] = {s.pos, 2.0f * s.radius, s.inside ? 1 : 0};
     }
     // The off hand's dot, with its rings (it's what the foregrip and magazine spots are for).
-    if (h.offValid && n > 0 && (mode == kAlways || anyNear || showAll)) draws[n++] = {h.offHand, 0.03f, 2};
+    if (h.offValid && n > 0 && (holsterMode == kAlways || reloadMode == kAlways || anyNear || showAll)) draws[n++] = {h.offHand, 0.03f, 2};
     n = std::min(n, max);
     if (n == 0) return 0;
 

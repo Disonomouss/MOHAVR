@@ -1438,3 +1438,31 @@ hud, then hold X."
   right B backs out. The toggle stays the wrist's (the Index has no menu button for the game).
 - **Proven [S]:** the bindings accepted (no "not accepted"), the harness cycle OK. The simulator emulates Touch only:
   **[H]** the Index player's confirmation.
+
+### D86. The rings off by default, holster and reload rings separately -- Decided 2026-10-10
+- **Why:** the player: "Need all visible reload and holster rings to be off by default, and able to be enabled separately
+  in the first tab."
+- **What:** `[Hands] HolsterRings` and `ReloadRings` (shipped **never**; each never / near / always), in place of the
+  single `Rings`, which is no longer read.
+  - **Holster rings:** the holsters and the belt pouch.
+  - **Reload rings:** the gun's magazine, bolt, pump and foregrip spots.
+  - The off hand's dot shows with either.
+  - The menu's General tab: Holster rings and Reload rings. The Holsters page's ring item is the holster rings; the
+    Holsters and Reload spots pages still show every ring while open.
+- **Proven [S]:** with the defaults, hands at the belt pouch and a hip showed no ring; General -> Holster rings: near
+  showed it ("markers: first rings shown").
+
+### D87. The firing shake as a switch -- Decided 2026-10-10
+- **Why:** the player: "screen shake when firing needs to be optional".
+- **Found:** there is no firing camera shake. The game's per-shot view kick does it:
+  - its pitch and yaw turn the controller, and the yaw turns the VR view's heading, so the world shakes side to side;
+  - its push moves the camera.
+  Both come from the weapon's WeaponKickComponents (KickComponent, IronsightsKickComponent), whose own copy of the
+  ViewKickTuning their native side takes in UpdateParams.
+- **What:** `[Camera] FireShake` (shipped **1**, the game's; the menu's Comfort tab -> Firing shake, live through shared
+  block v34 `fireShake`). Off: the components' pitch, yaw and push (distance and randomness) are zeroed and re-taken
+  (UpdateParams), per weapon and re-checked every second. The weapon's own KickParams, which D76's recoil in the hand
+  reads, stay.
+- **Proven [S]** (a 1.2 s Thompson burst; `mohavr shake trace`: the controller and the game camera per Draw):
+  - on: the heading moved over 0.83 deg, the camera 2.5 units;
+  - off: 0.00 deg and 0.5 units, the idle level.

@@ -19,9 +19,10 @@ class Markers {
 public:
     enum Mode { kNever = 0, kNear = 1, kAlways = 2 };
     bool Init(ID3D11Device* dev, ID3D11DeviceContext* ctx, XrSession session, int64_t swapchainFormat);
-    // Appends this frame's marker layers to `out` (at most `max`); returns how many. `showAll`: every holster ring
-    // whatever the mode (the menu's Holsters page).
-    int Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, Mode mode, bool showAll,
+    // Appends this frame's marker layers to `out` (at most `max`); returns how many. D86: two groups, each with its own
+    // mode -- the holster rings (the holsters and the belt pouch) and the reload rings (the gun's magazine, bolt, pump and
+    // foregrip spots). `showAll`: every holster ring whatever the mode (the menu's Holsters / Reload spots pages).
+    int Layers(XrSpace space, const XrPosef& head, const Hands::Output& h, Mode holsterMode, Mode reloadMode, bool showAll,
                const XrCompositionLayerBaseHeader** out, int max);
 
 private:

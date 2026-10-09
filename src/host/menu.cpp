@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -35,9 +35,9 @@ const char* kTabNames[kTabCount] = {"General", "Comfort", "Weapons", "Reload", "
 constexpr int kTabMax = 24;
 const int kTabItems[kTabCount][kTabMax] = {
     // General: the view and the setup.
-    {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kClose, -1},
+    {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kHolsterRings, kReloadRings, kClose, -1},
     // Comfort: moving, turning, stance.
-    {kTurn, kMove, kSticks, kVignette, kDamageTint, kSeated, kCrouch, kChute, kClose, -1},
+    {kTurn, kMove, kSticks, kVignette, kDamageTint, kFireShake, kSeated, kCrouch, kChute, kClose, -1},
     // Weapons: the gun in hand.
     {kGunFit, kRedDot, kRecoil, kScope, kScopeZoom, kMelee, kGunNade, kGrabPickup, kMgHands, kGiveAll, kClose, -1},
     // Reload: the manual reload and its pages.
@@ -53,7 +53,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -119,6 +119,7 @@ enum ScreenItem { shDist, shWidth, shDown, shReset, shBack, shCount };
 const wchar_t* kBackings[3] = {L"none", L"dim", L"dark"};
 const char* kHolsterLabels[kSpots] = {"right shoulder", "left shoulder", "right hip", "left hip", "chest", "lower back", "magazine pouch"};
 const wchar_t* kRingModes[3] = {L"never", L"near", L"always"};
+const char*    kRingLabels[3] = {"off", "near", "always"};  // (D86: the menu's words)
 
 std::wstring UserIniPath() {
     wchar_t base[MAX_PATH] = L"";
@@ -286,6 +287,10 @@ void Menu::ApplySavedSettings() {
         const int defTint = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"DamageTint", 1, shipped.c_str()));
         damageTint_ = GetPrivateProfileIntW(L"Camera", L"DamageTint", defTint, iniPath_.c_str()) != 0;
         if (hdr_) hdr_->damageTint = damageTint_ ? 2u : 1u;
+        // D87: the firing shake -- the shipped [Camera] FireShake until the player toggles it (live: hdr->fireShake).
+        const int defShake = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"FireShake", 1, shipped.c_str()));
+        fireShake_ = GetPrivateProfileIntW(L"Camera", L"FireShake", defShake, iniPath_.c_str()) != 0;
+        if (hdr_) hdr_->fireShake = fireShake_ ? 2u : 1u;
     }
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
@@ -394,13 +399,21 @@ void Menu::LoadHolsters(const HolsterSpot (&defaults)[kSpots], const std::string
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::wstring shipped(exe);
     shipped = shipped.substr(0, shipped.find_last_of(L'\\')) + L"\\MOHAVR.ini";
-    wchar_t def[16] = L"", v[16] = L"";
-    GetPrivateProfileStringW(L"Hands", L"Rings", L"near", def, 16, shipped.c_str());
-    GetPrivateProfileStringW(L"Hands", L"Rings", def, v, 16, iniPath_.c_str());
-    ringsMode_ = 1;
-    for (int m = 0; m < 3; ++m)
-        if (!_wcsicmp(v, kRingModes[m])) ringsMode_ = m;
-    MLOG("menu: rings %ls", kRingModes[ringsMode_]);
+    // D86 (the player: "all visible reload and holster rings off by default, and able to be enabled separately in the
+    // first tab"): [Hands] HolsterRings and ReloadRings, the shipped ones (never) until the player picks -- the older
+    // single Rings is no longer read.
+    auto ringMode = [&](const wchar_t* key) {
+        wchar_t def[16] = L"", v[16] = L"";
+        GetPrivateProfileStringW(L"Hands", key, L"never", def, 16, shipped.c_str());
+        GetPrivateProfileStringW(L"Hands", key, def, v, 16, iniPath_.c_str());
+        int mode = 0;
+        for (int m = 0; m < 3; ++m)
+            if (!_wcsicmp(v, kRingModes[m])) mode = m;
+        return mode;
+    };
+    ringsMode_ = ringMode(L"HolsterRings");
+    reloadRings_ = ringMode(L"ReloadRings");
+    MLOG("menu: holster rings %ls, reload rings %ls", kRingModes[ringsMode_], kRingModes[reloadRings_]);
     // Round 31: the hand point, the foregrip ring and the reload rings (the player's, else the shipped [Hands] ones).
     {
         wchar_t d[64] = L"", u[64] = L"";
@@ -734,7 +747,8 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Controls", L"SwapSticks", swapSticks_ ? L"1" : L"0", iniPath_.c_str());
     WritePrivateProfileStringW(L"Controls", L"GunHand", startLeft_ ? L"left" : L"right", iniPath_.c_str());
     WritePrivateProfileStringW(L"Aim", L"Reticle", redDot_ ? L"1" : L"0", iniPath_.c_str());
-    WritePrivateProfileStringW(L"Hands", L"Rings", kRingModes[ringsMode_], iniPath_.c_str());
+    WritePrivateProfileStringW(L"Hands", L"HolsterRings", kRingModes[ringsMode_], iniPath_.c_str());
+    WritePrivateProfileStringW(L"Hands", L"ReloadRings", kRingModes[reloadRings_], iniPath_.c_str());
 }
 
 void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
@@ -1003,7 +1017,7 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                     ringsMode_ = (ringsMode_ + (in.right ? 1 : 2)) % 3;
                     Save();
                     moved = false;
-                    MLOG("menu: rings -> %ls", kRingModes[ringsMode_]);
+                    MLOG("menu: holster rings -> %ls", kRingModes[ringsMode_]);
                     break;
                 default: moved = false; break;
             }
@@ -1087,6 +1101,16 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
                 WritePrivateProfileStringW(L"Render", L"Preset", w, iniPath_.c_str());
             }
             MLOG("menu: resolution -> %s (at the next start)", presets::kPresets[resPreset_].label);
+        } else if (item == kHolsterRings || item == kReloadRings) {
+            int& m = item == kHolsterRings ? ringsMode_ : reloadRings_;
+            m = (m + (in.right ? 1 : 2)) % 3;
+            Save();
+            MLOG("menu: %s rings -> %ls", item == kHolsterRings ? "holster" : "reload", kRingModes[m]);
+        } else if (item == kFireShake) {
+            fireShake_ = !fireShake_;
+            if (hdr_) hdr_->fireShake = fireShake_ ? 2u : 1u;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Camera", L"FireShake", fireShake_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: firing shake -> %s", fireShake_ ? "on" : "off");
         } else if (item == kDamageTint) {
             damageTint_ = !damageTint_;
             if (hdr_) hdr_->damageTint = damageTint_ ? 2u : 1u;
@@ -1384,6 +1408,21 @@ void Menu::Render() {
                 note(n2);
                 break;
             }
+            case kHolsterRings:
+                snprintf(label, sizeof(label), "Holster rings    <  %s  >", kRingLabels[ringsMode_]);
+                ImGui::Selectable(label, sel);
+                note("rings at the holsters and the belt pouch (near = when a hand comes close)");
+                break;
+            case kReloadRings:
+                snprintf(label, sizeof(label), "Reload rings     <  %s  >", kRingLabels[reloadRings_]);
+                ImGui::Selectable(label, sel);
+                note("rings at the gun's magazine, bolt, pump and foregrip");
+                break;
+            case kFireShake:
+                snprintf(label, sizeof(label), "Firing shake     <  %s  >", fireShake_ ? "on" : "off");
+                ImGui::Selectable(label, sel);
+                note("the view jolting with each shot (off: steady; the gun still kicks in your hand)");
+                break;
             case kDamageTint:
                 snprintf(label, sizeof(label), "Damage flash     <  %s  >", damageTint_ ? "on" : "off");
                 ImGui::Selectable(label, sel);
@@ -1517,7 +1556,7 @@ void Menu::Render() {
                 note("where you grab the magazine / handle: move and size the rings");
                 break;
             case kHolsterPage:
-                snprintf(label, sizeof(label), "Holsters and pouch  (rings: %ls)", kRingModes[ringsMode_]);
+                snprintf(label, sizeof(label), "Holsters and pouch  (rings: %s)", kRingLabels[ringsMode_]);
                 ImGui::Selectable(label, sel);
                 break;
             case kHandFwd:
@@ -1671,14 +1710,14 @@ void Menu::RenderHolsterPage() {
     ImGui::Selectable(label, selected_ == hSize);
     snprintf(label, sizeof(label), "Ring shown            <  %s  >", spotShown_[holsterSel_] ? "yes" : "no");
     ImGui::Selectable(label, selected_ == hShown);
-    snprintf(label, sizeof(label), "Rings (all)           <  %ls  >", kRingModes[ringsMode_]);
+    snprintf(label, sizeof(label), "Holster rings         <  %s  >", kRingLabels[ringsMode_]);
     ImGui::Selectable(label, selected_ == hRings);
     ImGui::Selectable("Reset this spot", selected_ == hReset);
     ImGui::Selectable("Back", selected_ == hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
-    ImGui::TextDisabled("Ring shown: this spot's ring, on its own. Rings: near = when a hand comes close.");
+    ImGui::TextDisabled("Ring shown: this spot's ring, on its own. Holster rings: near = when a hand comes close.");
     ImGui::TextDisabled("Saved for you.   B: back");
     ImGui::PopFont();
 }

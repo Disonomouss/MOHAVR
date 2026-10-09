@@ -12,6 +12,7 @@
 #include "addresses.hpp"
 #include "mounted.hpp"
 #include "pickup.hpp"
+#include "script_call.hpp"
 #include "loadout.hpp"
 #include "aim.hpp"
 #include "arms_ik.hpp"
@@ -623,12 +624,67 @@ M4 KickLocal(float riseDeg, float yawDeg) {
     return Frame(x, y, z, t);
 }
 
+// D87 (the player: "screen shake when firing needs to be optional"): the game's per-shot view kick -- its pitch and yaw
+// turn the controller (the yaw turns the VR view's heading: the world shakes side to side) and its push moves the camera
+// -- comes from the weapon's WeaponKickComponents (KickComponent, IronsightsKickComponent), whose own copy of the
+// ViewKickTuning their native side takes in UpdateParams. While [Camera] FireShake is off (the menu's hdr->fireShake),
+// those copies' pitch, yaw and push are zeroed and re-taken; the weapon's own KickParams -- D76's recoil in the hand --
+// stay. Back on, the weapon's are copied back.
+void FireShake(const shared::Header* hdr) {
+    const std::uint32_t mode = hdr ? hdr->fireShake : 0u;
+    const bool on = mode == 2u || (mode == 0u && g_cfg.fireShake);
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    const int wo = pawn ? names::PropertyOffset(pawn, "Weapon") : -1;
+    const std::uintptr_t weapon = wo >= 0 ? names::ReadPointer(pawn + wo) : 0;
+    if (!weapon || !names::IsA(weapon, "EALASmallArms")) return;
+    static std::uintptr_t doneFor = 0;
+    static bool doneOn = true;
+    // (Only on a change: a new weapon, or the switch; and re-checked every second -- an upgrade re-copies the weapon's.)
+    static DWORD nextCheck = 0;
+    const DWORD now = GetTickCount();
+    if (weapon == doneFor && on == doneOn && static_cast<LONG>(now - nextCheck) < 0) return;
+    nextCheck = now + 1000;
+    const int wk = names::PropertyOffset(weapon, "KickParams"), wik = names::PropertyOffset(weapon, "IronsightsKickParams");
+    bool changed = false;
+    for (int c = 0; c < 2; ++c) {
+        const int co = names::PropertyOffset(weapon, c ? "IronsightsKickComponent" : "KickComponent");
+        const std::uintptr_t comp = co >= 0 ? names::ReadPointer(weapon + co) : 0;
+        const int ko = comp ? names::PropertyOffset(comp, "KickParams") : -1;
+        const int src = c ? wik : wk;
+        if (ko < 0 || src < 0) continue;
+        float* k = reinterpret_cast<float*>(comp + ko);
+        const float* w = reinterpret_cast<const float*>(weapon + src);
+        // ViewKickTuning: 0 PitchDistance, 1 PitchRandomness, 4 YawDistance, 5 YawRandomness, 6 PushDistance, 9 PushRandomness.
+        static const int kFields[] = {0, 1, 4, 5, 6, 9};
+        for (int f : kFields) {
+            const float want = on ? w[f] : 0.0f;
+            if (k[f] != want) {
+                k[f] = want;
+                changed = true;
+            }
+        }
+        if (changed) {
+            script::Call u(comp, "UpdateParams", true);
+            if (u.ok) u.Run();
+        }
+    }
+    if (changed || weapon != doneFor || on != doneOn) {
+        static int logged = 0;
+        if (logged++ < 20)
+            MLOG("viewmodel: firing shake %s for %s (its kick components' pitch, yaw and push%s)", on ? "on" : "off",
+                 names::ClassName(weapon).c_str(), on ? " the weapon's own" : " zeroed; the recoil in the hand stays");
+    }
+    doneFor = weapon;
+    doneOn = on;
+}
+
 }  // namespace
 
 void OnPlayerView() {
     if (!g_installed) return;
     shared::Header* hdr = bridge::SharedHeader();
     UpdateWeaponKey(hdr);
+    FireShake(hdr);  // D87
     float camLoc[3], pitch = 0.0f, yaw = 0.0f;
     if (!view::GameCamera(camLoc, pitch, yaw)) {
         g_line.valid = false;

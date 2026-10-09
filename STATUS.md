@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
+(off); Comfort -> Firing shake (on). Shared block v34. Unreleased.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
 **Release 0.8.5** (published 2026-10-09): the Index's menu controls (D85).
 **Release 0.8.4** (published 2026-10-08): everything since 0.8.3 (D61-D84), `MOHAVR-0.8.4-Setup.exe` and the zip on GitHub.

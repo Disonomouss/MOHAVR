@@ -6,7 +6,7 @@
 
 Commands: toggle up down left right select back, and goto=<key> (D81): the open menu's item with that key
 selected in its tab (or goto=<tab name>: that tab's row), e.g. "toggle goto=recoil left". Keys: menu.cpp kItemKeys
-(recentre worldscale height resetscale gunhand resolution pacing | turning movedir sticks vignette damageflash seated crouch chute |
+(recentre worldscale height resetscale gunhand resolution pacing holsterrings reloadrings | turning movedir sticks vignette damageflash fireshake seated crouch chute |
 gunfit reddot recoil scope scopezoom melee gunnade grabpickup mghands giveall | manualreload pouchreload reloadgrip
 reloadspots rackeject rackkeep | holsters offnade nadehold offpistol offknife knifegrip freehand handfwd handup handin
 foresize rings | hudplace hudshow hudlayout hudbacking hudwrist hudscreen). The host reads and deletes

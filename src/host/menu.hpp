@@ -101,7 +101,8 @@ public:
     bool SpotShown(int i) const { return i >= 0 && i < kSpots ? spotShown_[i] : true; }
     const HolsterSpot& Spot(int i) const { return spots_[i]; }
     const std::string& HolsterCommand(int i) const { return commands_[i]; }
-    int  RingsMode() const { return ringsMode_; }                 // 0 never, 1 near, 2 always
+    int  RingsMode() const { return ringsMode_; }                 // the holster rings (D86): 0 never, 1 near, 2 always
+    int  ReloadRingsMode() const { return reloadRings_; }         // the reload rings (D86): 0 never, 1 near, 2 always
     bool HolsterPageOpen() const { return visible_ && page_ == 2; }
     bool ReloadSpotsPageOpen() const { return visible_ && page_ == 5; }
     // The grab ring `which` (0 the magazine, 1 the handle) for the host: right, up, back (m, the gun's frame), size factor.
@@ -198,7 +199,8 @@ private:
     bool                    spotShownDef_[kSpots] = {true, true, true, true, true, true, true};
     std::string             commands_[kHolsters], commandDefaults_[kHolsters];  // what each holster holds (game commands)
     int                     holsterSel_ = 0;
-    int                     ringsMode_ = 1;
+    int                     ringsMode_ = 0;
+    int                     reloadRings_ = 0;
     float                   handPoint_[3]{}, handPointDef_[3]{};  // m
     float                   foregripR_ = 0.12f, foregripRDef_ = 0.12f, ringScale_ = 1.0f, ringScaleDef_ = 1.0f;
     void                    SaveHands();
@@ -215,6 +217,7 @@ private:
     bool                    mgHands_ = false;     // D78
     bool                    nadeSimple_ = true;   // D83
     bool                    damageTint_ = true;   // D84
+    bool                    fireShake_ = true;    // D87
     void PublishWeaponModes() {
         if (!hdr_) return;
         hdr_->kickMode = 1u + static_cast<std::uint32_t>(kickPct_);

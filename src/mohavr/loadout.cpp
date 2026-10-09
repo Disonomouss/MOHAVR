@@ -20,6 +20,7 @@
 #include "log.hpp"
 #include "names.hpp"
 #include "script_call.hpp"
+#include "vr_view.hpp"
 
 namespace mohavr::loadout {
 using namespace script;
@@ -109,8 +110,24 @@ void PpTrace() {
 DWORD g_ppHoldUntil = 0, g_ppNext = 0;
 std::uintptr_t g_ppComp = 0;
 
+// Research (D87): the controller's rotation and the game camera, per Draw, for 2 s after "mohavr shake trace".
+DWORD g_shakeUntil = 0;
+void ShakeTrace() {
+    if (!g_shakeUntil || static_cast<LONG>(GetTickCount() - g_shakeUntil) > 0) return;
+    const auto engine = *reinterpret_cast<const std::uintptr_t*>(addr::kGEngine);
+    const auto* arr = engine ? reinterpret_cast<const std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
+    const std::uintptr_t player = (arr && arr[1] >= 1 && arr[0]) ? *reinterpret_cast<const std::uintptr_t*>(arr[0]) : 0;
+    const std::uintptr_t ctrl = player ? Obj(player, "Actor") : 0;
+    if (!ctrl) return;
+    const int* r = reinterpret_cast<const int*>(ctrl + addr::kActorRotation);
+    float loc[3] = {0, 0, 0}, p = 0.0f, y = 0.0f;
+    view::GameCamera(loc, p, y);
+    MLOG("shake: trace -- the controller pitch %d yaw %d; the game camera %.1f %.1f %.1f", r[0] & 0xFFFF, r[1], loc[0], loc[1], loc[2]);
+}
+
 void OnDraw(shared::Header* /*hdr*/) {
     PpTrace();
+    ShakeTrace();
     if (g_ppHoldUntil && static_cast<LONG>(GetTickCount() - g_ppHoldUntil) < 0 && g_ppComp &&
         static_cast<LONG>(GetTickCount() - g_ppNext) >= 0) {
         g_ppNext = GetTickCount() + 250;
@@ -168,6 +185,10 @@ void FilterPad(shared::PadState& pad) {
 bool TestCommand(const wchar_t* line) {
     // Research (the damage tint): "mohavr pp bullet|melee|state" -- the player controller's MOHAPostProcessComponent's own
     // effects started, and WorldInfo's colour-curve state logged.
+    if (!std::wcscmp(line, L"mohavr shake trace")) {
+        g_shakeUntil = GetTickCount() + 2000;
+        return true;
+    }
     if (!std::wcsncmp(line, L"mohavr pp", 9)) {
         const auto engine = *reinterpret_cast<const std::uintptr_t*>(addr::kGEngine);
         const auto* arr = engine ? reinterpret_cast<const std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;

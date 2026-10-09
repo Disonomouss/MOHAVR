@@ -1694,7 +1694,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             // The gesture spots' rings ([Hands] Rings / the menu; all holsters while its Holsters page is open).
             if (markersOk && lastMeta.hasView && menuHeadOk && handsOk)
                 layerCount += static_cast<uint32_t>(markers.Layers(
-                    local, menuHead, handsOut, static_cast<mohavr::host::Markers::Mode>(menuOk ? menu.RingsMode() : 1),
+                    local, menuHead, handsOut, static_cast<mohavr::host::Markers::Mode>(menuOk ? menu.RingsMode() : 0),
+                    static_cast<mohavr::host::Markers::Mode>(menuOk ? menu.ReloadRingsMode() : 0),
                     menuOk && (menu.HolsterPageOpen() || menu.ReloadSpotsPageOpen()), layers + layerCount,
                     15 - static_cast<int>(layerCount)));
             // The menu panel on top of the game when open.
