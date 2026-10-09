@@ -18,8 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
-**The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); fixed,
-unreleased.
+**The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.5** (published 2026-10-09): the Index's menu controls (D85).
 **Release 0.8.4** (published 2026-10-08): everything since 0.8.3 (D61-D84), `MOHAVR-0.8.4-Setup.exe` and the zip on GitHub.
 **The damage flash back** (2026-10-08, D84): the red on a hit returns (the DoF pass allowed while a tint runs);
 the menu's Comfort tab -> Damage flash (on).
@@ -72,12 +72,12 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
     name. The loader-style smoke test passes for x86 and x64.
 - Game-specific tools: Steamless, UE Explorer, umodel with the decompressor, and apitrace (x86).
 - SteamStub 2.1 analysed: code is not encrypted, and the OEP and WinMain are found and named
-  (ENGINE-NOTES Â§3â€“4).
+  (ENGINE-NOTES Ã‚Â§3Ã¢â‚¬â€œ4).
 - UnrealScript decompiles. The camera entry point is known: `PlayerController.GetPlayerViewPoint`
-  â†’ `PlayerCamera.GetCameraViewPoint` (ENGINE-NOTES Â§6).
+  Ã¢â€ â€™ `PlayerCamera.GetCameraViewPoint` (ENGINE-NOTES Ã‚Â§6).
 - Project documents created: CLAUDE.md, ENGINE-NOTES, DECISIONS, ROADMAP, PLAN, HEADSET-TESTS.
   Git repository initialised (local only).
-- Static research (ENGINE-NOTES Â§5aâ€“Â§6):
+- Static research (ENGINE-NOTES Ã‚Â§5aÃ¢â‚¬â€œÃ‚Â§6):
   - D3D9 `CreateDevice` call site `0x1090339A`, with the presentation parameters decoded.
     Windowed mode means no vsync.
   - Input: DirectInput mouse and keyboard with buffer sizes set; XInput imported by ordinal.
@@ -86,9 +86,9 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
   - Lead for stereo: stock UE3 2P-vertical split-screen is intact.
 
 - The user config and save folder is located (under OneDrive Documents), and the control table
-  is recorded (ENGINE-NOTES Â§7).
+  is recorded (ENGINE-NOTES Ã‚Â§7).
 
-- First instrumented launch (2026-09-25): windowed 1920Ã—1080 works. There's no engine log (D9).
+- First instrumented launch (2026-09-25): windowed 1920Ãƒâ€”1080 works. There's no engine log (D9).
   SendInput drives the menus, WM_CLOSE quits cleanly, and 999 MB of virtual memory is already
   used at the main menu. `tools/userdata.ps1` backs up and restores the player's folder
   (verified byte-identical).
@@ -118,7 +118,7 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
 - **M2 done, including the headset:** the player saw the game on the floating screen in a Quest 3
   through Virtual Desktop, at 90 Hz, stable and smooth, with correct colours (HEADSET-TESTS round 1).
 
-- **M3 [S] done:** `ULocalPlayer::CalcSceneView` was reverse-engineered (ENGINE-NOTES Â§5g). With
+- **M3 [S] done:** `ULocalPlayer::CalcSceneView` was reverse-engineered (ENGINE-NOTES Ã‚Â§5g). With
   safetyhook MidHooks, the head pose from the host drives the camera (game yaw + head
   orientation, head translation), and the projection is the headset's asymmetric FOV. The host
   submits a projection layer with the frame's own render pose. Verified in the simulator
@@ -129,7 +129,7 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
   wrongly captured head origin (a placeholder pose). Scale is back at 50 per the player, to revisit
   with stereo.
 
-- **M4 [S] done: true stereo through the engine's own split-screen path** (ENGINE-NOTES Â§5j). The
+- **M4 [S] done: true stereo through the engine's own split-screen path** (ENGINE-NOTES Ã‚Â§5j). The
   same local player is drawn twice per Draw, left and right half, each with its own eye pose and
   asymmetric FOV, in one render pass. About 10 MB extra, and 495 MB still free. Verified in the
   simulator.
@@ -138,7 +138,7 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
   in-headset menu (host, ImGui, Touch controls) sets world scale live; the player chose **100**, now the
   default. Open: the doubled gun (M7/M8), the per-eye HUD (M5), no controller play yet (M6).
 
-- **Overnight 2026-09-25 (unattended, UNATTENDED-REPORT.md Â§6 Aâ€“L, all [S] parts done):**
+- **Overnight 2026-09-25 (unattended, UNATTENDED-REPORT.md Ã‚Â§6 AÃ¢â‚¬â€œL, all [S] parts done):**
   - Menu: Recentre, Height, Turning (smooth/snap), smaller panel (shared block v5/v6).
   - Desktop mirror (`Bridge.Mirror`).
   - **M6 controllers:** an XInputGetState IAT hook gives the game a virtual Xbox pad from the Touch
@@ -149,13 +149,13 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
   - **M5 HUD panel:** the per-eye canvas is placed and scaled so both eyes see one panel.
   - `Weapon.HideViewModel` through the game's own exec (ULocalPlayer::Exec).
   - The shot ray mapped for M7.
-  - Frame-time logging, and `Render.ResX/ResY` (2880Ã—1620 measured fine).
+  - Frame-time logging, and `Render.ResX/ResY` (2880Ãƒâ€”1620 measured fine).
   - Host-crash fallback, a 30-min soak, death/reload.
   - The player package `dist/MOHAVR-0.7.0.zip`, with install/uninstall tested end to end.
   - Every new feature is behind a switch, off by default; round 5 turns them on for the headset verdict.
 
 - **Headset round 5 passed (2026-09-26):** controllers, tap/hold menu button, smooth/snap turning,
-  Height/Recentre, menus on the flat screen, HUD panel, 2880Ã—1620 (steady 90 Hz in the headset), mirror.
+  Height/Recentre, menus on the flat screen, HUD panel, 2880Ãƒâ€”1620 (steady 90 Hz in the headset), mirror.
   All are now shipped defaults (cutscenes stay 3D, per the player). Follow-ups done and simulator-proven:
   - the player's control layout: multi-input bindings, right-stick flick = crouch, sprint toggle;
   - Aim.HeadPitch (the controller's pitch from the head: gun and shots follow the head vertically);
@@ -163,8 +163,8 @@ GitHub repo (github.com/Disonomouss/MOHAVR, releases). Packages: `tools\package.
 
 ## Next
 1. **M7 done** (headset round 11 passed; `Aim.Mode=3`, right hand, is the default): aiming with the right controller plus the
-   red-dot reticle (ENGINE-NOTES Â§5s): `Aim.Mode` 1 head / 2â€“3 controller, through the player's
-   `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6â€“10 passed (window lock,
+   red-dot reticle (ENGINE-NOTES Ã‚Â§5s): `Aim.Mode` 1 head / 2Ã¢â‚¬â€œ3 controller, through the player's
+   `GetBaseAimRotation` and a per-frame engine trace; the host draws the reticle. Rounds 6Ã¢â‚¬â€œ10 passed (window lock,
    decals, A/B in menus).
 2. **HEADSET-TESTS round 29** (deployed): movement where you look (`Controls.MoveDirection=head`, D20, ENGINE-NOTES
    5al) and the crash recorder (`Debug.CrashDump`) for the pause-menu crash (twice in the gun-fit sessions, 5ak).
