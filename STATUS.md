@@ -21,8 +21,9 @@ into and uninstalls from the EA copy. Open: a headset session on the EA copy [H]
 **Room-scale walking** (2026-10-10, D88, ENGINE-NOTES 5by): the soldier walks where you walk in the room, walls stop him,
 the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
-(off); Comfort -> Firing shake (on). Shared block v34. Unreleased.
+(off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.6** (published 2026-10-10): room-scale walking (D88), the rings off by default (D86), the firing shake switch (D87).
 **Release 0.8.5** (published 2026-10-09): the Index's menu controls (D85).
 **Release 0.8.4** (published 2026-10-08): everything since 0.8.3 (D61-D84), `MOHAVR-0.8.4-Setup.exe` and the zip on GitHub.
 **The damage flash back** (2026-10-08, D84): the red on a hit returns (the DoF pass allowed while a tint runs);
