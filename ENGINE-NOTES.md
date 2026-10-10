@@ -47,6 +47,22 @@ How it starts (matters for the mod and the harness):
 - Program Files: the Binaries folder needs administrator rights to write (this PC: the player's Modify right was granted
   once, 2026-10-07, for `tools/deploy.ps1`).
 
+## 1c. The disc's copy: a no-DVD exe of the same build (D92, measured 2026-10-11)
+
+A player's log from a disc install: every header field and signature failed, and the mod stood down. Their MOHA.exe
+(4,180,992 bytes, MD5 b06a25bfc0d85830dcb73e5c928076cc, TimeDateStamp 0x562B029A = 2015-10-24) is a no-DVD exe (the
+disc's SecuROM 7 doesn't run on current Windows):
+- A UPX-style packer with its marks removed: sections .REST (empty, the image to be), .IN (compressed, the stub), .PIECES
+  (imports and resources). The stub at EP 0x121A8950 (`pushad; mov esi, 0x11DAF000; lea edi, [esi-0x14AE000]`)
+  unpacks, resolves the imports (LoadLibraryA / GetProcAddress) and ends `popad; ...; jmp 0x1112B7EA` at **0x121A8AFD**
+  (`E9 E8 2C F8 FE`). Its own import table names DINPUT8.dll, so the mod loads before the game is unpacked.
+- Unpacked offline, emulating the stub in Unicorn (not run natively; `scratchpad/disc-tools/unpack.py`): the OEP is
+  0x1112B7EA, and the image is a memory dump of build 3648. .data is identical; 37 of the 39 signatures are byte-identical,
+  and every other engine address too (the IAT slots are the same).
+- SecuROM's spliced instructions stay in the dump: ~3100 sites in .text where an instruction is `jmp [ptr]` (FF 25) to a
+  thunk holding it and a jmp back. Two fall in the signatures: FCanvas::Flush +6 (`mov eax, fs:[0]`, thunk 0x109812E6) and
+  the decal screen box +6 (`sub esp, 0x144`, thunk 0x10992426). The others are in code the mod only calls.
+
 ## 2. PE layout
 
 | Fact | Value | Evidence |

@@ -11,4 +11,8 @@ bool CheckBuild(int testMode);  // 1: a timestamp mismatch simulated; 2: a Check
 // D58: is this the EA app's copy (the OOA wrapper) rather than Steam's? Valid once CheckBuild has passed.
 bool IsEaBuild();
 
+// D92: is this the disc's no-DVD exe, still packed (its header's entry point is the unpacker's)? Header only: safe in
+// DllMain, before the game's code exists. CheckBuild runs once it is unpacked.
+bool IsDiscWrapper();
+
 }  // namespace mohavr

@@ -1537,3 +1537,19 @@ hud, then hold X."
 - **Proven [S]** (the Thompson's drum; the off hand moved and turned three ways): one position logged, "the pouch at -5.9
   -12.7 -60.0 units from the head" (the spot's 14 cm ahead, 60 cm down), and the drum drawn in the middle of the pouch's
   ring in every capture (logs/shots/d91-*.png).
+
+### D92. The disc's copy (a no-DVD exe) -- Decided 2026-10-11
+- **Why:** a player with the game from the disc: the mod stood down (every signature failed). The player: "Can we
+  support?" Then: "Build it".
+- **Found (ENGINE-NOTES 1c):** the disc's no-DVD exe is build 3648 under a UPX-style packer, which loads the mod before it
+  unpacks the game; once unpacked, all but two of the mod's sites match, and those two are SecuROM splices of the same
+  instruction.
+- **What:** recognised by its entry point (the unpacker's, 0x018A8950), the mod's DllMain only redirects the unpacker's
+  last jump (to the OEP; its bytes verified) into the mod. There, once the game is unpacked and its imports resolved, it:
+  - runs the build check with the disc's header fields;
+  - restores the two spliced instructions, only after checking the thunk holds exactly that instruction and a jmp back;
+  - checks every signature, then installs the hooks as on Steam's copy.
+  Steam's and the EA app's copies never take this path. Another no-DVD exe (another unpacker) still stands down.
+- **Proven:** [S] statically on the player's exe (the emulated unpack: the OEP, the signatures, the two thunks, the
+  unpacker's last jump); the EA copy's harness cycle unchanged (build check OK, gameplay). On the disc itself: not yet.
+  A test build (dist/MOHAVR-0.8.8-disc-test.zip) goes to the player.

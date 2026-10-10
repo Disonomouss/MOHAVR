@@ -25,6 +25,17 @@ inline constexpr std::uint32_t  kEaSizeOfImage = 0x00F2E000;
 inline constexpr std::uint32_t  kEaCheckSum    = 0x00E402F3;
 inline constexpr std::uint32_t  kEaEntryRva    = 0x00F2D000;  // the OOA stub, in .ooa
 
+// D92: the retail disc's copy, run through a no-DVD MOHA.exe (the disc's SecuROM doesn't run on current Windows). It is a
+// memory dump of the same build 3648 (unpacked offline in an emulator, 2026-10-11: the OEP, WinMain and 37 of the 39
+// signatures byte-identical, .data identical; ENGINE-NOTES 1c), packed with a UPX-style stub (sections .REST/.IN/.PIECES,
+// the UPX marks removed). The stub's own import table names DINPUT8.dll, so this DLL loads before the game is unpacked:
+// the mod starts from the stub's last instruction, its jump to the OEP, instead.
+inline constexpr std::uint32_t  kDiscTimeDateStamp = 0x562B029A;  // 2015-10-24 (the repack)
+inline constexpr std::uint32_t  kDiscSizeOfImage   = 0x018AC000;
+inline constexpr std::uint32_t  kDiscEntryRva      = 0x018A8950;  // the unpacker: pushad; mov esi, 0x11DAF000; ...
+inline constexpr std::uintptr_t kDiscOepJmp        = 0x121A8AFD;  // ... popad; (clear 0x80 of stack); jmp kOep
+inline constexpr std::uint8_t   kDiscOepJmpBytes[] = {0xE9, 0xE8, 0x2C, 0xF8, 0xFE};
+
 // A byte signature at a fixed VA: what the pinned build has there.
 struct Signature {
     const char*          name;
@@ -385,6 +396,23 @@ inline constexpr Signature kSignatures[] = {
     {"weapon execHasReserveAmmo",          kExecHasReserveAmmo, kExecHasReserveAmmoBytes, sizeof(kExecHasReserveAmmoBytes)},
     {"AActor::ProcessEvent",               kActorProcessEvent, kActorProcessEventBytes, sizeof(kActorProcessEventBytes)},
     {"UObject::ProcessEvent",              kObjectProcessEvent, kObjectProcessEventBytes, sizeof(kObjectProcessEventBytes)},
+};
+
+// D92: the disc's dump keeps SecuROM's spliced instructions (~3100 in .text): an instruction moved to a thunk, `jmp [ptr]`
+// (FF 25, 6 bytes) in its place, the thunk being that instruction and a jmp back to the next one. Two fall in the
+// signatures above (measured in the emulated dump: each the function's 4th instruction, its thunk exactly the original).
+// build_check.cpp restores them on the disc's copy -- only after checking the thunk is exactly that.
+struct Splice {
+    const char*          name;
+    std::uintptr_t       va;
+    const std::uint8_t*  original;
+    std::size_t          size;
+};
+inline constexpr std::uint8_t kSpliceCanvasFlushBytes[]    = {0x64, 0xA1, 0x00, 0x00, 0x00, 0x00};  // mov eax, fs:[0]
+inline constexpr std::uint8_t kSpliceDecalScreenBoxBytes[] = {0x81, 0xEC, 0x44, 0x01, 0x00, 0x00};  // sub esp, 0x144
+inline constexpr Splice kDiscSplices[] = {
+    {"FCanvas::Flush +6",   kCanvasFlush + 6,    kSpliceCanvasFlushBytes,    sizeof(kSpliceCanvasFlushBytes)},
+    {"decal screen box +6", kDecalScreenBox + 6, kSpliceDecalScreenBoxBytes, sizeof(kSpliceDecalScreenBoxBytes)},
 };
 
 }  // namespace mohavr::addr

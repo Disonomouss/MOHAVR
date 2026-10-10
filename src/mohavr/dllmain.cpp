@@ -3,7 +3,8 @@
 // copy (D58) its Activation.dll loads it, after decrypting the game and partway through its imports.
 //
 // DllMain does only loader-lock-safe work: open the log, read the ini, verify the build,
-// patch one IAT slot. No LoadLibrary, no threads.
+// patch one IAT slot. No LoadLibrary, no threads. On the disc's no-DVD exe (D92) it only redirects the unpacker's last jump:
+// the rest runs there, once the game is unpacked.
 #include <windows.h>
 
 #include <algorithm>
@@ -76,6 +77,38 @@ std::string Narrow(const wchar_t* w) {
     return n > 0 ? std::string(buf) : std::string("?");
 }
 
+void Start(const mohavr::Config& cfg);
+
+// D92: the disc's no-DVD exe -- the mod starts at its unpacker's last jump (addresses.hpp kDiscOepJmp), the game unpacked
+// and its imports resolved.
+mohavr::Config g_discCfg;
+std::uintptr_t g_oep = mohavr::addr::kOep;
+
+void __stdcall OnDiscEntry() {
+    MLOG("disc: the game is unpacked -- starting");
+    Start(g_discCfg);
+    MLOG("init done at the unpacker's end (%.1f ms)", mohavr::log::MsSinceStart());
+}
+
+__declspec(naked) void DiscEntryStub() {
+    __asm {
+        pushad
+        pushfd
+        call OnDiscEntry
+        popfd
+        popad
+        jmp dword ptr [g_oep]
+    }
+}
+
+bool RedirectDiscEntry(const mohavr::Config& cfg) {
+    g_discCfg = cfg;
+    const auto rel = static_cast<std::int32_t>(reinterpret_cast<std::uintptr_t>(&DiscEntryStub) - (mohavr::addr::kDiscOepJmp + 5));
+    std::uint8_t jmp[5] = {0xE9};
+    std::memcpy(jmp + 1, &rel, sizeof(rel));
+    return mohavr::patch::WriteBytes(mohavr::addr::kDiscOepJmp, mohavr::addr::kDiscOepJmpBytes, jmp, sizeof(jmp));
+}
+
 void Init(HMODULE self) {
     // Paths are anchored to this DLL's folder: the game hasn't set its working directory yet
     // (lessons 2).
@@ -89,6 +122,20 @@ void Init(HMODULE self) {
         MLOG("STAND DOWN: General.Enabled=0 -- acting as a plain dinput8 proxy");
         return;
     }
+    if (mohavr::IsDiscWrapper()) {
+        if (RedirectDiscEntry(cfg)) {
+            MLOG("disc: a no-DVD MOHA.exe, still packed -- the mod starts at its unpacker's end (0x%08X)",
+                 static_cast<unsigned>(mohavr::addr::kDiscOepJmp));
+        } else {
+            MLOG("STAND DOWN: a packed MOHA.exe whose unpacker isn't the known one -- no hooks installed, game runs unmodded");
+        }
+        return;
+    }
+    Start(cfg);
+    MLOG("init done in DllMain (%.1f ms)", mohavr::log::MsSinceStart());
+}
+
+void Start(const mohavr::Config& cfg) {
     if (!mohavr::CheckBuild(cfg.testWrongBuild)) {
         MLOG("STAND DOWN: MOHA.exe is not the pinned build -- no hooks installed, game runs unmodded");
         return;
@@ -131,7 +178,6 @@ void Init(HMODULE self) {
         MLOG("EA app: the entry point's bytes differ -- the IAT hooks are tried now (some may stand down)");
         InstallImportHooks(cfg);
     }
-    MLOG("init done in DllMain (%.1f ms)", mohavr::log::MsSinceStart());
 }
 
 }  // namespace
