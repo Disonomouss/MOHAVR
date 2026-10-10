@@ -164,6 +164,7 @@ bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: it
     bool  fireShake         = true;   // [Camera] FireShake -- the game's view kick and push per shot (D87; 0 = steady)
     bool  damageTint        = true;   // [Camera] DamageTint -- the game's damage flash and its other screen tints (D84)
     bool  noDepthOfField    = true;   // [Camera] DisableDepthOfField -- while head tracking
+    bool  steadyHeading     = true;   // [Camera] SteadyHeading -- the eyes keep the body's heading, not the camera bone's turn (D90)
     bool  jumpLift          = false;  // [Camera] JumpLift -- the game's camera lift on a jump (fJumpCameraOffset) in the view
     bool  steadyLanding     = true;   // [Camera] SteadyLanding -- the parachute landing's camera animation left out
     float minEyeHeight      = 0.0f;   // [Camera] MinEyeHeight -- cm: the view is kept at least this high above the pawn's

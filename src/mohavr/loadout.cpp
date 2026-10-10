@@ -122,7 +122,10 @@ void ShakeTrace() {
     const int* r = reinterpret_cast<const int*>(ctrl + addr::kActorRotation);
     float loc[3] = {0, 0, 0}, p = 0.0f, y = 0.0f;
     view::GameCamera(loc, p, y);
-    MLOG("shake: trace -- the controller pitch %d yaw %d; the game camera %.1f %.1f %.1f", r[0] & 0xFFFF, r[1], loc[0], loc[1], loc[2]);
+    const std::uintptr_t pawn = Obj(ctrl, "Pawn");
+    const std::uintptr_t weapon = pawn ? Obj(pawn, "Weapon") : 0;
+    MLOG("shake: trace -- the controller pitch %d yaw %d; the game camera %.1f %.1f %.1f (pitch %.2f yaw %.2f deg) [%s]", r[0] & 0xFFFF, r[1],
+         loc[0], loc[1], loc[2], p * 57.2958f, y * 57.2958f, weapon ? names::ClassName(weapon).c_str() : "-");
 }
 
 void OnDraw(shared::Header* /*hdr*/) {

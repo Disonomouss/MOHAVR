@@ -53,7 +53,8 @@ hand is at a holster or grab spot (rings showing them can be turned on in the me
 |---|---|
 | Over your right shoulder | Long gun 1 |
 | Over your left shoulder | Long gun 2 |
-| Right hip, chest | Pistol |
+| Right hip | Pistol |
+| Chest | Nothing (off by default; pick what it holds in the menu's Holsters page) |
 | Left hip | Grenades |
 | Lower back | Knife (the free hand) |
 | Front of your belt | Ammunition pouch |

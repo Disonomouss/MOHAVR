@@ -73,7 +73,7 @@ void Hands::Init(const std::wstring& ini) {
     zones_[1] = {L"LeftShoulder", "SwitchSecondary"};
     zones_[2] = {L"RightHip", "SwitchPistol"};
     zones_[3] = {L"LeftHip", "SwitchGrenade"};
-    zones_[4] = {L"Chest", "SwitchPistol"};  // the player, 2026-10-02: "Add chest holster" (the off-hand pistol's cross-draw)
+    zones_[4] = {L"Chest", ""};  // the player, 2026-10-02: "Add chest holster" (the off-hand pistol's cross-draw); off by default (D90)
     zones_[5] = {L"LowerBack", "Knife"};     // the player, 2026-10-03: "Add a holster to lower back for it" (the off-hand knife)
     // Where (cm from the head: right, up, forward) and how big (radius, cm): [Holsters] <Name>Spot = x y z r. The last is
     // the manual reload's magazine pouch, at the middle of the belt (D21).

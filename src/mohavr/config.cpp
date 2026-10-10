@@ -262,6 +262,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.fireShake      = get(L"Camera", L"FireShake", c.fireShake);
     c.roomScale      = get(L"Comfort", L"RoomScale", c.roomScale);
     c.jumpLift       = get(L"Camera", L"JumpLift", c.jumpLift);
+    c.steadyHeading  = get(L"Camera", L"SteadyHeading", c.steadyHeading);
     c.minEyeHeight   = getf(L"Camera", L"MinEyeHeight", c.minEyeHeight, 0.0f, 150.0f);
     c.steadyLanding  = get(L"Camera", L"SteadyLanding", c.steadyLanding);
     c.physicalCrouch = get(L"Controls", L"PhysicalCrouch", c.physicalCrouch);

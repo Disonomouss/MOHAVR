@@ -2329,6 +2329,15 @@ you keep walking into a wall the view fades to black until you step back.
 **Questions:**
 1. Does it sit where your hand goes for it, and look right (the right magazine, upright)? (yes/no)
 
+### Firing, the pistol's reload, the chest holster (D90)
+**Changed:** the view keeps your body's heading when you fire (the pistol turned it 2 degrees, even with the firing
+shake off); a magazine goes in once its top is in the well, about 8 cm before the hands meet; the chest holster is off.
+
+**Questions:**
+1. With Firing shake off, does the view stay still when you fire, the pistol most of all? (yes/no)
+2. Does the pistol reload without the controllers touching, and does the magazine still need to be lined up? (yes/no)
+3. Rifles: does the magazine go in where you'd expect, not too early? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

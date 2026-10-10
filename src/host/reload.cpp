@@ -66,6 +66,7 @@ void ManualReload::Init(const std::wstring& ini) {
     pullOut_ = iniFloat(L"PullOut", 4.0f) / 100.0f;
     insertR_ = iniFloat(L"InsertRadius", 5.0f) / 100.0f;
     insertAngle_ = iniFloat(L"InsertAngle", 40.0f);
+    insertReach_ = std::clamp(iniFloat(L"InsertReach", 8.0f), 0.0f, 20.0f) / 100.0f;  // D90
     boltGrabR_ = iniFloat(L"BoltGrabR", 5.0f) / 100.0f;
     rackArm_ = iniFloat(L"RackArm", 0.85f);
     rackMin_ = iniFloat(L"RackMin", 4.0f) / 100.0f;
@@ -84,9 +85,9 @@ void ManualReload::Init(const std::wstring& ini) {
     for (int i = 0; i < 3; ++i) hold_[i] = h[i] / 100.0f;
     static const char* kButtons[] = {"none", "upper (B / Y)", "lower (A / X)"};
     MLOG("reload: Weapon.ManualReload=%d (the default; the menu's toggle is the player's); release button %s, pull out %.0f cm, "
-         "insert within %.0f cm and %.0f deg, hold %.0f %.0f %.0f cm; the action: grab within %.0f cm, armed at %.0f%% of its "
+         "insert within %.0f cm (of the well's line, %.0f cm out) and %.0f deg, hold %.0f %.0f %.0f cm; the action: grab within %.0f cm, armed at %.0f%% of its "
          "travel (at least %.0f cm), a tug of %.0f cm when held back; a pump back at %.0f%% of its travel",
-         on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertAngle_, h[0], h[1], h[2],
+         on_ ? 1 : 0, kButtons[releaseButton_], pullOut_ * 100.0f, insertR_ * 100.0f, insertReach_ * 100.0f, insertAngle_, h[0], h[1], h[2],
          boltGrabR_ * 100.0f, rackArm_ * 100.0f, rackMin_ * 100.0f, rackTug_ * 100.0f, pumpArm_ * 100.0f);
 }
 
@@ -654,6 +655,7 @@ void ManualReload::Frame(const In& in, Out& out) {
     if (pump && ((geo_.state & 2048u) || rackArmed_)) out.maskTrigger[g] = true;  // GOAL A3: pump it first
     if (pump && pumpHeld_ && pumpByFore_ && pumpTrigger_) out.maskTrigger[o] = true;  // (the pump's trigger isn't the game's)
     float dist = 1e9f, angle = 180.0f;
+    const bool twoStageNow = (geo_.caps & 4096u) != 0, pumpNow = (geo_.caps & 2048u) != 0;  // (D90)
     const float dt = lastNow_ > 0.0 ? static_cast<float>(std::min(0.1, std::max(0.0, in.now - lastNow_))) : 0.0f;
     lastNow_ = in.now;
     if (mag_ == kInHand) {
@@ -684,8 +686,13 @@ void ManualReload::Frame(const In& in, Out& out) {
             magPose_ = Compose(in.off, heldRel_);
             const V3 heldOut = Rotate(magPose_.orientation, A3(geo_.magOut));
             // Insert=slide: the held magazine's front (MagLen ahead of its grab point) against the mouth.
+            // D90 (the player: the pistol's magazine went in only with the hands together -- its seated grab point is in
+            // the gun hand's fist): a magazine counts at the well anywhere on the well's line from its seated spot out
+            // InsertReach cm (its top in the well; it snaps home). Not a bolt's clip or a pump's shell.
+            const float reach = twoStageNow || pumpNow ? 0.0f : insertReach_;
+            const float along = std::clamp(Dot(Sub(P(magPose_.position), grabW), outW), 0.0f, reach);
             dist = geo_.magLen > 0.0f ? Len(Sub(Sub(P(magPose_.position), Scale(heldOut, geo_.magLen)), mouthW))
-                                      : Len(Sub(P(magPose_.position), grabW));
+                                      : Len(Sub(P(magPose_.position), Add(grabW, Scale(outW, along))));
             angle = std::acos(std::clamp(Dot(heldOut, outW), -1.0f, 1.0f)) * 57.2958f;
             if (!armed_ && dist > insertR_ + 0.02f) armed_ = true;  // away from the well first (a pull ends inside it)
             if (armed_ && dist < insertR_ && angle >= insertAngle_ && in.now - nearMissAt_ > 1.0) {
@@ -717,7 +724,8 @@ void ManualReload::Frame(const In& in, Out& out) {
         const float d = Len(Sub(offP, magRingW));
         out.rings[out.ringCount++] = {X(magRingW), magRingR, d < magRingR, d < 2.0f * magRingR || in.showSpots};
     } else if (mag_ == kInHand && armed_) {  // the well -- or the mouth, for the slide insert
-        out.rings[out.ringCount++] = {X(geo_.magLen > 0.0f ? mouthW : grabW), insertR_, dist < insertR_ && angle < insertAngle_,
+        const V3 wellRing = geo_.magLen > 0.0f ? mouthW : Add(grabW, Scale(outW, twoStageNow || pumpNow ? 0.0f : insertReach_));  // (D90)
+        out.rings[out.ringCount++] = {X(wellRing), insertR_, dist < insertR_ && angle < insertAngle_,
                                       dist < 3.0f * insertR_};
     }
     // GOAL A2: the knob's ring while the bolt must be worked (a spent case, or not closed).

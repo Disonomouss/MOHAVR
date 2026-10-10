@@ -136,7 +136,7 @@ private:
     bool          on_ = false;
     bool          rackEject_ = false, rackEjectKeep_ = false;  // D54
     int           releaseButton_ = 1;
-    float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f;  // metres, degrees
+    float         pullOut_ = 0.04f, insertR_ = 0.05f, insertAngle_ = 40.0f, insertReach_ = 0.08f;  // metres, degrees
     float         boltGrabR_ = 0.05f, rackArm_ = 0.85f, rackMin_ = 0.04f, rackTug_ = 0.01f;
     float         ringScale_ = 1.0f;
     float         spotAdj_[2][4] = {{0, 0, 0, 1}, {0, 0, 0, 1}};

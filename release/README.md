@@ -91,7 +91,7 @@ are off by default; turn on Holster rings and Reload rings in the menu's General
 | Over your left shoulder | Long gun 2 |
 | Right hip | Pistol |
 | Left hip | Grenade |
-| Chest | Pistol |
+| Chest | Nothing (off by default: give it one in the menu's Holsters page) |
 | Lower back | Knife (the free hand) |
 | Belt, front | Ammunition pouch |
 

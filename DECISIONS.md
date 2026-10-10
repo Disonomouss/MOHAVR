@@ -1503,3 +1503,25 @@ hud, then hold X."
   - eject: "a spare Attachment_Thompson.upgrade_03_drum in the pouch", the drum drawn at the belt;
   - the off hand's grip at the pouch: "taken from the pouch", the spare gone, one drum in the hand;
   - let fall again: a fresh spare.
+
+### D90. A steady heading when firing, the pistol's magazine in without the hands touching, the chest holster off -- Decided 2026-10-10
+- **Why:** the player:
+  - "Camera still moves when firing with fire shake turned off and recoil at 0."
+  - "Pistol is hard to reload, have to bring hands too close together to get magazine in, end up hitting controllers
+    together."
+  - "Also, turn chest holster off by default."
+- **Found (the firing):** with D87's switch off the controller no longer turns (0.00 deg), but the eyes took their heading
+  from the game camera, the arms' Cam socket, and the arms' fire animation turns that socket. Measured over five Colt shots:
+  2.05 deg (the Thompson's burst 0.3; the walk ~0.5). Its position moved 0.5 cm at most (ENGINE-NOTES 5bz).
+- **What:**
+  - `[Camera] SteadyHeading` (shipped **1**): in the player's own view, not on a mounted gun, the eyes' heading is the
+    controller's: the game camera's yaw less its turn from the controller (eye 0's). 0 = the game camera's, as before.
+  - `[ManualReload] InsertReach` (shipped **8** cm): a held magazine counts at the well anywhere on the well's line from its
+    seated spot out that far along its way in. The top in the well is enough; it snaps home. Not a bolt gun's clip or a
+    pump's shell. The Colt's seated grab point is in the gun hand's fist, so before it went in only with the hands
+    together. The well's ring (when shown) sits at the line's end.
+  - `[Holsters] Chest=none` (and the built-in default): the chest holster holds nothing until the player picks a Holds.
+- **Proven [S]** (the Colt, in the gun hand; the baseline first):
+  - SteadyHeading 0: five shots turned the view 2.05 deg; 1: 0.00, and the controller 0.00 throughout.
+  - InsertReach 0: a magazine held 6 cm below its seated spot stayed in the hand; 8: "inserted 2.0 cm from the well".
+  - The host's holsters: the chest's command empty.

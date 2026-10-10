@@ -253,6 +253,7 @@ float g_gameCam[3] = {};
 // 15 deg): the eyes stay where it was with the gun level.
 bool  g_mgEyeOk = false;
 int   g_ctrlYaw = 0;  // the controller's yaw at this view (eye 0)
+int   g_camYawDev = 0;  // D90: the controller's yaw less the game camera's at this view (eye 0; Unreal units)
 float g_mgEye[3] = {};  // the game's own camera at the player's last view (its shots start there)
 
 float UnitsPerMeter(const shared::Header* hdr) {
@@ -1465,6 +1466,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
             const int lim = mounted::Manned() ? 2048 + 8192 : 2048;
             g_viewIsPlayers = diff >= -lim && diff <= lim;
             g_ctrlYaw = cyaw;
+            g_camYawDev = diff;
             // Aim.HeadPitch: the controller's pitch follows the head. The view takes its pitch from the head
             // anyway, but the gun model and the shot direction follow the controller rotation (ENGINE-NOTES
             // 5o); left alone, stray mouse movement (tab-out, dragging the window) tilted the gun up in front
@@ -1562,7 +1564,14 @@ void OnViewPoint(SafetyHookContext& ctx) {
 
     // D78: while the hands aim a manned MG42 the camera turns with the gun (the mount's turn on top of the body's heading);
     // the eyes keep the body's heading -- the controller's yaw, read this frame -- or the world would swing with the hand.
-    const float gameYaw = (g_viewIsPlayers && mounted::HandsNow()) ? UnrToRad(g_ctrlYaw) : UnrToRad(rot[1]);
+    // D90 (the player: "camera still moves when firing" with the firing shake off): the arms' animations turn the Cam socket
+    // -- the Colt's shot up to 2 deg, the walk ~0.5 -- and the eyes took that turn as the heading. Camera.SteadyHeading: the
+    // eyes take the controller's (the body's) heading -- the game camera's less its turn from the controller (eye 0's; a
+    // snap turn this frame reaches the view next frame, as before).
+    const bool steady = g_cfg.steadyHeading && g_viewIsPlayers && !mounted::Manned();
+    const float gameYaw = (g_viewIsPlayers && mounted::HandsNow()) ? UnrToRad(g_ctrlYaw)
+                          : steady                                 ? UnrToRad(rot[1] + g_camYawDev)
+                                                                   : UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
         g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};

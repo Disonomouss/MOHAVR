@@ -18,6 +18,9 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**A steady heading when firing, the pistol's reload, the chest holster off** (2026-10-10, D90): `[Camera] SteadyHeading`
+(on: the arms' fire animation no longer turns the view; the Colt's 2 deg), `[ManualReload] InsertReach` (8 cm: the
+magazine goes in once its top is in the well), `[Holsters] Chest=none`. Unreleased.
 **A spare magazine in the pouch** (2026-10-10, D89): shown while the gun's magazine is out; the menu's Reload tab (on).
 Shared block v36. Released in 0.8.7.
 **Room-scale walking** (2026-10-10, D88, ENGINE-NOTES 5by): the soldier walks where you walk in the room, walls stop him,

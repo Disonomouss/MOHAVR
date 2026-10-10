@@ -2403,6 +2403,15 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   tried.
 - Physics stays the game's: the next tick's walking settles the height (a slope: the camera rose 58 units over 5.5 m).
 
+## 5bz. The arms' animations turn the camera (D90, 2026-10-10)
+
+- The game camera's yaw is the controller's plus the arms' Cam socket turn (the socket's rotation, GetViewRotationNative,
+  5ah). With the kick components zeroed (D87), firing still turned the camera: the Colt's fire animation (its slide and
+  flip) 2.05 deg over five shots, the Thompson's burst 0.3, the walk ~0.5 (round 25). The controller stayed at 0.00. The
+  socket moved 0.5 cm at most (`mohavr shake trace`, which now logs the camera's pitch, yaw and the weapon in hand).
+- `GiveWeapon` adds no rifle to a mission's loadout (the Garand, Kar98, BAR, M12 and Panzerschreck weren't reached by
+  `NextWeapon` in Husky); `SwitchPistol` draws the Colt.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |
