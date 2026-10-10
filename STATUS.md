@@ -28,7 +28,7 @@ restores two SecuROM splices. Static proof only; a test build for the disc playe
 D90 headset-confirmed (the heading and the pistol's reload fixed, rifles fine). Released in 0.8.8 (D90-D91).
 **A steady heading when firing, the pistol's reload, the chest holster off** (2026-10-10, D90): `[Camera] SteadyHeading`
 (on: the arms' fire animation no longer turns the view; the Colt's 2 deg), `[ManualReload] InsertReach` (8 cm: the
-magazine goes in once its top is in the well), `[Holsters] Chest=none`. Unreleased.
+magazine goes in once its top is in the well), `[Holsters] Chest=none`. Released in 0.8.8.
 **A spare magazine in the pouch** (2026-10-10, D89): shown while the gun's magazine is out; the menu's Reload tab (on).
 Shared block v36. Released in 0.8.7.
 **Room-scale walking** (2026-10-10, D88, ENGINE-NOTES 5by): the soldier walks where you walk in the room, walls stop him,
