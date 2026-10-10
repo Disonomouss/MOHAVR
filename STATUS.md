@@ -19,11 +19,11 @@ The build check knows both; on the EA copy the IAT hooks wait for the game's ent
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
 **Room-scale steps no longer pop the view** (2026-10-11, D94): the origin followed a step a frame before the camera did
-(the body popped back 4-8 cm for a frame). Unreleased.
+(the body popped back 4-8 cm for a frame). Released in 0.8.9.
 **The arms' torso turns with the head** (2026-10-11, D93): a real turn no longer twists the arms (`[Weapon] BodyTurn`).
-Unreleased.
+Released in 0.8.9.
 **The disc's copy** (2026-10-11, D92): a no-DVD exe of the same build, packed -- the mod starts at its unpacker's end and
-restores two SecuROM splices. Static proof only; a test build for the disc player. Unreleased.
+restores two SecuROM splices. Static proof only; a test build for the disc player. Released in 0.8.9 (experimental).
 **The spare magazine stays in the pouch** (2026-10-10, D91): it followed the off hand's hand point; centred in the pouch now.
 D90 headset-confirmed (the heading and the pistol's reload fixed, rifles fine). Released in 0.8.8 (D90-D91).
 **A steady heading when firing, the pistol's reload, the chest holster off** (2026-10-10, D90): `[Camera] SteadyHeading`
@@ -36,6 +36,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.9** (published 2026-10-11): the arms turn with a real turn (D93), the room-scale pop fixed (D94), disc copies (D92, experimental).
 **Release 0.8.8** (published 2026-10-10): the steady heading when firing, the pistol's reload, the chest holster off (D90), the spare magazine fixed in the pouch (D91).
 **Release 0.8.7** (published 2026-10-10): the spare magazine in the pouch (D89).
 **Release 0.8.6** (published 2026-10-10): room-scale walking (D88), the rings off by default (D86), the firing shake switch (D87).

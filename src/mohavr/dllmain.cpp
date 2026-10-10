@@ -22,7 +22,7 @@
 #include "render_res.hpp"
 #include "xinput_hook.hpp"
 
-#define MOHAVR_VERSION "0.8.8"
+#define MOHAVR_VERSION "0.8.9"
 
 namespace {
 
