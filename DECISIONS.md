@@ -1569,3 +1569,15 @@ hud, then hold X."
     mangled across the view.
   - BodyTurn 1: each arm from its own shoulder at 90 and 170 deg ("the torso turned -86 deg ... (the head -90)", then
     -166 for -170 as it caught up).
+
+### D94. Room-scale steps no longer pop the view for a frame -- Decided 2026-10-11
+- **Why:** the player: "have noticed that recently there is an intermittent twitch in which the body pops in and out."
+- **Found:** D88's step runs at the start of the Draw, after the tick has placed this frame's camera, so the pawn's move
+  reaches the camera only next frame. But the room origin moved at once. For that one frame the eyes, the hands and the
+  arms (all mapped from the origin) were a step behind, 4-8 cm back, and then forward again. Standing, the head's drift
+  crosses the 4 cm threshold now and then: an intermittent pop. Measured with a new `mohavr eye trace` (the eye and the
+  pawn per Draw): the head moved 5 cm, the pawn 4.99 units, and the eye stayed put for a frame before catching up.
+- **What:** the step's origin shift is applied at the next step, a frame later, when the camera has the move (a recentre
+  drops a pending shift).
+- **Proven [S]:** the same trace after: the eye moves 4.99 units in the frame the pawn does, with no frame behind (2 of 2
+  steps; before, 2 frames with the eye a step behind).

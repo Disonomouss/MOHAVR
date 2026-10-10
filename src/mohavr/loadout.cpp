@@ -128,9 +128,27 @@ void ShakeTrace() {
          loc[0], loc[1], loc[2], p * 57.2958f, y * 57.2958f, weapon ? names::ClassName(weapon).c_str() : "-");
 }
 
+// Research (the player: "an intermittent twitch in which the body pops in and out"): the eye's place in the world and the
+// pawn's, per Draw, for 3 s after "mohavr eye trace".
+DWORD g_eyeUntil = 0;
+void EyeTrace() {
+    if (!g_eyeUntil || static_cast<LONG>(GetTickCount() - g_eyeUntil) > 0) return;
+    float head[3], yaw = 0.0f, upm = 100.0f;
+    if (!view::HeadInWorld(head, yaw, upm)) return;
+    const auto engine = *reinterpret_cast<const std::uintptr_t*>(addr::kGEngine);
+    const auto* arr = engine ? reinterpret_cast<const std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;
+    const std::uintptr_t player = (arr && arr[1] >= 1 && arr[0]) ? *reinterpret_cast<const std::uintptr_t*>(arr[0]) : 0;
+    const std::uintptr_t ctrl = player ? Obj(player, "Actor") : 0;
+    const std::uintptr_t pawn = ctrl ? Obj(ctrl, "Pawn") : 0;
+    float pl[3] = {0, 0, 0};
+    if (pawn) names::ReadVector(pawn + addr::kActorLocation, pl);
+    MLOG("eye: trace -- the eye %.2f %.2f %.2f; the pawn %.2f %.2f %.2f", head[0], head[1], head[2], pl[0], pl[1], pl[2]);
+}
+
 void OnDraw(shared::Header* /*hdr*/) {
     PpTrace();
     ShakeTrace();
+    EyeTrace();
     if (g_ppHoldUntil && static_cast<LONG>(GetTickCount() - g_ppHoldUntil) < 0 && g_ppComp &&
         static_cast<LONG>(GetTickCount() - g_ppNext) >= 0) {
         g_ppNext = GetTickCount() + 250;
@@ -188,6 +206,10 @@ void FilterPad(shared::PadState& pad) {
 bool TestCommand(const wchar_t* line) {
     // Research (the damage tint): "mohavr pp bullet|melee|state" -- the player controller's MOHAPostProcessComponent's own
     // effects started, and WorldInfo's colour-curve state logged.
+    if (!std::wcscmp(line, L"mohavr eye trace")) {
+        g_eyeUntil = GetTickCount() + 3000;
+        return true;
+    }
     if (!std::wcscmp(line, L"mohavr shake trace")) {
         g_shakeUntil = GetTickCount() + 2000;
         return true;

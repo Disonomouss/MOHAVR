@@ -235,6 +235,7 @@ void ForceVrSettings() {
 bool  g_haveOrigin = false;
 bool  g_originTaken = false;  // set with each new origin (the crouch's settled line logs the eye after it: GOAL A3)
 float g_ox = 0, g_oy = 0, g_oz = 0;
+float g_pendOx = 0, g_pendOz = 0;  // D94: a room-scale step's origin shift, applied a frame later (with the camera)
 
 // M7: how the player's last head-tracked view mapped LOCAL into the world (game thread; PoseToWorld).
 struct WorldMap {
@@ -293,6 +294,7 @@ void UpdateOrigin(const shared::Header* hdr, std::uint32_t recenterSeq, const sh
         g_haveOrigin = true;
         g_originTaken = true;
         g_ox = head.px; g_oy = head.py; g_oz = head.pz;
+        g_pendOx = g_pendOz = 0.0f;
     }
 }
 
@@ -1148,6 +1150,13 @@ bool  g_seatedNow = false;  // (PhysicalCrouch: seated play this frame)
 float g_roomBlocked = 0.0f;
 
 void RoomScaleStep(shared::Header* hdr) {
+    // D94 (the player: "an intermittent twitch in which the body pops in and out"): this runs at the start of the Draw, after
+    // the tick has placed this frame's camera, so a step's pawn move reaches the camera only next frame. The origin used to
+    // move at once: for one frame the eyes (and the hands, the arms) were the step behind -- 4-8 cm back, then forward again
+    // (measured: the head 5 cm out, the eye still for a frame). Now the origin follows when the camera does.
+    g_ox += g_pendOx;
+    g_oz += g_pendOz;
+    g_pendOx = g_pendOz = 0.0f;
     const std::uint32_t mode = hdr ? hdr->roomScale : 0u;
     const bool on = mode == 2u || (mode == 0u && g_cfg.roomScale);
     float blocked = 0.0f;
@@ -1210,8 +1219,8 @@ void RoomScaleStep(shared::Header* hdr) {
         if ((t < 2 || (t == 2 ? std::fabs(full.x) : std::fabs(full.y)) > 0.05f * s / 100.0f) && tryStep(tries[t])) took = t;
     float sx = 0.0f, sz = 0.0f;
     if (took >= 0) toRoom(tries[took], sx, sz);
-    g_ox += sx;  // the origin follows the step, so the eyes come back over the body
-    g_oz += sz;
+    g_pendOx = sx;  // the origin follows the step -- next frame, with the camera (D94) -- so the eyes come back over the body
+    g_pendOz = sz;
     const float moved = off > 0.0f ? std::sqrt(sx * sx + sz * sz) / off : 0.0f;
     const float rest = std::sqrt((dx - sx) * (dx - sx) + (dz - sz) * (dz - sz));
     blocked = took == 0 ? 0.0f : rest * 100.0f;  // (only where a step was refused: a body catching up isn't blocked)

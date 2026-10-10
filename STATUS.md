@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Room-scale steps no longer pop the view** (2026-10-11, D94): the origin followed a step a frame before the camera did
+(the body popped back 4-8 cm for a frame). Unreleased.
 **The arms' torso turns with the head** (2026-10-11, D93): a real turn no longer twists the arms (`[Weapon] BodyTurn`).
 Unreleased.
 **The disc's copy** (2026-10-11, D92): a no-DVD exe of the same build, packed -- the mod starts at its unpacker's end and

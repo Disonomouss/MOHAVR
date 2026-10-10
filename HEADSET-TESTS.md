@@ -2354,6 +2354,13 @@ holster and moves around when your off hand moves." -> D91.
 1. Turn round on the spot with a gun: do both arms come from the right shoulders all the way round? (yes/no)
 2. Looking aside while aiming: do the shoulders follow too much or too little? (BodyTurnLag / BodyTurnMax)
 
+### The body's pop (D94)
+**Changed:** a room-scale step (your head drifting past 4 cm) put the view and the body a step back for one frame; now the
+step and the view move together.
+
+**Questions:**
+1. Standing and moving a little, is the intermittent pop of the body gone? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
