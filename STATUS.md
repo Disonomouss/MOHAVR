@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The spare magazine stays in the pouch** (2026-10-10, D91): it followed the off hand's hand point; centred in the pouch now.
+D90 headset-confirmed (the heading and the pistol's reload fixed, rifles fine). Unreleased.
 **A steady heading when firing, the pistol's reload, the chest holster off** (2026-10-10, D90): `[Camera] SteadyHeading`
 (on: the arms' fire animation no longer turns the view; the Colt's 2 deg), `[ManualReload] InsertReach` (8 cm: the
 magazine goes in once its top is in the well), `[Holsters] Chest=none`. Unreleased.

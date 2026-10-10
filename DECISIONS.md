@@ -1525,3 +1525,15 @@ hud, then hold X."
   - SteadyHeading 0: five shots turned the view 2.05 deg; 1: 0.00, and the controller 0.00 throughout.
   - InsertReach 0: a magazine held 6 cm below its seated spot stayed in the hand; 8: "inserted 2.0 cm from the well".
   - The host's holsters: the chest's command empty.
+
+### D91. The spare magazine stays in the pouch -- Decided 2026-10-10
+- **Why:** the player, on D89's spare: "The visible magazine sits above the holster and moves around when your off hand
+  moves." (D90's three fixes: "fixed", "fixed", "No issue".)
+- **Found:** the host published the tests' target 1 as the pouch's centre, and the tests' targets are moved by the off
+  hand's hand point (so a test hand lands its point there). The spare was off by that offset, which turns with the off
+  hand. The simulator's test hands never turned, so D89's test didn't show it.
+- **What:** the host publishes the pouch's own centre (`Hands::Output::pouch`). The spare is centred in the pouch (halfway
+  from the seated magazine bone's origin, its top, to its grab point), not stood on its grab point.
+- **Proven [S]** (the Thompson's drum; the off hand moved and turned three ways): one position logged, "the pouch at -5.9
+  -12.7 -60.0 units from the head" (the spot's 14 cm ahead, 60 cm down), and the drum drawn in the middle of the pouch's
+  ring in every capture (logs/shots/d91-*.png).

@@ -125,7 +125,8 @@ void OnDraw(shared::Header* hdr) {
         if (logged++ < 20) MLOG("pouchmag: a spare %s.%s (bone #%d) in the pouch", g_want.att.c_str(), g_want.bone.c_str(), bone);
     }
     // Its frame: the gun as it is held upright and facing the body's way (the first-person mesh: X left, Y down, Z ahead),
-    // scaled as drawn, with the magazine's grab point in the pouch.
+    // scaled as drawn, the magazine centred in the pouch: halfway from its seated bone's origin (its top) to its grab point
+    // (D91: the grab point alone stood it up out of the pouch).
     shared::Pose p{};
     p.px = hdr->pouchPos[0];
     p.py = hdr->pouchPos[1];
@@ -140,15 +141,27 @@ void OnDraw(shared::Header* hdr) {
     const float U[9] = {n * s, -c * s, 0.0f,   // mesh X -> left
                         0.0f, 0.0f, -s,        // mesh Y -> down
                         c * s, n * s, 0.0f};   // mesh Z -> ahead
-    float o[3];
-    for (int j = 0; j < 3; ++j) o[j] = pos[j] - (g_want.grab[0] * U[j] + g_want.grab[1] * U[3 + j] + g_want.grab[2] * U[6 + j]);
-    // world = boneComp x [U, o] (row vectors).
     const float* b = g_want.boneComp;
+    float mid[3], o[3];
+    for (int j = 0; j < 3; ++j) mid[j] = 0.5f * (g_want.grab[j] + b[12 + j]);
+    for (int j = 0; j < 3; ++j) o[j] = pos[j] - (mid[0] * U[j] + mid[1] * U[3 + j] + mid[2] * U[6 + j]);
+    // world = boneComp x [U, o] (row vectors).
     for (int r = 0; r < 4; ++r)
         for (int j = 0; j < 3; ++j) g_spare.world[r * 4 + j] = b[r * 4] * U[j] + b[r * 4 + 1] * U[3 + j] + b[r * 4 + 2] * U[6 + j] +
                                                              (r == 3 ? o[j] : 0.0f);
     for (int r = 0; r < 3; ++r) g_spare.world[r * 4 + 3] = 0.0f;
     g_spare.world[15] = 1.0f;
+    // (Where it is against the head, when that moves past 2 cm: the pouch is the body's, not the hands'.)
+    static float last[3] = {1e9f, 1e9f, 1e9f};
+    static int moves = 0;
+    const float rel[3] = {pos[0] - head[0], pos[1] - head[1], pos[2] - head[2]};
+    const float d = std::sqrt((rel[0] - last[0]) * (rel[0] - last[0]) + (rel[1] - last[1]) * (rel[1] - last[1]) +
+                              (rel[2] - last[2]) * (rel[2] - last[2]));
+    if (d > 2.0f && moves < 30) {
+        ++moves;
+        std::memcpy(last, rel, sizeof(last));
+        MLOG("pouchmag: the pouch at %.1f %.1f %.1f units from the head", rel[0], rel[1], rel[2]);
+    }
 }
 
 bool IsCarrier(std::uintptr_t comp) { return comp && carrier::Component(g_spare.slot) == comp; }

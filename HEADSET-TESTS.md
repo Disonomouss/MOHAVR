@@ -2338,6 +2338,15 @@ shake off); a magazine goes in once its top is in the well, about 8 cm before th
 2. Does the pistol reload without the controllers touching, and does the magazine still need to be lined up? (yes/no)
 3. Rifles: does the magazine go in where you'd expect, not too early? (yes/no)
 
+**Answers (2026-10-10):** 1 "fixed" · 2 "fixed" · 3 "No issue". And D89's spare: "The visible magazine sits above the
+holster and moves around when your off hand moves." -> D91.
+
+### The spare magazine, placed again (D91)
+**Changed:** the spare magazine stays in the pouch whatever the off hand does, centred in it.
+
+**Questions:**
+1. Does it sit in the pouch and stay still while your hands move? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

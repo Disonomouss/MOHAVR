@@ -1213,12 +1213,13 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 } else if (!(g_hdr->mgState & 2u)) {
                     mgWas = mgHeld = false;
                 }
-                // D89: the pouch's centre for the spare magazine (hands.cpp's target 1).
-                g_hdr->pouchPosOk = handsOk && handsOut.targetOk[1] ? 1u : 0u;
-                if (handsOk && handsOut.targetOk[1]) {
-                    g_hdr->pouchPos[0] = handsOut.target[1].x;
-                    g_hdr->pouchPos[1] = handsOut.target[1].y;
-                    g_hdr->pouchPos[2] = handsOut.target[1].z;
+                // D89: the pouch's centre for the spare magazine. (D91: not the tests' target 1, which the off hand's hand
+                // point moves -- the spare sat above the pouch and moved with the off hand.)
+                g_hdr->pouchPosOk = handsOk ? 1u : 0u;
+                if (handsOk) {
+                    g_hdr->pouchPos[0] = handsOut.pouch.x;
+                    g_hdr->pouchPos[1] = handsOut.pouch.y;
+                    g_hdr->pouchPos[2] = handsOut.pouch.z;
                 }
                 if (handsOk) {
                     g_hdr->gunFlags = gunFlags;

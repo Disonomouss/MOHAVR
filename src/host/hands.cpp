@@ -226,6 +226,7 @@ Hands::Output Hands::Update(const Input& in) {
     else if (pouchReload_ && gunOk && in.weaponKind != 2) addSpot(kPouch, pouch, pouchR, false, kHolsters);  // (the pouch reload)
     out.targetOk[1] = true;
     out.target[1] = {pouch.x, pouch.y, pouch.z};
+    out.pouch = {pouch.x, pouch.y, pouch.z};
     out.offValid = offOk;
     out.offHand = {pt[o].x, pt[o].y, pt[o].z};
     // The off-hand grenade's view of the off hand.

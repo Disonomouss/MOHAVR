@@ -103,6 +103,7 @@ public:
         float       pulseAmp[2]{}, pulseMs[2]{};  // ... of this strength and length (0: the default short one)
         bool        maskFace[2]{};  // the manual reload's release button kept from the pad (per physical hand)
         bool        maskTrigger[2]{};  // ... and a trigger (the flip of a held taped pair)
+        XrVector3f  pouch{};        // D89/D91: the pouch's centre, as is (target[1] is the tests', moved by the hand point)
         bool        targetOk[11]{}; // tests (pad_cmd.txt hand=l,@mag|@pouch|@bolt|@magin|@boltup|@boltback|@fore|@grenade|
         XrVector3f  target[11]{};   // @pistol|@chest|@back): the magazine, the pouch, the action, the aim point that seats a
                                     // held magazine, a bolt lifted / back, the foregrip (GOAL A3: a pump gun's pump), the
