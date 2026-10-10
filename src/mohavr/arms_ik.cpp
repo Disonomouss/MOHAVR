@@ -349,14 +349,76 @@ int FingerIndex(const char* name) {
     return idx;
 }
 
-void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2w, const M4& A, const M4& invL2W, const M4& carry) {
+// D93 (the player: physical turning "results in the arms twisting"): the torso's turn from the soldier's heading -- the
+// head's yaw against it, followed over Weapon.BodyTurnLag and never more than BodyTurnMax behind (radians; the soldier's
+// heading itself, the stick's turns included, is not in it).
+float TorsoTurn(bool mirrored) {
+    static float turn = 0.0f;
+    static DWORD last = 0;
+    const DWORD now = GetTickCount();
+    const float dt = last ? std::fmin(0.1f, static_cast<float>(now - last) / 1000.0f) : 0.0f;
+    last = now;
+    float head[3], yaw = 0.0f, upm = 100.0f, fwd[3];
+    if (!g_cfg.bodyTurn || !view::HeadInWorld(head, yaw, upm) || !view::HeadForwardInWorld(fwd)) return turn = 0.0f;
+    if (fwd[0] * fwd[0] + fwd[1] * fwd[1] < 0.04f) return mirrored ? -turn : turn;  // (looking straight down: kept)
+    float want = std::atan2(fwd[1], fwd[0]) - yaw;
+    while (want > 3.14159265f) want -= 6.2831853f;
+    while (want < -3.14159265f) want += 6.2831853f;
+    float d = want - turn;
+    while (d > 3.14159265f) d -= 6.2831853f;
+    while (d < -3.14159265f) d += 6.2831853f;
+    const float k = g_cfg.bodyTurnLag > 0.0f ? 1.0f - std::exp(-dt / g_cfg.bodyTurnLag) : 1.0f;
+    d *= 1.0f - k;  // what is left behind after this frame's follow
+    const float maxD = g_cfg.bodyTurnMax * 0.0174533f;
+    d = std::fmax(-maxD, std::fmin(maxD, d));
+    turn = want - d;
+    while (turn > 3.14159265f) turn -= 6.2831853f;
+    while (turn < -3.14159265f) turn += 6.2831853f;
+    static int logged = 0;
+    static float loggedTurn = 0.0f;
+    if (logged < 40 && std::fabs(turn - loggedTurn) > 0.35f) {  // (each 20 degrees)
+        ++logged;
+        loggedTurn = turn;
+        MLOG("armik: the torso turned %.0f deg from the soldier's heading (the head %.0f)", turn * 57.29578f, want * 57.29578f);
+    }
+    // The arms are solved in the mirror world in left-hand mode: a turn there is the other way.
+    return mirrored ? -turn : turn;
+}
+
+// A turn about the vertical through `c` (Unreal yaw: +X toward +Y), as a row-vector transform.
+M4 YawAbout(V3 c, float a) {
+    const float co = std::cos(a), si = std::sin(a);
+    M4 r = kIdentity;
+    r.m[0][0] = co;
+    r.m[0][1] = si;
+    r.m[1][0] = -si;
+    r.m[1][1] = co;
+    r.m[3][0] = c.x - (c.x * co - c.y * si);
+    r.m[3][1] = c.y - (c.x * si + c.y * co);
+    return r;
+}
+
+void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const M4& A, const M4& invL2W, const M4& carry) {
     // The shoulders: anchored to the tracked head (Weapon.ShoulderWidth apart, ShoulderDrop below the eyes,
     // ShoulderBack behind, turned with the body) -- the game's rig has them at eye height behind the eye. The torso moves
-    // with them (by their mean shift).
+    // with them (by their mean shift). D93: the body -- the torso, the shoulders and the pose the elbows bend from -- turned
+    // with the head (TorsoTurn) about the vertical through it: `l2w` is the body's frame from here on (the hands' targets
+    // stay where they are; `invL2W` still takes the result back to the mesh's own frame).
+    float mirrorM[16];
+    const float torso = TorsoTurn(viewmodel::DrawMirror(mirrorM));
+    M4 l2w = l2wGame;
+    {
+        float hp[3], hy = 0.0f, hu = 100.0f;
+        if (torso != 0.0f && view::HeadInWorld(hp, hy, hu)) {
+            const V3 c = Origin(Mul(Translate(V3{hp[0], hp[1], hp[2]}), carry));
+            l2w = Mul(l2wGame, YawAbout(c, torso));
+        }
+    }
     V3 bodyShoulder[2], anchor[2];
     for (int s = 0; s < 2; ++s) bodyShoulder[s] = anchor[s] = Origin(Mul(saved[g_rig.side[s].arm], l2w));
     float head[3], yaw = 0.0f, upm = 100.0f;
     if (view::HeadInWorld(head, yaw, upm)) {
+        yaw += torso;
         const V3 h = Origin(Mul(Translate(V3{head[0], head[1], head[2]}), carry));
         head[0] = h.x;
         head[1] = h.y;

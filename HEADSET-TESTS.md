@@ -2347,6 +2347,13 @@ holster and moves around when your off hand moves." -> D91.
 **Questions:**
 1. Does it sit in the pouch and stay still while your hands move? (yes/no)
 
+### Turning round for real (D93)
+**Changed:** your shoulders and the arms' torso turn with your head, so turning your real body no longer twists the arms.
+
+**Questions:**
+1. Turn round on the spot with a gun: do both arms come from the right shoulders all the way round? (yes/no)
+2. Looking aside while aiming: do the shoulders follow too much or too little? (BodyTurnLag / BodyTurnMax)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

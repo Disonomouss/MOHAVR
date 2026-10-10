@@ -1553,3 +1553,19 @@ hud, then hold X."
 - **Proven:** [S] statically on the player's exe (the emulated unpack: the OEP, the signatures, the two thunks, the
   unpacker's last jump); the EA copy's harness cycle unchanged (build check OK, gameplay). On the disc itself: not yet.
   A test build (dist/MOHAVR-0.8.8-disc-test.zip) goes to the player.
+
+### D93. The arms' torso turns with the head -- Decided 2026-10-11
+- **Why:** the player: physical turning "results in the arms twisting".
+- **Found:** the arm IK placed the shoulders along the soldier's heading (the controller's yaw), and the torso and the pose
+  the elbows bend from kept that heading too. A real turn moves the head and the hands but not the soldier's heading, so
+  at 90 deg the shoulders stood sideways to the player and each arm reached across the body to its hand.
+- **What:** `[Weapon] BodyTurn` (shipped **1**): the arm solve's body -- the torso bones, the shoulder anchors and the
+  elbows' reference pose -- is turned about the vertical through the head by the head's yaw against the soldier's
+  heading. It follows the head over `BodyTurnLag` (0.35 s) and never trails it by more than `BodyTurnMax` (45 deg); looking
+  straight down keeps the last turn. In left-hand mode, where the arms are solved in the mirror world, the turn is the other
+  way. The soldier's own heading (walking, aiming, the stick's turns) is unchanged; the hands' targets are unchanged.
+- **Proven [S]** (head and hands turned together, pitched 40 deg down; logs/shots/bt0-*, bt1-*):
+  - BodyTurn 0: at 90 deg the off arm came across from the gun side, its sleeve twisted; at 170 deg both arms were
+    mangled across the view.
+  - BodyTurn 1: each arm from its own shoulder at 90 and 170 deg ("the torso turned -86 deg ... (the head -90)", then
+    -166 for -170 as it caught up).

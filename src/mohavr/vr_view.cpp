@@ -2150,6 +2150,12 @@ bool HeadInWorld(float (&pos)[3], float& yaw, float& unitsPerMeter) {
     return true;
 }
 
+bool HeadForwardInWorld(float (&fwd)[3]) {
+    if (!g_world.valid) return false;
+    float pos[3], upm = 100.0f;
+    return PoseToWorld(g_world.head, pos, fwd, upm);
+}
+
 bool VectorToWorld(const float (&xr)[3], float (&ue)[3]) {
     if (!g_world.valid) return false;
     const float s = UnitsPerMeter(bridge::SharedHeader());

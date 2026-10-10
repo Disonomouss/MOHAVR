@@ -49,6 +49,8 @@ bool PoseToWorld(const shared::Pose& p, float (&pos)[3], float (&fwd)[3], float&
 bool PoseFrameToWorld(const shared::Pose& p, float (&pos)[3], float (&axes)[3][3], float& unitsPerMeter);
 // The tracked head of that view in the world (Unreal units), the game's yaw (radians) and the scale in use.
 bool HeadInWorld(float (&pos)[3], float& yaw, float& unitsPerMeter);
+// D93: the head's forward in the world (Unreal axes), from the same mapping.
+bool HeadForwardInWorld(float (&fwd)[3]);
 // A LOCAL-space vector (metres, OpenXR axes) as a world vector in Unreal units, turned like that view.
 bool VectorToWorld(const float (&xr)[3], float (&ue)[3]);
 // M8: the game's own camera of that view (before the head): location and pitch/yaw in radians.

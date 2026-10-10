@@ -124,6 +124,9 @@ float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself f
     bool  freeHandSave = true;  // [Weapon] FreeHandSave -- that hold kept between sessions (%LOCALAPPDATA%\MOHAVR)
     int   elbowHinge = 2;  // [Weapon] ElbowHinge -- 0 each arm segment on its own, 1 on the elbow's hinge, 2 the forearm carried by the upper arm
     float shoulderWidth = 30.0f, shoulderDrop = 22.0f, shoulderBack = 6.0f;  // [Weapon] Shoulder* -- cm, from the head
+    bool  bodyTurn = true;         // [Weapon] BodyTurn -- the arms' shoulders and torso turn with the head (D93)
+    float bodyTurnLag = 0.35f;     // [Weapon] BodyTurnLag -- s; BodyTurnMax: degrees the torso may trail the head
+    float bodyTurnMax = 45.0f;
     int  viewModel      = 2;      // [Weapon] ViewModel -- 0 the game's (flat FOV trick), 1 true 3D, 2 in the aiming hand (M8)
     float gripX = 34.0f, gripY = 11.0f, gripZ = -17.0f;  // [Weapon] GripX/Y/Z -- the camera-frame point (Unreal units)
                                                      // put at the controller (fwd/right/up)
