@@ -1581,3 +1581,24 @@ hud, then hold X."
   drops a pending shift).
 - **Proven [S]:** the same trace after: the eye moves 4.99 units in the frame the pawn does, with no frame behind (2 of 2
   steps; before, 2 frames with the eye a step behind).
+
+### D95. The disc's copy: SecuROM's splices kept, GetCommandLineW by its slot -- Decided 2026-10-11
+- **Why:** the disc player on 0.8.9: the game no longer starts. "General protection fault!" at 0x109ACEE4 (then 0x120C9261,
+  0x109F08AB, 0x109E1905, 0x10915CAA), before the Direct3D device. The mod's log was clean: the disc recognised, the two
+  splices restored, the build check OK, the hooks installed.
+- **Found:**
+  - The fault is SecuROM's own code reading the decal screen box's splice as data. At 0x109ACED8: `mov ecx,
+    [0x120C1380]; adc ecx, [0x10A2ABB7]; mov ecx, [ecx]`, where 0x10A2ABB7 is the splice's +1. D92's restore changed
+    those bytes; the pointer went wild.
+  - A scan of the dump for absolute references into every range the mod writes found only that one, and in the Steam
+    build a jump table at 0x10C16EF5, which is the same there.
+  - The log's "GetCommandLineW import not found": the dump's import table is zeroed (the packer fills the same IAT
+    slots), so Render.ResX/ResY (the headset's resolution) were never applied.
+- **What:**
+  - The splices are never written. CheckBuild verifies each thunk as before, and a verified splice counts as the
+    instruction it stands for (`CodeMatches`, used by the signatures and by hudtex's re-check). The two hooks are
+    MidHooks at the function starts, which write the 6 bytes before the splice.
+  - render_res falls back to GetCommandLineW's pinned IAT slot (0x112C60CC, from the Steam exe's import table), used only
+    if it holds GetCommandLineW.
+- **Proven:** [S] the EA copy's cycle unchanged (build check OK, both hooks installed, gameplay). The disc: static only
+  (the dump: the hooks' bytes don't overlap the splices; no other SecuROM reads into them); a test build to the player.

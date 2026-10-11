@@ -21,10 +21,12 @@ const IMAGE_NT_HEADERS32* Nt() {
     return reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + reinterpret_cast<const IMAGE_DOS_HEADER*>(base)->e_lfanew);
 }
 
-// D92: puts a SecuROM-spliced instruction back -- only when the site is `jmp [ptr]` and the thunk it reaches is exactly the
-// original instruction followed by a jmp to the next one (so the restored code does the same).
-bool Unsplice(const addr::Splice& sp) {
-    if (patch::BytesMatch(sp.va, sp.original, sp.size)) return true;  // (not spliced)
+// D92/D95: is a SecuROM-spliced instruction the same code -- the site `jmp [ptr]` and the thunk it reaches exactly the
+// original instruction followed by a jmp to the next one? Never written back: SecuROM's code reads these bytes as data.
+bool g_spliceOk[sizeof(addr::kDiscSplices) / sizeof(addr::kDiscSplices[0])] = {};
+
+bool VerifySplice(const addr::Splice& sp) {
+    if (patch::BytesMatch(sp.va, sp.original, sp.size)) return false;  // (not spliced: the plain signature decides)
     const std::uintptr_t lo = addr::kImageBase, hi = addr::kImageBase + Nt()->OptionalHeader.SizeOfImage;
     const auto* site = reinterpret_cast<const std::uint8_t*>(sp.va);
     if (sp.size != 6 || site[0] != 0xFF || site[1] != 0x25) {
@@ -45,13 +47,29 @@ bool Unsplice(const addr::Splice& sp) {
         MLOG("build check: disc -- %s's thunk at 0x%08X is not the original instruction and a jmp back", sp.name, thunk);
         return false;
     }
-    std::uint8_t seen[6];
-    std::memcpy(seen, site, sizeof(seen));
-    if (!patch::WriteBytes(sp.va, seen, sp.original, sp.size)) return false;
-    MLOG("build check: disc -- %s restored (SecuROM's thunk at 0x%08X held the same instruction)", sp.name, thunk);
+    MLOG("build check: disc -- %s is SecuROM's splice of the same instruction (thunk 0x%08X; kept as it is)", sp.name, thunk);
     return true;
 }
 }  // namespace
+
+bool CodeMatches(std::uintptr_t va, const std::uint8_t* expected, std::size_t size) {
+    if (patch::BytesMatch(va, expected, size)) return true;
+    if (size > 64) return false;
+    std::uint8_t buf[64];
+    if (!patch::BytesMatch(va, reinterpret_cast<const std::uint8_t*>(va), size)) return false;  // (readable)
+    std::memcpy(buf, reinterpret_cast<const void*>(va), size);
+    bool any = false;
+    for (std::size_t i = 0; i < sizeof(addr::kDiscSplices) / sizeof(addr::kDiscSplices[0]); ++i) {
+        const addr::Splice& sp = addr::kDiscSplices[i];
+        if (!g_spliceOk[i] || sp.va + sp.size <= va || sp.va >= va + size) continue;
+        for (std::size_t k = 0; k < sp.size; ++k) {
+            const std::uintptr_t at = sp.va + k;
+            if (at >= va && at < va + size) buf[at - va] = sp.original[k];
+        }
+        any = true;
+    }
+    return any && std::memcmp(buf, expected, size) == 0;
+}
 
 bool IsDiscWrapper() { return Nt()->OptionalHeader.AddressOfEntryPoint == addr::kDiscEntryRva; }
 
@@ -98,10 +116,10 @@ bool CheckBuild(int testMode) {
                  "the code is checked below)%s", have, known, testMode == 2 ? " [Debug.TestWrongBuild=2: simulated]" : "");
     }
     if (disc && ok)
-        for (const auto& sp : addr::kDiscSplices)
-            if (!Unsplice(sp)) ok = false;
+        for (std::size_t i = 0; i < sizeof(addr::kDiscSplices) / sizeof(addr::kDiscSplices[0]); ++i)
+            g_spliceOk[i] = VerifySplice(addr::kDiscSplices[i]);
     for (const auto& s : addr::kSignatures) {
-        if (!patch::BytesMatch(s.va, s.bytes, s.size)) {
+        if (!CodeMatches(s.va, s.bytes, s.size)) {
             MLOG("build check: FAIL -- signature '%s' at 0x%08X does not match", s.name, s.va);
             ok = false;
         }

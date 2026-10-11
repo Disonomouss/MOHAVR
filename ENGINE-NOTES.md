@@ -62,6 +62,12 @@ disc's SecuROM 7 doesn't run on current Windows):
 - SecuROM's spliced instructions stay in the dump: ~3100 sites in .text where an instruction is `jmp [ptr]` (FF 25) to a
   thunk holding it and a jmp back. Two fall in the signatures: FCanvas::Flush +6 (`mov eax, fs:[0]`, thunk 0x109812E6) and
   the decal screen box +6 (`sub esp, 0x144`, thunk 0x10992426). The others are in code the mod only calls.
+- **SecuROM's code reads the splices as data (D95):** at 0x109ACED8 `mov ecx, [0x120C1380]; adc ecx, [0x10A2ABB7]; mov
+  ecx, [ecx]` (0x10A2ABB7 = the decal box's splice +1). Restoring the instruction (D92) crashed the game at its start
+  ("General protection fault" at 0x109ACEE4): never write a splice. A scan of the dump for absolute references into the
+  mod's written ranges found no other.
+- The dump's import directory (kGameImportDirRva) is zeroed; the packer fills the same IAT slots (KERNEL32!GetCommandLineW
+  at 0x112C60CC).
 
 ## 2. PE layout
 

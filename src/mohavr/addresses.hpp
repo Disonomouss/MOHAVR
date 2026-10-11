@@ -75,6 +75,10 @@ inline constexpr std::uintptr_t kIatXInputGetState = 0x112C6804;
 // header at the DRM's one-entry table (Core/Activation.dll) instead, but keeps these descriptors byte-identical in .rdata
 // (both files compared 2026-10-07) and resolves them at run time.
 inline constexpr std::uint32_t kGameImportDirRva = 0x00CDAB3C;
+// D95: KERNEL32!GetCommandLineW's slot in that table's IAT (the Steam exe's import table, 2026-10-11). The disc's dump has
+// the table zeroed (its packer fills the same slots itself): render_res.cpp falls back to this slot, used only when it
+// holds GetCommandLineW.
+inline constexpr std::uintptr_t kIatGetCommandLineW = 0x112C60CC;
 
 // Object layout (ENGINE-NOTES 5l): ULocalPlayer+0x40 = Actor (the APlayerController);
 // AActor::Rotation (FRotator: Pitch, Yaw, Roll ints) at +0xF4 -- ULevel::MoveActor (FUN_10B62090,
@@ -401,7 +405,11 @@ inline constexpr Signature kSignatures[] = {
 // D92: the disc's dump keeps SecuROM's spliced instructions (~3100 in .text): an instruction moved to a thunk, `jmp [ptr]`
 // (FF 25, 6 bytes) in its place, the thunk being that instruction and a jmp back to the next one. Two fall in the
 // signatures above (measured in the emulated dump: each the function's 4th instruction, its thunk exactly the original).
-// build_check.cpp restores them on the disc's copy -- only after checking the thunk is exactly that.
+// D95: they are KEPT as they are -- SecuROM's own code reads the splice's bytes as data (0x109ACED8: `mov ecx,
+// [0x120C1380]; adc ecx, [0x10A2ABB7]; mov ecx, [ecx]` -- the decal box's splice +1): D92 restored them, and the disc's
+// game crashed at its start (a player's "General protection fault" at 0x109ACEE4). build_check.cpp checks each thunk is
+// exactly the original instruction and a jmp back, and then counts the splice as those bytes (CodeMatches). The hooks on
+// these functions write only the 6 bytes before it.
 struct Splice {
     const char*          name;
     std::uintptr_t       va;

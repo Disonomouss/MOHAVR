@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "addresses.hpp"
+#include "build_check.hpp"
 #include "config.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -428,7 +429,7 @@ bool Install(const Config& cfg) {
     g_h = (g_w * 9 / 16) & ~1;
     // Standing rule 4: the build check verified these signatures; check them again next to the code that hooks them.
     const auto vt = reinterpret_cast<const std::uintptr_t*>(addr::kFlushCommandVtable);
-    if (!patch::BytesMatch(addr::kCanvasFlush, addr::kCanvasFlushBytes, sizeof(addr::kCanvasFlushBytes)) ||
+    if (!CodeMatches(addr::kCanvasFlush, addr::kCanvasFlushBytes, sizeof(addr::kCanvasFlushBytes)) ||
         !patch::BytesMatch(addr::kFlushCommandExecute, addr::kFlushCommandExecuteBytes, sizeof(addr::kFlushCommandExecuteBytes)) ||
         !patch::BytesMatch(addr::kHudClosingFlushDone, addr::kHudClosingFlushDoneBytes, sizeof(addr::kHudClosingFlushDoneBytes)) ||
         vt[1] != addr::kFlushCommandExecute) {

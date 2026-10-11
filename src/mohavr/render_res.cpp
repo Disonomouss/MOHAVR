@@ -43,6 +43,12 @@ bool InstallResolution(const Config& cfg) {
     HMODULE exe = GetModuleHandleW(nullptr);
     void** slot = FindImportSlot(exe, "KERNEL32.dll", "GetCommandLineW");
     void* real = reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetCommandLineW"));
+    // D95: the disc's dump has the import table zeroed; its packer fills the same slots -- the pinned one, if it holds it.
+    if (!slot && real && *reinterpret_cast<void**>(addr::kIatGetCommandLineW) == real) {
+        slot = reinterpret_cast<void**>(addr::kIatGetCommandLineW);
+        MLOG("render: GetCommandLineW's slot by its address (0x%08X: the import table is gone, the slot holds it)",
+             static_cast<unsigned>(addr::kIatGetCommandLineW));
+    }
     if (!slot || !real || *slot != real) {
         MLOG("render: GetCommandLineW import %s -- Render.ResX/ResY not applied", !slot ? "not found" : "not the expected function");
         return false;
