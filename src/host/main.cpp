@@ -1741,6 +1741,14 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     }
 
     MLOG("host: the game exited -- shutting down");
+    // D98 (a player: the game "never closes when you quit ... this stays running"): a runtime can stall in the session's
+    // teardown (the objects below, then its DLLs unloading). Whatever happens, the host is gone 5 s after the game.
+    CreateThread(nullptr, 0, [](LPVOID) -> DWORD {
+        Sleep(5000);
+        MLOG("host: still here 5 s after the game exited (the OpenXR runtime's teardown?) -- ending the process");
+        TerminateProcess(GetCurrentProcess(), 3);
+        return 0;
+    }, nullptr, 0, nullptr);
     xrRequestExitSession(session);
     SetState(HostState::Exited, "game exited");
     return 0;
@@ -1773,5 +1781,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     MLOG("host: mirror %d, controllers %d", mirrorMode, controllers);
     const int rc = Run(gamePid, runtimeJson, mirrorMode, controllers);
     MLOG("host: exit %d", rc);
+    // D98: ended here, not through the DLLs' unloading (a runtime's can hang at process exit; nothing of ours needs it).
+    TerminateProcess(GetCurrentProcess(), static_cast<UINT>(rc));
     return rc;
 }

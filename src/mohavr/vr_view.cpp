@@ -530,6 +530,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (mounted::TestCommand(line)) continue;  // "mohavr mg ..." (GOAL D)
         if (pickup::TestCommand(line)) continue;   // "mohavr pickup ..." (D77)
         if (loadout::TestCommand(line)) continue;  // "mohavr ui" (D79)
+        if (armsik::TestCommand(line)) continue;   // "mohavr arm trace" (D98)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         const bool ok = gexec::Run(player, line);

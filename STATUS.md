@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The torso follows the hands; the host can't outlive the game** (2026-10-13, D98): 0.8.9's torso swung and flickered
+with every glance; the quit report not reproduced (asked which process stays). Unreleased.
 **The flat screen's distance and size** (2026-10-13, D97): the menu's General tab (live). Unreleased.
 **The mission openings on the cinema screen** (2026-10-12, D96): the quote and title card (`[Camera] CinemaScenes`). Released in 0.8.10.
 **The disc's copy, take 2** (2026-10-11, D95): 0.8.9 crashed the disc's game at its start -- SecuROM reads the splices D92

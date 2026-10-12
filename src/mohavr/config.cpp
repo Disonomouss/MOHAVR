@@ -181,7 +181,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.shoulderBack   = getf(L"Weapon", L"ShoulderBack", c.shoulderBack, -30.0f, 30.0f);
     c.bodyTurn       = get(L"Weapon", L"BodyTurn", c.bodyTurn);
     c.bodyTurnLag    = getf(L"Weapon", L"BodyTurnLag", c.bodyTurnLag, 0.0f, 3.0f);
-    c.bodyTurnMax    = getf(L"Weapon", L"BodyTurnMax", c.bodyTurnMax, 0.0f, 180.0f);
+    c.bodyTurnDeadzone = getf(L"Weapon", L"BodyTurnDeadzone", c.bodyTurnDeadzone, 0.0f, 90.0f);
     c.throwScale     = getf(L"Hands", L"ThrowScale", c.throwScale, 0.2f, 5.0f);
     c.offHandThrowScale = getf(L"OffHand", L"ThrowScale", c.offHandThrowScale, 0.2f, 5.0f);
     c.offHandPassThrower = get(L"OffHand", L"PassThrower", c.offHandPassThrower);

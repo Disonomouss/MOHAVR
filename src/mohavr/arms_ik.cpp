@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <cwchar>
 #include <string>
 #include <vector>
 
@@ -349,37 +350,70 @@ int FingerIndex(const char* name) {
     return idx;
 }
 
-// D93 (the player: physical turning "results in the arms twisting"): the torso's turn from the soldier's heading -- the
-// head's yaw against it, followed over Weapon.BodyTurnLag and never more than BodyTurnMax behind (radians; the soldier's
-// heading itself, the stick's turns included, is not in it).
+// Research: "mohavr arm trace" -- each solve's torso turn and elbows for 3 s.
+DWORD g_armTraceUntil = 0;
+
+// D93 (the player: physical turning "results in the arms twisting"): the torso's turn from the soldier's heading (radians;
+// the soldier's heading itself, the stick's turns included, is not in it). D98 (a player: "the IK is completely bugged and
+// flickering constantly when you turn"): following the head swung the shoulders with every glance, on a 16 ms clock (the
+// torso moved on 89 of 249 frames) and with a hard limit that jumped (19 deg in a frame). Now it follows the hands -- where
+// their midpoint is from the head, when it is 15 cm out (aiming, holding the gun) -- else the head; only past
+// Weapon.BodyTurnDeadzone, smoothly over BodyTurnLag, on the performance counter.
 float TorsoTurn(bool mirrored) {
     static float turn = 0.0f;
-    static DWORD last = 0;
-    const DWORD now = GetTickCount();
-    const float dt = last ? std::fmin(0.1f, static_cast<float>(now - last) / 1000.0f) : 0.0f;
-    last = now;
+    static LONGLONG last = 0;
+    LARGE_INTEGER q, f;
+    QueryPerformanceCounter(&q);
+    QueryPerformanceFrequency(&f);
+    const float dt = last ? static_cast<float>(std::fmin(0.1, static_cast<double>(q.QuadPart - last) / static_cast<double>(f.QuadPart))) : 0.0f;
+    last = q.QuadPart;
     float head[3], yaw = 0.0f, upm = 100.0f, fwd[3];
     if (!g_cfg.bodyTurn || !view::HeadInWorld(head, yaw, upm) || !view::HeadForwardInWorld(fwd)) return turn = 0.0f;
-    if (fwd[0] * fwd[0] + fwd[1] * fwd[1] < 0.04f) return mirrored ? -turn : turn;  // (looking straight down: kept)
-    float want = std::atan2(fwd[1], fwd[0]) - yaw;
-    while (want > 3.14159265f) want -= 6.2831853f;
-    while (want < -3.14159265f) want += 6.2831853f;
-    float d = want - turn;
-    while (d > 3.14159265f) d -= 6.2831853f;
-    while (d < -3.14159265f) d += 6.2831853f;
-    const float k = g_cfg.bodyTurnLag > 0.0f ? 1.0f - std::exp(-dt / g_cfg.bodyTurnLag) : 1.0f;
-    d *= 1.0f - k;  // what is left behind after this frame's follow
-    const float maxD = g_cfg.bodyTurnMax * 0.0174533f;
-    d = std::fmax(-maxD, std::fmin(maxD, d));
-    turn = want - d;
-    while (turn > 3.14159265f) turn -= 6.2831853f;
-    while (turn < -3.14159265f) turn += 6.2831853f;
+    auto wrap = [](float a) {
+        while (a > 3.14159265f) a -= 6.2831853f;
+        while (a < -3.14159265f) a += 6.2831853f;
+        return a;
+    };
+    // The target, as a real-world turn from the soldier's heading.
+    bool have = false;
+    float want = 0.0f;
+    const char* from = "the hands";
+    {
+        float gunF[16], offF[16];
+        bool offValid = false, twoHanded = false;
+        if (viewmodel::HandFrames(gunF, offF, offValid, twoHanded)) {
+            // (In left-hand mode the frames are the mirror world's: the head sits on the mirror's plane, so a direction from it
+            // is the real one mirrored -- turned back below.)
+            const float mx = 0.5f * (gunF[12] + (offValid ? offF[12] : gunF[12])) - head[0];
+            const float my = 0.5f * (gunF[13] + (offValid ? offF[13] : gunF[13])) - head[1];
+            if (mx * mx + my * my > (0.15f * upm) * (0.15f * upm)) {
+                const float rel = wrap(std::atan2(my, mx) - yaw);
+                want = mirrored ? -rel : rel;
+                have = true;
+            }
+        }
+    }
+    if (!have && fwd[0] * fwd[0] + fwd[1] * fwd[1] > 0.04f) {  // (looking straight down: kept)
+        want = wrap(std::atan2(fwd[1], fwd[0]) - yaw);
+        from = "the head";
+        have = true;
+    }
+    if (have) {
+        const float e = wrap(want - turn);
+        const float dz = g_cfg.bodyTurnDeadzone * 0.0174533f;
+        if (std::fabs(e) > dz) {
+            const float goal = e > 0.0f ? e - dz : e + dz;  // just to the dead zone's edge
+            const float k = g_cfg.bodyTurnLag > 0.0f ? 1.0f - std::exp(-dt / g_cfg.bodyTurnLag) : 1.0f;
+            turn = wrap(turn + goal * k);
+        }
+    }
     static int logged = 0;
     static float loggedTurn = 0.0f;
     if (logged < 40 && std::fabs(turn - loggedTurn) > 0.35f) {  // (each 20 degrees)
         ++logged;
         loggedTurn = turn;
-        MLOG("armik: the torso turned %.0f deg from the soldier's heading (the head %.0f)", turn * 57.29578f, want * 57.29578f);
+        MLOG("armik: the torso turned %.0f deg from the soldier's heading (following %s, at %.0f)", turn * 57.29578f, from,
+             want * 57.29578f);
     }
     // The arms are solved in the mirror world in left-hand mode: a turn there is the other way.
     return mirrored ? -turn : turn;
@@ -645,6 +679,16 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const
         bend = Unit(Sub(bend, Scale(u, Dot(bend, u))));
         if (Len(bend) < 0.5f) bend = Unit(Sub(V3{0, 0, -1}, Scale(u, -u.z)));
         const V3 elbow = Add(shoulder, Add(Scale(u, along), Scale(bend, out)));
+        if (g_armTraceUntil && static_cast<LONG>(GetTickCount() - g_armTraceUntil) < 0) {
+            float hp[3], hy = 0.0f, hu = 100.0f;
+            if (view::HeadInWorld(hp, hy, hu)) {
+                LARGE_INTEGER q;
+                QueryPerformanceCounter(&q);
+                MLOG("armik: trace -- t %lld side %d torso %.1f elbow %.1f %.1f %.1f shoulder %.1f %.1f %.1f", q.QuadPart / 10000, si,
+                     torso * 57.29578f, elbow.x - hp[0], elbow.y - hp[1], elbow.z - hp[2], shoulder.x - hp[0], shoulder.y - hp[1],
+                     shoulder.z - hp[2]);
+            }
+        }
         // The upper arm and the forearm bone: from the BODY's pose (moved with the shoulder), turned onto their new
         // segments -- no wrist twist (round 16: a 90-degree turn spun the bicep and shoulder around).
         const M4 bsh = Mul(l2w, Translate(Sub(shoulder, bodyShoulderS)));
@@ -1113,6 +1157,12 @@ bool Install(const Config& cfg) {
     g_mid = std::move(*mid);
     MLOG("armik: hooked UpdateTransform 0x%08X and the MeshObject update 0x%08X (ElbowHinge=%d)",
          static_cast<unsigned>(addr::kMohaSkelUpdateTransform), static_cast<unsigned>(addr::kSkelMeshObjectUpdateCall), cfg.elbowHinge);
+    return true;
+}
+
+bool TestCommand(const wchar_t* line) {
+    if (std::wcscmp(line, L"mohavr arm trace") != 0) return false;
+    g_armTraceUntil = GetTickCount() + 3000;
     return true;
 }
 

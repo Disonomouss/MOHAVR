@@ -1626,3 +1626,27 @@ hud, then hold X."
   cutscenes on the cinema screen, the mission openings (D96).
 - **Proven [S]** (the main menu): 2.0 m / 1.6 m wide, then distance 3.0 m (smaller, further), then 2.6 m wide (larger
   again) -- each change on screen at once. The player's settings were backed up and restored around the test.
+
+### D98. The torso follows the hands, not every glance; the host can't outlive the game -- Decided 2026-10-13
+- **Why:** a player on 0.8.10: "The IK is completely bugged and flickering constantly when you turn. Also noticed that
+  the game never closes when you quit. This stays running after you exit the game."
+- **Found (the IK):** D93's torso followed the head. In the player's log it swung between -40 and +45 deg every second or
+  so as they looked about, once to 127. A new `mohavr arm trace` (each solve's torso turn and elbows), with the head
+  sweeping and the hands held in the room:
+  - the torso moved on only 89 of 249 frames (GetTickCount's 16 ms clock at 90 fps);
+  - it jumped up to 18.8 deg in a frame (the hard 45 deg limit), and the elbows with it.
+  With BodyTurn 0: no movement, no jumps.
+- **What (the IK):** the torso now faces where the hands are (their midpoint from the head, when it is 15 cm out: aiming,
+  holding a gun), else where the head looks. It moves only once that is past `[Weapon] BodyTurnDeadzone` (15 deg),
+  smoothly over `BodyTurnLag` (0.3 s), on the performance counter. No hard limit. (BodyTurnMax is gone.)
+- **Found (the quit):** not reproduced. On the EA copy in the simulator the game's own Quit -> Accept ends both
+  processes in under 4 s (the harness had only ever closed the window). The player's log ends normally after the pause
+  menu; which process stayed is not known.
+- **What (the quit):** the host ends itself 5 s after the game exits, whatever its OpenXR runtime's teardown does. It also
+  skips the DLLs' unloading at its exit (TerminateProcess after the last log line).
+- **Proven [S]:**
+  - The head sweeping +-50 deg with the hands still: the torso steady (8 deg, from the hands), no elbow jump in 278
+    solves.
+  - A real turn (head and hands) of 90 and 170 deg: the torso followed the hands; each arm from its own shoulder
+    (logs/shots/bt2-*).
+  - The game's Quit -> Accept: both processes gone in 5 s, "host: exit 0".

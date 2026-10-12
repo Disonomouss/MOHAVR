@@ -2373,6 +2373,14 @@ step and the view move together.
 **Questions:**
 1. At the main menu, do both change the screen at once, and is there a setting you like? (which?)
 
+### The torso, again (D98)
+**Changed:** the shoulders now face where your hands are (or where you look, with your hands down), and only after a 15
+degree turn -- looking about doesn't swing them.
+
+**Questions:**
+1. Aim and look around: do the arms stay still, with no flicker? (yes/no)
+2. Turn round for real with the gun: do the arms still come from the right shoulders? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
