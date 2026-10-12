@@ -18,7 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
-**The game's video settings in the log** (2026-10-13, D100): for a player's "blurry" report (their pipeline was fine). Unreleased.
+**The game's video settings in the log** (2026-10-13, D100): for a player's "blurry" report (their pipeline was fine). In 0.8.12's rebuilt files (the release updated, its tag moved).
 **Room-scale steps no longer flicker the arms** (2026-10-13, D99): the step now comes after the Draw. Released in 0.8.12.
 **The torso follows the hands; the host can't outlive the game** (2026-10-13, D98): 0.8.9's torso swung and flickered
 with every glance; the quit report not reproduced (asked which process stays). Released in 0.8.11.
