@@ -19,8 +19,8 @@ The build check knows both; on the EA copy the IAT hooks wait for the game's ent
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
 **The torso follows the hands; the host can't outlive the game** (2026-10-13, D98): 0.8.9's torso swung and flickered
-with every glance; the quit report not reproduced (asked which process stays). Unreleased.
-**The flat screen's distance and size** (2026-10-13, D97): the menu's General tab (live). Unreleased.
+with every glance; the quit report not reproduced (asked which process stays). Released in 0.8.11.
+**The flat screen's distance and size** (2026-10-13, D97): the menu's General tab (live). Released in 0.8.11.
 **The mission openings on the cinema screen** (2026-10-12, D96): the quote and title card (`[Camera] CinemaScenes`). Released in 0.8.10.
 **The disc's copy, take 2** (2026-10-11, D95): 0.8.9 crashed the disc's game at its start -- SecuROM reads the splices D92
 restored; now kept. GetCommandLineW by its slot (the dump has no import table). Released in 0.8.10 (not yet confirmed on a disc).
@@ -42,6 +42,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.11** (published 2026-10-13): the torso follows the hands (D98, the 0.8.9-0.8.10 flicker), the host can't outlive the game, the flat screen's distance and size (D97).
 **Release 0.8.10** (published 2026-10-12): the mission openings on the cinema screen (D96), the disc's crash fixed (D95, unconfirmed).
 **Release 0.8.9** (published 2026-10-11): the arms turn with a real turn (D93), the room-scale pop fixed (D94), disc copies (D92, experimental).
 **Release 0.8.8** (published 2026-10-10): the steady heading when firing, the pistol's reload, the chest holster off (D90), the spare magazine fixed in the pouch (D91).
