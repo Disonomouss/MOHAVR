@@ -1673,3 +1673,14 @@ hud, then hold X."
   - after: 5 steps, no jump past the head's own 2.5 cm (the test hands trail an instant head move by a frame, with or
     without a step);
   - the eye still moves with the pawn in the same frame (D94's trace: 4.99 / 4.99 units).
+
+### D100. The game's video settings in the log -- Decided 2026-10-13
+- **Why:** a player: "the game is blurry no matter what resolution they use." Their log (0.8.11) showed a healthy pipeline:
+  2408x2560 per eye (Auto, what their Quest 3 asked for), 90 fps, paced, nothing dropped. Nothing said why.
+- **What:** at the first Draw the mod logs the game's own video settings from its user config: MOHASettings.ini's
+  ScreenPercentage (below 100 the scene is drawn smaller and stretched), TextureDetail (0-2), bPostFX and bAllowBloom, and
+  MOHAEngine.ini's texture pool and MaxAnisotropy. Read only.
+- **Proven [S]:** "ScreenPercentage 100.0, TextureDetail 2, PostFX True, Bloom True; texture pool 140 MB, MaxAnisotropy ?"
+  (this PC: not set).
+- **Open:** the player's own settings and headset link (Air Link / Link / Virtual Desktop encode settings), asked for. If
+  their settings are full, candidates for the mod: forcing anisotropic filtering, a larger texture pool (in memory).

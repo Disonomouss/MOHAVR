@@ -1,6 +1,9 @@
 #include "render_res.hpp"
 
 #include <windows.h>
+#include <shlobj.h>
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
 
 #include <cstdint>
 #include <cstring>
@@ -72,6 +75,34 @@ bool InstallResolution(const Config& cfg) {
     MLOG("render: the game sees ResX=%d ResY=%d (windowed): each eye renders %dx%d -- %s", cfg.renderResX, cfg.renderResY,
          cfg.renderResX / 2, cfg.renderResY, cfg.renderPreset.c_str());
     return true;
+}
+
+void LogGameVideoSettings() {
+    // D100 (a player: "blurry no matter what resolution"): the game's own video settings, from its user config
+    // (<Documents>\EA Games\Medal of Honor Airborne(tm)\Config) -- ScreenPercentage below 100 draws the scene smaller and
+    // stretches it, a low TextureDetail blurs the textures, a small texture pool keeps them at low mips.
+    PWSTR docs = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) || !docs) {
+        MLOG("render: the game's video settings -- the Documents folder isn't known");
+        return;
+    }
+    const std::wstring dir = std::wstring(docs) + L"\\EA Games\\Medal of Honor Airborne(tm)\\Config\\";
+    CoTaskMemFree(docs);
+    const std::wstring settings = dir + L"MOHASettings.ini", engine = dir + L"MOHAEngine.ini";
+    auto get = [](const std::wstring& file, const wchar_t* sec, const wchar_t* key) {
+        wchar_t v[64] = L"";
+        GetPrivateProfileStringW(sec, key, L"?", v, 64, file.c_str());
+        std::string s;
+        for (const wchar_t* c = v; *c; ++c) s += static_cast<char>(*c < 128 ? *c : '?');
+        while (!s.empty() && s.front() == ' ') s.erase(s.begin());
+        return s;
+    };
+    const wchar_t* opt = L"MOHAGame.MOHAScalabilityOptions";
+    MLOG("render: the game's video settings -- ScreenPercentage %s, TextureDetail %s (0 low .. 2 high), PostFX %s, Bloom %s; texture pool %s MB, "
+         "MaxAnisotropy %s",
+         get(settings, opt, L"ScreenPercentage").c_str(), get(settings, opt, L"TextureDetail").c_str(), get(settings, opt, L"bPostFX").c_str(),
+         get(settings, opt, L"bAllowBloom").c_str(), get(engine, L"TextureStreaming", L"PoolSize").c_str(),
+         get(engine, L"SystemSettings", L"MaxAnisotropy").c_str());
 }
 
 }  // namespace mohavr::render

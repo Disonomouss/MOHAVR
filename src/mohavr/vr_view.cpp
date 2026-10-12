@@ -31,6 +31,7 @@
 #include "mounted.hpp"
 #include "pickup.hpp"
 #include "loadout.hpp"
+#include "render_res.hpp"
 #include "log.hpp"
 #include "names.hpp"
 #include "patch.hpp"
@@ -617,6 +618,11 @@ void RunHostCommand(const std::uintptr_t* players, const shared::Header* hdr) {
 
 void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canvas) {
     PaceBeforeDraw();
+    static bool videoLogged = false;
+    if (!videoLogged) {
+        videoLogged = true;
+        render::LogGameVideoSettings();  // D100
+    }
     const auto engine = *reinterpret_cast<std::uintptr_t*>(addr::kGEngine);
     auto* arr = engine ? reinterpret_cast<std::uintptr_t*>(engine + addr::kGamePlayersOffset) : nullptr;  // Data, Num, Max
     shared::Header* hdr = bridge::SharedHeader();

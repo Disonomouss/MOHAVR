@@ -11,6 +11,9 @@ struct Config;
 
 namespace mohavr::render {
 
+// D100: logs the game's own video settings (its user config: ScreenPercentage, TextureDetail, ...). Not in DllMain.
+void LogGameVideoSettings();
+
 // Before WinMain (DllMain). No-op when Render.ResX/ResY are 0.
 bool InstallResolution(const Config& cfg);
 
