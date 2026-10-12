@@ -247,6 +247,11 @@ Config LoadConfig(const std::wstring& dir) {
     c.gripZ          = getf(L"Weapon", L"GripZ", c.gripZ, -200.0f, 200.0f);
     c.cinemaScreen   = static_cast<int>(GetPrivateProfileIntW(L"Camera", L"CinemaScreen", c.cinemaScreen, ini.c_str()));
     if (c.cinemaScreen < 0 || c.cinemaScreen > 2) c.cinemaScreen = 0;
+    {
+        wchar_t v[256] = L"";
+        GetPrivateProfileStringW(L"Camera", L"CinemaScenes", c.cinemaScenes.c_str(), v, 256, ini.c_str());
+        c.cinemaScenes = v;
+    }
 
     c.headTracking      = get(L"Camera", L"HeadTracking", c.headTracking);
     c.headPosition      = get(L"Camera", L"HeadPosition", c.headPosition);

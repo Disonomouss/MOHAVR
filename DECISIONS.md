@@ -1602,3 +1602,16 @@ hud, then hold X."
     if it holds GetCommandLineW.
 - **Proven:** [S] the EA copy's cycle unchanged (build check OK, both hooks installed, gameplay). The disc: static only
   (the dump: the hooks' bytes don't overlap the splices; no other SecuROM reads into them); a test build to the player.
+
+### D96. The mission openings on the cinema screen -- Decided 2026-10-12
+- **Why:** the player (a capture of the quote before a mission, its text in pieces): "The screens just before missions start
+  look strange, can you put them on a cinema screen?"
+- **Found:** after Accept Loadout the game shows four UI scenes in turn, with no cursor: `UIScene_Common_Black1`, `_Quote`
+  (~13 s), `_Black2`, `_Title` (the mission's title card). The cinema screen (M5) only knew menus by the Windows cursor, so
+  these were drawn in stereo, each eye a slice of the text. In gameplay the active scene list is empty.
+- **What:** `[Camera] CinemaScenes` (shipped `UIScene_Common_`; name prefixes, commas; empty = none): while an active UI
+  scene's name starts with one, the view is the flat cinema screen, as for a menu.
+- **Proven [S]** (Husky from the loadout; `mohavr ui` every 2 s):
+  - before: cinema off at Black1, the quote in slices across the eyes;
+  - after: the cinema screen held from the loadout through Black1, the Quote and the Title, the quote whole on it; off
+    as the title closed.

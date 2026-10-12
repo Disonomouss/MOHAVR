@@ -181,6 +181,28 @@ void OnDraw(shared::Header* /*hdr*/) {
     }
 }
 
+std::string CinemaScene(const std::wstring& prefixes) {
+    if (prefixes.empty()) return {};
+    std::uintptr_t data = 0;
+    const int n = Array(SceneClient(), "ActiveScenes", data);
+    for (int i = 0; i < n && i < 16; ++i) {
+        const std::uintptr_t scene = names::ReadPointer(data + 4u * static_cast<std::uintptr_t>(i));
+        if (!scene) continue;
+        const std::string name = names::Name(scene);
+        std::size_t at = 0;
+        while (at <= prefixes.size()) {
+            const std::size_t comma = prefixes.find(L',', at);
+            const std::wstring p = prefixes.substr(at, comma == std::wstring::npos ? std::wstring::npos : comma - at);
+            if (!p.empty() && name.size() >= p.size() && std::equal(p.begin(), p.end(), name.begin(),
+                                                                    [](wchar_t a, char b) { return a == static_cast<unsigned char>(b); }))
+                return name;
+            if (comma == std::wstring::npos) break;
+            at = comma + 1;
+        }
+    }
+    return {};
+}
+
 void FilterPad(shared::PadState& pad) {
     if (!g_active.load()) return;
     // Up / down from the D-pad or the left stick (past half), with a repeat while held: 0.45 s, then every 0.18 s.

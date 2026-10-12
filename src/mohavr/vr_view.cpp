@@ -313,7 +313,9 @@ bool UiMenuOpen() {
 void UpdateCinemaMode(bool menu) {
     if (!g_cfg.cinemaScreen) return;
     const bool camera = g_cfg.cinemaScreen >= 2 && !g_viewIsPlayers;
-    const bool want = menu || camera;
+    // D96: the mission openings' scenes (no cursor: the black fades, the quote, the title card) -- flat too.
+    const std::string scene = loadout::CinemaScene(g_cfg.cinemaScenes);
+    const bool want = menu || camera || !scene.empty();
     const DWORD now = GetTickCount();
     if (want == g_cinema) {
         g_cinemaFlipSince = 0;
@@ -327,7 +329,8 @@ void UpdateCinemaMode(bool menu) {
     static int logged = 0;
     if (logged++ < 40)
         MLOG("cinema: %s (%s)", want ? "ON -- flat full-screen image on the host's screen" : "off -- stereo, head-tracked",
-             want ? (menu ? "UI menu: cursor shown" : "the view is not the player's (cinematic camera)") : "player view, no menu");
+             want ? (menu ? "UI menu: cursor shown" : !scene.empty() ? ("UI scene " + scene).c_str() : "the view is not the player's (cinematic camera)")
+                  : "player view, no menu");
 }
 
 void CommitCinemaFrame() {

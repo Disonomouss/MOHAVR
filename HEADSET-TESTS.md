@@ -2361,6 +2361,12 @@ step and the view move together.
 **Questions:**
 1. Standing and moving a little, is the intermittent pop of the body gone? (yes/no)
 
+### The mission openings (D96)
+**Changed:** the black fades, the quote and the title card before a mission are on the flat cinema screen.
+
+**Questions:**
+1. Start a mission: are the quote and the title readable on the screen, and does the view come back when play starts? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

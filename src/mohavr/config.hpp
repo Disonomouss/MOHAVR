@@ -133,6 +133,7 @@ float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself f
     int  landingBody    = 0;      // [Weapon] LandingBody -- once landed: 0 the body hidden (as in play), 1 the game's
     bool hideBody       = false;  // [Weapon] HideBody -- hide the first-person body/sleeves (RenderBody exec)
     int  cinemaScreen   = 1;      // [Camera]  CinemaScreen -- flat on the host's screen: 1 UI menus, 2 + cinematic cameras (M5)
+    std::wstring cinemaScenes = L"UIScene_Common_";  // [Camera] CinemaScenes -- UI scenes (name prefixes, commas) shown flat (D96)
     bool debugViewState = false;  // [Debug]   ViewState -- write the game camera to %TEMP%\MOHAVR\view_state.txt (tests)
     bool debugEyeFloor = false;   // [Debug]   EyeFloor -- log the eye's and the game camera's height above the floor per
                                   //           frame through falls and landings (GOAL B1)
