@@ -470,6 +470,7 @@ void ApplyLandingBody(const std::uintptr_t* players) {
 // D75 (defined below, with the physical crouch).
 void PublishAirdrop(shared::Header* hdr);
 void RoomScaleStep(shared::Header* hdr);  // D88 (with the physical crouch)
+void ApplyRoomOrigin();                   // D94/D99
 bool ChuteTestCommand(const wchar_t* line);
 
 void RunTestCommands(const std::uintptr_t* players) {
@@ -634,7 +635,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     pickup::OnDraw(hdr);  // D77
     mounted::OnDraw(hdr);  // D78
     loadout::OnDraw(hdr);  // D79
-    if (hdr) RoomScaleStep(hdr);  // D88
+    ApplyRoomOrigin();  // D99: the last Draw's room-scale step reaches the view now, with the camera (the step: after the Draw)
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout
     UpdateCinemaMode(uiMenu);
@@ -642,12 +643,14 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     if (g_cinema) {
         g_drawHook.thiscall<void>(self, viewport, canvas);  // one full-screen view, the game's own camera
         CommitCinemaFrame();
+        if (hdr) RoomScaleStep(hdr);  // D88/D99 (after the Draw)
         PaceAfterDraw();
         return;
     }
     const bool want = g_cfg.headTracking && g_cfg.stereo && hdr && (hdr->viewValid & 1u) && arr && arr[1] == 1 && arr[0];
     if (!want) {
         g_drawHook.thiscall<void>(self, viewport, canvas);
+        if (hdr) RoomScaleStep(hdr);  // D88/D99 (after the Draw)
         PaceAfterDraw();
         return;
     }
@@ -694,6 +697,24 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     arr[0] = savedData;
     arr[1] = 1;
     if (!g_committed && g_eyeCounter >= 2) CommitBuilding();  // (a view the engine skipped: the frame is still the eyes')
+    {
+        // Research (D99): what this Draw showed -- the elbows as last solved, against this Draw's eye, and the pawn.
+        float el[2][3], hp[3], hy = 0.0f, hu = 100.0f;
+        const std::uintptr_t tp = aim::LocalPlayerPawn();
+        if (armsik::TraceDrawn(el) && view::HeadInWorld(hp, hy, hu) && tp) {
+            static unsigned drawNo = 0;
+            float pl[3];
+            names::ReadVector(tp + addr::kActorLocation, pl);
+            MLOG("armik: drawn -- #%u elbows %.1f %.1f %.1f / %.1f %.1f %.1f from the eye; the pawn %.1f %.1f", ++drawNo, el[0][0] - hp[0],
+                 el[0][1] - hp[1], el[0][2] - hp[2], el[1][0] - hp[0], el[1][1] - hp[1], el[1][2] - hp[2], pl[0], pl[1]);
+        }
+    }
+    // D99 (a player: with room-scale on "any movement results in player flickering"): the step comes after the frame is
+    // drawn. At the start of the Draw (D88) it came after the tick had placed the camera and the parts, and the game
+    // re-poses the parts inside the move (ClientSetLocation turns the pawn, then moves it): each step the drawn arms
+    // flicked 8 cm off the hands and back. Now the next tick places the camera with it, the view takes the origin shift at
+    // the next Draw's start, and the parts' bake takes the step back off until that view (viewmodel::RoomStep).
+    if (hdr) RoomScaleStep(hdr);
     // Back to a full-screen player (and its own view state) for anything outside Draw.
     auto* lp = static_cast<std::uint8_t*>(player);
     void*& vs = *reinterpret_cast<void**>(lp + addr::kLocalPlayerViewState);
@@ -1153,14 +1174,16 @@ void SteadyLanding(std::uintptr_t localPlayer, float* loc, int* rot) {
 bool  g_seatedNow = false;  // (PhysicalCrouch: seated play this frame)
 float g_roomBlocked = 0.0f;
 
-void RoomScaleStep(shared::Header* hdr) {
-    // D94 (the player: "an intermittent twitch in which the body pops in and out"): this runs at the start of the Draw, after
-    // the tick has placed this frame's camera, so a step's pawn move reaches the camera only next frame. The origin used to
-    // move at once: for one frame the eyes (and the hands, the arms) were the step behind -- 4-8 cm back, then forward again
-    // (measured: the head 5 cm out, the eye still for a frame). Now the origin follows when the camera does.
+// D94 (the player: "an intermittent twitch in which the body pops in and out"): a step's pawn move reaches the camera only at
+// the next tick, so the origin follows it then -- at the next Draw's start (measured: the head 5 cm out, the eye still for
+// a frame when it moved at once).
+void ApplyRoomOrigin() {
     g_ox += g_pendOx;
     g_oz += g_pendOz;
     g_pendOx = g_pendOz = 0.0f;
+}
+
+void RoomScaleStep(shared::Header* hdr) {
     const std::uint32_t mode = hdr ? hdr->roomScale : 0u;
     const bool on = mode == 2u || (mode == 0u && g_cfg.roomScale);
     float blocked = 0.0f;
@@ -1210,10 +1233,16 @@ void RoomScaleStep(shared::Header* hdr) {
     auto tryStep = [&](const Vec3& w) {
         const float to[3] = {from[0] + w.x, from[1] + w.y, from[2]};
         script::Call mv(ctrl, "ClientSetLocation", true);
-        if (!mv.ok || !mv.Set("NewLocation", to, sizeof(to)) || !mv.Set("NewRotation", keep, sizeof(keep)) || !mv.Run()) return false;
+        if (!mv.ok || !mv.Set("NewLocation", to, sizeof(to)) || !mv.Set("NewRotation", keep, sizeof(keep))) return false;
+        // D99: told before -- the move re-poses the parts inside it, and they must stay with the hands.
+        const float d[3] = {w.x, w.y, 0.0f}, back[3] = {-w.x, -w.y, 0.0f};
+        viewmodel::RoomStep(d);
+        const bool ran = mv.Run();
         float now[3];
         names::ReadVector(pawn + addr::kActorLocation, now);
-        return std::fabs(now[0] - from[0]) > 0.01f || std::fabs(now[1] - from[1]) > 0.01f;
+        const bool moved = ran && (std::fabs(now[0] - from[0]) > 0.01f || std::fabs(now[1] - from[1]) > 0.01f);
+        if (!moved) viewmodel::RoomStep(back);
+        return moved;
     };
     const Vec3 full = toWorld(rx, rz);
     // The whole step, half of it, or -- along a wall -- its part along each world axis (sliding).

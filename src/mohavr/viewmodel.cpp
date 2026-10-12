@@ -124,6 +124,7 @@ struct State {
     // tick's bake carries the move and the hand frames along with the body's move since (Weapon.CatchUp).
     std::uintptr_t pawn;
     M4    pawnFrame;
+    float roomSince[3] = {0.0f, 0.0f, 0.0f};  // D99: room-scale steps since this view (world units)
     // D21 manual reload: the host's flags, pull, held magazine and rack, read with the hands (RELOAD-DESIGN X3), and the
     // held magazine's grab-point frame mapped like the off hand's (mirrored with it).
     bool  reloadValid, magValid;
@@ -911,6 +912,7 @@ void OnPlayerView() {
     g_state.dInv = dInv;
     g_state.camInv = camInv;
     g_state.noHands = false;
+    g_state.roomSince[0] = g_state.roomSince[1] = g_state.roomSince[2] = 0.0f;
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -1005,6 +1007,24 @@ bool BodyMoveSinceView(float (&w)[16]) {
     const M4 m = Mul(RigidInverse(s.pawnFrame), now);
     std::memcpy(w, m.m, sizeof(w));
     return true;
+}
+
+void RoomStep(const float (&d)[3]) {
+    if (!g_installed) return;
+    AcquireSRWLockExclusive(&g_lock);
+    for (int i = 0; i < 3; ++i) {
+        g_state.pawnFrame.m[3][i] += d[i];  // not a walk: the catch-up leaves it out
+        g_state.roomSince[i] += d[i];       // and the bakes take it back off the parts' frames
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+bool RoomSince(float (&d)[3]) {
+    if (!g_installed) return false;
+    AcquireSRWLockShared(&g_lock);
+    for (int i = 0; i < 3; ++i) d[i] = g_state.roomSince[i];
+    ReleaseSRWLockShared(&g_lock);
+    return d[0] != 0.0f || d[1] != 0.0f || d[2] != 0.0f;
 }
 
 bool NoGunDrawn() { return g_noGunDrawn; }

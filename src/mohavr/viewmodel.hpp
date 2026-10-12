@@ -66,5 +66,12 @@ bool ReloadInputs(ReloadFrame& out);
 // (world, row-major: a point carried by the body then -> now = p * w). The next tick's bake is one move behind the eyes
 // without it (Weapon.CatchUp). False when unknown (no view, another pawn, a jump of over 1 m).
 bool BodyMoveSinceView(float (&w)[16]);
+// D99: a room-scale step moves the pawn by `d` (world units) -- told BEFORE the move (the game re-poses the parts inside
+// it). Not a walk: the hands stay where they are in the world, so the catch-up mustn't carry the parts with it, and until
+// the next player view the parts' bakes take the step back off their components' frames (each step, the arms flicked
+// 8 cm off the hands and back). A refused step is told back (-d).
+void RoomStep(const float (&d)[3]);
+// The room-scale steps since the player view the parts' placement comes from (world units); false if none.
+bool RoomSince(float (&d)[3]);
 
 }  // namespace mohavr::viewmodel

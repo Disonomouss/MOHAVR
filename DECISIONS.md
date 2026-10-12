@@ -1650,3 +1650,26 @@ hud, then hold X."
   - A real turn (head and hands) of 90 and 170 deg: the torso followed the hands; each arm from its own shoulder
     (logs/shots/bt2-*).
   - The game's Quit -> Accept: both processes gone in 5 s, "host: exit 0".
+
+### D99. Room-scale steps no longer flicker the arms -- Decided 2026-10-13
+- **Why:** the player on 0.8.11: "with roomscale setting on, any movement results in player flickering. Turned off it is
+  fine."
+- **Found:** a new per-Draw trace (`mohavr arm trace`: the elbows as the last solve left them, against that Draw's eye;
+  every solve too) from a ground save, with the head stepping 2.5 cm at a time: on each room-scale step (5 units) the
+  drawn elbows jumped 8 cm off and 10 cm back over two frames. The step ran at the Draw's start (D88), after the tick had
+  placed this frame's camera and parts, and the game re-poses the parts inside the move: ClientSetLocation turns the pawn
+  (one re-pose before it has moved), then moves it (another). Both re-poses used the last view's placement against the
+  moved component, so the frame drew the arms off the hands. Telling the catch-up about the step alone, or before the
+  move, did not help: the turn's re-pose came first.
+- **What:**
+  - The step runs after the Draw (all three Draw paths).
+  - The next tick places the camera and the parts with it in.
+  - The room origin takes the step at the next Draw's start, before the view (`ApplyRoomOrigin`; D94's one-frame wait,
+    now across the tick).
+  - Until that view the parts' bake takes the step back off their components' frames, and the catch-up leaves it out
+    (`viewmodel::RoomStep`, told before the move, taken back if it is refused).
+- **Proven [S]** (this morning's Husky save; the player's data backed up and restored):
+  - before: 6 steps, each an 8 cm / 10 cm out-and-back of the drawn elbows;
+  - after: 5 steps, no jump past the head's own 2.5 cm (the test hands trail an instant head move by a frame, with or
+    without a step);
+  - the eye still moves with the pawn in the same frame (D94's trace: 4.99 / 4.99 units).

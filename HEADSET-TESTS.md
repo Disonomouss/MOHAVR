@@ -2381,6 +2381,12 @@ degree turn -- looking about doesn't swing them.
 1. Aim and look around: do the arms stay still, with no flicker? (yes/no)
 2. Turn round for real with the gun: do the arms still come from the right shoulders? (yes/no)
 
+### Room-scale walking without the flicker (D99)
+**Changed:** the soldier's steps that follow you no longer flick the arms off your hands.
+
+**Questions:**
+1. Room-scale walk on: walk around the room with a gun -- any flicker? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

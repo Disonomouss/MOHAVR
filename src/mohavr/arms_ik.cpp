@@ -350,8 +350,10 @@ int FingerIndex(const char* name) {
     return idx;
 }
 
-// Research: "mohavr arm trace" -- each solve's torso turn and elbows for 3 s.
+// Research: "mohavr arm trace" -- each solve's torso turn and elbows for 3 s; and, per Draw (vr_view), the elbows as the
+// last solve before it left them against that Draw's eye (D99: what is drawn).
 DWORD g_armTraceUntil = 0;
+float g_lastElbow[2][3] = {};
 
 // D93 (the player: physical turning "results in the arms twisting"): the torso's turn from the soldier's heading (radians;
 // the soldier's heading itself, the stick's turns included, is not in it). D98 (a player: "the IK is completely bugged and
@@ -679,6 +681,9 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const
         bend = Unit(Sub(bend, Scale(u, Dot(bend, u))));
         if (Len(bend) < 0.5f) bend = Unit(Sub(V3{0, 0, -1}, Scale(u, -u.z)));
         const V3 elbow = Add(shoulder, Add(Scale(u, along), Scale(bend, out)));
+        g_lastElbow[si][0] = elbow.x;
+        g_lastElbow[si][1] = elbow.y;
+        g_lastElbow[si][2] = elbow.z;
         if (g_armTraceUntil && static_cast<LONG>(GetTickCount() - g_armTraceUntil) < 0) {
             float hp[3], hy = 0.0f, hu = 100.0f;
             if (view::HeadInWorld(hp, hy, hu)) {
@@ -1032,7 +1037,13 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     if (g_cfg.catchUp) D = Mul(Mul(AffineInverse(W), D), W);
     NoteBakedMove(comp, D);
     const M4 invL2W = AffineInverse(l2w);
-    const M4 A = Mul(l2w, D);  // where the part is drawn: bone * A
+    // D99: a room-scale step since the view moved the component with the pawn, but not the hands -- taken back off.
+    M4 l2wView = l2w;
+    {
+        float rs[3];
+        if (viewmodel::RoomSince(rs)) l2wView = Mul(l2w, Translate(V3{-rs[0], -rs[1], -rs[2]}));
+    }
+    const M4 A = Mul(l2wView, D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
     for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
     if (!arms)
@@ -1163,6 +1174,12 @@ bool Install(const Config& cfg) {
 bool TestCommand(const wchar_t* line) {
     if (std::wcscmp(line, L"mohavr arm trace") != 0) return false;
     g_armTraceUntil = GetTickCount() + 3000;
+    return true;
+}
+
+bool TraceDrawn(float (&elbows)[2][3]) {
+    if (!g_armTraceUntil || static_cast<LONG>(GetTickCount() - g_armTraceUntil) > 0) return false;
+    std::memcpy(elbows, g_lastElbow, sizeof(elbows));
     return true;
 }
 
