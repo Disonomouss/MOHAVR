@@ -18,9 +18,9 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
-**The mission openings on the cinema screen** (2026-10-12, D96): the quote and title card (`[Camera] CinemaScenes`). Unreleased.
+**The mission openings on the cinema screen** (2026-10-12, D96): the quote and title card (`[Camera] CinemaScenes`). Released in 0.8.10.
 **The disc's copy, take 2** (2026-10-11, D95): 0.8.9 crashed the disc's game at its start -- SecuROM reads the splices D92
-restored; now kept. GetCommandLineW by its slot (the dump has no import table). Test build to the player. Unreleased.
+restored; now kept. GetCommandLineW by its slot (the dump has no import table). Released in 0.8.10 (not yet confirmed on a disc).
 **Room-scale steps no longer pop the view** (2026-10-11, D94): the origin followed a step a frame before the camera did
 (the body popped back 4-8 cm for a frame). Released in 0.8.9.
 **The arms' torso turns with the head** (2026-10-11, D93): a real turn no longer twists the arms (`[Weapon] BodyTurn`).
@@ -39,6 +39,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.10** (published 2026-10-12): the mission openings on the cinema screen (D96), the disc's crash fixed (D95, unconfirmed).
 **Release 0.8.9** (published 2026-10-11): the arms turn with a real turn (D93), the room-scale pop fixed (D94), disc copies (D92, experimental).
 **Release 0.8.8** (published 2026-10-10): the steady heading when firing, the pistol's reload, the chest holster off (D90), the spare magazine fixed in the pouch (D91).
 **Release 0.8.7** (published 2026-10-10): the spare magazine in the pouch (D89).
