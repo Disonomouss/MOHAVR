@@ -2367,6 +2367,12 @@ step and the view move together.
 **Questions:**
 1. Start a mission: are the quote and the title readable on the screen, and does the view come back when play starts? (yes/no)
 
+### The flat screen's distance and size (D97; menu -> General)
+**Changed:** Screen distance and Screen size for the flat screen (menus, cutscenes, the mission openings).
+
+**Questions:**
+1. At the main menu, do both change the screen at once, and is there a setting you like? (which?)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kScreenDist, kScreenSize, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -35,7 +35,8 @@ const char* kTabNames[kTabCount] = {"General", "Comfort", "Weapons", "Reload", "
 constexpr int kTabMax = 24;
 const int kTabItems[kTabCount][kTabMax] = {
     // General: the view and the setup.
-    {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kHolsterRings, kReloadRings, kClose, -1},
+    {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kScreenDist, kScreenSize, kHolsterRings, kReloadRings,
+     kClose, -1},
     // Comfort: moving, turning, stance.
     {kTurn, kMove, kSticks, kRoomScale, kVignette, kDamageTint, kFireShake, kSeated, kCrouch, kChute, kClose, -1},
     // Weapons: the gun in hand.
@@ -53,7 +54,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag", "screendist", "screensize"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -299,6 +300,18 @@ void Menu::ApplySavedSettings() {
         const int defPouchMag = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"PouchMag", 1, shipped.c_str()));
         pouchMag_ = GetPrivateProfileIntW(L"ManualReload", L"PouchMag", defPouchMag, iniPath_.c_str()) != 0;
         if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
+        // D97: the flat screen (menus, cutscenes, the mission openings) -- the shipped [Camera] ScreenDistance / ScreenWidth
+        // until the player changes them here.
+        auto camNum = [&](const wchar_t* key, float def, float lo, float hi) {
+            wchar_t a[32] = L"", b[32] = L"";
+            GetPrivateProfileStringW(L"Camera", key, L"", a, 32, shipped.c_str());
+            float v = a[0] ? static_cast<float>(_wtof(a)) : def;
+            GetPrivateProfileStringW(L"Camera", key, L"", b, 32, iniPath_.c_str());
+            if (b[0]) v = static_cast<float>(_wtof(b));
+            return std::fmax(lo, std::fmin(hi, v));
+        };
+        screenDist_ = camNum(L"ScreenDistance", 2.0f, kScreenDistMin, kScreenDistMax);
+        screenWidth_ = camNum(L"ScreenWidth", 1.6f, kScreenWidthMin, kScreenWidthMax);
     }
     // The comfort vignette (GOAL A2): likewise the shipped [Comfort] Vignette (0 none, 1 light, 2 strong).
     const int defVig = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"Vignette", 0, shipped.c_str()));
@@ -1262,6 +1275,18 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
             ringScale_ = std::fmax(0.3f, std::fmin(2.0f, ringScale_ + dir * 0.1f));
             SaveHands();
             MLOG("menu: reload rings -> %.0f%%", ringScale_ * 100.0f);
+        } else if (item == kScreenDist || item == kScreenSize) {  // D97
+            wchar_t b[32];
+            if (item == kScreenDist) {
+                screenDist_ = std::fmax(kScreenDistMin, std::fmin(kScreenDistMax, screenDist_ + dir * 0.25f));
+                swprintf_s(b, L"%.2f", screenDist_);
+                if (!iniPath_.empty()) WritePrivateProfileStringW(L"Camera", L"ScreenDistance", b, iniPath_.c_str());
+            } else {
+                screenWidth_ = std::fmax(kScreenWidthMin, std::fmin(kScreenWidthMax, screenWidth_ + dir * 0.2f));
+                swprintf_s(b, L"%.2f", screenWidth_);
+                if (!iniPath_.empty()) WritePrivateProfileStringW(L"Camera", L"ScreenWidth", b, iniPath_.c_str());
+            }
+            MLOG("menu: the flat screen -> %.2f m wide at %.2f m", screenWidth_, screenDist_);
         }
     }
     if (in.select) {
@@ -1606,6 +1631,15 @@ void Menu::Render() {
                 break;
             case kRingScale:
                 snprintf(label, sizeof(label), "Reload rings          <  %.0f%%  >", ringScale_ * 100.0f);
+                ImGui::Selectable(label, sel);
+                break;
+            case kScreenDist:
+                snprintf(label, sizeof(label), "Screen distance  <  %.2f m  >", screenDist_);
+                ImGui::Selectable(label, sel);
+                note("the flat screen for menus, cutscenes and the mission openings");
+                break;
+            case kScreenSize:
+                snprintf(label, sizeof(label), "Screen size      <  %.1f m wide  >", screenWidth_);
                 ImGui::Selectable(label, sel);
                 break;
             case kFreeHandPage: ImGui::Selectable("Free hand  (how your other hand sits)", sel); break;

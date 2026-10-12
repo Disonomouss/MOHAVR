@@ -118,6 +118,10 @@ public:
     const float (&HandPoint() const)[3] { return handPoint_; }
     float ForegripRadius() const { return foregripR_; }
     float RingScale() const { return ringScale_; }
+    // D97: the flat screen's distance and width (metres): the player's, else the shipped [Camera] ScreenDistance / ScreenWidth.
+    float ScreenDistance() const { return screenDist_; }
+    float ScreenWidth() const { return screenWidth_; }
+    static constexpr float kScreenDistMin = 0.5f, kScreenDistMax = 10.0f, kScreenWidthMin = 0.4f, kScreenWidthMax = 10.0f;
     bool StartLeft() const { return startLeft_; }
     // The HUD (WRISTHUD-DESIGN, the HUD tab; the player's [HUD] keys, the shipped ones the defaults): on the wrist or the
     // screen, when the wrist panels show, their layout, backing, placement and size; the screen panel's distance / size /
@@ -220,6 +224,7 @@ private:
     bool                    fireShake_ = true;    // D87
     bool                    roomScale_ = true;    // D88
     bool                    pouchMag_ = true;     // D89
+    float                   screenDist_ = 2.0f, screenWidth_ = 1.6f;  // D97
     void PublishWeaponModes() {
         if (!hdr_) return;
         hdr_->kickMode = 1u + static_cast<std::uint32_t>(kickPct_);

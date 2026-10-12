@@ -155,6 +155,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
     Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
   - Frame pacing
+  - Screen distance and Screen size: the flat screen for menus, cutscenes and the mission openings
   - Holster rings and Reload rings (off by default; near = when a hand comes close, or always)
 - **Comfort**
   - Turning (smooth, snap 30 or 45 degrees), Move direction (where you look, or your body), Sticks (swap them)

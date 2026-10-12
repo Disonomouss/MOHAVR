@@ -1615,3 +1615,14 @@ hud, then hold X."
   - before: cinema off at Black1, the quote in slices across the eyes;
   - after: the cinema screen held from the loadout through Black1, the Quote and the Title, the quote whole on it; off
     as the title closed.
+
+### D97. The flat screen's distance and size in the menu -- Decided 2026-10-13
+- **Why:** the player: "Add virtual screen distance for menus and loading screens."
+- **What:** the menu's General tab, after Frame pacing:
+  - **Screen distance**: 0.5-10 m in 0.25 m steps.
+  - **Screen size**: its width, 0.4-10 m in 0.2 m steps.
+  Both are live (the host reads them per frame) and saved in the player's ini as `[Camera] ScreenDistance` /
+  `ScreenWidth`, over the shipped 2.0 m and 1.6 m. The screen is the one for every frame without a view: menus,
+  cutscenes on the cinema screen, the mission openings (D96).
+- **Proven [S]** (the main menu): 2.0 m / 1.6 m wide, then distance 3.0 m (smaller, further), then 2.6 m wide (larger
+  again) -- each change on screen at once. The player's settings were backed up and restored around the test.

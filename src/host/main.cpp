@@ -1666,8 +1666,10 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 layer.subImage.swapchain = swapchain;
                 layer.subImage.imageRect = full;
                 layer.pose.orientation.w = 1.0f;
-                layer.pose.position = {0.0f, screenY, -screenDist};
-                layer.size = {screenWidth, screenWidth * static_cast<float>(height) / static_cast<float>(width)};
+                // D97: the menu's Screen distance / Screen size (live), else the ini's.
+                const float sd = menuOk ? menu.ScreenDistance() : screenDist, sw = menuOk ? menu.ScreenWidth() : screenWidth;
+                layer.pose.position = {0.0f, screenY, -sd};
+                layer.size = {sw, sw * static_cast<float>(height) / static_cast<float>(width)};
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
             }
             layerCount = 1;
