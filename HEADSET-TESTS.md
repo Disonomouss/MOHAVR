@@ -2397,6 +2397,8 @@ pull its trigger to click. Hold both controllers to your eyes for 3 s to recentr
 3. Does the hands-at-the-eyes recentre fire when you want it, and never by accident (aiming down a scope, the
    parachute)? (yes/no)
 
+**Answers (2026-10-13):** "All tested well."
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
