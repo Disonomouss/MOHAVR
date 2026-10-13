@@ -100,6 +100,7 @@ public:
     void  SetMaskedFace(int hand, bool upper, bool on) { maskedFace_[hand] = on ? FaceSrc(hand, upper) : kNone; }
     // D60: a hand's lower face button (X / A) kept from the game while it is the wrist's menu button (main.cpp).
     void  SetWristMasked(int hand, bool on) { wristMasked_[hand] = on; }
+    void  SetWristMaskedUpper(int hand, bool on) { wristMaskedUpper_[hand] = on; }  // D104: the wrist HUD's hide / show
     // Likewise a physical hand's trigger (the manual reload's flip of a held twin magazine).
     void  SetMaskedTrigger(int hand, bool on) { maskedTrig_[hand] = on; }
     // Xbox buttons kept from the game in gameplay (XINPUT bits; the off-hand grenade holds back RB, the game's own grenade
@@ -195,6 +196,7 @@ private:
     bool        maskedDown_[2]{};
     bool        maskedTrig_[2]{};
     bool        wristMasked_[2]{};
+    bool        wristMaskedUpper_[2]{};
     std::uint16_t maskedButtons_ = 0;
     std::uint16_t maskedHeld_ = 0;     // masked buttons still down (kept masked until let go)
     bool        testLost_[2]{};        // pad_cmd.txt "lost=": that hand reports no tracking

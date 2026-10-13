@@ -28,6 +28,9 @@ namespace mohavr::host {
 // Digital menu input for one frame (edges; the caller turns stick deflection into repeats).
 struct MenuInput {
     bool toggle = false, up = false, down = false, left = false, right = false, select = false, back = false;
+    // D104: the right controller's ray on the menu panel (pixels in the panel's image) and a trigger press there.
+    bool pointerOk = false, click = false;
+    float px = 0.0f, py = 0.0f;
 };
 
 class Menu {
@@ -43,6 +46,10 @@ public:
     void Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid);
 
     bool Visible() const { return visible_; }
+    // D104: where an aim ray meets the open panel, in the panel image's pixels; false when it misses.
+    bool PanelHit(const XrPosef& aim, float& px, float& py) const;
+    // D104: the wrist panels hidden / shown by the player (saved: [HUD] WristHidden).
+    void ToggleWristHidden();
     // The quad layer for this frame (only when Visible()).
     const XrCompositionLayerBaseHeader* Layer(XrSpace local);
 
@@ -225,6 +232,17 @@ private:
     bool                    roomScale_ = true;    // D88
     bool                    pouchMag_ = true;     // D89
     float                   screenDist_ = 2.0f, screenWidth_ = 1.6f;  // D97
+    // D104: the rows the last Render drew (their index as the page counts them; tabs as -100 - t), for the pointer.
+    struct RowRec {
+        int   index;
+        float x0, y0, x1, y1;
+        float lt = -1.0f, gt = -1.0f;  // a value row's '<' and '>' (x), else -1
+    };
+    std::vector<RowRec>     rows_;
+    int                     hoverRow_ = -99999;
+    bool                    pointerShown_ = false;
+    float                   pointerX_ = 0.0f, pointerY_ = 0.0f;
+    void Row(const char* label, int index);
     void PublishWeaponModes() {
         if (!hdr_) return;
         hdr_->kickMode = 1u + static_cast<std::uint32_t>(kickPct_);

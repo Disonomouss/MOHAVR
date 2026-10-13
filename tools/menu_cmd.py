@@ -4,7 +4,8 @@
     python tools/menu_cmd.py goto=worldscale right right right   # world scale +15 (the menu open)
     python tools/menu_cmd.py toggle select                       # open, Recentre (the first item)
 
-Commands: toggle up down left right select back, and goto=<key> (D81): the open menu's item with that key
+Commands: toggle up down left right select back, ptr=<x>,<y>[,click] (D104: the pointer on the open menu, in its
+image's pixels), and goto=<key> (D81): the open menu's item with that key
 selected in its tab (or goto=<tab name>: that tab's row), e.g. "toggle goto=recoil left". Keys: menu.cpp kItemKeys
 (recentre worldscale height resetscale gunhand resolution pacing screendist screensize holsterrings reloadrings | turning movedir sticks roomscale vignette damageflash fireshake seated crouch chute |
 gunfit reddot recoil scope scopezoom melee gunnade grabpickup mghands giveall | manualreload pouchreload pouchmag reloadgrip
@@ -24,7 +25,7 @@ VALID = {"toggle", "up", "down", "left", "right", "select", "back"}
 
 
 def main(cmds):
-    bad = [c for c in cmds if c not in VALID and not c.startswith("goto=")]
+    bad = [c for c in cmds if c not in VALID and not c.startswith("goto=") and not c.startswith("ptr=")]
     if bad:
         print(f"unknown command(s): {bad}; valid: {sorted(VALID)}")
         return 2

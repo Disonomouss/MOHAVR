@@ -71,9 +71,11 @@ shows the game normally instead of staying white, the mod isn't running: check t
 | Left menu button (tap) | Pause |
 | Left menu button (hold) | MOHAVR menu |
 | Look at the wrist HUD, then X (tap / hold) | Pause / MOHAVR menu (for controllers whose menu button the VR runtime keeps, like the Reverb G2 under SteamVR) |
+| Look at the wrist HUD, then hold Y for 1 s | Hide / show the wrist HUD's panels |
 
 You aim by pointing the gun: a red dot shows where shots land. In the game's menus the face buttons work as
-labelled: A selects, B goes back. You can also point at a menu item with the right controller and pull its trigger. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
+labelled: A selects, B goes back. You can also point at a menu item with the right controller and pull its trigger (the MOHAVR menu too: on a value,
+the left half steps it down, the right half up). The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
 
 The game pauses when you take the headset off or open the headset's dashboard. Each shot vibrates the gun hand

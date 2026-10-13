@@ -2399,6 +2399,14 @@ pull its trigger to click. Hold both controllers to your eyes for 3 s to recentr
 
 **Answers (2026-10-13):** "All tested well."
 
+### The MOHAVR menu by pointer; the wrist HUD hidden by Y (D104)
+**Changed:** point at the MOHAVR menu's rows and tabs with the right controller and pull its trigger (a value row: the left
+half steps down, the right half up). Look at the wrist HUD and hold Y for 1 s to hide its panels; the same to show them.
+
+**Questions:**
+1. Does the dot sit where you point, and do clicks land on the row you meant? (yes/no)
+2. Does Y held at the wrist hide and show the panels, without Y doing its game action then? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

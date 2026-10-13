@@ -359,6 +359,7 @@ void WristHud::Update(const In& in) {
     // in the face while the off hand holds the foregrip unless looked at); always while the Wrist panels page is open.
     float faceDeg = 180.0f, lookDeg = 180.0f;
     bool want = false, always = false;
+    lookedAt_ = false;
     if (!why) {
         const V3 c = Mul(Add(centre[0], centre[1]), 0.5f);
         const V3 n = Unit(Add(normal[0], normal[1]));
@@ -372,7 +373,9 @@ void WristHud::Update(const In& in) {
         // (always: still only while the panels face the head -- palm up or the arm hanging they'd be seen from behind, mirrored)
         const bool facesHead = facing > std::cos(std::min(fa + 30.0f * 0.0174533f + hyst, 1.5708f));  // (never past edge-on)
         always = set_.show == 1 && !in.foregrip && facesHead;
-        want = in.wristPage || lookedAt || always;
+        lookedAt_ = lookedAt;
+        // D104: hidden by the player -- only the Wrist panels page shows them (looked at + Y held shows them again).
+        want = in.wristPage || (!set_.hidden && (lookedAt || always));
     }
     if (why) {
         fade_ = 0.0f;  // (at once: a menu, no tracking, no HUD)
@@ -409,6 +412,7 @@ void WristHud::Update(const In& in) {
     }
     // Logged as it changes.
     const char* note = why ? why : want ? (in.wristPage ? "the Wrist panels page" : always ? "always, facing you" : "looked at")
+                                        : set_.hidden ? "hidden by the player"
                                         : (set_.show == 1 ? (in.foregrip ? "the foregrip held, not looked at" : "always, but not facing you")
                                                           : "not looked at");
     if (note != why_ || want != want_) {

@@ -1744,3 +1744,33 @@ hud, then hold X."
   - the right hand aimed at Options -> "pointing at the menu (1414 433)" (aimed at 1416 433);
   - the right trigger -> "click at 1414 433", and the Options menu opened;
   - both hands 12 cm before the eyes -> "recentre by the hands at the eyes (3.0 s)", the recentre published.
+
+### D104. Point and click in the MOHAVR menu; hiding the wrist HUD by looking at it and holding Y -- Decided 2026-10-13
+- **Why:** the user: "Can we add the point and click for the mod menu too. Also can we add an option to hiding and showing
+  the wrist hud by looking at it and holding Y."
+- **What (the menu):**
+  - Every row is drawn through `Menu::Row`, which records its rectangle and its index as its page counts it (the main
+    tab's loop index, a page's own enum). A value row also records where its "<" and ">" sit. The tab row is recorded too.
+  - The host intersects the right controller's aim ray with the open panel (`Menu::PanelHit`: the panel's pose, 0.8 m
+    wide). The row under the ray is selected as the pointer comes onto it. A trigger press there (0.6 / 0.4) clicks:
+    - a value row steps down on its "<" half, up on its ">" half;
+    - a tab opens;
+    - any other row is selected.
+    The trigger's own "select" is left out that frame so a press can't act twice. A dot marks where the ray meets the
+    panel.
+  - Always on (the stick and buttons still work). Tests: `menu_cmd.py ptr=<x>,<y>[,click]`; the tabs' rectangles are
+    logged once.
+- **What (the wrist HUD):**
+  - `HudSettings.hidden`, the player's `[HUD] WristHidden`: the wrist panels stay hidden; the head-locked rest (hit
+    indicators, objectives) stays.
+  - The wrist gate still works out "looked at" while hidden (`WristHud::LookedAt`).
+  - The off hand's upper face button (Y; B on the right hand), pressed while the wrist is looked at and the MOHAVR menu
+    is closed, is kept from the game. Held `[Controls] WristToggle` s (shipped **1**; 0 = off) it toggles the panels, with
+    a pulse.
+- **Proven [S]:**
+  - The pointer swept down the panel: rows 1-7 in turn. A click on World scale's ">" half: 100 -> 105. A click on Gun
+    hand: -> left.
+  - The test pointer on the Comfort tab and a click: the Comfort tab open (the headset's capture).
+  - The left wrist palm down, looked at, Y held 1.6 s: "panels hidden (hidden by the player)"; again: "panels shown
+    (looked at)".
+  - The player's data backed up and restored around each run.

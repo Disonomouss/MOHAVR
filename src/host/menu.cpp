@@ -772,8 +772,46 @@ void Menu::Save() {
     WritePrivateProfileStringW(L"Hands", L"ReloadRings", kRingModes[reloadRings_], iniPath_.c_str());
 }
 
-void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headValid) {
+void Menu::Update(float dt, const MenuInput& inRaw, const XrPosef& head, bool headValid) {
     SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
+    MenuInput in = inRaw;
+    // D104 (a player: point and click "for the mod menu too"): the row under the right controller's ray (as the last frame
+    // drew it) is selected as the pointer comes onto it; the trigger there selects it -- a value row steps down on its '<'
+    // half, up on its '>' half; a tab opens.
+    pointerShown_ = visible_ && in.pointerOk;
+    if (pointerShown_) {
+        pointerX_ = in.px;
+        pointerY_ = in.py;
+        const RowRec* hit = nullptr;
+        for (const RowRec& r : rows_)
+            if (in.px >= r.x0 && in.px <= r.x1 && in.py >= r.y0 && in.py <= r.y1) hit = &r;
+        const int idx = hit ? hit->index : -99999;
+        if (idx != hoverRow_) {
+            static int logged = 0;
+            if (logged++ < 200) MLOG("menu: pointer on %s %d (page %d, tab %d) at %.0f %.0f", !hit ? "nothing" : idx <= -100 ? "tab" : "row",
+                                     !hit ? 0 : idx <= -100 ? -100 - idx : idx, page_, tab_, in.px, in.py);
+        }
+        if (hit && idx != hoverRow_ && idx > -100) selected_ = idx;
+        if (hit && idx <= -100 && idx != hoverRow_ && page_ == 0) selected_ = -1;
+        hoverRow_ = idx;
+        if (in.click && hit) {
+            MLOG("menu: pointer click on %s %d", idx <= -100 ? "tab" : "row", idx <= -100 ? -100 - idx : idx);
+            in.select = false;
+            if (idx <= -100) {
+                if (page_ == 0) {
+                    tab_ = -100 - idx;
+                    selected_ = -1;
+                    MLOG("menu: pointer -- tab %s", kTabNames[tab_]);
+                }
+            } else if (hit->lt >= 0.0f) {
+                (in.px >= 0.5f * (hit->lt + hit->gt) ? in.right : in.left) = true;
+            } else {
+                in.select = true;
+            }
+        }
+    } else {
+        hoverRow_ = -99999;
+    }
     const bool backFromPage = visible_ && ((page_ == 1 && (in.back || (in.select && selected_ == fBack))) ||
                                            (page_ == 2 && (in.back || (in.select && selected_ == hBack))) ||
                                            (page_ == 3 && (in.back || (in.select && selected_ == eqBack))) ||
@@ -1344,9 +1382,55 @@ void Menu::Update(float dt, const MenuInput& in, const XrPosef& head, bool headV
     Render();
 }
 
+bool Menu::PanelHit(const XrPosef& aim, float& px, float& py) const {
+    if (!visible_ || !width_ || !height_) return false;
+    // The panel: a quad at panelPose_ (yaw only), 0.8 m wide, facing +z. The ray in its frame.
+    const auto& q = panelPose_.orientation;
+    const float yaw = 2.0f * std::atan2(q.y, q.w), c = std::cos(-yaw), s = std::sin(-yaw);
+    auto toPanel = [&](float x, float z, float& ox, float& oz) {  // R_y(-yaw)
+        ox = c * x + s * z;
+        oz = -s * x + c * z;
+    };
+    const auto& a = aim.orientation;
+    const float dx = -(2.0f * (a.x * a.z + a.w * a.y)), dy = -(2.0f * (a.y * a.z - a.w * a.x)), dz = -(1.0f - 2.0f * (a.x * a.x + a.y * a.y));
+    float ox, oz, lx, lz;
+    toPanel(aim.position.x - panelPose_.position.x, aim.position.z - panelPose_.position.z, ox, oz);
+    toPanel(dx, dz, lx, lz);
+    const float oy = aim.position.y - panelPose_.position.y;
+    if (lz > -0.05f || oz <= 0.0f) return false;  // pointing away, or behind the panel
+    const float t = -oz / lz;
+    const float w = 0.8f, h = 0.8f * static_cast<float>(height_) / static_cast<float>(width_);
+    const float u = (ox + lx * t) / w + 0.5f, v = 0.5f - (oy + dy * t) / h;
+    if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
+    px = u * static_cast<float>(width_);
+    py = v * static_cast<float>(height_);
+    return true;
+}
+
+void Menu::ToggleWristHidden() {
+    hud_.hidden = !hud_.hidden;
+    if (!iniPath_.empty()) WritePrivateProfileStringW(L"HUD", L"WristHidden", hud_.hidden ? L"1" : nullptr, iniPath_.c_str());
+    MLOG("menu: the wrist HUD's panels %s (looked at, Y held)", hud_.hidden ? "hidden" : "shown");
+}
+
+// D104: a row drawn and kept for the pointer (its rectangle, and a value row's '<' / '>' positions).
+void Menu::Row(const char* label, int index) {
+    ImGui::Selectable(label, selected_ == index);
+    RowRec r{index, ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y, ImGui::GetItemRectMax().x, ImGui::GetItemRectMax().y};
+    const char* lt = std::strstr(label, "<  ");
+    const char* gt = std::strrchr(label, '>');
+    if (lt && gt && gt > lt) {
+        const std::string head(label, lt), upto(label, gt);
+        r.lt = r.x0 + ImGui::CalcTextSize(head.c_str()).x;
+        r.gt = r.x0 + ImGui::CalcTextSize(upto.c_str()).x;
+    }
+    rows_.push_back(r);
+}
+
 void Menu::Render() {
     ImGui_ImplDX11_NewFrame();
     ImGui::NewFrame();
+    rows_.clear();
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
     ImGui::Begin("MOHAVR", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -1381,6 +1465,14 @@ void Menu::Render() {
         char tl[48];
         snprintf(tl, sizeof(tl), cur && selected_ < 0 ? "<%s>" : cur ? "[%s]" : " %s ", kTabNames[t]);
         ImGui::TextColored(col, "%s", tl);
+        rows_.push_back({-100 - t, ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y, ImGui::GetItemRectMax().x,
+                         ImGui::GetItemRectMax().y});  // (D104: a tab for the pointer)
+        static int tabsLogged = 0;
+        if (tabsLogged < kTabCount) {
+            ++tabsLogged;
+            MLOG("menu: tab %s drawn at %.0f..%.0f x %.0f..%.0f", kTabNames[t], ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().x,
+                 ImGui::GetItemRectMin().y, ImGui::GetItemRectMax().y);
+        }
     }
     ImGui::PopFont();
     ImGui::Separator();
@@ -1401,41 +1493,41 @@ void Menu::Render() {
         switch (it) {
             case kWorldScale:
                 snprintf(label, sizeof(label), "World scale      <  %.0f  >", unitsPerMeter_);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 snprintf(label, sizeof(label), "higher = smaller world   (eyes %.1f units apart)", ipdMm * unitsPerMeter_ / 1000.0f);
                 note(label);
                 break;
             case kHeight:
                 snprintf(label, sizeof(label), "Height           <  %+.0f cm  >", heightOffset_ * 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kTurn:
                 if (snapDeg_) snprintf(label, sizeof(label), "Turning          <  snap %d\xC2\xB0  >", snapDeg_);
                 else snprintf(label, sizeof(label), "Turning          <  smooth  >");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kSticks:
                 snprintf(label, sizeof(label), "Sticks           <  %s  >", swapSticks_ ? "move right, turn left" : "move left, turn right");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kMove:
                 snprintf(label, sizeof(label), "Move direction   <  %s  >", moveByHead_ ? "where you look" : "body");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kGunHand:
                 snprintf(label, sizeof(label), "Gun hand         <  %s  >", startLeft_ ? "left" : "right");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kRedDot:
                 snprintf(label, sizeof(label), "Red dot          <  %s  >", redDot_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kPacing:
                 snprintf(label, sizeof(label), "Frame pacing     <  %s  >", pacing_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("on = one game frame per headset frame");
                 break;
-            case kRecenter: ImGui::Selectable("Recentre (face forward, here)", sel); break;
+            case kRecenter: Row("Recentre (face forward, here)", i); break;
             case kResolution: {
                 const presets::Preset& p = presets::kPresets[resPreset_];
                 int w = p.eyeW, h = p.eyeH;
@@ -1444,7 +1536,7 @@ void Menu::Render() {
                 char size[32] = "headset not seen yet";
                 if (w > 0 && h > 0) snprintf(size, sizeof(size), "%dx%d per eye", w, h);
                 snprintf(label, sizeof(label), "Resolution       <  %s  >", p.label);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 char n2[160];
                 snprintf(n2, sizeof(n2), "%s; %s", size,
                          resPreset_ == startPreset_ ? (hdr_ && hdr_->width ? "as now" : "") : "applies at the next start");
@@ -1453,227 +1545,227 @@ void Menu::Render() {
             }
             case kHolsterRings:
                 snprintf(label, sizeof(label), "Holster rings    <  %s  >", kRingLabels[ringsMode_]);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("rings at the holsters and the belt pouch (near = when a hand comes close)");
                 break;
             case kReloadRings:
                 snprintf(label, sizeof(label), "Reload rings     <  %s  >", kRingLabels[reloadRings_]);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("rings at the gun's magazine, bolt, pump and foregrip");
                 break;
             case kPouchMag:
                 snprintf(label, sizeof(label), "Magazine in pouch <  %s  >", pouchMag_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("with your gun's magazine out, a fresh one shows in the belt pouch");
                 break;
             case kRoomScale:
                 snprintf(label, sizeof(label), "Room-scale walk  <  %s  >", roomScale_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("walk around your room and your soldier walks with you (walls stop him)");
                 break;
             case kFireShake:
                 snprintf(label, sizeof(label), "Firing shake     <  %s  >", fireShake_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the view jolting with each shot (off: steady; the gun still kicks in your hand)");
                 break;
             case kDamageTint:
                 snprintf(label, sizeof(label), "Damage flash     <  %s  >", damageTint_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the screen goes red when you're hit (and the game's other screen tints)");
                 break;
             case kRecoil:
                 if (kickPct_ == 0) snprintf(label, sizeof(label), "Recoil           <  off  >");
                 else snprintf(label, sizeof(label), "Recoil           <  %d%%  >", kickPct_);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the muzzle rises in your hand per shot (100% = the game's own kick)");
                 break;
             case kGrabPickup:
                 snprintf(label, sizeof(label), "Grab pickup      <  %s  >", grabPickup_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("reach for a weapon or a crate and close a free grip on it to take it");
                 break;
             case kMgHands:
                 snprintf(label, sizeof(label), "Mounted MG42     <  %s  >", mgHands_ ? "hands" : "head");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("hands: grip the handle and push it (B gets off); head: it follows your view");
                 break;
             case kChute:
                 snprintf(label, sizeof(label), "Parachute        <  %s  >", chuteHands_ ? "hands" : "stick");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("hands: hold both grips, pull one down to turn, both to slow, a hard pull flares");
                 break;
             case kSeated:
                 snprintf(label, sizeof(label), "Seated           <  %s  >", seated_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("sit, then Recentre: your seated head becomes standing height");
                 break;
             case kVignette:
                 snprintf(label, sizeof(label), "Vignette         <  %s  >", vignette_ == 0 ? "none" : vignette_ == 1 ? "light" : "strong");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("darkens the edges while the stick moves or turns you");
                 break;
             case kCrouch:
                 snprintf(label, sizeof(label), "Physical crouch  <  %s  >", crouch_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("on = crouch for real and the game crouches (recentre standing)");
                 break;
             case kGiveAll:
-                ImGui::Selectable("Give all weapons", sel);
+                Row("Give all weapons", i);
                 note("the game's cheat: every gun, full ammo (switch with next weapon)");
                 break;
             case kResetScale:
                 snprintf(label, sizeof(label), "Reset world scale (%.0f)", hdr_ ? hdr_->defaultUnitsPerMeter : 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kGunFit:
                 snprintf(label, sizeof(label), "Gun fit  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kReload:
                 snprintf(label, sizeof(label), "Manual reload    <  %s  >", manualReload_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kRackEject:
                 snprintf(label, sizeof(label), "Rack ejects a round <  %s  >", rackEject_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("racking a loaded slide, bolt or pump throws the chambered round out");
                 break;
             case kRackKeep:
                 snprintf(label, sizeof(label), "  Ejected round   <  %s  >", rackEjectKeep_ ? "kept" : "lost");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note(rackEjectKeep_ ? "kept: it goes back to your reserve" : "lost: it counts as a round spent");
                 break;
             case kNadeStyle:
                 snprintf(label, sizeof(label), "Grenades         <  %s  >", nadeSimple_ ? "simple" : "classic");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note(nadeSimple_ ? "hold the grip to take one, trigger once to cook, let go to throw"
                                  : "trigger pulls the pin, a 2nd pull cooks; hold as set below");
                 break;
             case kOffNade:
                 snprintf(label, sizeof(label), "Off-hand grenade <  %s  >", offHandNade_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the free hand takes a grenade at the grenade holster: the gun stays in hand");
                 break;
             case kPouchReload:
                 snprintf(label, sizeof(label), "Pouch reload     <  %s  >", pouchReload_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("a hand holding a gun grips the ammo pouch on your belt: reloaded at once");
                 break;
             case kMelee:
                 snprintf(label, sizeof(label), "Physical melee   <  %s  >", physicalMelee_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("swing the butt of your gun into an enemy (a bayonet: thrust or slash): the game's melee");
                 break;
             case kScope:
                 snprintf(label, sizeof(label), "Scopes           <  %s  >", scope_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("raise a scoped gun to your eye, both hands on it: you look through the scope");
                 break;
             case kScopeZoom:
                 snprintf(label, sizeof(label), "Scope zoom       <  %s  >", scopeZoomGame_ ? "game" : "realistic");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note(scopeZoomGame_ ? "the game's zoom: the turning stick up / down zooms while you look through"
                                     : "each scope's real magnification (Springfield 2.5x, G43 and StG44 4x, M18 2.8x)");
                 break;
             case kGunNade:
                 snprintf(label, sizeof(label), "Hand grenades    <  %s  >", gunNadePin_ ? "pin & grip" : "game");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("in the gun hand: trigger pulls the pin, again cooks; squeeze, swing and let go to throw");
                 break;
             case kNadeHold:
                 snprintf(label, sizeof(label), "  Grenade hold   <  %s  >", nadeClick_ ? "click" : "grip");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("grip: hold the grip, let go to throw.  click: click to take, squeeze and let go to throw");
                 break;
             case kOffPistol:
                 snprintf(label, sizeof(label), "Off-hand pistol  <  %s  >", offHandPistol_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the free hand draws the pistol at the pistol holster: the gun stays in hand");
                 break;
             case kOffKnife:
                 snprintf(label, sizeof(label), "Off-hand knife   <  %s  >", offHandKnife_ ? "on" : "off");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the MP40's dagger: the free hand draws it at the lower back; stab or slash");
                 break;
             case kKnifePage:
-                ImGui::Selectable("Knife grip  (how the knife sits in your hand)", sel);
+                Row("Knife grip  (how the knife sits in your hand)", i);
                 break;
             case kGripPage:
                 snprintf(label, sizeof(label), "Reload grip  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("where your hand sits on the magazine / handle");
                 break;
             case kSpotPage:
                 snprintf(label, sizeof(label), "Reload spots  (%s)", weaponKey_.empty() ? "no gun in hand" : weaponKey_.c_str());
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("where you grab the magazine / handle: move and size the rings");
                 break;
             case kHolsterPage:
                 snprintf(label, sizeof(label), "Holsters and pouch  (rings: %s)", kRingLabels[ringsMode_]);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kHandFwd:
                 snprintf(label, sizeof(label), "Hand point fwd/back   <  %+.0f  >", handPoint_[0] * 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kHandUp:
                 snprintf(label, sizeof(label), "Hand point up/down    <  %+.0f  >", handPoint_[1] * 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kHandIn:
                 snprintf(label, sizeof(label), "Hand point in/out     <  %+.0f  >", handPoint_[2] * 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the white dot: put it in your hand (in = toward the palm)");
                 break;
             case kForeSize:
                 snprintf(label, sizeof(label), "Foregrip ring         <  %.0f across  >", foregripR_ * 200.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kRingScale:
                 snprintf(label, sizeof(label), "Reload rings          <  %.0f%%  >", ringScale_ * 100.0f);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
             case kScreenDist:
                 snprintf(label, sizeof(label), "Screen distance  <  %.2f m  >", screenDist_);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the flat screen for menus, cutscenes and the mission openings");
                 break;
             case kScreenSize:
                 snprintf(label, sizeof(label), "Screen size      <  %.1f m wide  >", screenWidth_);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
-            case kFreeHandPage: ImGui::Selectable("Free hand  (how your other hand sits)", sel); break;
+            case kFreeHandPage: Row("Free hand  (how your other hand sits)", i); break;
             case kHudPlace: {
                 const bool can = wristAvail_;  // (the game has the HUD ring and the host opened it)
                 snprintf(label, sizeof(label), "HUD              <  %s  >", hud_.place ? (can ? "wrist" : "wrist (not available)") : "screen");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note(hud_.place ? "your other wrist, palm down: health and the compass (the minimap) left, weapon and grenades right"
                                 : "one panel in front of you");
                 break;
             }
             case kHudShow:
                 snprintf(label, sizeof(label), "  Wrist shows    <  %s  >", hud_.show ? "always" : "when looked at");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("when looked at: turn the wrist toward you and look at it");
                 break;
             case kHudLayout:
                 snprintf(label, sizeof(label), "  Wrist layout   <  %s  >", hud_.layout ? "arm forward" : "forearm across chest");
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note(hud_.layout ? "the arm pointing forward: the panels either side of the wrist"
                                  : startLeft_ ? "the forearm across the chest: health on your left (toward the hand), weapon toward the elbow"
                                               : "the forearm across the chest: health on your left (toward the elbow), weapon toward the hand");
                 break;
             case kHudBacking:
                 snprintf(label, sizeof(label), "  Wrist backing  <  %ls  >", kBackings[hud_.backing]);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 break;
-            case kHudWristPage: ImGui::Selectable("Wrist panels  (move and size them)", sel); break;
+            case kHudWristPage: Row("Wrist panels  (move and size them)", i); break;
             case kHudScreenPage:
                 snprintf(label, sizeof(label), "Screen HUD  (%.1f m away, %.1f m wide)", hud_.screen[0], hud_.screen[1]);
-                ImGui::Selectable(label, sel);
+                Row(label, i);
                 note("the panel in front of you; on the wrist, what stays in view (hits, objectives, prompts)");
                 break;
-            case kClose: ImGui::Selectable("Close", sel); break;
+            case kClose: Row("Close", i); break;
             default: break;
         }
         if (sel) ImGui::SetScrollHereY(0.5f);  // (a tab longer than the panel scrolls with the selection)
@@ -1683,6 +1775,8 @@ void Menu::Render() {
     ImGui::TextDisabled("Stick: choose / adjust (up: the tabs)   Trigger: select   Menu: close");
     ImGui::PopFont();
     }
+    if (pointerShown_)  // D104: where the controller points
+        ImGui::GetForegroundDrawList()->AddCircleFilled(ImVec2(pointerX_, pointerY_), 9.0f, IM_COL32(255, 210, 110, 230));
     ImGui::PopFont();
     ImGui::End();
     ImGui::Render();
@@ -1717,26 +1811,26 @@ void Menu::RenderFitPage() {
     char label[128];
     auto moved = [&](int i) { return std::round(fitDefault_.grip[i] - fit_.grip[i]) + 0.0f; };  // +0.0f: no "-0"
     snprintf(label, sizeof(label), "Gun forward / back    <  %+.0f  >", moved(0));
-    ImGui::Selectable(label, selected_ == fForward);
+    Row(label, fForward);
     snprintf(label, sizeof(label), "Gun right / left      <  %+.0f  >", moved(1));
-    ImGui::Selectable(label, selected_ == fRight);
+    Row(label, fRight);
     snprintf(label, sizeof(label), "Gun up / down         <  %+.0f  >", moved(2));
-    ImGui::Selectable(label, selected_ == fUp);
+    Row(label, fUp);
     snprintf(label, sizeof(label), "Gun angle             <  %+.0f\xC2\xB0  >", fit_.angle);
-    ImGui::Selectable(label, selected_ == fAngle);
+    Row(label, fAngle);
     snprintf(label, sizeof(label), "Aim line up / down    <  %+.1f cm  >", fit_.rayUp);
-    ImGui::Selectable(label, selected_ == fRayUp);
+    Row(label, fRayUp);
     snprintf(label, sizeof(label), "Aim line right / left <  %+.1f cm  >", fit_.rayRight);
-    ImGui::Selectable(label, selected_ == fRayRight);
+    Row(label, fRayRight);
     snprintf(label, sizeof(label), "Foregrip forward      <  %.0f cm  >", fit_.foreFwd);
-    ImGui::Selectable(label, selected_ == fForeFwd);
+    Row(label, fForeFwd);
     snprintf(label, sizeof(label), "Foregrip up / down    <  %+.0f cm  >", fit_.foreUp);
-    ImGui::Selectable(label, selected_ == fForeUp);
+    Row(label, fForeUp);
     snprintf(label, sizeof(label), "Foregrip right / left <  %+.0f cm  >", fit_.foreRight);
-    ImGui::Selectable(label, selected_ == fForeRight);
-    ImGui::Selectable("Reset this gun", selected_ == fReset);
+    Row(label, fForeRight);
+    Row("Reset this gun", fReset);
     if (!on) ImGui::EndDisabled();
-    ImGui::Selectable("Back", selected_ == fBack);
+    Row("Back", fBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled(gunInHand_ ? "Stick right = forward / right / up / muzzle up. Saved for this gun."
@@ -1754,28 +1848,28 @@ void Menu::RenderHolsterPage() {
     const HolsterSpot& s = spots_[holsterSel_];
     char label[128];
     snprintf(label, sizeof(label), "Spot                  <  %s  >", kHolsterLabels[holsterSel_]);
-    ImGui::Selectable(label, selected_ == hWhich);
+    Row(label, hWhich);
     if (holsterSel_ < kHolsters) {
         const int at = HoldIndex(commands_[holsterSel_]);
         snprintf(label, sizeof(label), "Holds                 <  %s  >", at >= 0 ? kHoldNames[at] : commands_[holsterSel_].c_str());
-        ImGui::Selectable(label, selected_ == hHolds);
+        Row(label, hHolds);
     } else {
-        ImGui::Selectable("Holds                    a new magazine (the manual reload)", selected_ == hHolds);
+        Row("Holds                    a new magazine (the manual reload)", hHolds);
     }
     snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", s.x * 100.0f);
-    ImGui::Selectable(label, selected_ == hRight);
+    Row(label, hRight);
     snprintf(label, sizeof(label), "Up / down             <  %+.0f  >", s.y * 100.0f);
-    ImGui::Selectable(label, selected_ == hUp);
+    Row(label, hUp);
     snprintf(label, sizeof(label), "Forward / back        <  %+.0f  >", s.z * 100.0f);
-    ImGui::Selectable(label, selected_ == hForward);
+    Row(label, hForward);
     snprintf(label, sizeof(label), "Size                  <  %.0f across  >", s.r * 200.0f);
-    ImGui::Selectable(label, selected_ == hSize);
+    Row(label, hSize);
     snprintf(label, sizeof(label), "Ring shown            <  %s  >", spotShown_[holsterSel_] ? "yes" : "no");
-    ImGui::Selectable(label, selected_ == hShown);
+    Row(label, hShown);
     snprintf(label, sizeof(label), "Holster rings         <  %s  >", kRingLabels[ringsMode_]);
-    ImGui::Selectable(label, selected_ == hRings);
-    ImGui::Selectable("Reset this spot", selected_ == hReset);
-    ImGui::Selectable("Back", selected_ == hBack);
+    Row(label, hRings);
+    Row("Reset this spot", hReset);
+    Row("Back", hBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Stick right = right / up / forward / bigger. Every ring shows while this page is open.");
@@ -1794,19 +1888,19 @@ void Menu::RenderSpotPage() {
     const float* a = spotAdj_[spotSel_];
     char label[128];
     snprintf(label, sizeof(label), "Ring                  <  %s  >", kSpotNames[spotSel_]);
-    ImGui::Selectable(label, selected_ == pWhich);
+    Row(label, pWhich);
     if (!on) ImGui::BeginDisabled();
     snprintf(label, sizeof(label), "Forward / back        <  %+.0f  >", a[0]);
-    ImGui::Selectable(label, selected_ == pFwd);
+    Row(label, pFwd);
     snprintf(label, sizeof(label), "Up / down             <  %+.0f  >", a[1]);
-    ImGui::Selectable(label, selected_ == pUp);
+    Row(label, pUp);
     snprintf(label, sizeof(label), "Right / left          <  %+.0f  >", a[2]);
-    ImGui::Selectable(label, selected_ == pRight);
+    Row(label, pRight);
     snprintf(label, sizeof(label), "Size                  <  %.0f%%  >", a[3]);
-    ImGui::Selectable(label, selected_ == pSize);
-    ImGui::Selectable("Reset this ring", selected_ == pReset);
+    Row(label, pSize);
+    Row("Reset this ring", pReset);
     if (!on) ImGui::EndDisabled();
-    ImGui::Selectable("Back", selected_ == pBack);
+    Row("Back", pBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Moves where you grab (cm along the gun); both rings show.");
@@ -1824,30 +1918,30 @@ void Menu::RenderGripPage() {
     const float* a = gripAdj_[gripSel_];
     char label[128];
     snprintf(label, sizeof(label), "Grip                  <  %s  >", kGripNames[gripSel_]);
-    ImGui::Selectable(label, selected_ == gWhich);
+    Row(label, gWhich);
     if (!on) ImGui::BeginDisabled();
     snprintf(label, sizeof(label), "Hold like grab        <  %s  >", gripHoldLikeGrab_ ? "yes" : "no");
-    ImGui::Selectable(label, selected_ == gHoldLikeGrab);
+    Row(label, gHoldLikeGrab);
     if (gripSel_ == 1 && gripHoldLikeGrab_) {
         ImGui::PushFont(nullptr, 28.0f);
         ImGui::TextDisabled("   the magazine in your hand takes the grab's grip (adjust that one)");
         ImGui::PopFont();
     }
     snprintf(label, sizeof(label), "Forward / back        <  %+.1f  >", a[0]);
-    ImGui::Selectable(label, selected_ == gFwd);
+    Row(label, gFwd);
     snprintf(label, sizeof(label), "Up / down             <  %+.1f  >", a[1]);
-    ImGui::Selectable(label, selected_ == gUp);
+    Row(label, gUp);
     snprintf(label, sizeof(label), "Right / left          <  %+.1f  >", a[2]);
-    ImGui::Selectable(label, selected_ == gRight);
+    Row(label, gRight);
     snprintf(label, sizeof(label), "Tilt (muzzle up)      <  %+.0f\xC2\xB0  >", a[3]);
-    ImGui::Selectable(label, selected_ == gTilt);
+    Row(label, gTilt);
     snprintf(label, sizeof(label), "Turn                  <  %+.0f\xC2\xB0  >", a[4]);
-    ImGui::Selectable(label, selected_ == gTurn);
+    Row(label, gTurn);
     snprintf(label, sizeof(label), "Roll                  <  %+.0f\xC2\xB0  >", a[5]);
-    ImGui::Selectable(label, selected_ == gRoll);
-    ImGui::Selectable("Reset this grip", selected_ == gReset);
+    Row(label, gRoll);
+    Row("Reset this grip", gReset);
     if (!on) ImGui::EndDisabled();
-    ImGui::Selectable("Back", selected_ == gBack);
+    Row("Back", gBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Moves your hand on the part (cm) and turns it at the wrist;");
@@ -1864,15 +1958,15 @@ void Menu::RenderKnifePage() {
     ImGui::Separator();
     char label[128];
     snprintf(label, sizeof(label), "Grip                  <  %s  >", knifeIcepick_ ? "icepick (blade down)" : "forward");
-    ImGui::Selectable(label, selected_ == kgGrip);
+    Row(label, kgGrip);
     const char* names[6] = {"Forward / back", "Right / left", "Up / down", "Tilt (up / down)", "Turn (left / right)", "Roll"};
     for (int i = 0; i < 6; ++i) {
         if (i < 3) snprintf(label, sizeof(label), "%-22s<  %+.1f cm  >", names[i], knifeAdj_[i]);
         else snprintf(label, sizeof(label), "%-22s<  %+.0f\xC2\xB0  >", names[i], knifeAdj_[i]);
-        ImGui::Selectable(label, selected_ == kgFwd + i);
+        Row(label, kgFwd + i);
     }
-    ImGui::Selectable("Reset", selected_ == kgReset);
-    ImGui::Selectable("Back", selected_ == kgBack);
+    Row("Reset", kgReset);
+    Row("Back", kgBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Draw the knife and hold it in view, then adjust. Saved for you.");
@@ -1899,15 +1993,15 @@ void Menu::RenderFreeHandPage() {
     ImGui::Separator();
     char label[128];
     snprintf(label, sizeof(label), "Tilt (up / down)      <  %+.0f\xC2\xB0  >", freeHand_[0]);
-    ImGui::Selectable(label, selected_ == eqPitch);
+    Row(label, eqPitch);
     snprintf(label, sizeof(label), "Turn (left / right)   <  %+.0f\xC2\xB0  >", freeHand_[1]);
-    ImGui::Selectable(label, selected_ == eqYaw);
+    Row(label, eqYaw);
     snprintf(label, sizeof(label), "Roll                  <  %+.0f\xC2\xB0  >", freeHand_[2]);
-    ImGui::Selectable(label, selected_ == eqRoll);
+    Row(label, eqRoll);
     snprintf(label, sizeof(label), "Forward / back        <  %+.0f cm  >", freeHand_[3]);
-    ImGui::Selectable(label, selected_ == eqForward);
-    ImGui::Selectable("Reset", selected_ == eqReset);
-    ImGui::Selectable("Back", selected_ == eqBack);
+    Row(label, eqForward);
+    Row("Reset", eqReset);
+    Row("Back", eqBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Hold your other hand in view and adjust until it sits like your real hand. Saved for you.");
@@ -1925,19 +2019,19 @@ void Menu::RenderWristPage() {
     const float* a = hud_.panel[p];
     char label[128];
     snprintf(label, sizeof(label), "Panel                 <  %s  >", kWristPanelNames[wristSel_]);
-    ImGui::Selectable(label, selected_ == wpWhich);
+    Row(label, wpWhich);
     snprintf(label, sizeof(label), "Along the arm         <  %+.1f cm  >", a[0]);
-    ImGui::Selectable(label, selected_ == wpAlong);
+    Row(label, wpAlong);
     snprintf(label, sizeof(label), "Across the arm        <  %+.1f cm  >", a[1]);
-    ImGui::Selectable(label, selected_ == wpAcross);
+    Row(label, wpAcross);
     snprintf(label, sizeof(label), "Out from the arm      <  %+.1f cm  >", a[2]);
-    ImGui::Selectable(label, selected_ == wpOut);
+    Row(label, wpOut);
     snprintf(label, sizeof(label), "Size                  <  %.0f%%  >", a[3]);
-    ImGui::Selectable(label, selected_ == wpSize);
+    Row(label, wpSize);
     snprintf(label, sizeof(label), "Tilt toward you       <  %+.0f\xC2\xB0  >", a[4]);
-    ImGui::Selectable(label, selected_ == wpTilt);
-    ImGui::Selectable("Reset", selected_ == wpReset);
-    ImGui::Selectable("Back", selected_ == wpBack);
+    Row(label, wpTilt);
+    Row("Reset", wpReset);
+    Row("Back", wpBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Hold your other wrist palm down in view: the panels show while this page is open.");
@@ -1953,13 +2047,13 @@ void Menu::RenderScreenHudPage() {
     ImGui::Separator();
     char label[128];
     snprintf(label, sizeof(label), "Distance              <  %.1f m  >", hud_.screen[0]);
-    ImGui::Selectable(label, selected_ == shDist);
+    Row(label, shDist);
     snprintf(label, sizeof(label), "Size (width)          <  %.1f m  >", hud_.screen[1]);
-    ImGui::Selectable(label, selected_ == shWidth);
+    Row(label, shWidth);
     snprintf(label, sizeof(label), "Height                <  %+.0f cm  >", -hud_.screen[2] * 100.0f);
-    ImGui::Selectable(label, selected_ == shDown);
-    ImGui::Selectable("Reset", selected_ == shReset);
-    ImGui::Selectable("Back", selected_ == shBack);
+    Row(label, shDown);
+    Row("Reset", shReset);
+    Row("Back", shBack);
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);
     ImGui::TextDisabled("Live. With the HUD on the wrist this places what stays in view (hits, objectives, prompts).");
@@ -1985,6 +2079,7 @@ void Menu::LoadHud() {
     const std::wstring dPlace = str(L"Place", L"screen", v);
     hudDef_.place = !_wcsicmp(dPlace.c_str(), L"wrist") ? 1 : 0;
     hud_.place = !_wcsicmp(v, L"wrist") ? 1 : 0;
+    hud_.hidden = GetPrivateProfileIntW(L"HUD", L"WristHidden", 0, iniPath_.c_str()) != 0;  // D104: the player's only
     const std::wstring dShow = str(L"WristShow", L"look", v);
     hudDef_.show = !_wcsicmp(dShow.c_str(), L"always") ? 1 : 0;
     hud_.show = !_wcsicmp(v, L"always") ? 1 : 0;

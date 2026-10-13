@@ -652,6 +652,20 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
     bool wristBtnOwned = false, wristBtnFired = false, wristBtnWas = false;
     int wristHand = 0;      // the off hand, from the last frame's wrist HUD input
     bool wristGate = false;  // the last frame's wrist gate
+    // D104: the wrist HUD hidden / shown -- looked at, the off hand's upper face button (Y; B on the right hand) held
+    // [Controls] WristToggle seconds (0 = off).
+    const float wristToggleHold = [&] {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Controls", L"WristToggle", L"1", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        const float f = static_cast<float>(_wtof(v));
+        return f >= 0.0f && f <= 5.0f ? f : 1.0f;
+    }();
+    bool wristLooked = false;  // the last frame's: the wrist looked at (shown or hidden)
+    float wristYHeld = 0.0f;
+    bool wristYOwned = false, wristYFired = false, wristYWas = false;
+    bool menuPtrTrig = false;  // D104: the right trigger on the mod menu (its hysteresis)
+    bool testPtr = false, testPtrClick = false;  // D104 tests: menu_cmd.py ptr=x,y[,click]
+    float testPtrX = 0.0f, testPtrY = 0.0f;
     // The flat screen for frames without a view (menus, cutscenes, loading): [Camera] ScreenDistance /
     // ScreenWidth in metres, world-locked in front of LOCAL (follows Recentre).
     auto iniFloat = [&](const wchar_t* key, float def, float lo, float hi) {
@@ -886,6 +900,28 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                         pad.SetWristMasked(wristHand, wristBtnOwned);
                         pad.SetWristMasked(1 - wristHand, false);
                     }
+                    // D104 (a player: "hiding and showing the wrist hud by looking at it and holding Y"): pressed while the
+                    // wrist is looked at (shown or hidden) and the MOHAVR menu is closed, the button is kept from the game;
+                    // held WristToggle s it hides / shows the panels (a pulse); let go early, nothing.
+                    if (wristToggleHold > 0.0f && menuOk) {
+                        const bool yDown = pad.FaceButton(session, wristHand, true) > 0.5f;
+                        if (yDown && !wristYWas && wristLooked && !menu.Visible()) wristYOwned = true;
+                        if (yDown && wristYOwned) {
+                            wristYHeld += dt;
+                            if (!wristYFired && wristYHeld >= wristToggleHold) {
+                                wristYFired = true;
+                                menu.ToggleWristHidden();
+                                pad.Pulse(session, wristHand, 0.8f, 60.0f);
+                            }
+                        }
+                        if (!yDown) {
+                            wristYOwned = wristYFired = false;
+                            wristYHeld = 0.0f;
+                        }
+                        wristYWas = yDown;
+                        pad.SetWristMaskedUpper(wristHand, wristYOwned);
+                        pad.SetWristMaskedUpper(1 - wristHand, false);
+                    }
                 } else {
                     mi.toggle = pressed(aToggle);
                 }
@@ -937,6 +973,15 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             else if (c == "back") mi.back = true;
             else if (c == "unfocus") pauseForFocusLoss("test command");  // D74 (the simulator keeps its focus)
             else if (c.rfind("goto=", 0) == 0 && menuOk) menu.Goto(c.substr(5));  // D81: an item by its key
+            else if (c.rfind("ptr=", 0) == 0) {  // D104: the pointer at x,y on the menu panel (pixels), ",click" to click there
+                float x = 0.0f, y = 0.0f;
+                if (sscanf_s(c.c_str() + 4, "%f,%f", &x, &y) == 2) {
+                    testPtr = true;
+                    testPtrX = x;
+                    testPtrY = y;
+                    testPtrClick = c.find("click") != std::string::npos;
+                }
+            }
             MLOG("host: test command '%s'", c.c_str());
         }
 
@@ -1412,6 +1457,33 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             }
         }
 
+        // D104: the right controller's ray on the open MOHAVR menu (last frame's pose) -- the row under it, and its trigger
+        // as a click there (the trigger's own "select" left out then, or it would act twice).
+        if (menuOk && menu.Visible() && (handBits & 2u)) {
+            float px = 0.0f, py = 0.0f;
+            if (menu.PanelHit(handPose[1], px, py)) {
+                mi.pointerOk = true;
+                mi.px = px;
+                mi.py = py;
+                const float tv = pad.TriggerValue(session, 1);
+                const bool was = menuPtrTrig;
+                menuPtrTrig = menuPtrTrig ? tv > 0.4f : tv > 0.6f;
+                if (menuPtrTrig && !was) {
+                    mi.click = true;
+                    mi.select = false;
+                }
+            } else {
+                menuPtrTrig = pad.TriggerValue(session, 1) > 0.4f && menuPtrTrig;
+            }
+        }
+        if (testPtr) {  // (a test pointer replaces the controller's for one frame)
+            mi.pointerOk = true;
+            mi.px = testPtrX;
+            mi.py = testPtrY;
+            mi.click = testPtrClick;
+            if (testPtrClick) mi.select = false;
+            testPtr = testPtrClick = false;
+        }
         if (menuOk) menu.Update(dt, mi, menuHead, menuHeadOk);
         // Physical crouch (GOAL A1): the game side bumps crouchReqSeq once per stance toggle it wants -- one pulse of the
         // game's crouch each (its own retry if the stance doesn't change).
@@ -1639,6 +1711,7 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             wrist.Update(win);
             wristHand = win.offHand;
             wristGate = wrist.PanelsUp();
+            wristLooked = wrist.LookedAt();  // D104
         }
 
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};

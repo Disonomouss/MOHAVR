@@ -72,6 +72,8 @@ hand is at a holster or grab spot (rings showing them can be turned on in the me
 | Look through a scope | Hold the gun with both hands and raise the scope to your eye |
 | Pick up a weapon or ammo | Reach for it (a dropped gun, a rack, a crate) and squeeze a free hand's grip |
 | See your HUD | Turn your free hand palm down and look at the wrist |
+| Hide / show the wrist HUD | Look at the wrist and hold Y for 1 second |
+| Use a menu | Point at it with the right controller and pull the trigger (or use the stick and buttons) |
 | Steer the parachute by hand | Menu: Comfort -> Parachute: hands. Hold both grips, pull one down to turn, both to slow, a quick hard pull of both to flare |
 | Fire a mounted MG42 | Use it as in the game. Your head aims it; or menu: Weapons -> Mounted MG42: hands, then grip the handle and push it. B gets you off |
 | Choose your loadout | In the loadout screen: A opens a slot's list, the left stick moves, A picks |

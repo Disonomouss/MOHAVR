@@ -320,6 +320,8 @@ shared::PadState Pad::Map(const Raw& in, bool menuLayout) {
     }
     for (int h = 0; h < 2; ++h)
         if (wristMasked_[h]) r.src[FaceSrc(h, false)] = 0.0f;  // the wrist's menu button (D60)
+    for (int h = 0; h < 2; ++h)
+        if (wristMaskedUpper_[h]) r.src[FaceSrc(h, true)] = 0.0f;  // the wrist HUD's hide / show (D104)
     if (maskedTrig_[0]) r.src[kLTrig] = 0.0f;  // physical hands, before the left-handed swap below
     if (maskedTrig_[1]) r.src[kRTrig] = 0.0f;
     // Player options: right stick moves, left turns (the flicks go with the turning stick); left-handed: the gun

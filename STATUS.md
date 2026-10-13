@@ -18,6 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Point and click in the MOHAVR menu; the wrist HUD hidden by looking + Y** (2026-10-13, D104). Unreleased.
 **Pointing at the game's menus; recentring with the hands at the eyes** (2026-10-13, D103): shared block v37. Headset-confirmed; released in 0.8.14.
 **The resolution limit raised to 6144 per eye** (2026-10-13, D102): measured 90 fps at 4295x4564 and 6144x6144 (RTX 5090). Released in 0.8.13.
 **No full screen in VR** (2026-10-13, D101): Alt+Enter swallowed, a changed size put back (a player's headset froze

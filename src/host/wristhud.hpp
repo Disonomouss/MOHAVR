@@ -35,6 +35,7 @@ struct HudSettings {
     // from where it sits by default), size (%), tilt (deg, toward the eyes).
     float panel[2][5] = {{0, 0, 0, 100, 15}, {0, 0, 0, 100, 15}};
     float screen[3] = {2.0f, 2.4f, 0.1f};  // the screen panel (and the rest quad on the wrist): distance, width, down (m)
+    bool  hidden = false;  // D104: the wrist panels hidden by the player (looked at + Y held toggles; [HUD] WristHidden)
 };
 
 class WristHud {
@@ -68,6 +69,8 @@ public:
     // D60: the gate is open this frame (the off hand palm down and looked at, or always; whichever HUD place): the off hand's
     // lower face button is then the MOHAVR menu's (main.cpp).
     bool PanelsUp() const { return want_ && panelsOn_; }
+    // D104: the wrist is looked at this frame (palm down, facing the eyes, the head on it) -- shown or hidden.
+    bool LookedAt() const { return lookedAt_; }
     // This frame's layers (the rest quad, then the two panels), at most `max`; returns how many were written.
     int Layers(XrSpace local, XrSpace view, const XrCompositionLayerBaseHeader** out, int max, bool panelsAllowed = true);
     // Diagnostics: the last HUD texture taken and the composed atlas.
@@ -107,6 +110,7 @@ private:
     // the gate and the panels
     float                     fade_ = 0.0f;
     bool                      want_ = false;    // the gate's verdict (with its hysteresis)
+    bool                      lookedAt_ = false;  // D104: looked at, whether shown or hidden
     bool                      restOn_ = false, panelsOn_ = false;
     float                     cropNow_[2][4] = {};
     XrPosef                   panelPose_[2]{};
