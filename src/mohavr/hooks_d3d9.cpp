@@ -120,6 +120,7 @@ HRESULT STDMETHODCALLTYPE Hook_Present(IDirect3DDevice9* dev, const RECT* src, c
     // The stereo pair must fill the backbuffer: keep the game window at the size it renders.
     if (g_cfg.lockWindow) {
         const auto* hdr = bridge::SharedHeader();
+        winlock::SetBlockAltEnter(g_cfg.blockAltEnter);
         if (hdr && hdr->width) winlock::Watch(hdr->width, hdr->height);
     }
     // Before Present: the finished frame is still in the backbuffer.

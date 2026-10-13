@@ -641,6 +641,22 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
     pickup::OnDraw(hdr);  // D77
     mounted::OnDraw(hdr);  // D78
     loadout::OnDraw(hdr);  // D79
+    // D101 (a player's log: mid-mission the game went full screen at 3840x2160 -- Alt+Enter, now swallowed by the window
+    // lock; the bridge paused, the headset's picture stopped for the rest of the session): if the size changes anyway, the
+    // game is put back to the bridge's with its own "setres" (windowed), once a second until it is; the bridge resumes.
+    {
+        unsigned bw = 0, bh = 0;
+        static DWORD nextSetRes = 0;
+        if (bridge::PausedFor(bw, bh) && arr && arr[1] >= 1 && arr[0] && static_cast<LONG>(GetTickCount() - nextSetRes) >= 0) {
+            nextSetRes = GetTickCount() + 1000;
+            wchar_t cmd[64];
+            swprintf_s(cmd, L"setres %ux%uw", bw, bh);
+            const bool ok = gexec::Run(*reinterpret_cast<const std::uintptr_t*>(arr[0]), cmd);
+            static int logged = 0;
+            if (logged++ < 10)
+                MLOG("render: the game's size changed (full screen?) -- '%ls' -> %s", cmd, ok ? "handled" : "not handled");
+        }
+    }
     ApplyRoomOrigin();  // D99: the last Draw's room-scale step reaches the view now, with the camera (the step: after the Draw)
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout

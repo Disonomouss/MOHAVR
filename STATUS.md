@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**No full screen in VR** (2026-10-13, D101): Alt+Enter swallowed, a changed size put back (a player's headset froze
+mid-mission after a full-screen switch: likely the "no objective" report). Unreleased.
 **The game's video settings in the log** (2026-10-13, D100): for a player's "blurry" report (their pipeline was fine). In 0.8.12's rebuilt files (the release updated, its tag moved).
 **Room-scale steps no longer flicker the arms** (2026-10-13, D99): the step now comes after the Draw. Released in 0.8.12.
 **The torso follows the hands; the host can't outlive the game** (2026-10-13, D98): 0.8.9's torso swung and flickered

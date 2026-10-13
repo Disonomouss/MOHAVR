@@ -102,6 +102,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.renderResX     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResX", c.renderResX, ini.c_str()));
     c.renderResY     = static_cast<int>(GetPrivateProfileIntW(L"Render", L"ResY", c.renderResY, ini.c_str()));
     c.lockWindow     = get(L"Render", L"LockWindow", c.lockWindow);
+    c.blockAltEnter  = get(L"Render", L"BlockAltEnter", c.blockAltEnter);
     c.decalFix       = get(L"Render", L"DecalFix", c.decalFix);
     // D73: a resolution preset -- the player's menu choice (%LOCALAPPDATA%\MOHAVR\MOHAVR.user.ini [Render] Preset), else the
     // shipped [Render] Preset; "custom" keeps ResX/ResY. [Render] UserPreset=0 (the harness's runs) ignores the player's.

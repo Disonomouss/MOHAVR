@@ -12,5 +12,7 @@ namespace mohavr::winlock {
 // LaunchUnrealUWindowsClient) and, once its client area is exactly the backbuffer (the game has finished
 // sizing it), subclasses it and pins that size. Cheap after that.
 void Watch(unsigned backbufferW, unsigned backbufferH);
+// D101: [Render] BlockAltEnter -- swallow Alt+Enter (UE3's full-screen toggle) in the locked window.
+void SetBlockAltEnter(bool on);
 
 }  // namespace mohavr::winlock

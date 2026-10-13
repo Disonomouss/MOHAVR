@@ -11,6 +11,7 @@ HWND    g_hwnd = nullptr;
 WNDPROC g_orig = nullptr;
 int     g_w = 0, g_h = 0;  // the pinned outer size
 int     g_refused = 0;
+bool    g_blockAltEnter = true;
 unsigned g_calls = 0;
 
 UINT g_applyStyleMsg = 0;  // registered when the lock is installed (not in DllMain)
@@ -26,6 +27,13 @@ LRESULT CALLBACK Proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     // whatever size is asked for (measured: asked 2896x1659, got 2576x1408; headset round 9). So there is
     // no maximizing: the maximize box is removed (Lock), SC_MAXIMIZE is swallowed, and a window that gets
     // maximized anyway (restored from the taskbar into a maximized state) is restored straight back.
+    // D101 (a player's log: "Reset #1 3840x2160 windowed 0" mid-mission, then a frozen headset -- "no indication of what to
+    // do next"): Alt+Enter is UE3's full-screen toggle, to its own saved resolution (the desktop's). In VR the game's window
+    // must stay the render size: the key is swallowed.
+    if (g_blockAltEnter && (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP || msg == WM_SYSCHAR) && wp == VK_RETURN && (lp & (1 << 29))) {
+        if (msg == WM_SYSKEYDOWN && g_refused++ < 10) MLOG("window: refused Alt+Enter (full screen would take the game off the headset's size)");
+        return 0;
+    }
     if (msg == WM_SYSCOMMAND && (wp & 0xFFF0) == SC_MAXIMIZE) {
         if (g_refused++ < 10) MLOG("window: refused to maximize (it would shrink the game's view)");
         return 0;
@@ -74,6 +82,8 @@ BOOL CALLBACK FindGame(HWND h, LPARAM lp) {
 }
 
 }  // namespace
+
+void SetBlockAltEnter(bool on) { g_blockAltEnter = on; }
 
 void Watch(unsigned bbW, unsigned bbH) {
     if (g_hwnd || (++g_calls % 30) != 0 || g_calls > 30 * 20000) return;

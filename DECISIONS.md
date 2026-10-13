@@ -1684,3 +1684,24 @@ hud, then hold X."
   (this PC: not set).
 - **Open:** the player's own settings and headset link (Air Link / Link / Virtual Desktop encode settings), asked for. If
   their settings are full, candidates for the mod: forcing anisotropic filtering, a larger texture pool (in memory).
+### D101. No full screen in VR: Alt+Enter swallowed, the size put back -- Decided 2026-10-13
+- **Why:** the player who reported "no indication of what to do next" after the AA guns (first mission) and a blurry
+  picture sent a log (0.8.12, Virtual Desktop, the Bigscreen Beyond preset: 5120x2560). The user played the mission twice
+  without the bug.
+- **Found:**
+  - Mid-mission, after a pause menu: `Reset #1 3840x2160 windowed 0`. The game went full screen, and the bridge paused
+    for the rest of the session ("restart the game"), so the headset got no new frames while the game played on
+    (a charge planted 2 minutes later). That fits "no indication": the headset showed none of it.
+  - The game's Audio/Video menu has no resolution setting. Windowed 0 is UE3's full-screen toggle, Alt+Enter, to the
+    nearest display mode.
+  - Reproduced: Alt+Enter at 1920x1080 went full screen at that size; at 5120x2560 it went to 5120x2880 (this
+    monitor's mode) and the bridge paused.
+  - (The blur, separately: VD recommends 4295x4564 per eye; the mod renders 2560 at most -- D73's cap.)
+- **What:**
+  - `[Render] BlockAltEnter` (shipped **1**): the window lock swallows Alt+Enter.
+  - If the size changes anyway, the mod sends the game's own `setres <W>x<H>w` back to the bridge's size, once a second
+    until the bridge resumes (the bridge now waits for that, not a restart).
+- **Proven [S]:**
+  - Alt+Enter, blocked: "window: refused Alt+Enter", no Reset.
+  - Unblocked at 5120x2560: Reset to 5120x2880 full screen, the bridge paused; `setres 5120x2560w` reset it back to
+    windowed 5120x2560 and the bridge resumed within 0.7 s.

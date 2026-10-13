@@ -319,13 +319,20 @@ void OnBeforeReset() {
 void OnAfterReset(unsigned width, unsigned height) {
     if (!g_hdr || !g_ready || !width || !height) return;
     if (width != g_hdr->width || height != g_hdr->height) {
-        if (!g_paused) MLOG("bridge: Reset changed the backbuffer to %ux%u (was %ux%u) -- bridge paused (restart the game)",
+        if (!g_paused) MLOG("bridge: Reset changed the backbuffer to %ux%u (was %ux%u) -- bridge paused until it is back (D101)",
                             width, height, g_hdr->width, g_hdr->height);
         g_paused = true;
     } else if (g_paused) {
         MLOG("bridge: backbuffer back to %ux%u -- bridge resumed", width, height);
         g_paused = false;
     }
+}
+
+bool PausedFor(unsigned& width, unsigned& height) {
+    if (!g_hdr || !g_ready || !g_paused) return false;
+    width = g_hdr->width;
+    height = g_hdr->height;
+    return true;
 }
 
 void StartHost(const std::wstring& runtimeJson, float defaultUnitsPerMeter, int mirror, bool controllers) {

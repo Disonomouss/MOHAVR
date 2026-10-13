@@ -30,6 +30,9 @@ void OnPresent(IDirect3DDevice9* device);
 // bridge (the shared textures and the host's swapchain have the old size).
 void OnBeforeReset();
 void OnAfterReset(unsigned width, unsigned height);
+// D101: while a Reset has changed the backbuffer from the bridge's size (the game's own video options), that size -- the
+// game is asked to go back to it (vr_view: "setres"), and the bridge resumes when it does.
+bool PausedFor(unsigned& width, unsigned& height);
 
 // Frame pacing (hdr->pace, the host menu's Frame pacing; vr_view.cpp, game thread): the host's frame event --
 // auto-reset, set once per headset frame, just after the host wrote that frame's poses and took the last game frame.
