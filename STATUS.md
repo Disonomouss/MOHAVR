@@ -18,7 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
-**Point and click in the MOHAVR menu; the wrist HUD hidden by looking + Y** (2026-10-13, D104). Unreleased.
+**Point and click in the MOHAVR menu; the wrist HUD hidden by looking + Y** (2026-10-13, D104). Released in 0.8.15.
 **Pointing at the game's menus; recentring with the hands at the eyes** (2026-10-13, D103): shared block v37. Headset-confirmed; released in 0.8.14.
 **The resolution limit raised to 6144 per eye** (2026-10-13, D102): measured 90 fps at 4295x4564 and 6144x6144 (RTX 5090). Released in 0.8.13.
 **No full screen in VR** (2026-10-13, D101): Alt+Enter swallowed, a changed size put back (a player's headset froze
@@ -49,6 +49,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.15** (published 2026-10-13): point and click in the MOHAVR menu, the wrist HUD hidden / shown with Y (D104).
 **Release 0.8.14** (published 2026-10-13): pointing at the game's menus, recentring with the hands at the eyes (D103).
 **Release 0.8.13** (published 2026-10-13): no full screen in VR (D101), the resolution limit 6144 per eye (D102).
 **Release 0.8.12** (published 2026-10-13): room-scale steps no longer flicker the arms (D99).
