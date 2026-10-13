@@ -28,8 +28,12 @@ inline constexpr Preset kPresets[] = {
 };
 inline constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 
-// Per-eye caps (the 32-bit game's address space: render targets grow with the pixel count; D57, D73).
-inline constexpr int kMaxEye = 2560;
+// Per-eye cap for the presets and Auto, and for a custom ResX/ResY (D102, was 2560 -- a caution for the 32-bit game's
+// address space, D73). Measured on the EA copy (4 GB flag on, RTX 5090): 4295x4564 per eye (Virtual Desktop's request)
+// and 6144x6144 both 90 fps in gameplay, 1.6 / 1.7 GB of address space (the targets live in the D3D12 device), the
+// stereo pair right. 6144 is the largest measured.
+inline constexpr int kMaxEye = 6144;
+inline constexpr int kMaxEyeLimit = kMaxEye;
 
 inline int Find(const char* key) {
     for (int i = 0; i < kPresetCount; ++i) {

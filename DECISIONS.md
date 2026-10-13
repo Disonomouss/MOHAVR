@@ -1705,3 +1705,17 @@ hud, then hold X."
   - Alt+Enter, blocked: "window: refused Alt+Enter", no Reset.
   - Unblocked at 5120x2560: Reset to 5120x2880 full screen, the bridge paused; `setres 5120x2560w` reset it back to
     windowed 5120x2560 and the bridge resumed within 0.7 s.
+
+### D102. The resolution limit raised to 6144 per eye -- Decided 2026-10-13
+- **Why:** the user: "Raise the resolution limit." D101's player plays over Virtual Desktop, which asks for 4295x4564 per
+  eye; the mod rendered 2560 at most (D73's cap, a caution for the 32-bit game's address space), so VD scaled the picture
+  up ~1.7x.
+- **Measured** (the EA copy, the 4 GB flag on, RTX 5090, the simulator; the parachute mission's landing, in gameplay):
+  - 4295x4564 per eye (8590x4564): 90 fps, 1.6 GB of address space, the stereo pair right.
+  - 6144x6144 per eye (12288x6144): 90 fps, 1.7 GB, right.
+  - (5120x2560 was 1.72 GB in D73: the render targets live in the D3D12 device, not the game's address space.)
+- **What:** `kMaxEye` 2560 -> **6144** for the presets and Auto, and the same for a custom ResX/ResY (the old 7680x4320
+  check). A bigger request is scaled to fit, keeping its shape.
+- **Proven [S]:** Auto with a saved 4295x4564 -> rendered as is; 8000x8500 -> 5782x6142 "(capped at 6144 per eye)";
+  a harness cycle at 1920x1080 OK. GPU cost grows with the pixels: Auto follows the runtime's (VD's) request, which the
+  player sets.

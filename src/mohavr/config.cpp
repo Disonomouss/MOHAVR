@@ -134,14 +134,14 @@ Config LoadConfig(const std::wstring& dir) {
                 const float k = static_cast<float>(presets::kMaxEye) / static_cast<float>(w > h ? w : h);
                 w = static_cast<int>(w * k) & ~1;
                 h = static_cast<int>(h * k) & ~1;
-                how += " (capped at 2560 per eye)";
+                how += " (capped at " + std::to_string(presets::kMaxEye) + " per eye)";
             }
             c.renderResX = 2 * w;
             c.renderResY = h;
         }
         c.renderPreset = how;
     }
-    if (c.renderResX < 640 || c.renderResX > 7680 || c.renderResY < 480 || c.renderResY > 4320) c.renderResX = c.renderResY = 0;
+    if (c.renderResX < 640 || c.renderResX > 2 * presets::kMaxEyeLimit || c.renderResY < 480 || c.renderResY > presets::kMaxEyeLimit) c.renderResX = c.renderResY = 0;
     c.aimHeadPitch   = get(L"Aim", L"HeadPitch", c.aimHeadPitch);
     c.aimMode        = static_cast<int>(GetPrivateProfileIntW(L"Aim", L"Mode", c.aimMode, ini.c_str()));
     if (c.aimMode < 0 || c.aimMode > 3) c.aimMode = 0;
