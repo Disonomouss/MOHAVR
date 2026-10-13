@@ -1719,3 +1719,28 @@ hud, then hold X."
 - **Proven [S]:** Auto with a saved 4295x4564 -> rendered as is; 8000x8500 -> 5782x6142 "(capped at 6144 per eye)";
   a harness cycle at 1920x1080 OK. GPU cost grows with the pixels: Auto follows the runtime's (VD's) request, which the
   player sets.
+### D103. Pointing at the game's menus; recentring with the hands at the eyes -- Decided 2026-10-13
+- **Why:** a player: "control the menus by pointing the controller at the buttons and pressing right trigger to select.
+  Like virtual desktop or steamvr do. They would also like to be able to recenter by holding their hands to their eyes
+  for 3 seconds."
+- **Found:**
+  - The game's UI follows the Windows cursor: it imports GetCursorPos (IAT slot 0x112C6684), and hover moves its
+    highlight.
+  - Its window is bigger than the desktop (5120 or more wide), so the real cursor can't reach all of it.
+  - A faked GetCursorPos (`mohavr cursor 1416 433`) lit Options and drew the game's cursor there; a posted
+    WM_LBUTTONDOWN/UP (`mohavr click`) opened it.
+- **What:**
+  - `[Controls] PointerMenus` (shipped **1**), in the host: while the flat screen shows a game menu with its cursor
+    (gameUiMenu) and the mod's menu is closed, the right controller's aim ray is intersected with the screen (LOCAL:
+    centred at x 0, the screen's height, facing +z at the Screen distance). The spot (0..1) and the trigger (0.6 / 0.4
+    hysteresis) go to the game (shared block v37: pointerOk, pointerU/V, pointerDown).
+  - The game (`pointer.cpp`) answers its GetCursorPos with the spot (held 300 ms past the last hit) and posts the
+    trigger's edges as left-button messages. Pointing elsewhere gives the real cursor back. The sticks and buttons work
+    as before.
+  - `[Controls] RecenterGesture` (shipped **3** s; 0 = off), in the host: both controllers really tracked within 20 cm of
+    the head for that long recentres as the menu's Recentre does. A light pulse comes each second, a strong one as it
+    fires, once per hold.
+- **Proven [S]** (the main menu, the simulator's test hands):
+  - the right hand aimed at Options -> "pointing at the menu (1414 433)" (aimed at 1416 433);
+  - the right trigger -> "click at 1414 433", and the Options menu opened;
+  - both hands 12 cm before the eyes -> "recentre by the hands at the eyes (3.0 s)", the recentre published.

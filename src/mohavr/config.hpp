@@ -56,6 +56,7 @@ struct Config {
     int  renderResY     = 1620;
     std::string renderPreset;          // D73: how the size was chosen (logged)
     bool lockWindow     = true;   // [Render] LockWindow -- keep the game window at its render size (stereo split)
+    bool pointerMenus   = true;   // [Controls] PointerMenus -- point at the flat screen's menus with a controller (D103)
     bool blockAltEnter  = true;   // [Render] BlockAltEnter -- swallow UE3's Alt+Enter full-screen toggle (D101)
     bool decalFix       = true;   // [Render] DecalFix -- decals (bullet holes) in the right eye too (ENGINE-NOTES 5r)
     bool aimHeadPitch   = true;   // [Aim] HeadPitch -- the player's pitch (gun, shots) follows the head

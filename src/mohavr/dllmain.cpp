@@ -19,6 +19,7 @@
 #include "hooks_d3d9.hpp"
 #include "log.hpp"
 #include "patch.hpp"
+#include "pointer.hpp"
 #include "render_res.hpp"
 #include "xinput_hook.hpp"
 
@@ -31,6 +32,7 @@ void InstallImportHooks(const mohavr::Config& cfg) {
     if (cfg.hookD3D9) mohavr::hooks::InstallDirect3DCreate9(cfg);
     mohavr::render::InstallResolution(cfg);
     if (cfg.controllers && cfg.bridgeHost) mohavr::xinput::Install();
+    mohavr::pointer::Install(cfg);  // D103
 }
 
 // D58: the EA app's copy -- the IAT hooks wait for the game's entry point (addresses.hpp kOepJmp).

@@ -28,7 +28,7 @@
 namespace mohavr::shared {
 
 inline constexpr std::uint32_t kMagic   = 0x3152564D;  // "MVR1"
-inline constexpr std::uint32_t kVersion = 36;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change); 30: the main gun's shots (D74); 31: the airdrop phase (D75); 32: the recoil, the grab pickup, the MG42 by hand (D76-D78); 33: the damage flash (D84); 34: the firing shake (D87); 35: room-scale walking (D88); 36: the spare magazine in the pouch (D89)
+inline constexpr std::uint32_t kVersion = 37;          // 2: views + render pose (M3); 3: per-eye meta (M4); 4: live settings; 5: recentre + height; 6: virtual pad; 7: aim poses; 8: gun fit; 9: hands; 10: throwing; 11: weapon kind; 12: free hand; 13: view times; 14: manual reload; 15: the reload grips' held magazine; 16: grip adjustments; 17: the slide insert; 18: the two-stage action; 19: the pump (no layout change); 20: the off-hand grenade; 21: the off-hand pistol; 22: the gun hand's grenade by pin, cook and grip (no layout change); 23: physical melee; 24: scopes; 25: the off-hand knife; 26: the knife's hold adjusted; 27: the rack eject (no layout change); 28: the wrist HUD; 29: physical crouch (no layout change); 30: the main gun's shots (D74); 31: the airdrop phase (D75); 32: the recoil, the grab pickup, the MG42 by hand (D76-D78); 33: the damage flash (D84); 34: the firing shake (D87); 35: room-scale walking (D88); 36: the spare magazine in the pouch (D89); 37: the menu pointer (D103)
 inline constexpr std::uint32_t kRing    = 3;
 
 // OpenXR conventions throughout (right-handed, +Y up, -Z forward, metres), in the host's LOCAL
@@ -437,6 +437,12 @@ struct Header {
     volatile std::uint32_t pouchMagMode;          // 3916
     volatile std::uint32_t pouchPosOk;            // 3920
     volatile float         pouchPos[3];           // 3924
+    // 37 (D103): host -> game: the right controller's ray on the flat screen while a game menu (with its cursor) is up --
+    // pointerOk 1 while it hits, the spot as a share of the game frame (0..1 from the top left), the trigger held.
+    volatile std::uint32_t pointerOk;             // 3936
+    volatile float         pointerU;              // 3940
+    volatile float         pointerV;              // 3944
+    volatile std::uint32_t pointerDown;           // 3948
 };
 #pragma pack(pop)
 
@@ -537,7 +543,9 @@ static_assert(offsetof(Header, fireShake) == 3904 && offsetof(Header, roomScale)
               "shared::Header layout must match between x86 and x64");
 static_assert(offsetof(Header, pouchMagMode) == 3916 && offsetof(Header, pouchPos) == 3924,
               "shared::Header layout must match between x86 and x64");
-static_assert(sizeof(Header) == 3936, "shared::Header layout must match between x86 and x64");
+static_assert(offsetof(Header, pointerOk) == 3936 && offsetof(Header, pointerDown) == 3948,
+              "shared::Header layout must match between x86 and x64");
+static_assert(sizeof(Header) == 3952, "shared::Header layout must match between x86 and x64");
 
 // Manual reload events (reloadEvt low byte) and the key hash both sides use.
 // kReloadInsertOther: a taped pair inserted flipped -- its other half goes in (twin magazines).

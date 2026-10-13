@@ -2387,6 +2387,16 @@ degree turn -- looking about doesn't swing them.
 **Questions:**
 1. Room-scale walk on: walk around the room with a gun -- any flicker? (yes/no)
 
+### Pointing at menus, recentring by the eyes (D103)
+**Changed:** in the game's menus (the flat screen), point with the right controller -- the game's cursor follows -- and
+pull its trigger to click. Hold both controllers to your eyes for 3 s to recentre.
+
+**Questions:**
+1. Does the cursor sit where you point, all over the screen (and at a different Screen distance / size)? (yes/no)
+2. Does the trigger click reliably, without double clicks? (yes/no)
+3. Does the hands-at-the-eyes recentre fire when you want it, and never by accident (aiming down a scope, the
+   parachute)? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -79,6 +79,8 @@ inline constexpr std::uint32_t kGameImportDirRva = 0x00CDAB3C;
 // the table zeroed (its packer fills the same slots itself): render_res.cpp falls back to this slot, used only when it
 // holds GetCommandLineW.
 inline constexpr std::uintptr_t kIatGetCommandLineW = 0x112C60CC;
+// D103: USER32!GetCursorPos's slot (the same table; the game's UI reads the cursor through it). Used only when it holds it.
+inline constexpr std::uintptr_t kIatGetCursorPos = 0x112C6684;
 
 // Object layout (ENGINE-NOTES 5l): ULocalPlayer+0x40 = Actor (the APlayerController);
 // AActor::Rotation (FRotator: Pitch, Yaw, Roll ints) at +0xF4 -- ULevel::MoveActor (FUN_10B62090,

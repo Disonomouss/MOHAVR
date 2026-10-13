@@ -717,6 +717,19 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
         return f >= 0.0f && f <= 1.0f ? f : 0.6f;
     }();
     std::uint32_t seenShots = g_hdr ? g_hdr->gunShots : 0;
+    // D103: the right controller points at the flat screen's game menus, its trigger clicks ([Controls] PointerMenus).
+    const bool pointerMenus = GetPrivateProfileIntW(L"Controls", L"PointerMenus", 1, (ExeDir() + L"\\MOHAVR.ini").c_str()) != 0;
+    bool pointerTrig = false;
+    // D103: recentre by holding both controllers to the eyes ([Controls] RecenterGesture: the seconds held, 0 = off).
+    const float recenterHold = [&] {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Controls", L"RecenterGesture", L"3", v, 16, (ExeDir() + L"\\MOHAVR.ini").c_str());
+        const float f = static_cast<float>(_wtof(v));
+        return f >= 0.0f && f <= 10.0f ? f : 3.0f;
+    }();
+    double recenterSince = 0.0;  // when both hands came to the eyes (0 = not there)
+    int recenterTicks = 0;       // the progress pulses given
+    bool recenterGesture = false;
     mohavr::shared::SlotScope lastScope{};  // v24: where its eyes and scope view are
     std::uint64_t shown = 0;  // last game frame copied into `last`
     // Recentre (menu): `local` is re-created at the head's heading and floor position. Frames the game
@@ -995,6 +1008,36 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 // A hand the runtime stops tracking (round 24: after ~10 s without moving, the Quest drops idle
                 // controllers, and the gun fell back to the game's flat-screen placement, seen double) stays put.
                 if (handsOk) handBits |= pad.HoldLost(headLoc.pose, handPose, handBits);
+                // D103 (a player: "recenter by holding their hands to their eyes for 3 seconds"): both controllers really
+                // tracked within 20 cm of the head for RecenterGesture seconds -- a light pulse each second, a strong one
+                // as it fires (once per hold).
+                if (recenterHold > 0.0f && handsOk) {
+                    const double t = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
+                    auto atEyes = [&](int h) {
+                        const float dx = handPose[h].position.x - headLoc.pose.position.x, dy = handPose[h].position.y - headLoc.pose.position.y,
+                                    dz = handPose[h].position.z - headLoc.pose.position.z;
+                        return (trackedBits & (1u << h)) && dx * dx + dy * dy + dz * dz < 0.20f * 0.20f;
+                    };
+                    if (atEyes(0) && atEyes(1)) {
+                        if (recenterSince == 0.0) {
+                            recenterSince = t;
+                            recenterTicks = 0;
+                        }
+                        const int ticks = static_cast<int>(t - recenterSince);
+                        if (ticks > recenterTicks && t - recenterSince < recenterHold) {
+                            recenterTicks = ticks;
+                            for (int h = 0; h < 2; ++h) pad.Pulse(session, h, 0.3f, 30.0f);
+                        }
+                        if (recenterTicks >= 0 && t - recenterSince >= recenterHold) {
+                            recenterGesture = true;
+                            recenterTicks = -1000;  // (fired: not again until the hands leave)
+                            for (int h = 0; h < 2; ++h) pad.Pulse(session, h, 1.0f, 120.0f);
+                            MLOG("host: recentre by the hands at the eyes (%.1f s)", recenterHold);
+                        }
+                    } else {
+                        recenterSince = 0.0;
+                    }
+                }
                 // D21: the game's side of the manual reload (its geometry, ammo, state), before the hands use it.
                 const double nowS = static_cast<double>(qpcNow.QuadPart) / static_cast<double>(qpf.QuadPart);
                 if (menuOk) manualReload.SetOn(menu.ManualReloadOn());
@@ -1456,7 +1499,9 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
             std::memcpy(g_hdr->cmd, kPrimary, sizeof(kPrimary));
             InterlockedIncrement(reinterpret_cast<volatile LONG*>(&g_hdr->cmdSeq));
         }
-        if (menuOk && menu.TakeRecenterRequest()) {
+        const bool recenterNow = (menuOk && menu.TakeRecenterRequest()) || recenterGesture;  // (D103: or the gesture)
+        recenterGesture = false;
+        if (recenterNow) {
             if (!menuHeadOk || prevLocal != XR_NULL_HANDLE || recenterBumpPending) {
                 MLOG("host: recentre ignored (%s)", !menuHeadOk ? "no head pose" : "previous recentre still in flight");
             } else {
@@ -1644,6 +1689,8 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                     }
                 }
                 proj.space = (prevLocal != XR_NULL_HANDLE && shown <= prevLocalUntil) ? prevLocal : local;
+                g_hdr->pointerOk = 0u;  // (D103: only on the flat screen)
+                g_hdr->pointerDown = 0u;
                 proj.viewCount = 2;
                 proj.views = pviews;
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);
@@ -1671,6 +1718,33 @@ int Run(DWORD gamePid, const std::wstring& runtimeJson, int mirrorMode, bool con
                 layer.pose.position = {0.0f, screenY, -sd};
                 layer.size = {sw, sw * static_cast<float>(height) / static_cast<float>(width)};
                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
+                // D103: the right controller's ray on the screen (LOCAL: centred at x 0, y screenY, facing +z at -sd),
+                // while a game menu with its cursor is up and the mod's menu isn't: the spot and the trigger, for the game.
+                bool hit = false;
+                if (pointerMenus && g_hdr->gameUiMenu && !(menuOk && menu.Visible()) && (handBits & 2u)) {
+                    const XrPosef& a = handPose[1];
+                    const auto& q = a.orientation;
+                    const float dx = -(2.0f * (q.x * q.z + q.w * q.y)), dy = -(2.0f * (q.y * q.z - q.w * q.x)),
+                                dz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));  // R * (0, 0, -1)
+                    if (dz < -0.05f) {
+                        const float t = (-sd - a.position.z) / dz;
+                        const float x = a.position.x + dx * t, y = a.position.y + dy * t, sh = layer.size.height;
+                        const float u = x / sw + 0.5f, v = 0.5f - (y - screenY) / sh;
+                        if (t > 0.0f && u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f) {
+                            g_hdr->pointerU = u;
+                            g_hdr->pointerV = v;
+                            const float tv = pad.TriggerValue(session, 1);
+                            pointerTrig = pointerTrig ? tv > 0.4f : tv > 0.6f;
+                            g_hdr->pointerDown = pointerTrig ? 1u : 0u;
+                            hit = true;
+                        }
+                    }
+                }
+                if (!hit) {
+                    pointerTrig = false;
+                    g_hdr->pointerDown = 0u;
+                }
+                g_hdr->pointerOk = hit ? 1u : 0u;
             }
             layerCount = 1;
             // The comfort vignette (GOAL A2): right over the game's image, under everything the host draws.

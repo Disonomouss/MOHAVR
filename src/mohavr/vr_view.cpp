@@ -31,6 +31,7 @@
 #include "mounted.hpp"
 #include "pickup.hpp"
 #include "loadout.hpp"
+#include "pointer.hpp"
 #include "render_res.hpp"
 #include "log.hpp"
 #include "names.hpp"
@@ -533,6 +534,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (pickup::TestCommand(line)) continue;   // "mohavr pickup ..." (D77)
         if (loadout::TestCommand(line)) continue;  // "mohavr ui" (D79)
         if (armsik::TestCommand(line)) continue;   // "mohavr arm trace" (D98)
+        if (pointer::TestCommand(line)) continue;  // "mohavr cursor x y", "mohavr click" (D103)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         const bool ok = gexec::Run(player, line);
@@ -657,6 +659,7 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
                 MLOG("render: the game's size changed (full screen?) -- '%ls' -> %s", cmd, ok ? "handled" : "not handled");
         }
     }
+    pointer::OnDraw(hdr);  // D103
     ApplyRoomOrigin();  // D99: the last Draw's room-scale step reaches the view now, with the camera (the step: after the Draw)
     const bool uiMenu = UiMenuOpen();
     if (hdr && hdr->gameUiMenu != (uiMenu ? 1u : 0u)) hdr->gameUiMenu = uiMenu ? 1u : 0u;  // the pad's menu layout

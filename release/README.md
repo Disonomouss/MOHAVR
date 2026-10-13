@@ -73,7 +73,7 @@ shows the game normally instead of staying white, the mod isn't running: check t
 | Look at the wrist HUD, then X (tap / hold) | Pause / MOHAVR menu (for controllers whose menu button the VR runtime keeps, like the Reverb G2 under SteamVR) |
 
 You aim by pointing the gun: a red dot shows where shots land. In the game's menus the face buttons work as
-labelled: A selects, B goes back. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
+labelled: A selects, B goes back. You can also point at a menu item with the right controller and pull its trigger. The whole table can be changed in `[Controls]` in `MOHAVR.ini`.
 
 
 The game pauses when you take the headset off or open the headset's dashboard. Each shot vibrates the gun hand
@@ -149,7 +149,7 @@ is in your left hand); while the menu is open, a tap of X closes it. The left st
 trigger or A selects, and B goes back or closes. Up from the first item reaches the tabs.
 
 - **General**
-  - Recentre
+  - Recentre (or hold both controllers to your eyes for 3 seconds)
   - World scale (higher = smaller world), Height (seated or standing), Reset world scale
   - The starting gun hand
   - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
