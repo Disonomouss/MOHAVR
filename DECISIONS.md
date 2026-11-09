@@ -1774,3 +1774,24 @@ hud, then hold X."
   - The left wrist palm down, looked at, Y held 1.6 s: "panels hidden (hidden by the player)"; again: "panels shown
     (looked at)".
   - The player's data backed up and restored around each run.
+
+### D105. The game's memory in the log; no leak found -- Decided 2026-11-10
+- **Why:** the user: "We must have a memory leak. We shouldn't be running out of memory so quickly." The mod logged the
+  address space only once, at start.
+- **What:** every 30 s (with the perf line) the game logs its address space:
+  - used of the total;
+  - the largest free block, which is what a big allocation can still get;
+  - private and working set;
+  - the regions by kind, committed / reserved: private, mapped, image.
+- **Measured [S]** (the EA copy, the 4 GB flag on; a loop of walking, firing, the manual reload with the pouch's spare,
+  weapon switches, the MOHAVR menu, the pause menu and room-scale steps, every 30 s):
+  - 1920x1080, 12 min (30 cycles): used 1,636 -> ~1,745 MB in the first 4 min, then flat (1,715-1,776); private flat
+    ~1,000 MB.
+  - 4128x2208 (the Quest 3 preset), 12 min and 20 min (50 cycles): used ~1,620 -> ~1,734 MB, flat from ~10 min. Private
+    committed flat (960-1,000); mapped and image flat. The growth is private RESERVED space, 334 -> 470 MB in 32 MB steps
+    (the D3D9-on-12 path's reservations, D57), stopping at 470.
+  - The host (x64): private flat at 439 MB, ~500 handles. The game: ~1,055 handles, flat.
+- **Conclusion:** no leak in either process. The VR path needs ~1.75 GB of address space, which levels off: with the
+  4 GB flag (D57) there are ~2 GB spare. Without it (2 GB), the game runs out within minutes. The flag is lost when
+  Steam's "verify files" or the EA app's repair restores the exe. A player's log says which: "memory: MOHA.exe large
+  address aware: yes/no", and now the 30 s lines.

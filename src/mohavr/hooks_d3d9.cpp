@@ -2,6 +2,8 @@
 
 #include <windows.h>
 #include <d3d9.h>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
 #include <d3d9on12.h>
 
 #include <atomic>
@@ -87,6 +89,42 @@ HRESULT STDMETHODCALLTYPE Hook_Reset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETER
 }
 
 // Frame pacing (Present to Present), logged every 10 s: average, worst, and frames over 20 ms.
+// D105 (the user: "We must have a memory leak. We shouldn't be running out of memory so quickly"): the game's address
+// space every 30 s -- used of the total, the largest free block (what a big allocation can still get), the private bytes.
+// The 32-bit game dies when an allocation can't be met, long before "used" reaches the total.
+void LogMemory() {
+    MEMORYSTATUSEX ms{sizeof(ms)};
+    if (!GlobalMemoryStatusEx(&ms)) return;
+    SIZE_T largest = 0, freeTotal = 0;
+    SIZE_T kind[3][2] = {};  // private / mapped / image x committed / reserved
+    MEMORY_BASIC_INFORMATION mbi{};
+    for (std::uintptr_t a = 0x10000; a < 0xFFFF0000u && VirtualQuery(reinterpret_cast<void*>(a), &mbi, sizeof(mbi));) {
+        const std::uintptr_t next = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        if (mbi.State == MEM_FREE) {
+            freeTotal += mbi.RegionSize;
+            if (mbi.RegionSize > largest) largest = mbi.RegionSize;
+        } else {
+            const int k = mbi.Type == MEM_MAPPED ? 1 : mbi.Type == MEM_IMAGE ? 2 : 0;
+            kind[k][mbi.State == MEM_COMMIT ? 0 : 1] += mbi.RegionSize;
+        }
+        if (next <= a) break;
+        a = next;
+    }
+    PROCESS_MEMORY_COUNTERS_EX pmc{};
+    pmc.cb = sizeof(pmc);
+    GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc));
+    MLOG("memory: %llu of %llu MB address space used, the largest free block %llu MB (%llu MB free in all); private %llu MB, "
+         "working set %llu MB",
+         static_cast<unsigned long long>((ms.ullTotalVirtual - ms.ullAvailVirtual) >> 20),
+         static_cast<unsigned long long>(ms.ullTotalVirtual >> 20), static_cast<unsigned long long>(largest >> 20),
+         static_cast<unsigned long long>(freeTotal >> 20), static_cast<unsigned long long>(pmc.PrivateUsage >> 20),
+         static_cast<unsigned long long>(pmc.WorkingSetSize >> 20));
+    MLOG("memory:   by kind (MB committed / reserved) -- private %llu / %llu, mapped %llu / %llu, image %llu / %llu",
+         static_cast<unsigned long long>(kind[0][0] >> 20), static_cast<unsigned long long>(kind[0][1] >> 20),
+         static_cast<unsigned long long>(kind[1][0] >> 20), static_cast<unsigned long long>(kind[1][1] >> 20),
+         static_cast<unsigned long long>(kind[2][0] >> 20), static_cast<unsigned long long>(kind[2][1] >> 20));
+}
+
 void TrackFrameTime() {
     static LARGE_INTEGER freq{}, last{};
     static double sumMs = 0.0, worstMs = 0.0, windowStart = 0.0;
@@ -112,6 +150,8 @@ void TrackFrameTime() {
         sumMs = worstMs = 0.0;
         frames = slow = 0;
         windowStart = t;
+        static int windows = 0;
+        if (++windows % 3 == 1) LogMemory();  // D105: every 30 s
     }
 }
 
