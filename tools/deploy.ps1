@@ -77,9 +77,13 @@ switch ($Action) {
         # Build the ini (and validate every override) BEFORE touching the game folder, so a bad
         # -Set can't leave a half-deployed mod behind.
         $text = Get-Content (Join-Path $root 'config\MOHAVR.ini') -Raw
-        # D73: a test that sets the resolution means it -- the player's menu preset must not override it.
+        # D73: a test that sets the resolution means it -- the player's menu preset must not override it, and (D107: the shipped
+        # preset is auto) neither the shipped preset.
         if (($Set | Where-Object { $_ -match '^Render\.Res[XY]=' }) -and -not ($Set | Where-Object { $_ -match '^Render\.UserPreset=' })) {
             $Set = @($Set) + 'Render.UserPreset=0'
+        }
+        if (($Set | Where-Object { $_ -match '^Render\.Res[XY]=' }) -and -not ($Set | Where-Object { $_ -match '^Render\.Preset=' })) {
+            $Set = @($Set) + 'Render.Preset=custom'
         }
         foreach ($kv in $Set) {
             if ($kv -notmatch '^(\w+)\.(\w+)=(.*)$') { throw "bad -Set '$kv' (use Section.Key=Value)" }

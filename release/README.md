@@ -154,8 +154,9 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Recentre (or hold both controllers to your eyes for 3 seconds)
   - World scale (higher = smaller world), Height (seated or standing), Reset world scale
   - The starting gun hand
-  - Resolution: Custom (the ini's), Auto (what your headset asks for), or a headset's own size (Quest 2 / 3S, Quest 3,
-    Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen Beyond); applies at the next start
+  - Resolution: Auto (the default: what your headset software asks for, from the second start), Custom (the ini's), or a
+    headset's own size (Quest 2 / 3S, Quest 3, Quest Pro, Pico 4, Index, Reverb G2, Vive Pro 2, Rift S, PS VR2, Bigscreen
+    Beyond); applies at the next start. The game's own resolution setting doesn't apply in VR.
   - Frame pacing
   - Screen distance and Screen size: the flat screen for menus, cutscenes and the mission openings
   - Holster rings and Reload rings (off by default; near = when a hand comes close, or always)

@@ -1818,3 +1818,18 @@ hud, then hold X."
     there); then the hands alone, the gun hand's wrist open (a small ring), no stretched skin.
   - The game's log: "arms drawn -- full / the forearms and hands / the hands only".
   - The pointer held on the Hands tab: one selection, stable. In the bottom band: rows 11, 12, 13 scrolled under it.
+
+### D107. Auto is the shipped resolution -- Decided 2026-11-14
+- **Why:** a player (Quest 3 over Virtual Desktop, the EA app): "low resolution in distance even choosing max res in game".
+  Their log: "each eye renders 1440x1620 -- Custom (the ini's ResX/ResY)". The shipped preset was Custom (2880x1620), and
+  the game's own resolution setting has no effect while the mod sets the size. The user: make Auto the default.
+- **What:**
+  - `[Render] Preset=auto` shipped: the size the headset's runtime asked for last session (D73), up to 6144 per eye
+    (D102). The very first start, before any headset has been seen, falls back to ResX/ResY as before.
+  - A player's own menu choice still wins.
+  - `deploy.ps1`: a test that sets ResX/ResY also gets `Render.Preset=custom`, so the harness's 1920x1080 screen checks
+    still hold.
+- **Proven [S]:** a harness cycle (Custom 1920x1080) OK; the shipped defaults with the player's choice ignored -> "Auto:
+  what "OpenXR Simulator" asked for last time" (1280x1400 per eye).
+- (The same player's other report, the wrist's X opening the game's menu, is as designed: a tap is the game's Start, held
+  0.6 s it is the MOHAVR menu.)
