@@ -170,6 +170,7 @@ struct Rig {
     bool ok = false;
     Side side[2];            // right (the gun hand's), left (the support hand)
     std::vector<int> body;   // root .. legs (moved with the shoulders)
+    int camera = -1;         // the 'Camera' bone (the game's camera socket): never collapsed (D106)
 } g_rig;
 
 bool Resolve(std::uintptr_t mesh, int bones) {
@@ -208,6 +209,7 @@ bool Resolve(std::uintptr_t mesh, int bones) {
                               s.find("Shoulder") != std::string::npos || s.find("Prop") != std::string::npos;
         if (!handSide) g_rig.body.push_back(i);
     }
+    g_rig.camera = find("Camera");
     g_rig.ok = true;
     MLOG("armik: rig of %s -- %d bones; right hand %d (+%zu fingers) forearm %d (+%zu roll) arm %d (+%zu roll) clavicle %d, "
          "left %d %d %d %d, %zu body",
@@ -432,6 +434,46 @@ M4 YawAbout(V3 c, float a) {
     r.m[3][0] = c.x - (c.x * co - c.y * si);
     r.m[3][1] = c.y - (c.x * si + c.y * co);
     return r;
+}
+
+// D106 (the player: "Add option for hands only and hands and forearms only"): [Hands] Arms / the menu's Hands tab. The
+// parts not shown are scaled to nothing at the joint they end at, so their skin folds into it: the upper arm and the
+// clavicle into the elbow (forearms), and the forearm too into the wrist (hands); the body into the gun hand's. The game's
+// own pose comes back after the render copy, and the Camera bone (its camera socket) and the weapon props are left alone.
+void CollapseArms(M4* bones) {
+    const shared::Header* hdr = bridge::SharedHeader();
+    const std::uint32_t m = hdr ? hdr->armsMode : 0u;
+    const int mode = m >= 1u && m <= 3u ? static_cast<int>(m) - 1 : g_cfg.armsShown;
+    static int loggedMode = -1;
+    if (mode != loggedMode) {
+        loggedMode = mode;
+        MLOG("armik: arms drawn -- %s", mode == 2 ? "the hands only" : mode == 1 ? "the forearms and hands" : "full");
+    }
+    if (mode <= 0) return;
+    auto collapse = [&](int i, const V3& p) {
+        if (i < 0 || i == g_rig.camera) return;
+        M4 z{};
+        z.m[3][0] = p.x;
+        z.m[3][1] = p.y;
+        z.m[3][2] = p.z;
+        z.m[3][3] = 1.0f;
+        bones[i] = z;
+    };
+    V3 joint[2];
+    for (int si = 0; si < 2; ++si) {
+        const Side& s = g_rig.side[si];
+        joint[si] = Origin(bones[mode == 2 ? s.hand : s.fore]);  // (component space, as the bones)
+    }
+    for (int si = 0; si < 2; ++si) {
+        const Side& s = g_rig.side[si];
+        collapse(s.clav, joint[si]);
+        for (int i : s.armGroup) collapse(i, joint[si]);
+        if (mode == 2) {
+            collapse(s.fore, joint[si]);
+            for (int i : s.rolls) collapse(i, joint[si]);
+        }
+    }
+    for (int i : g_rig.body) collapse(i, joint[0]);
 }
 
 void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const M4& A, const M4& invL2W, const M4& carry) {
@@ -740,6 +782,7 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const
         const M4 kRoll = Mul(Mul(foreTF, AxisAngle(wrist, axis, 0.6f * twist)), invL2W);
         for (int i : s.rolls) bones[i] = Mul(S[i], kRoll);
     }
+    CollapseArms(bones);  // D106
 }
 
 // Diagnostics: per walk or sprint (MOHAPlayerPawn.CurrentActivity 1-3 = walk, sprint, crouch-walk, which the Stand_Walk,

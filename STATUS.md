@@ -18,6 +18,8 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The arms shown: full / forearms and hands / hands only** (2026-11-13, D106; shared block v38), and the pointer no longer
+flickers on a long tab. Unreleased.
 **The game's memory every 30 s in the log; no leak found** (2026-11-10, D105): soaks of 12-20 min level off at ~1.75 GB
 (the D3D9-on-12 reservations); without the 4 GB flag that runs out. Unreleased.
 **Point and click in the MOHAVR menu; the wrist HUD hidden by looking + Y** (2026-10-13, D104). Released in 0.8.15.

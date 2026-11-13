@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kScreenDist, kScreenSize, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kScreenDist, kScreenSize, kArms, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -44,7 +44,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     // Reload: the manual reload and its pages.
     {kReload, kPouchReload, kPouchMag, kGripPage, kSpotPage, kRackEject, kRackKeep, kClose, -1},
     // Hands: the holsters, the off hand's items, the hand point and rings.
-    {kHolsterPage, kNadeStyle, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
+    {kArms, kHolsterPage, kNadeStyle, kOffNade, kNadeHold, kOffPistol, kOffKnife, kKnifePage, kFreeHandPage, kHandFwd, kHandUp, kHandIn, kForeSize,
      kRingScale, kClose, -1},
     {kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kClose, -1},
 };
@@ -54,7 +54,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag", "screendist", "screensize"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag", "screendist", "screensize", "arms"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -300,6 +300,14 @@ void Menu::ApplySavedSettings() {
         const int defPouchMag = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"PouchMag", 1, shipped.c_str()));
         pouchMag_ = GetPrivateProfileIntW(L"ManualReload", L"PouchMag", defPouchMag, iniPath_.c_str()) != 0;
         if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
+        // D106: how much of the arms is drawn -- the shipped [Hands] Arms until the player changes it.
+        {
+            wchar_t a[16] = L"", b[16] = L"";
+            GetPrivateProfileStringW(L"Hands", L"Arms", L"full", a, 16, shipped.c_str());
+            GetPrivateProfileStringW(L"Hands", L"Arms", a, b, 16, iniPath_.c_str());
+            arms_ = !_wcsicmp(b, L"hands") ? 2 : !_wcsicmp(b, L"forearms") ? 1 : 0;
+            if (hdr_) hdr_->armsMode = static_cast<std::uint32_t>(arms_ + 1);
+        }
         // D97: the flat screen (menus, cutscenes, the mission openings) -- the shipped [Camera] ScreenDistance / ScreenWidth
         // until the player changes them here.
         auto camNum = [&](const wchar_t* key, float def, float lo, float hi) {
@@ -674,6 +682,7 @@ void Menu::PublishGrips() {
 // on the controller, so moving the gun forward moves that point back.)
 // D81, tests: the item with this key (kItemKeys) selected in its tab, or a tab's row by its name; the menu must be open.
 bool Menu::Goto(const std::string& key) {
+    hoverSelected_ = false;
     if (!visible_) {
         MLOG("menu: test goto '%s' -- the menu isn't open", key.c_str());
         return false;
@@ -775,6 +784,7 @@ void Menu::Save() {
 void Menu::Update(float dt, const MenuInput& inRaw, const XrPosef& head, bool headValid) {
     SyncWeapon();  // every frame: the fit follows the weapon in hand, open or not
     MenuInput in = inRaw;
+    if (in.up || in.down || in.left || in.right) hoverSelected_ = false;  // (the stick's selection scrolls into view again)
     // D104 (a player: point and click "for the mod menu too"): the row under the right controller's ray (as the last frame
     // drew it) is selected as the pointer comes onto it; the trigger there selects it -- a value row steps down on its '<'
     // half, up on its '>' half; a tab opens.
@@ -791,7 +801,10 @@ void Menu::Update(float dt, const MenuInput& inRaw, const XrPosef& head, bool he
             if (logged++ < 200) MLOG("menu: pointer on %s %d (page %d, tab %d) at %.0f %.0f", !hit ? "nothing" : idx <= -100 ? "tab" : "row",
                                      !hit ? 0 : idx <= -100 ? -100 - idx : idx, page_, tab_, in.px, in.py);
         }
-        if (hit && idx != hoverRow_ && idx > -100) selected_ = idx;
+        if (hit && idx != hoverRow_ && idx > -100) {
+            selected_ = idx;
+            hoverSelected_ = true;
+        }
         if (hit && idx <= -100 && idx != hoverRow_ && page_ == 0) selected_ = -1;
         hoverRow_ = idx;
         if (in.click && hit) {
@@ -1165,6 +1178,12 @@ void Menu::Update(float dt, const MenuInput& inRaw, const XrPosef& head, bool he
             m = (m + (in.right ? 1 : 2)) % 3;
             Save();
             MLOG("menu: %s rings -> %ls", item == kHolsterRings ? "holster" : "reload", kRingModes[m]);
+        } else if (item == kArms) {  // D106
+            arms_ = (arms_ + (in.right ? 1 : 2)) % 3;
+            if (hdr_) hdr_->armsMode = static_cast<std::uint32_t>(arms_ + 1);
+            static const wchar_t* kKeys[3] = {L"full", L"forearms", L"hands"};
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Hands", L"Arms", kKeys[arms_], iniPath_.c_str());
+            MLOG("menu: arms -> %ls", kKeys[arms_]);
         } else if (item == kPouchMag) {
             pouchMag_ = !pouchMag_;
             if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
@@ -1543,6 +1562,13 @@ void Menu::Render() {
                 note(n2);
                 break;
             }
+            case kArms: {
+                static const char* kLabels[3] = {"full", "forearms and hands", "hands only"};
+                snprintf(label, sizeof(label), "Arms             <  %s  >", kLabels[arms_]);
+                Row(label, i);
+                note("how much of your arms you see");
+                break;
+            }
             case kHolsterRings:
                 snprintf(label, sizeof(label), "Holster rings    <  %s  >", kRingLabels[ringsMode_]);
                 Row(label, i);
@@ -1768,7 +1794,15 @@ void Menu::Render() {
             case kClose: Row("Close", i); break;
             default: break;
         }
-        if (sel) ImGui::SetScrollHereY(0.5f);  // (a tab longer than the panel scrolls with the selection)
+        // (a tab longer than the panel scrolls with the selection -- the stick's, not the pointer's: scrolled under the pointer
+        // the next row would come under it and be selected, and so on -- D106's test)
+        if (sel && !hoverSelected_) ImGui::SetScrollHereY(0.5f);
+    }
+    // D106: pointing near the panel's top or bottom edge scrolls a long tab.
+    if (pointerShown_ && height_ > 0) {
+        const float edge = 70.0f, h = static_cast<float>(height_);
+        if (pointerY_ < edge) ImGui::SetScrollY(std::fmax(0.0f, ImGui::GetScrollY() - 12.0f));
+        else if (pointerY_ > h - edge) ImGui::SetScrollY(std::fmin(ImGui::GetScrollMaxY(), ImGui::GetScrollY() + 12.0f));
     }
     ImGui::Separator();
     ImGui::PushFont(nullptr, 26.0f);

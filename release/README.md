@@ -186,6 +186,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Reload grip and Reload spots (per gun)
   - Rack ejects a round, and whether the ejected round is lost or kept
 - **Hands**
+  - Arms: full, forearms and hands, or hands only
   - Holsters and pouch (move, size, choose what each holds, show or hide each ring)
   - Grenades: simple (default; hold the grip, trigger once, let go to throw) or classic
   - Off-hand grenade (and, classic only, Grenade hold), Off-hand pistol, Off-hand knife and Knife grip

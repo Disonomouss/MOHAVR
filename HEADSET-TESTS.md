@@ -2407,6 +2407,14 @@ half steps down, the right half up). Look at the wrist HUD and hold Y for 1 s to
 1. Does the dot sit where you point, and do clicks land on the row you meant? (yes/no)
 2. Does Y held at the wrist hide and show the panels, without Y doing its game action then? (yes/no)
 
+### Arms: full / forearms / hands (D106; menu -> Hands -> Arms)
+**Changed:** choose how much of your arms you see. Also: pointing at a long menu tab no longer flickers, and pointing
+near the panel's top or bottom edge scrolls it.
+
+**Questions:**
+1. Forearms and hands: do the sleeves end cleanly at the elbows, anywhere you hold your arms? (yes/no)
+2. Hands only: do the hands look right (the wrist's open end)? Would you prefer a cuff? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -1795,3 +1795,26 @@ hud, then hold X."
   4 GB flag (D57) there are ~2 GB spare. Without it (2 GB), the game runs out within minutes. The flag is lost when
   Steam's "verify files" or the EA app's repair restores the exe. A player's log says which: "memory: MOHA.exe large
   address aware: yes/no", and now the 30 s lines.
+
+### D106. The arms shown: full, forearms and hands, or hands only -- Decided 2026-11-13
+- **Why:** the user: "Add option for hands only and hands and forearms only."
+- **What:**
+  - `[Hands] Arms` = full (shipped) | forearms | hands, and the menu's Hands tab -> Arms (the first row). Live through
+    shared block v38 `armsMode`; saved in the player's ini.
+  - At the end of the arm solve, the bones not shown are scaled to nothing at the joint they end at, so their skin folds
+    into it:
+    - forearms: the clavicle and the upper arm (and its roll) into each side's elbow;
+    - hands: the forearm and its roll bones too, into each side's wrist;
+    - the body bones into the gun side's joint.
+  - The Camera bone (the game's camera socket) and the weapon props are never touched, and the game's own pose comes
+    back after the render copy, so the game's camera and attachments don't see it.
+- **Found on the way (D104's pointer):** pointing at a tab longer than the panel flickered between rows (6, 9, 6, ...).
+  - The pointer selected a row, the tab scrolled to put the selection in view, another row came under the pointer, and
+    so on.
+  - Now only the stick's selection scrolls into view.
+  - Pointing within 70 px of the panel's top or bottom edge scrolls it, so a long tab can be read by the pointer alone.
+- **Proven [S]:**
+  - The same pose in the three modes (logs/shots/arms-*): the sleeves; then the forearms (the upper arms out of view
+    there); then the hands alone, the gun hand's wrist open (a small ring), no stretched skin.
+  - The game's log: "arms drawn -- full / the forearms and hands / the hands only".
+  - The pointer held on the Hands tab: one selection, stable. In the bottom band: rows 11, 12, 13 scrolled under it.

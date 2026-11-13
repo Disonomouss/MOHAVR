@@ -126,6 +126,7 @@ float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself f
     bool  freeHandSave = true;  // [Weapon] FreeHandSave -- that hold kept between sessions (%LOCALAPPDATA%\MOHAVR)
     int   elbowHinge = 2;  // [Weapon] ElbowHinge -- 0 each arm segment on its own, 1 on the elbow's hinge, 2 the forearm carried by the upper arm
     float shoulderWidth = 30.0f, shoulderDrop = 22.0f, shoulderBack = 6.0f;  // [Weapon] Shoulder* -- cm, from the head
+    int   armsShown = 0;       // [Hands] Arms -- full (0), forearms (1: the forearms and hands), hands (2) (D106)
     bool  bodyTurn = true;         // [Weapon] BodyTurn -- the arms' shoulders and torso turn with the head (D93)
     float bodyTurnLag = 0.3f;      // [Weapon] BodyTurnLag -- s; BodyTurnDeadzone: degrees it stays put (D98)
     float bodyTurnDeadzone = 15.0f;

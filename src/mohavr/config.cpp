@@ -182,6 +182,11 @@ Config LoadConfig(const std::wstring& dir) {
     c.shoulderDrop   = getf(L"Weapon", L"ShoulderDrop", c.shoulderDrop, 0.0f, 60.0f);
     c.shoulderBack   = getf(L"Weapon", L"ShoulderBack", c.shoulderBack, -30.0f, 30.0f);
     c.bodyTurn       = get(L"Weapon", L"BodyTurn", c.bodyTurn);
+    {
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"Hands", L"Arms", L"full", v, 16, ini.c_str());
+        c.armsShown = !_wcsicmp(v, L"hands") ? 2 : !_wcsicmp(v, L"forearms") ? 1 : 0;
+    }
     c.bodyTurnLag    = getf(L"Weapon", L"BodyTurnLag", c.bodyTurnLag, 0.0f, 3.0f);
     c.bodyTurnDeadzone = getf(L"Weapon", L"BodyTurnDeadzone", c.bodyTurnDeadzone, 0.0f, 90.0f);
     c.throwScale     = getf(L"Hands", L"ThrowScale", c.throwScale, 0.2f, 5.0f);
