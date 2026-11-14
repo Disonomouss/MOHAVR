@@ -47,6 +47,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
         src/mohavr/carrier.cpp
         src/mohavr/script_call.cpp
         src/mohavr/arms_ik.cpp
+        src/mohavr/landing.cpp
         src/mohavr/muzzle.cpp
         src/mohavr/crash_dump.cpp
         src/mohavr/reload.cpp

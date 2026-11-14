@@ -14,6 +14,7 @@
 #include "arms_ik.hpp"
 #include "bridge.hpp"
 #include "throwing.hpp"
+#include "landing.hpp"
 #include "muzzle.hpp"
 #include "offhand.hpp"
 #include "melee.hpp"
@@ -537,6 +538,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (pointer::TestCommand(line)) continue;  // "mohavr cursor x y", "mohavr click" (D103)
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
+        if (landing::TestCommand(line)) continue;  // "mohavr landing" (D108)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -2142,6 +2144,7 @@ bool Install(const Config& cfg) {
     melee::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (physical melee: the drawn gun)
     scope::Configure(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);  // (scopes: the drawn gun's tube)
     knife::Configure(cfg, armsOk && !cfg.hideViewModel);  // (the off-hand knife: the bake draws it)
+    landing::Install(cfg);    // D108: the parachute landing's verdict (logged; greased when PerfectLanding is on)
     muzzle::Install(cfg);     // round 26: the flash and the brass at the drawn gun (needs the bake's move)
     // D21 manual reload: the game's own reload is only ever blocked with the Draw hook and the arm bake running.
     reload::Install(cfg, static_cast<bool>(g_drawHook) && armsOk && !cfg.hideViewModel);

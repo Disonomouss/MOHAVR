@@ -1833,3 +1833,28 @@ hud, then hold X."
   what "OpenXR Simulator" asked for last time" (1280x1400 per eye).
 - (The same player's other report, the wrist's X opening the game's menu, is as designed: a tap is the game's Start, held
   0.6 s it is the MOHAVR menu.)
+### D108. Perfect landing: every parachute landing greased -- Decided 2026-11-14
+- **Why:** the user: "Can you add an option that forces a perfect landing every time."
+- **What:**
+  - `[Comfort] PerfectLanding` (off by default: the player asked for an option) and the menu's Comfort tab -> Perfect
+    landing (after Parachute). Live through shared block v39 `perfectLanding` (the old pad38: no layout change); saved in
+    the player's ini.
+  - The game judges a landing once, when the pawn enters AirDropLanding: the native PerformLandingDetection(eLandingType,
+    Velocity) (the flare's timing and the speed), then PostLandingTypeDetermination reads eLandingType for everything
+    else. A hook on the native's exec (0x10E4A780, ENGINE-NOTES 5ca) sets the local player's verdict to **greased** (6)
+    after the game's own judgement, before anything reads it.
+  - Greased, not the enum's "perfect" (0): both show the HUD's "greased" icon, but only greased skips the gear's removal
+    (AirDropLandingDone: OnDoneLanding at once, versus the AirDropLanded state's ~3 s with the weapon away). It is the
+    game's best landing, what a perfect flare earns.
+  - The hook is always installed and logs the game's verdict ("landing: the game judged it hard (back) (2)"), so a
+    player's log shows how each landing went. It changes nothing while the switch is off.
+  - The stats see a greased landing (playerStats.OnLanding), as for a real one.
+- **Found on the way:** the shipped ini had `RoomScale` and `RoomFadeStart` under [Controls], but both binaries read them
+  from [Comfort] (D88): the lines were dead (their defaults are the same values). Moved to [Comfort].
+- **Proven [S]** (`mohavr chute 40`, `mohavr landing` polled every 0.75 s):
+  - Off: "the game judged it hard (back)"; the pawn in AirDropLanding ~3.5 s, AirDropLanded ~3 s (the gear off), then
+    Stand_Idle about 7 s after touchdown.
+  - On (the ini, then the menu live): "the game judged it hard (forward) (1) -- made greased"; AirDropLanding ~1 s, then
+    Stand_Idle (no AirDropLanded). Off again from the menu: the game's verdict stands (hard (forward)).
+- **Not checked:** the disc copy (D92's dump wasn't kept); if a SecuROM splice is in the hook's 64 bytes, the hook stands
+  down alone ("bytes differ") and the game judges every landing.

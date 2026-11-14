@@ -2415,6 +2415,14 @@ near the panel's top or bottom edge scrolls it.
 1. Forearms and hands: do the sleeves end cleanly at the elbows, anywhere you hold your arms? (yes/no)
 2. Hands only: do the hands look right (the wrist's open end)? Would you prefer a cuff? (yes/no)
 
+### Perfect landing (D108; menu -> Comfort -> Perfect landing)
+**Changed:** with it on, every parachute landing is greased (the game's best: no stumble, no pause to take the harness
+off), however you flare. Off by default.
+
+**Questions:**
+1. On: does a mission's opening jump land greased (the "greased" icon, the gun up at once)? (yes/no)
+2. Off: does a landing without a flare still go as before (a hard landing, the harness taken off)? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

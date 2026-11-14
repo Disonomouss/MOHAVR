@@ -172,6 +172,7 @@ trigger or A selects, and B goes back or closes. Up from the first item reaches 
   - Physical crouch (off by default): crouch for real and the game crouches too, for low cover. Recentre standing first.
   - Parachute: stick (default) or hands -- hold both grips (the risers), pull one down to turn, both to slow, a quick hard
     pull of both to flare before landing
+  - Perfect landing (off by default): every parachute landing is greased, however you flare
 - **Weapons**
   - Gun fit (fit each gun to your hand and line up its aim), Red dot
   - Recoil (off, 50-200 %; 100 % = the game's own kick)

@@ -233,6 +233,7 @@ private:
     bool                    pouchMag_ = true;     // D89
     float                   screenDist_ = 2.0f, screenWidth_ = 1.6f;  // D97
     int                     arms_ = 0;            // D106: 0 full, 1 forearms and hands, 2 hands only
+    bool                    landing_ = false;     // D108: [Comfort] PerfectLanding
     // D104: the rows the last Render drew (their index as the page counts them; tabs as -100 - t), for the pointer.
     struct RowRec {
         int   index;

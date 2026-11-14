@@ -2434,6 +2434,30 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - `GiveWeapon` adds no rifle to a mission's loadout (the Garand, Kar98, BAR, M12 and Panzerschreck weren't reached by
   `NextWeapon` in Husky); `SwitchPistol` draws the Colt.
 
+## 5ca. The parachute landing's verdict (D108, 2026-11-14)
+
+- MOHAPlayerPawn.EAirDropLandingType: 0 PERFECT, 1-4 HARD_FORWARD / BACK / LEFT / RIGHT, 5 FLARED, 6 GREASED (the pawn's
+  default value is 6).
+- The pawn's AirDropLanding state, BeginState: `PerformLandingDetection(eLandingType, Velocity);
+  PostLandingTypeDetermination();`. The latter reads eLandingType for:
+  - the HUD icon (ShowAirdropLandingIcon: 0 and 6 "greased", 5 "flared", else "hard");
+  - playerStats.OnLanding;
+  - the level's SeqEvent_PlayerLanded impulses (1 hard, 2 flared, 3 greased, else -1);
+  - SetActivity(41) and a timer of fAirDropLandingAnimTime[type] to AirDropLandingDone.
+- AirDropLandingDone: 6 -> OnDoneLanding() at once; any other type -> GotoState('AirDropLanded') (the gear comes off,
+  the weapon away, ~3 s).
+- AMOHAPlayerPawn::execPerformLandingDetection **0x10E4A780** (native table entry 0x116129B0 -> the UTF-16 name
+  "intAMOHAPlayerPawnexecPerformLandingDetection" at 0x11565CE8):
+  - thiscall, RET 8, 0xCE bytes;
+  - P_GET_BYTE_REF (GPropAddr 0x116CBF84 set to 0, then the out variable's address, else a local);
+  - P_GET_STRUCT(FVector) and P_FINISH;
+  - then the pawn's virtual at vtable +0x42C(BYTE* out, FVector velocity) writes the verdict through the pointer.
+  So the pawn's eLandingType holds the verdict once the exec returns (capstone over the unpacked exe).
+- Measured (`mohavr chute 40`, no flare): hard (back), hard (forward). The off timeline: AirDropLanding ~3.5 s,
+  AirDropLanded ~3 s, then Stand_Idle. Greased: AirDropLanding ~1 s, then Stand_Idle.
+- `mohavr chute` straight after a landing sometimes lands at once (the verdict comes the same millisecond as the lift),
+  and once a jump was still falling 12 s on: a quirk of the test command's spot, not of the landing.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

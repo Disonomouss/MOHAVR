@@ -24,7 +24,7 @@ constexpr float kHeightMin = -0.6f, kHeightMax = 0.6f, kHeightStep = 0.05f;
 enum Item { kWorldScale, kHeight, kTurn, kSticks, kMove, kGunHand, kRedDot, kPacing, kReload, kGunFit, kHolsterPage, kFreeHandPage,
             kRecenter, kResetScale, kClose, kGripPage, kHandFwd, kHandUp, kHandIn, kForeSize, kRingScale, kSpotPage, kGiveAll,
             kOffNade, kOffPistol, kNadeHold, kGunNade, kPouchReload, kMelee, kScope, kScopeZoom, kOffKnife, kKnifePage, kRackEject,
-            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kScreenDist, kScreenSize, kArms, kItemCount };
+            kRackKeep, kHudPlace, kHudShow, kHudLayout, kHudBacking, kHudWristPage, kHudScreenPage, kCrouch, kVignette, kSeated, kResolution, kChute, kRecoil, kGrabPickup, kMgHands, kNadeStyle, kDamageTint, kHolsterRings, kReloadRings, kFireShake, kRoomScale, kPouchMag, kScreenDist, kScreenSize, kArms, kLanding, kItemCount };
 // Round 32: the main page in tabs (the player: "the menu is getting cluttered"). The tab row is selected_ -1: left /
 // right switch tabs there, down goes into the tab's items (up from the first comes back).
 // D81 (the player, 2026-10-08: clean it up again -- General had grown to 15 items, Weapons to 21): six tabs, each item where
@@ -38,7 +38,7 @@ const int kTabItems[kTabCount][kTabMax] = {
     {kRecenter, kWorldScale, kHeight, kResetScale, kGunHand, kResolution, kPacing, kScreenDist, kScreenSize, kHolsterRings, kReloadRings,
      kClose, -1},
     // Comfort: moving, turning, stance.
-    {kTurn, kMove, kSticks, kRoomScale, kVignette, kDamageTint, kFireShake, kSeated, kCrouch, kChute, kClose, -1},
+    {kTurn, kMove, kSticks, kRoomScale, kVignette, kDamageTint, kFireShake, kSeated, kCrouch, kChute, kLanding, kClose, -1},
     // Weapons: the gun in hand.
     {kGunFit, kRedDot, kRecoil, kScope, kScopeZoom, kMelee, kGunNade, kGrabPickup, kMgHands, kGiveAll, kClose, -1},
     // Reload: the manual reload and its pages.
@@ -54,7 +54,7 @@ const char* kItemKeys[kItemCount] = {
     "freehand", "recentre", "resetscale", "close", "reloadgrip", "handfwd", "handup", "handin", "foresize", "rings", "reloadspots",
     "giveall", "offnade", "offpistol", "nadehold", "gunnade", "pouchreload", "melee", "scope", "scopezoom", "offknife", "knifegrip",
     "rackeject", "rackkeep", "hudplace", "hudshow", "hudlayout", "hudbacking", "hudwrist", "hudscreen", "crouch", "vignette",
-    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag", "screendist", "screensize", "arms"};
+    "seated", "resolution", "chute", "recoil", "grabpickup", "mghands", "nadestyle", "damageflash", "holsterrings", "reloadrings", "fireshake", "roomscale", "pouchmag", "screendist", "screensize", "arms", "landing"};
 static_assert(sizeof(kItemKeys) / sizeof(kItemKeys[0]) == kItemCount, "one key per menu item");
 // "Give all weapons" (the player's request, 2026-10-01): shown only with the shipped [Weapon] GiveAllMenu=1.
 bool g_giveAllMenu = false;
@@ -300,6 +300,10 @@ void Menu::ApplySavedSettings() {
         const int defPouchMag = static_cast<int>(GetPrivateProfileIntW(L"ManualReload", L"PouchMag", 1, shipped.c_str()));
         pouchMag_ = GetPrivateProfileIntW(L"ManualReload", L"PouchMag", defPouchMag, iniPath_.c_str()) != 0;
         if (hdr_) hdr_->pouchMagMode = pouchMag_ ? 2u : 1u;
+        // D108: every parachute landing greased -- the shipped [Comfort] PerfectLanding until the player toggles it.
+        const int defLanding = static_cast<int>(GetPrivateProfileIntW(L"Comfort", L"PerfectLanding", 0, shipped.c_str()));
+        landing_ = GetPrivateProfileIntW(L"Comfort", L"PerfectLanding", defLanding, iniPath_.c_str()) != 0;
+        if (hdr_) hdr_->perfectLanding = landing_ ? 2u : 1u;
         // D106: how much of the arms is drawn -- the shipped [Hands] Arms until the player changes it.
         {
             wchar_t a[16] = L"", b[16] = L"";
@@ -1225,6 +1229,11 @@ void Menu::Update(float dt, const MenuInput& inRaw, const XrPosef& head, bool he
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Weapon", L"MountedHands", mgHands_ ? L"1" : L"0", iniPath_.c_str());
             PublishWeaponModes();
             MLOG("menu: mounted MG42 -> %s", mgHands_ ? "the gun hand aims it" : "the head aims it (the game's way)");
+        } else if (item == kLanding) {  // D108
+            landing_ = !landing_;
+            if (hdr_) hdr_->perfectLanding = landing_ ? 2u : 1u;
+            if (!iniPath_.empty()) WritePrivateProfileStringW(L"Comfort", L"PerfectLanding", landing_ ? L"1" : L"0", iniPath_.c_str());
+            MLOG("menu: perfect landing -> %s", landing_ ? "on (every landing greased)" : "off (the game judges it)");
         } else if (item == kChute) {
             chuteHands_ = !chuteHands_;
             if (!iniPath_.empty()) WritePrivateProfileStringW(L"Controls", L"ChuteHands", chuteHands_ ? L"1" : L"0", iniPath_.c_str());
@@ -1619,6 +1628,11 @@ void Menu::Render() {
                 snprintf(label, sizeof(label), "Parachute        <  %s  >", chuteHands_ ? "hands" : "stick");
                 Row(label, i);
                 note("hands: hold both grips, pull one down to turn, both to slow, a hard pull flares");
+                break;
+            case kLanding:
+                snprintf(label, sizeof(label), "Perfect landing  <  %s  >", landing_ ? "on" : "off");
+                Row(label, i);
+                note("on: every parachute landing is greased, however you flare");
                 break;
             case kSeated:
                 snprintf(label, sizeof(label), "Seated           <  %s  >", seated_ ? "on" : "off");
