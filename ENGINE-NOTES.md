@@ -2458,6 +2458,18 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - `mohavr chute` straight after a landing sometimes lands at once (the verdict comes the same millisecond as the lift),
   and once a jump was still falling 12 s on: a quirk of the test command's spot, not of the landing.
 
+## 5cb. The first-person parts' camera is not the eye's base (D109, 2026-11-23)
+
+- The game poses its first-person gun and arms against its own camera (the arms' Cam socket; fJumpCameraOffset comes on
+  top, round 26). The mod's move into the hand is `inverse(camera) x the gun's frame at the controller`, so the camera
+  it uses must be that one.
+- `OnViewPoint` then raises the EYE's base: the physical crouch's compensation (the standing camera less the camera now,
+  ~64 units) and MinEyeHeight. The hands' mapping and the eyes take the raised base; a move built on it draws the parts
+  lower by the raise (measured: the mesh's origin 88.8 below the move's camera against 24.1).
+- `mohavr gun where` logs the drawn gun's origin against its frame at the controller: 25.2 -0.9 -15.7 for the Garand in
+  the test pose, the same standing, crouched by the stick and crouched by the head.
+- The harness's save resumes standing and crouches by itself a moment later (the save was made crouched).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

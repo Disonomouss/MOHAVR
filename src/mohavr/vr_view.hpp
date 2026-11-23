@@ -55,6 +55,9 @@ bool HeadForwardInWorld(float (&fwd)[3]);
 bool VectorToWorld(const float (&xr)[3], float (&ue)[3]);
 // M8: the game's own camera of that view (before the head): location and pitch/yaw in radians.
 bool GameCamera(float (&loc)[3], float& pitch, float& yaw);
+// D109: the camera the game's first-person gun and arms are posed against this frame -- GameCamera's before the eye's own
+// corrections (the physical crouch's compensation, MinEyeHeight). The viewmodel's move is built on it.
+bool MeshCamera(float (&loc)[3], float& pitch, float& yaw);
 // Camera.SteadyLanding: the parachute landing's view is held now (the hands' per-view work waits).
 bool LandingHeld();
 

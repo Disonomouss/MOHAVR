@@ -247,6 +247,7 @@ struct WorldMap {
     float        yaw;      // the game's yaw (radians)
     shared::Pose head;     // that view's head pose (the translation reference without an origin)
     float        pitch;    // the game's own view pitch (radians) -- the first-person gun is placed with it
+    float        mesh[3];  // D109: the camera the first-person parts are posed against (base before the eye's corrections)
 };
 WorldMap g_world{};
 // Debug.MuzzleFreeze: the left eye's final view location and rotation, last stereo frame.
@@ -539,6 +540,7 @@ void RunTestCommands(const std::uintptr_t* players) {
         if (reload::SweepCommand(line)) continue;  // "mohavr sweep" (GOAL E)
         if (ChuteTestCommand(line)) continue;  // "mohavr chute" (D75)
         if (landing::TestCommand(line)) continue;  // "mohavr landing" (D108)
+        if (viewmodel::TestCommand(line)) continue;  // "mohavr gun where" (D109)
         const bool ok = gexec::Run(player, line);
         MLOG("test: game command '%ls' -> %s", line, ok ? "handled" : "not handled");
     }
@@ -1488,7 +1490,10 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
     }
     // The eye follows the real head while the crouch is the head's (and while the camera rises after its stand).
     if ((c.phys && crouched) || static_cast<LONG>(c.settleUntil - now) > 0) {
-        if (c.standCam > 0.0f) g_crouchComp = std::fmin(std::fmax(c.standCam - camAbove, 0.0f), 100.0f);
+        // D109: a save resumed crouched has no standing camera learnt yet (the eye then sat the game's drop too low: 47 cm
+        // above the feet): the measured one until it is (160.9-161.7 units, D61).
+        const float stand = c.standCam > 0.0f ? c.standCam : 161.0f;
+        g_crouchComp = std::fmin(std::fmax(stand - camAbove, 0.0f), 100.0f);
         if (!c.phys && g_crouchComp < 0.5f) c.settleUntil = now;
     }
     if (c.logAt && static_cast<LONG>(now - c.logAt) >= 0) {
@@ -1595,6 +1600,11 @@ void OnViewPoint(SafetyHookContext& ctx) {
     }
     if (g_cfg.steadyLanding) SteadyLanding(ctx.edi, loc, rot);
 
+    // D109 (a player: with physical crouch "my arms ... move all the way to ground level"): the first-person gun and arms
+    // are posed against the game's camera as it is here -- before the crouch compensation and MinEyeHeight below raise
+    // the EYE. The move that puts them in the hand (viewmodel) takes this camera; the eyes and the hands' mapping take
+    // the raised one (g_world.base).
+    const float meshCam[3] = {loc[0], loc[1], loc[2]};
     // Physical crouch (GOAL A1): decided once per frame; its compensation raises every eye alike.
     if (g_thisEye == 0) PhysicalCrouch(hdr, head, loc);
     if (g_crouchComp > 0.0f) loc[2] += g_crouchComp;
@@ -1643,7 +1653,8 @@ void OnViewPoint(SafetyHookContext& ctx) {
                                                                    : UnrToRad(rot[1]);
     if (g_thisEye == 0 && g_viewIsPlayers) {
         // M7: the mapping this frame uses, for PoseToWorld (before the head moves `loc`).
-        g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF))};
+        g_world = {true, {loc[0], loc[1], loc[2]}, gameYaw, head, UnrToRad(static_cast<std::int16_t>(rot[0] & 0xFFFF)),
+                   {meshCam[0], meshCam[1], meshCam[2]}};
         std::memcpy(g_gameCam, gameCam, sizeof(g_gameCam));
         TrackCameraSway(loc, rot[1]);
     }
@@ -2241,6 +2252,14 @@ bool LandingHeld() { return g_landingHeld; }
 bool GameCamera(float (&loc)[3], float& pitch, float& yaw) {
     if (!g_world.valid) return false;
     for (int i = 0; i < 3; ++i) loc[i] = g_world.base[i];
+    pitch = g_world.pitch;
+    yaw = g_world.yaw;
+    return true;
+}
+
+bool MeshCamera(float (&loc)[3], float& pitch, float& yaw) {
+    if (!g_world.valid) return false;
+    for (int i = 0; i < 3; ++i) loc[i] = g_world.mesh[i];
     pitch = g_world.pitch;
     yaw = g_world.yaw;
     return true;

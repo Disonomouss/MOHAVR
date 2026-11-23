@@ -227,6 +227,7 @@ SafetyHookMid g_activityHook;
 // The first-person part drawn isn't a weapon's (the parachute's harness) and no weapon's is: the game draws them.
 bool g_noGunDrawn = false;
 std::uintptr_t g_gunComp = 0;  // the weapon's first-person part (UpdateWeaponKey)
+std::atomic<int> g_traceGun{0};  // "mohavr gun where": the next views' gun against its controller, logged
 unsigned      g_sprintSwaps = 0, g_walkSwaps = 0, g_jumpSwaps = 0;
 
 // Weapon.SprintArms (round 24; rounds 22-23: the sprint animation swung the gun out of the hand, and a speed-detected
@@ -687,7 +688,7 @@ void OnPlayerView() {
     UpdateWeaponKey(hdr);
     FireShake(hdr);  // D87
     float camLoc[3], pitch = 0.0f, yaw = 0.0f;
-    if (!view::GameCamera(camLoc, pitch, yaw)) {
+    if (!view::MeshCamera(camLoc, pitch, yaw)) {  // (D109: not the eye's raised base)
         g_line.valid = false;
         return;
     }
@@ -780,6 +781,22 @@ void OnPlayerView() {
         const M4 gunFrame = Mul(Mul(Frame(kAxisX, kAxisY, kAxisZ, back), BarrelTurn(hdr->weaponKey)), ctrlFrame);
         d = Mul(camInv, gunFrame);
         dInv = Mul(RigidInverse(gunFrame), cam);
+        // Tests ("mohavr gun where"): where the game's gun mesh lands through the move, against the gun's frame at the
+        // controller. The mesh's origin in its own camera frame is fixed per pose, so this offset must not change with
+        // the stance (D109: it dropped by the physical crouch's compensation).
+        if (g_traceGun.load() > 0) {
+            const std::uintptr_t gc = g_gunComp;
+            const int glo = gc ? names::PropertyOffset(gc, "LocalToWorld") : -1;
+            if (glo >= 0) {
+                g_traceGun.fetch_sub(1);
+                M4 l2w;
+                std::memcpy(l2w.m, reinterpret_cast<const void*>(gc + glo), sizeof(l2w.m));
+                const M4 drawn = Mul(l2w, d);
+                MLOG("viewmodel: test -- the drawn gun's origin %.1f %.1f %.1f from its frame at the controller (world x y z); "
+                     "the move's camera z %.1f, the mesh's origin %.1f below it", drawn.m[3][0] - gunFrame.m[3][0],
+                     drawn.m[3][1] - gunFrame.m[3][1], drawn.m[3][2] - gunFrame.m[3][2], camLoc[2], camLoc[2] - l2w.m[3][2]);
+            }
+        }
         // The aim line: the host's, mapped the same way.
         float rpos[3], rdir[3], rupm = 100.0f;
         g_line.valid = false;
@@ -1028,6 +1045,12 @@ bool RoomSince(float (&d)[3]) {
 }
 
 bool NoGunDrawn() { return g_noGunDrawn; }
+
+bool TestCommand(const wchar_t* line) {
+    if (std::wcscmp(line, L"mohavr gun where") != 0) return false;
+    g_traceGun.store(1);
+    return true;
+}
 
 bool GunRay(float (&pos)[3], float (&dir)[3], float& unitsPerMeter) {
     if (!g_line.valid) return false;

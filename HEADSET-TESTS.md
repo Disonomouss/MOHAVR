@@ -2423,6 +2423,13 @@ off), however you flare. Off by default.
 1. On: does a mission's opening jump land greased (the "greased" icon, the gun up at once)? (yes/no)
 2. Off: does a landing without a flare still go as before (a hard landing, the harness taken off)? (yes/no)
 
+### Physical crouch: the arms (D109; menu -> Comfort -> Physical crouch on)
+**Changed:** crouching for real no longer drops the gun and arms to the ground; they stay in your hands.
+
+**Questions:**
+1. Crouched for real: are the gun and arms where your hands are? (yes/no)
+2. Standing, with physical crouch on: are the arms offset at all? (yes/no; if yes, send MOHAVR.log)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

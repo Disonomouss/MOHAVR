@@ -32,6 +32,8 @@ void DrawWithoutHands(const float (&d)[16]);
 
 // A first-person part that isn't a weapon's is drawn (the parachute's harness) and no weapon's is: no gun in the hand.
 bool NoGunDrawn();
+// Tests (Debug.GameCommands): "mohavr gun where" logs the drawn gun's origin against its frame at the controller.
+bool TestCommand(const wchar_t* line);
 
 // ViewModel=2: this frame's aim line along the gun in the hand (world: start, unit direction; the scale in use).
 // False when the gun isn't in the hand.

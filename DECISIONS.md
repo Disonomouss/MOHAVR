@@ -1858,3 +1858,31 @@ hud, then hold X."
     Stand_Idle (no AirDropLanded). Off again from the menu: the game's verdict stands (hard (forward)).
 - **Not checked:** the disc copy (D92's dump wasn't kept); if a SecuROM splice is in the hook's 64 bytes, the hook stands
   down alone ("bytes differ") and the game judges every landing.
+
+### D109. Physical crouch: the gun and arms stay in the hands -- Decided 2026-11-23
+- **Why:** a player: "When I have [physical crouch] enabled, my arms are offset from my body as if they're crouching
+  already, and when I then crouch, they move all the way to ground level".
+- **Cause:** the move that puts the game's first-person gun and arms into the hand (viewmodel) is built against the
+  game's camera, the frame the game poses them in. It took that camera from `g_world.base`, which is the EYE's base: with
+  the head's crouch engaged it already carried the crouch compensation (D61: the game's ~64-unit crouch drop added back so
+  the eye follows the real head). The parts were therefore drawn that far below the controllers. MinEyeHeight's raise
+  went the same way.
+- **What:**
+  - `g_world.mesh` / `view::MeshCamera()`: the camera before those two corrections. The viewmodel's move takes it; the
+    eyes and the hands' mapping (PoseFrameToWorld) keep the raised base. `GameCamera()` is unchanged for its other
+    callers (melee, the off hand, throwing, the mounted gun).
+  - The standing camera's height falls back to the measured 161 units until it is learnt (a save resumed crouched never
+    stood: one run had no compensation at all, the eye 47 cm above the feet).
+  - No switch: it corrects D61's own behaviour (`[Controls] PhysicalCrouch` remains the switch, off by default).
+- **Proven [S]** (`mohavr gun where`: the drawn gun's origin against its frame at the controller, world units):
+  - Before: standing 25.2 -0.9 -15.6; the head's crouch **50.2 -11.8 -74.4** (59 lower; the mesh 88.8 below the move's
+    camera instead of 24.1 = the 64.3 compensation); still off just after standing up.
+  - After: standing 25.2 -0.9 -15.7; the head 0.30 m down the same; the head's crouch **25.2 -0.9 -15.8**; the stick's
+    crouch 25.1 -0.9 -16.0. The eye 110.6-111.7 cm crouched, 161.3 standing (as D61).
+  - The shots (logs/shots/d109-before-b-crouch, d109-after-c-crouch): before, the arms hang to the ground; after, the gun
+    sits in the view as when standing.
+  - During a stance change the mesh's origin moves 10-30 units for a moment (the game's own animation, as before).
+- **Not explained:** the report's first half (arms offset while standing). In the simulator, with the switch on and the
+  head at the recentre height or 0.30 m below it, the gun is where it is with the switch off. The offset needs the
+  head's crouch engaged (the head 0.40 m below the recentre height) or the ~1.5 s after standing up. If a player still
+  sees it standing, their log's "crouch:" lines say which.
