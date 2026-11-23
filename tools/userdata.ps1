@@ -55,10 +55,19 @@ switch ($Action) {
 
     'backup' {
         if (-not (Test-Path $userDir)) { throw "user folder not found: $userDir" }
-        $dest = Join-Path $root ('logs\backup\' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        # A folder of its own, always: two backups in the same second (a test script's, then the harness's) shared
+        # the timestamp's folder, and Copy-Item into an existing <dest>\Config nests it (<dest>\Config\Config) -- the
+        # restore then put the nested copy into the player's folder, one level deeper each time (found 2026-11-23: five
+        # levels since October; moved out to logs\backup\nested-debris-*).
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        $dest = Join-Path $root "logs\backup\$stamp"
+        for ($i = 2; Test-Path $dest; $i++) { $dest = Join-Path $root "logs\backup\$stamp-$i" }
+        New-Item -ItemType Directory -Force $dest | Out-Null
         foreach ($p in $parts) {
             $src = Join-Path $userDir $p
-            if (Test-Path $src) { Copy-Item $src (Join-Path $dest $p) -Recurse -Force }
+            if (Test-Path (Join-Path $src $p)) { throw "the player's $p folder holds a nested $p\$p (a faulty backup's copy) -- move it out first" }
+            if (Test-Path (Join-Path $dest $p)) { throw "backup folder $dest already holds $p" }
+            if (Test-Path $src) { Copy-Item $src $dest -Recurse -Force }
         }
         foreach ($f in $modFiles) {
             $fp = Join-Path $modDir $f
