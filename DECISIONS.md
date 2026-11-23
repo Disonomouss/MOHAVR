@@ -1886,3 +1886,19 @@ hud, then hold X."
   head at the recentre height or 0.30 m below it, the gun is where it is with the switch off. The offset needs the
   head's crouch engaged (the head 0.40 m below the recentre height) or the ~1.5 s after standing up. If a player still
   sees it standing, their log's "crouch:" lines say which.
+
+### D110. The cutscenes' black bars hidden in VR -- Decided 2026-11-23
+- **Why:** a player: "black bar on screen during cutscenes".
+- **Cause:** the game's letterbox (MOHAHUD_Letterbox, switched by the levels' Toggle Letterbox action) draws black bars
+  on the HUD's canvas. In VR the canvas is the head-locked HUD layer (D55: the letterbox stays head-locked), so the
+  top bar floated across the middle of the view (the bottom one falls outside the HUD texture).
+- **What:** `[HUD] Letterbox` = 0 (shipped): the bars' height (barScreenHeightPercentage) is held at 0 for every VR
+  view, before the HUD draws, and put back for a flat frame, so the cinema screen keeps the game's picture as it is.
+  1 keeps the bars in VR. bActive and the bars' animation stay the game's (its toggle and the action's "finished"
+  output read them). No code patch: a property write each view, as the crosshair's.
+- **Proven [S]** (`mohavr hud letterbox on|off` calls ActivateLetterbox / DeactivateLetterbox):
+  - Before: one black bar across the view (logs/shots/d109-before-e-letterbox), the top 36 px of the HUD texture black.
+  - After: no bar in the view or the texture, the HUD's other elements drawn (d109-after-lb-on, -lbon-host_hud).
+  - "hud: the letterbox's bars hidden in VR (5% ...)" / "back for the flat screen" at each change (the pause menu, the
+    loading screen).
+- **Not checked:** a real mission cutscene (the test switches the letterbox on by the script call the levels use).

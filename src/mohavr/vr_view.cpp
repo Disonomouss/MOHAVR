@@ -1562,6 +1562,8 @@ void OnViewPoint(SafetyHookContext& ctx) {
         }
         if (!g_cinema) ApplySnapTurn(hdr, ctx.edi, rot);
     }
+    if (g_thisEye == 0 && ctx.edi)  // D110: the cutscenes' bars, off the VR views
+        hudtex::Letterbox(*reinterpret_cast<std::uintptr_t*>(ctx.edi + addr::kLocalPlayerActor), !g_cinema);
     if (g_cinema) return;  // flat: the game's own camera, untouched; the frame is marked "no view"
 
     // The game's own camera, where its shots start (aim): before JumpLift below and before the head.

@@ -96,7 +96,12 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - Wrist HUD tests (WRISTHUD-DESIGN 5; the menu's HUD tab, the last; `goto=hudplace`): the off hand palm down across the chest
   is `hand=l,0.13,-0.40,0.30,90,0,90` with `sim_pose.py --pitch -45` (the right hand: mirrored signs); the host logs
   "wristhud: panels shown / hidden (why)"; `python work/research/wristhud/host_capture.py --out-prefix P` saves the host's
-  frame, HUD texture and atlas, `check_atlas.py P host.log` checks the crops; `mohavr hud hit <yaw> | objective | status`.
+  frame, HUD texture and atlas, `check_atlas.py P host.log` checks the crops; `mohavr hud hit <yaw> | objective | status |
+  letterbox on|off` (D110: the cutscenes' bars).
+- Physical crouch tests (D61, D109): deploy with `Controls.PhysicalCrouch=1`, drop the head 0.5 m (`sim_pose.py --y 1.2`);
+  the log's "crouch:" lines give the stance and the eye's height; `mohavr gun where` logs the drawn gun's origin against
+  its frame at the controller (it must not change with the stance). Game commands are read twice a second: send them
+  at least 0.75 s apart. `python tools/find_native.py <native table name>` finds a script native's exec in the exe.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

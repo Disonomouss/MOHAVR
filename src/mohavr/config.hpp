@@ -20,6 +20,7 @@ struct Config {
     int   hudPlace      = 0;      // [HUD] Place -- 0 screen, 1 wrist: until the host's menu says (the player's [HUD] Place)
     int   hudCanvas     = 1280;   // [HUD] WristCanvas -- the HUD texture's width in px (height 9/16 of it; the HUD lays out on it)
     bool  hudCrosshair  = false;  // [HUD] Crosshair -- the game's own crosshair (0: hidden; the red dot aims)
+    bool  hudLetterbox  = false;  // [HUD] Letterbox -- the cutscenes' black bars in VR (0: hidden; the cinema screen keeps them) (D110)
     bool  hudHitMarker  = false;  // [HUD] HitMarker -- the red cross on a hit (0: hidden)
     bool  weaponTracers = false;  // [Weapon] Tracers -- the player's tracers (0: none; they start at the gun's game pose)
     int   muzzleFlash   = 2;      // [Weapon] MuzzleFlash -- the player's muzzle flash: 0 hide, 1 game, 2 at the drawn barrel

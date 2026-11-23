@@ -2430,6 +2430,13 @@ off), however you flare. Off by default.
 1. Crouched for real: are the gun and arms where your hands are? (yes/no)
 2. Standing, with physical crouch on: are the arms offset at all? (yes/no; if yes, send MOHAVR.log)
 
+### No black bar in cutscenes (D110)
+**Changed:** the black bar that floated across the view during in-game cutscenes is gone (`[HUD] Letterbox=1` in the ini
+brings it back). Cutscenes on the flat screen look as before.
+
+**Questions:**
+1. In an in-game cutscene (a mission's start): is the bar gone? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

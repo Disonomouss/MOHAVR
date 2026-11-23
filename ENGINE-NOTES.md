@@ -2470,6 +2470,16 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   the test pose, the same standing, crouched by the stick and crouched by the head.
 - The harness's save resumes standing and crouches by itself a moment later (the save was made crouched).
 
+## 5cc. The letterbox (D110, 2026-11-23)
+
+- `MOHAHUD.hud_letterBox` (MOHAHUD_Letterbox). The levels' SeqAct_ToggleLetterbox -> the pawn's OnToggleLetterbox ->
+  `MOHAHUD.ModifyLetterBox(Action)` -> SetNewOpeningParams / ActivateLetterbox(bAnimateBars), or the closing pair.
+- MOHAHUD's render: `if (hud_letterBox.bActive) hud_letterBox.Render(Canvas)`. Render: `barHeight =
+  barScreenHeightPercentage (0.05 by default) x Canvas.SizeY x barAnimatePercent`, then the native DrawLetterbox(Canvas)
+  (exec 0x10E43E80, native table entry 0x11613068; it calls the object's virtual at vtable +0x184).
+- On the 1280x720 HUD texture only the top bar shows (36 px).
+- barScreenHeightPercentage = 0 draws nothing; the rest of the HUD pass is unchanged.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

@@ -18,6 +18,7 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The cutscenes' black bars hidden in VR** (2026-11-23, D110; `[HUD] Letterbox=0`). Unreleased.
 **Physical crouch: the gun and arms stay in the hands** (2026-11-23, D109): they were drawn ~64 cm below the controllers
 while the head's crouch was engaged. Unreleased.
 **Perfect landing** (2026-11-14, D108; shared block v39): an option (the menu's Comfort tab, `[Comfort] PerfectLanding`, off

@@ -137,6 +137,8 @@ int IntProp(std::uintptr_t o, const char* name, int def) {
     const int off = names::PropertyOffset(o, name);
     return off >= 0 ? *reinterpret_cast<const int*>(o + off) : def;
 }
+bool g_letterbox = false;  // [HUD] Letterbox (D110)
+
 std::uintptr_t ObjProp(std::uintptr_t o, const char* name) {
     const int off = o ? names::PropertyOffset(o, name) : -1;
     return off >= 0 ? names::ReadPointer(o + off) : 0;
@@ -418,6 +420,7 @@ bool WriteBmp32(const std::wstring& path, const D3DLOCKED_RECT& lr, UINT w, UINT
 }  // namespace
 
 bool Install(const Config& cfg) {
+    g_letterbox = cfg.hudLetterbox;
     InitializeCriticalSection(&g_rtLock);
     g_placeDefault = cfg.hudPlace;
     if (cfg.hudMode != 1 || !cfg.hudRedirect) {
@@ -621,6 +624,41 @@ void OnCapture(IDirect3DDevice9* dev, const std::wstring& dir) {
     LeaveCriticalSection(&g_rtLock);
 }
 
+// D110 (a player: "black bar on screen during cutscenes"): the game's letterbox (MOHAHUD_Letterbox, switched by the levels'
+// SeqAct_ToggleLetterbox) is black bars on the HUD's canvas. In VR the canvas is the head-locked HUD layer, where the top
+// bar floated across the view. Its Render makes barHeight = barScreenHeightPercentage x the canvas's height x the
+// animation each frame, so the percentage is held at 0 for the VR views ([HUD] Letterbox=0) and put back for a flat
+// frame (the cinema screen shows the game's picture as it is). bActive and the animation stay the game's (its toggle
+// reads bActive).
+void Letterbox(std::uintptr_t ctrl, bool vrView) {
+    if (g_letterbox) return;
+    static std::uintptr_t keptFor = 0;
+    static float kept = 0.0f;
+    const std::uintptr_t box = ObjProp(ObjProp(ctrl, "myHUD"), "hud_letterBox");
+    const int off = box ? names::PropertyOffset(box, "barScreenHeightPercentage") : -1;
+    if (off < 0) return;
+    auto* pct = reinterpret_cast<float*>(box + static_cast<std::uintptr_t>(off));
+    if (box != keptFor) {  // a new HUD (a level load): nothing of ours in it
+        keptFor = box;
+        kept = 0.0f;
+    }
+    static int logged = 0;
+    if (vrView) {
+        if (*pct > 0.0f && *pct <= 1.0f) {
+            kept = *pct;
+            *pct = 0.0f;
+            if (logged < 6) {
+                ++logged;
+                MLOG("hud: the letterbox's bars hidden in VR (%.0f%% of the screen each; HUD.Letterbox=0)", kept * 100.0f);
+            }
+        }
+    } else if (*pct == 0.0f && kept > 0.0f) {
+        *pct = kept;
+        kept = 0.0f;
+        if (logged < 6) MLOG("hud: the letterbox's bars back for the flat screen (%.0f%%)", *pct * 100.0f);
+    }
+}
+
 bool TestCommand(std::uintptr_t player, const wchar_t* line) {
     if (wcsncmp(line, L"mohavr hud ", 11) != 0) return false;
     const wchar_t* arg = line + 11;
@@ -661,6 +699,16 @@ bool TestCommand(std::uintptr_t player, const wchar_t* line) {
         const bool ok = c.Set("Enabled", &on, 4) && c.Set("Duration", &dur, 4) && c.Set("infoType", &both, 1) &&
                         c.Set("complexity", &folder, 1) && c.Run();
         MLOG("test: hud badges -> %s", ok ? "shown" : "failed");
+        return true;
+    }
+    if (!wcsncmp(arg, L"letterbox ", 10)) {
+        // The cutscenes' bars (MOHAHUD_Letterbox, as SeqAct_ToggleLetterbox does without the animation).
+        const bool on = !wcscmp(arg + 10, L"on");
+        const std::uintptr_t box = ObjProp(hud, "hud_letterBox");
+        script::Call c(box, on ? "ActivateLetterbox" : "DeactivateLetterbox");
+        const std::uint32_t animate = 0;
+        const bool ok = box && c.Set("bAnimate", &animate, 4) && c.Run();
+        MLOG("test: hud letterbox %s -> %s", on ? "on" : "off", ok ? "done" : "failed");
         return true;
     }
     if (!wcscmp(arg, L"status")) {

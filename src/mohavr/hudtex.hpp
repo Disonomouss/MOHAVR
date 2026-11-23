@@ -38,6 +38,9 @@ void SetShared(bool ok);
 // loop to one player) -- the place is the wrist (the host's hdr->hudPlace, else [HUD] Place), the render target and the
 // shared ring are ready, and no pass has failed. False otherwise (the screen panel).
 bool PlanDraw(const shared::Header* hdr);
+// D110: the game's letterbox bars -- hidden for a VR view ([HUD] Letterbox=0), back for a flat frame. Once per view, with
+// the player's controller, before the HUD draws.
+void Letterbox(std::uintptr_t ctrl, bool vrView);
 bool ThisDraw();                    // PlanDraw said yes for the current Draw
 // Game thread, at the HUD matrix push of a wrist Draw: the pass opens (batches flushed from now on are the HUD's).
 // `localPlayer` = the ULocalPlayer whose HUD draws (its HUD's elements are read after the pass).

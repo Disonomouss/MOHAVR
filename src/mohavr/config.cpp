@@ -55,6 +55,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.hudScale       = getf(L"HUD", L"Scale", c.hudScale, 0.1f, 2.0f);
     c.hudCrosshair   = get(L"HUD", L"Crosshair", c.hudCrosshair);
     c.hudHitMarker   = get(L"HUD", L"HitMarker", c.hudHitMarker);
+    c.hudLetterbox   = get(L"HUD", L"Letterbox", c.hudLetterbox);
     c.hudRedirect    = get(L"HUD", L"Redirect", c.hudRedirect);
     {
         wchar_t v[16] = L"";
