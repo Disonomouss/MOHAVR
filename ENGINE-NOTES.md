@@ -2494,6 +2494,18 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - A part's bake runs before the Draw whose view it is shown with, with the move built at the Draw before: the Camera
   bone in the bake is a frame newer than the move's camera (3-4 cm through the glide at the simulator's frame rate).
 
+## 5ce. What a stance change does to the pawn and the arms' mesh (D112, 2026-11-24)
+
+- The collision cylinder is resized at the START of the change, crouching and standing alike: CollisionHeight 96 <-> 49,
+  and the pawn's Location (the cylinder's centre) moves 47 units that tick. The feet stay.
+- On that tick the arms' LocalToWorld goes with the centre (+47 standing up) and its bones go the other way (-47 in
+  component space): the Camera bone, and the camera, stay where they were in the world.
+- The stand's animation takes the camera up to 16.5 units past the standing height (about 0.5 s in) and back down by its
+  end; the crouch's dips less than 1.
+- `mohavr arm trace` now logs per Draw: both elbows and wrists against the eye, the pawn's z, the head's z, the
+  activity and the crouch compensation ("armik: drawn -- ...").
+- The game can refuse its crouch (three pulses of X without a stance change) while another pawn overlaps the player.
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

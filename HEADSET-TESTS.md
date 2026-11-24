@@ -2445,6 +2445,15 @@ physical crouch both).
 1. Crouching and standing: do the gun and arms stay still in your hands? (yes/no)
 2. Is there any jump as the crouch finishes? (yes/no)
 
+### Standing up: no jitter (D112)
+**Changed:** the arms no longer jump or jitter as you stand up or crouch (physical crouch and the stick's), and the view
+no longer bounces at the end of a physical stand-up.
+
+**Questions:**
+1. Standing up for real (physical crouch on): do the arms stay still? (yes/no)
+2. Standing up with the stick: do the arms stay with your hands while the view rises? (yes/no)
+3. Walking: is the gun as steady in the hand as before? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

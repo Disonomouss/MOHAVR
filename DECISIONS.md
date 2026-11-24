@@ -1935,3 +1935,40 @@ hud, then hold X."
   width at 1920, 5.1% at 2880 (the old default), 3.6% at the player's Quest 3 preset (4128). Screen distance and Screen
   size (D97, General) are the existing levers; the player's ini has neither set. A real "bigger font" (the UI laid out
   smaller and magnified) is research that needs the decompiler.
+
+### D112. Standing up: the arms hold still -- Decided 2026-11-24
+- **Why:** the player, after D111: "Arms jitter when standing up."
+- **Measured first** (`mohavr arm trace`: per Draw, both wrists and elbows against the eye, the pawn's z, the activity,
+  the crouch compensation; the test hands follow the head, so every value should stay constant). Four things moved:
+  1. **A 47 cm jump for one frame** of both arms and the gun, at the start of every crouch and every stand. The stance
+     change resizes the collision cylinder (half height 49 <-> 96), which moves the pawn's Location, its centre, 47 units
+     in one tick with the body going nowhere. Weapon.CatchUp (round 25) took it for a step of the body. In the game since
+     round 25; D111 only made it visible.
+  2. **The view bounced at the end of the head's stand.** The stand's animation takes the game camera up to 16.5 units
+     past the standing height and back. The physical crouch's compensation stopped at zero the first time the camera
+     reached that height, so the eye rode the bounce, and the arms, placed a frame earlier, stepped 2-3 cm against it.
+  3. **The elbows.** They bend the way the game's pose bends, so the animation D111 took off the hand still reached
+     them: the free arm's elbow swung 11 cm and stepped 4.
+  4. **The stick's crouch and stand:** the eye rides the camera's glide (as in the flat game), and the hands, placed at
+     the view before, trailed it by a frame (up to 2.3 cm a frame, 6.4 cm of wander).
+- **What:**
+  1. The catch-up's move is the pawn's **feet's** (`viewmodel::PawnFrame`); the first-person meshes, which do go with
+     the centre on that tick, are taken back by the centre's (`BodyMoveSinceView(w, true)`).
+  2. Through the settle after the head's stand the compensation follows the camera below zero too (to -40), for as long
+     as the stance change runs; what is left when it ends fades in 150 ms.
+  3. Each elbow keeps the bend it had before the change, in the arms' own space, while D111's lock holds the hand
+     (`g_stanceWeight`), blended back with it.
+  4. While the lock holds and the eye is not held by the compensation, the hands' targets are carried by the camera's
+     own move in the world since their view (`CarryNow`), beyond the body's.
+  - All under `[Weapon] StanceArms` except 1 and 2, which correct CatchUp and the physical crouch themselves.
+- **Proven [S]** (the Garand; the largest step of any wrist or elbow from one Draw to the next, and how far each
+  wandered over the change):
+  - The head's stand, before: 47 (the jump), then steps to 3.9; the eye up 16.5. After: **steps to 1.5 cm, wander to
+    1.7 cm, the eye still** (the simulator's own 50 cm head teleport aside).
+  - The stick's stand, before: 47, then to 4.1; wrists wandering 6.4. After: **steps to 1.5 cm, wrists within 0.5 cm.**
+  - The stick's crouch, after: within 0.5 cm, steps of 0.1.
+  - Walking (the catch-up's change): "a walk ... the gun hand moved up to 0.2 / 0.4 cm" (0.4-4.0 in earlier logs).
+  - Every stance change completed; "a stance change ... the gun hand moved up to 0.4-0.5 cm" as D111.
+- **Not checked:** a real stand-up (the simulator moves the head 50 cm in one frame; a real head takes half a second, with
+  the hands tracked on their own); other guns; the head's crouch DOWN traced (one run's requests were refused by the
+  game -- an ally was standing in the player -- and the rerun's trace window missed it; its log lines were as before).

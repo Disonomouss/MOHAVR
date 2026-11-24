@@ -18,6 +18,9 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**Standing up: the arms hold still** (2026-11-24, D112): a one-frame 47 cm jump of the arms at every stance change (the
+cylinder's resize taken for a step), the view's bounce at the end of the head's stand, the elbows and the hands' one-frame
+trail behind the camera's glide. Unreleased.
 **The arms and gun stay still through a crouch or stand** (2026-11-24, D111; `[Weapon] StanceArms=idle`): the game's
 0.7 s animation moved them 17-21 cm in the hand; now 0.5 cm. Unreleased.
 **The cutscenes' black bars hidden in VR** (2026-11-23, D110; `[HUD] Letterbox=0`). Unreleased.

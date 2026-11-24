@@ -124,6 +124,7 @@ struct State {
     // tick's bake carries the move and the hand frames along with the body's move since (Weapon.CatchUp).
     std::uintptr_t pawn;
     M4    pawnFrame;
+    float pawnHalf = 0.0f;  // D112: the collision cylinder's half height at this view (PawnFrame is the feet's)
     float roomSince[3] = {0.0f, 0.0f, 0.0f};  // D99: room-scale steps since this view (world units)
     // D21 manual reload: the host's flags, pull, held magazine and rack, read with the hands (RELOAD-DESIGN X3), and the
     // held magazine's grab-point frame mapped like the off hand's (mirrored with it).
@@ -135,11 +136,23 @@ struct State {
     bool  noHands;
 } g_state{};
 
+// The pawn's frame for the catch-up: its yaw, and its FEET (D112). A stance change resizes the collision cylinder and moves
+// the pawn's Location (its centre) 47 units in one tick with the body going nowhere; taken as a walk, the arms and gun
+// jumped that far for a frame at the start of every crouch and stand.
+float PawnHalfHeight(std::uintptr_t pawn) {
+    const int co = names::PropertyOffset(pawn, "CylinderComponent");
+    const std::uintptr_t cyl = co >= 0 ? names::ReadPointer(pawn + co) : 0;
+    const int ho = cyl ? names::PropertyOffset(cyl, "CollisionHeight") : -1;
+    const float h = ho >= 0 ? *reinterpret_cast<const float*>(cyl + ho) : 0.0f;
+    return h > 1.0f && h < 200.0f ? h : 0.0f;
+}
+
 M4 PawnFrame(std::uintptr_t pawn) {
     const float* loc = reinterpret_cast<const float*>(pawn + addr::kActorLocation);
+    const float half = PawnHalfHeight(pawn);
     const float yaw = static_cast<float>(*reinterpret_cast<const int*>(pawn + addr::kActorRotation + 4)) * (3.14159265f / 32768.0f);
     const float c = std::cos(yaw), s = std::sin(yaw);
-    const float x[3] = {c, s, 0.0f}, y[3] = {-s, c, 0.0f}, z[3] = {0.0f, 0.0f, 1.0f}, t[3] = {loc[0], loc[1], loc[2]};
+    const float x[3] = {c, s, 0.0f}, y[3] = {-s, c, 0.0f}, z[3] = {0.0f, 0.0f, 1.0f}, t[3] = {loc[0], loc[1], loc[2] - half};
     return Frame(x, y, z, t);
 }
 
@@ -924,6 +937,7 @@ void OnPlayerView() {
     g_state.upm = upmNow;
     g_state.pawn = pawn;
     g_state.pawnFrame = pawnFrame;
+    g_state.pawnHalf = pawn ? PawnHalfHeight(pawn) : 0.0f;
     g_state.valid = true;
     g_state.tick = GetTickCount();
     g_state.d = d;
@@ -1010,7 +1024,7 @@ bool DrawMirror(float (&r)[16]) {
     return true;
 }
 
-bool BodyMoveSinceView(float (&w)[16]) {
+bool BodyMoveSinceView(float (&w)[16], bool centre) {
     if (!g_installed || g_cfg.viewModel != 2) return false;
     State s;
     AcquireSRWLockShared(&g_lock);
@@ -1022,7 +1036,13 @@ bool BodyMoveSinceView(float (&w)[16]) {
     // More than a frame's walk isn't one (a teleport, a respawn at the same pawn): no catch-up.
     const float dx = now.m[3][0] - s.pawnFrame.m[3][0], dy = now.m[3][1] - s.pawnFrame.m[3][1], dz = now.m[3][2] - s.pawnFrame.m[3][2];
     if (dx * dx + dy * dy + dz * dz > 100.0f * 100.0f) return false;
-    const M4 m = Mul(RigidInverse(s.pawnFrame), now);
+    M4 m = Mul(RigidInverse(s.pawnFrame), now);
+    // The centre's move: the feet's plus the cylinder's resize (the tick a stance change resizes it, the first-person
+    // meshes go with the centre; the game puts them back the next tick).
+    if (centre && s.pawnHalf > 0.0f) {
+        const float half = PawnHalfHeight(pawn);
+        if (half > 0.0f) m.m[3][2] += half - s.pawnHalf;
+    }
     std::memcpy(w, m.m, sizeof(w));
     return true;
 }

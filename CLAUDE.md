@@ -101,7 +101,8 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
 - Physical crouch tests (D61, D109): deploy with `Controls.PhysicalCrouch=1`, drop the head 0.5 m (`sim_pose.py --y 1.2`);
   the log's "crouch:" lines give the stance and the eye's height; `mohavr gun where` logs the drawn gun's origin against
   its frame at the controller (it must not change with the stance). Game commands are read twice a second: send them
-  at least 0.75 s apart. `python tools/find_native.py <native table name>` finds a script native's exec in the exe.
+  at least 0.75 s apart. `mohavr arm trace` logs every Draw for 3 s ("armik: drawn": the wrists and elbows against the
+  eye, the pawn's z, the activity, the compensation): with the test hands following the head, nothing should move. `python tools/find_native.py <native table name>` finds a script native's exec in the exe.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.

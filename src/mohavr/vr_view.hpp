@@ -58,6 +58,9 @@ bool GameCamera(float (&loc)[3], float& pitch, float& yaw);
 // D109: the camera the game's first-person gun and arms are posed against this frame -- GameCamera's before the eye's own
 // corrections (the physical crouch's compensation, MinEyeHeight). The viewmodel's move is built on it.
 bool MeshCamera(float (&loc)[3], float& pitch, float& yaw);
+// D112: the last view held the eye at the real head's height against the game camera's own movement (the physical
+// crouch's compensation): the hands' targets then don't go with the camera.
+bool EyeHeld();
 // Camera.SteadyLanding: the parachute landing's view is held now (the hands' per-view work waits).
 bool LandingHeld();
 

@@ -476,6 +476,7 @@ void PublishAirdrop(shared::Header* hdr);
 void RoomScaleStep(shared::Header* hdr);  // D88 (with the physical crouch)
 void ApplyRoomOrigin();                   // D94/D99
 bool ChuteTestCommand(const wchar_t* line);
+extern float g_crouchComp;  // (defined below, with the physical crouch; the Draw's trace reads it)
 
 void RunTestCommands(const std::uintptr_t* players) {
     if (!g_cfg.debugGameCommands || !players || players[1] < 1 || !players[0]) return;
@@ -734,8 +735,14 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
             static unsigned drawNo = 0;
             float pl[3];
             names::ReadVector(tp + addr::kActorLocation, pl);
-            MLOG("armik: drawn -- #%u elbows %.1f %.1f %.1f / %.1f %.1f %.1f from the eye; the pawn %.1f %.1f", ++drawNo, el[0][0] - hp[0],
-                 el[0][1] - hp[1], el[0][2] - hp[2], el[1][0] - hp[0], el[1][1] - hp[1], el[1][2] - hp[2], pl[0], pl[1]);
+            float wr[2][3] = {};
+            armsik::TraceWrists(wr);
+            const int co = names::PropertyOffset(tp, "CurrentActivity");
+            MLOG("armik: drawn -- #%u elbows %.1f %.1f %.1f / %.1f %.1f %.1f from the eye; the pawn %.1f %.1f; wrists %.1f %.1f %.1f / "
+                 "%.1f %.1f %.1f; pawn z %.1f head z %.1f act %d comp %.1f", ++drawNo, el[0][0] - hp[0],
+                 el[0][1] - hp[1], el[0][2] - hp[2], el[1][0] - hp[0], el[1][1] - hp[1], el[1][2] - hp[2], pl[0], pl[1],
+                 wr[0][0] - hp[0], wr[0][1] - hp[1], wr[0][2] - hp[2], wr[1][0] - hp[0], wr[1][1] - hp[1], wr[1][2] - hp[2], pl[2], hp[2],
+                 co >= 0 ? *reinterpret_cast<const std::uint8_t*>(tp + co) : -1, g_crouchComp);
         }
     }
     // D99 (a player: with room-scale on "any movement results in player flickering"): the step comes after the frame is
@@ -1318,6 +1325,7 @@ struct CrouchState {
     int   fails = 0;
     float standCam = -1.0f;    // the game camera's height above the feet when standing (units, learnt)
     DWORD settleUntil = 0;     // after the head's stand: the compensation fades with the rising camera
+    DWORD settleFade = 0;      // ... and from here (the stand's animation over) what is left of it fades out (D112)
     DWORD slowAt = 0;
     bool  slowOk = true;       // no ladder, no mounted gun (the controller's state, at 4 Hz)
     DWORD logAt = 0;           // a second after a stance change: the eye's height logged (the tests' measure)
@@ -1325,6 +1333,7 @@ struct CrouchState {
 };
 CrouchState g_crouch;
 float g_crouchComp = 0.0f;     // units added to the camera's height this frame (both eyes)
+bool  g_eyeHeld = false;       // D112: the compensation is on (the eye keeps the real head's height whatever the camera does)
 
 // D75: the airdrop's phase for the host (its hand steering): the pawn's Physics and CurrentActivity (ENGINE-NOTES 5an: 2 falling
 // with activity 35 = freefall, 11 the parachute, activity 40 flaring).
@@ -1397,6 +1406,7 @@ bool ChuteTestCommand(const wchar_t* line) {
 void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* loc) {
     CrouchState& c = g_crouch;
     g_crouchComp = 0.0f;
+    g_eyeHeld = false;
     const std::uintptr_t pawn = aim::LocalPlayerPawn();
     float feet = 0.0f, half = 0.0f;
     if (!pawn || !g_viewIsPlayers || !PawnFeet(pawn, feet, half)) return;
@@ -1493,8 +1503,34 @@ void PhysicalCrouch(shared::Header* hdr, const shared::Pose& head, const float* 
         // D109: a save resumed crouched has no standing camera learnt yet (the eye then sat the game's drop too low: 47 cm
         // above the feet): the measured one until it is (160.9-161.7 units, D61).
         const float stand = c.standCam > 0.0f ? c.standCam : 161.0f;
-        g_crouchComp = std::fmin(std::fmax(stand - camAbove, 0.0f), 100.0f);
-        if (!c.phys && g_crouchComp < 0.5f) c.settleUntil = now;
+        g_eyeHeld = true;
+        if (c.phys && crouched) {
+            g_crouchComp = std::fmin(std::fmax(stand - camAbove, 0.0f), 100.0f);
+            c.settleFade = 0;
+        } else {
+            // D112 (the player: "arms jitter when standing up"): the stand's animation takes the game camera up to 16 units
+            // PAST the standing height and back. The compensation stopped at zero the first time the camera reached it, so
+            // the eye rode that bounce (and the arms, placed a frame earlier, stepped 2-3 cm against it). Held through the
+            // animation, below zero too; when it is over, what is left (the learnt height against this one) fades in 150 ms.
+            const int ao = names::PropertyOffset(pawn, "CurrentActivity");
+            const bool changing = ao >= 0 && *reinterpret_cast<const std::uint8_t*>(pawn + ao) == 25;  // PLAYER_ACTIVITY_STANCE_CHANGE
+            float comp = std::fmin(std::fmax(stand - camAbove, -40.0f), 100.0f);
+            if (changing) {
+                c.settleFade = 0;
+            } else {
+                if (!c.settleFade) c.settleFade = now;
+                const float f = 1.0f - static_cast<float>(now - c.settleFade) / 150.0f;
+                if (f <= 0.0f || std::fabs(comp) < 0.05f) {
+                    comp = 0.0f;
+                    c.settleUntil = now;
+                } else {
+                    comp *= f;
+                }
+            }
+            g_crouchComp = comp;
+        }
+    } else {
+        c.settleFade = 0;
     }
     if (c.logAt && static_cast<LONG>(now - c.logAt) >= 0) {
         c.logAt = 0;
@@ -1609,7 +1645,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     const float meshCam[3] = {loc[0], loc[1], loc[2]};
     // Physical crouch (GOAL A1): decided once per frame; its compensation raises every eye alike.
     if (g_thisEye == 0) PhysicalCrouch(hdr, head, loc);
-    if (g_crouchComp > 0.0f) loc[2] += g_crouchComp;
+    if (g_crouchComp != 0.0f) loc[2] += g_crouchComp;
 
     // Camera.MinEyeHeight (GOAL B, "you clip into the ground when landing"): the parachute's botched landing rolls the
     // arms' Cam socket down to the floor, and in VR the view keeps the head's orientation, so the eye looked out from
@@ -2258,6 +2294,8 @@ bool GameCamera(float (&loc)[3], float& pitch, float& yaw) {
     yaw = g_world.yaw;
     return true;
 }
+
+bool EyeHeld() { return g_eyeHeld; }
 
 bool MeshCamera(float (&loc)[3], float& pitch, float& yaw) {
     if (!g_world.valid) return false;
