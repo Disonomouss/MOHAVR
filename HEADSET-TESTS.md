@@ -2471,6 +2471,12 @@ the hand during a stand).
 1. Two-handed, crouch and stand with the stick: is the gun still in your hands? (yes/no)
 2. If not: send MOHAVR.log from that session (the first six crouches / stands are recorded frame by frame).
 
+### The bottom of the crouch, seated (D115)
+**Changed:** no shake of the hands and gun as the crouch reaches its bottom, and no kick as you start to stand.
+
+**Questions:**
+1. Seated, crouch and stand with the stick: are the hands and gun still all the way down and back up? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

@@ -2041,3 +2041,21 @@ hud, then hold X."
   - `StanceArms=game`: the animation alone (17.6-20.4 cm), no 47 cm frame.
 - **Not proven:** a real foregrip hold (the simulator's two-handed solve keeps the gun's own pose on the gun hand); the
   recorder now measures the gun, so the next session's log says.
+
+### D115. The hands go with the eye, not under its floor -- Decided 2026-11-24
+- **Why:** the player, after D114: "Hands and gun shake when reaching the bottom of the crouch. One quick shake when
+  beginning to stand back up."
+- **Their session** (the recorder, logs/headset-20261124-d114-*; `tools/stance_trace.py`): over all six recorded
+  changes the gun in the hand moved 0.00 cm / 0.01 deg and the gun hand in its controller's frame 0.40 cm -- the lock
+  held. But the head was 0.43 m under the recentre height throughout (a seated player), so the stick's crouch put the
+  eye at 53 cm above the feet, and `Camera.MinEyeHeight` (60) held it: "the eye held 60 cm above the feet (raised
+  1.0-7.4 cm)". In those frames both wrists moved together against the eye, 0.4-1.6 cm a frame.
+- **Cause:** D112 carries the hands with the game camera's own move between the view and the Draw. Under the eye's
+  floor the camera goes on moving (down to 53, and back up from there as the stand begins) and the eye does not.
+- **What:** the carried move is the eye's base's: the higher of the camera and the floor, before and after
+  (`view::EyeFloor`, the camera's z and the floor's as the last view had them).
+- **Proven [S]** (seated: the head 0.43 m under the origin, the stick, two-handed solve; wrists against the eye):
+  - Before: through the crouch's bottom the wrists wandered 2.6 cm, steps to 1.9; a 1.8 cm step as the stand began.
+  - After: within 0.5-1.0 cm, steps of 0.2 (the crouch) and 0.1 (the stand); the gun in the hand 0.00 / 0.01 deg.
+- **Test notes:** the harness sometimes leaves the game showing a cursor ("cinema: ON ... UI menu: cursor shown") with
+  no menu open, and nothing of the test then runs; seen when "in gameplay" took 12-13 s. A rerun is the only cure so far.

@@ -1138,7 +1138,14 @@ bool CarryNow(std::uintptr_t pawn, M4& W) {
         float rs[3];
         if (viewmodel::RoomSince(rs)) nowAt = Sub(nowAt, V3{rs[0], rs[1], rs[2]});
         const V3 carried = Origin(Mul(Translate(Origin(Mul(s.viewCam, s.viewL2W))), W));
-        W = Mul(W, Translate(Sub(nowAt, carried)));
+        V3 move = Sub(nowAt, carried);
+        // D115 (the player, seated, the head 43 cm under the recentre height: "hands and gun shake when reaching the bottom
+        // of the crouch. One quick shake when beginning to stand back up"): Camera.MinEyeHeight stops the EYE 60 cm above
+        // the feet while the camera goes on down (to 53 there) and starts back up from under it. The hands went with the
+        // camera for those frames and the eye did not. They go with the eye's base: the higher of the camera and that floor.
+        float camZ = 0.0f, floorZ = 0.0f;
+        if (view::EyeFloor(camZ, floorZ)) move.z = std::fmax(camZ + move.z, floorZ) - std::fmax(camZ, floorZ);
+        W = Mul(W, Translate(move));
     }
     return true;
 }

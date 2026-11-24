@@ -61,6 +61,9 @@ bool MeshCamera(float (&loc)[3], float& pitch, float& yaw);
 // D112: the last view held the eye at the real head's height against the game camera's own movement (the physical
 // crouch's compensation): the hands' targets then don't go with the camera.
 bool EyeHeld();
+// D115: Camera.MinEyeHeight at the last view: the camera's z it saw and the lowest z the eye's base may take (the eye's
+// base was the higher of the two). False when the floor didn't apply.
+bool EyeFloor(float& camZ, float& floorZ);
 // Camera.SteadyLanding: the parachute landing's view is held now (the hands' per-view work waits).
 bool LandingHeld();
 

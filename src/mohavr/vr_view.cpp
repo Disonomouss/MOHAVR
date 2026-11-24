@@ -1339,6 +1339,9 @@ struct CrouchState {
 CrouchState g_crouch;
 float g_crouchComp = 0.0f;     // units added to the camera's height this frame (both eyes)
 bool  g_eyeHeld = false;       // D112: the compensation is on (the eye keeps the real head's height whatever the camera does)
+// D115: Camera.MinEyeHeight at the last view -- the camera's z it was given and the lowest z the eye's base may take.
+bool  g_eyeFloorOk = false;
+float g_eyeFloorCamZ = 0.0f, g_eyeFloorZ = 0.0f;
 
 // D75: the airdrop's phase for the host (its hand steering): the pawn's Physics and CurrentActivity (ENGINE-NOTES 5an: 2 falling
 // with activity 35 = freefall, 11 the parachute, activity 40 flaring).
@@ -1657,6 +1660,7 @@ void OnViewPoint(SafetyHookContext& ctx) {
     // inside the ground. Keep the head's eye at least MinEyeHeight above the pawn's feet: the game camera is raised
     // before the hands' mapping below takes it (the hands stay with the view), by the same amount for both eyes (the
     // head's height, not each eye's).
+    if (g_thisEye == 0) g_eyeFloorOk = false;
     if (g_cfg.minEyeHeight > 0.0f) {
         const std::uintptr_t pawn = aim::LocalPlayerPawn();
         float feet = 0.0f, half = 0.0f;
@@ -1669,6 +1673,11 @@ void OnViewPoint(SafetyHookContext& ctx) {
             if (h > -1.0f && h < 1.0f) headUp += h * s;
             const float minZ = feet + g_cfg.minEyeHeight * s / 100.0f;
             const float raise = minZ - (loc[2] + headUp);
+            if (g_thisEye == 0) {  // (for what is carried with the camera between views: armsik's CarryNow)
+                g_eyeFloorOk = true;
+                g_eyeFloorCamZ = loc[2];
+                g_eyeFloorZ = minZ - headUp;
+            }
             if (raise > 0.0f) {
                 loc[2] += raise;
                 static DWORD lastLog = 0;
@@ -2301,6 +2310,12 @@ bool GameCamera(float (&loc)[3], float& pitch, float& yaw) {
 }
 
 bool EyeHeld() { return g_eyeHeld; }
+
+bool EyeFloor(float& camZ, float& floorZ) {
+    camZ = g_eyeFloorCamZ;
+    floorZ = g_eyeFloorZ;
+    return g_eyeFloorOk;
+}
 
 bool MeshCamera(float (&loc)[3], float& pitch, float& yaw) {
     if (!g_world.valid) return false;
