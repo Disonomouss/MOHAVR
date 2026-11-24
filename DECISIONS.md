@@ -1969,6 +1969,11 @@ hud, then hold X."
   - The stick's crouch, after: within 0.5 cm, steps of 0.1.
   - Walking (the catch-up's change): "a walk ... the gun hand moved up to 0.2 / 0.4 cm" (0.4-4.0 in earlier logs).
   - Every stance change completed; "a stance change ... the gun hand moved up to 0.4-0.5 cm" as D111.
+  - The head's crouch DOWN: steps under 1.0 cm, wander to 1.4 (the head's teleport aside).
+  - Room-scale steps through the stick's crouch (the head moved 3 cm sideways eight times): the same one-frame 2.8 cm
+    step per move as with no stance change (the test hands following the moved head), nothing added. (A room step
+    since the view is taken off the camera's carried move, as D99 keeps it out of the catch-up.)
+  - The Colt, three changes: 0.2, 0.5, 0.3 cm (D111's 4.0 cm did not recur).
 - **Not checked:** a real stand-up (the simulator moves the head 50 cm in one frame; a real head takes half a second, with
-  the hands tracked on their own); other guns; the head's crouch DOWN traced (one run's requests were refused by the
-  game -- an ally was standing in the player -- and the rerun's trace window missed it; its log lines were as before).
+  the hands tracked on their own); the other guns. One run's head crouch was refused by the game three times (an ally
+  overlapped the player then; cause not established); the reruns crouched at the first request.

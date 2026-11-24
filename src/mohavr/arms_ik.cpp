@@ -1055,6 +1055,10 @@ bool CarryNow(std::uintptr_t pawn, M4& W) {
     M4 Kw;
     V3 at[2];
     if (pawn && !view::EyeHeld() && StanceMove(pawn, Kw, &at)) {
+        // (A room-scale step since the view moved the arms with the pawn; it is no move of the camera's against the
+        // hands -- D99 keeps it out of W and takes it off the parts' frames -- so it comes off here too.)
+        float rs[3];
+        if (viewmodel::RoomSince(rs)) at[0] = Sub(at[0], V3{rs[0], rs[1], rs[2]});
         const V3 carried = Origin(Mul(Translate(at[1]), W));
         W = Mul(W, Translate(Sub(at[0], carried)));
     }

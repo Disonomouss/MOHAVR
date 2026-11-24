@@ -2504,7 +2504,8 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
   end; the crouch's dips less than 1.
 - `mohavr arm trace` now logs per Draw: both elbows and wrists against the eye, the pawn's z, the head's z, the
   activity and the crouch compensation ("armik: drawn -- ...").
-- The game can refuse its crouch (three pulses of X without a stance change) while another pawn overlaps the player.
+- Seen once: the game refused its crouch (three pulses of X, no stance change) while the aim trace reported an allied
+  pawn overlapping the player. The cause isn't established.
 
 ## 6. Content and UnrealScript
 
