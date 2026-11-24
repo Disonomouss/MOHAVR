@@ -1925,4 +1925,13 @@ hud, then hold X."
   - Every change completed ("crouch: settled ..." at 96.3 / 111.7 / 161.3 cm as before); `mohavr gun where` afterwards
     25.2 -0.9 -15.6 (unchanged).
   - A shot 0.35 s into the stick's crouch (logs/shots/d111-idle-a-mid-stick-crouch): the gun as at rest.
-- **Not checked:** other guns (the lock is the same arithmetic for each); firing or reloading during a change.
+  - The Colt after `SwitchPistol` (the stick's crouch, stand, crouch): 0.1 cm / 0 deg, 0.5 cm / 2 deg, and one of
+    **4.0 cm / 4 deg** -- not explained (the pose the lock blends back to differing from the one it held, or the save's
+    firefight: a hit); [H] question 2 asks for it.
+- **Not checked:** the other guns; firing or reloading during a change.
+- **The menus' text** (the same message: "text in menus is too small ... options for bringing the screens closer or
+  making the font bigger"): not built. Measured: the game's menu fonts are a fixed pixel size ("Campaign" is 148 x 20 px
+  at 2880x1620 and at 3840x2160), so they shrink on the flat screen as the render size grows -- 7.7% of the screen's
+  width at 1920, 5.1% at 2880 (the old default), 3.6% at the player's Quest 3 preset (4128). Screen distance and Screen
+  size (D97, General) are the existing levers; the player's ini has neither set. A real "bigger font" (the UI laid out
+  smaller and magnified) is research that needs the decompiler.
