@@ -2437,6 +2437,14 @@ brings it back). Cutscenes on the flat screen look as before.
 **Questions:**
 1. In an in-game cutscene (a mission's start): is the bar gone? (yes/no)
 
+### Crouching: the hands stay still (D111)
+**Changed:** the gun and arms no longer play the game's crouch / stand animation in your hands (the stick's crouch and
+physical crouch both).
+
+**Questions:**
+1. Crouching and standing: do the gun and arms stay still in your hands? (yes/no)
+2. Is there any jump as the crouch finishes? (yes/no)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

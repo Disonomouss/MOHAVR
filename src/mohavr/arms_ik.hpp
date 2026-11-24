@@ -26,6 +26,8 @@ bool BakedMove(std::uintptr_t component, float (&d)[16]);
 // Game thread (round 31): the free support hand's frame in its controller's frame (world axes; the mirror world's when
 // mirrored), as the last arms bake placed it -- the drawn hand = this x the controller frame.
 bool FreeHandRel(float (&rel)[16]);
+// Game thread, at the player's view (D111): the arms' Camera bone as the view takes it, for the stance change's lock.
+void NoteView();
 // Tests (Debug.GameCommands): "mohavr arm trace" logs each arm solve (the torso's turn, the elbows) for 3 s.
 bool TestCommand(const wchar_t* line);
 // While that trace runs: the elbows (world) as the last solve left them.

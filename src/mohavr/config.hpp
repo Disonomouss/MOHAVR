@@ -51,6 +51,7 @@ struct Config {
     bool  leftHandMirror = true;   // [Weapon] LeftHandMirror -- with the gun in the left hand, the arms and gun drawn mirrored
     int   sprintArms    = 2;      // [Weapon] SprintArms -- what the first-person arms play while sprinting: 0 game, 1 walk, 2 idle
     bool  walkArms      = true;   // [Weapon] WalkArms -- the first-person arms play idle while walking too (idle | game)
+    bool  stanceArms    = true;   // [Weapon] StanceArms -- ... and through a crouch / stand: held as idle where drawn (idle | game) (D111)
     bool  jumpArms      = true;   // [Weapon] JumpArms -- ... and while jumping, falling and landing (idle | game)
     bool  catchUp       = true;   // [Weapon] CatchUp -- the gun, arms and free hand follow the body's move since their view
     int  renderResX     = 2880;      // [Render] ResX/ResY -- the game's resolution (windowed), 0 = the game's own (M9)

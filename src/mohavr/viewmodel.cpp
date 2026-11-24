@@ -692,6 +692,7 @@ void OnPlayerView() {
         g_line.valid = false;
         return;
     }
+    armsik::NoteView();  // D111
     const float cp = std::cos(pitch), sp = std::sin(pitch), cy = std::cos(yaw), sy = std::sin(yaw);
     const float cx[3] = {cp * cy, cp * sy, sp}, cyv[3] = {-sy, cy, 0.0f}, cz[3] = {-sp * cy, -sp * sy, cp};
     const M4 cam = Frame(cx, cyv, cz, camLoc);

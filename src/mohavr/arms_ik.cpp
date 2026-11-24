@@ -797,6 +797,7 @@ struct SprintDiag {
     std::uintptr_t pawn = 0;
     bool     in = false, havePending = false, pendingSprint = false, haveLast = false;
     bool     pendingRun = false, sprinted = false;  // the pending sample / this move had the sprint activity
+    bool     pendingStance = false, stance = false; // ... the stance-change activity (D111)
     DWORD    start = 0;
     M4       before, pending, last;
     float    maxOff = 0.0f, maxDeg = 0.0f;
@@ -813,7 +814,7 @@ float AngleBetween(const M4& a, const M4& b) {
     return std::acos(std::fmax(-1.0f, std::fmin(1.0f, (tr - 1.0f) * 0.5f))) * 57.29578f;
 }
 
-void CommitSprintSample(const M4& hand, bool moving, bool running, float upm) {
+void CommitSprintSample(const M4& hand, bool moving, bool running, bool stanceNow, float upm) {
     SprintDiag& s = g_sprintDiag;
     static unsigned inRow = 0;
     if (s.haveLast && Len(Sub(Origin(hand), Origin(s.last))) > 20.0f * upm / 100.0f && inRow < 2) {
@@ -828,11 +829,13 @@ void CommitSprintSample(const M4& hand, bool moving, bool running, float upm) {
         if (!s.in) {
             s.in = true;
             s.sprinted = false;
+            s.stance = false;
             s.start = GetTickCount();
             s.maxOff = s.maxDeg = 0.0f;
             s.skipped = 0;
         }
         s.sprinted = s.sprinted || running;
+        s.stance = s.stance || stanceNow;
         s.maxOff = std::fmax(s.maxOff, Len(Sub(Origin(hand), Origin(s.before))));
         s.maxDeg = std::fmax(s.maxDeg, AngleBetween(s.before, hand));
         return;
@@ -844,7 +847,8 @@ void CommitSprintSample(const M4& hand, bool moving, bool running, float upm) {
             static const char* kArms[] = {"game", "walk", "idle"};
             MLOG("armik: %s of %u ms -- the gun hand moved up to %.1f cm and turned up to %.0f deg in its controller's frame "
                  "(Weapon.WalkArms=%s SprintArms=%s CatchUp=%d; %u odd samples skipped)",
-                 s.sprinted ? "a sprint" : "a walk", static_cast<unsigned>(GetTickCount() - s.start), s.maxOff * 100.0f / upm,
+                 s.stance ? (g_cfg.stanceArms ? "a stance change (Weapon.StanceArms=idle)" : "a stance change (Weapon.StanceArms=game)")
+                 : s.sprinted ? "a sprint" : "a walk", static_cast<unsigned>(GetTickCount() - s.start), s.maxOff * 100.0f / upm,
                  s.maxDeg, g_cfg.walkArms ? "idle" : "game", kArms[g_cfg.sprintArms < 0 || g_cfg.sprintArms > 2 ? 0 : g_cfg.sprintArms],
                  g_cfg.catchUp ? 1 : 0, s.skipped);
         }
@@ -908,15 +912,133 @@ void TraceShot(const M4& hand, float upm) {
     haveLast = true;
 }
 
+// D111 (the player, after D109: "the hands still play a bit of an animation when crouching. Block that"): the pawn's
+// stance change (CurrentActivity 25, 0.7 s) plays <weapon>_stand_to_crouch / crouch_to_stand on the arms. It can't be
+// swapped for idle as walking is (viewmodel's activity tick): single player ends the stance change on that animation's
+// OnAnimEnd, and the game camera's glide between the two heights is its Camera bone. So the game plays it, and only
+// where the parts are DRAWN the gun hand's movement against the camera is taken out: every first-person part gets
+//   K = hand^-1 x (hand x Camera^-1 as it was just before the change) x Camera        (the arms' component space)
+// in front of the move, which leaves the gun hand -- and the gun on its socket -- exactly where the idle pose had them
+// in the camera's frame, whatever the animation does. The socket's offset from the Camera bone cancels out. Blended
+// back over 0.2 s when the activity ends (the idle pose it returns to differs a little).
+struct StanceLock {
+    std::uintptr_t pawn = 0;
+    bool   haveRef = false;
+    M4     ref;            // hand x Camera^-1, component space, the last frame before a stance change
+    double until = 0.0;    // the blend back ends here (seconds, QPC)
+    unsigned logged = 0;
+    // The Camera bone as it was when the view the move is built on was taken (the Draw before this update): the move's
+    // camera is that one, and through the glide the bone moves ~1 unit a frame at 90 fps (3 at 30).
+    bool   haveViewCam = false;
+    M4     viewCam;
+    DWORD  viewCamTick = 0;
+};
+StanceLock g_stance;
+constexpr double kStanceBlend = 0.2;
+
+double NowSeconds() {
+    LARGE_INTEGER q, f;
+    QueryPerformanceCounter(&q);
+    QueryPerformanceFrequency(&f);
+    return static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
+}
+
+// The lock's move this frame, in the world (points x Kw x the move): false when there is none. Called by every part's
+// bake: the same bones give the same answer, and the state only moves with the activity and the clock.
+bool StanceMove(std::uintptr_t pawn, M4& Kw) {
+    if (!g_cfg.stanceArms || !g_rig.ok || g_rig.camera < 0) return false;
+    const int ao = names::PropertyOffset(pawn, "FPArms"), co = names::PropertyOffset(pawn, "CurrentActivity");
+    const std::uintptr_t arms = ao >= 0 ? names::ReadPointer(pawn + ao) : 0;
+    if (!arms || co < 0) return false;
+    const int sbo = names::PropertyOffset(arms, "SpaceBases"), l2wo = names::PropertyOffset(arms, "LocalToWorld"),
+              smo = names::PropertyOffset(arms, "SkeletalMesh");
+    if (sbo < 0 || l2wo < 0 || smo < 0 || names::ReadPointer(arms + smo) != g_rig.mesh) return false;
+    const auto* bones = reinterpret_cast<const M4*>(names::ReadPointer(arms + sbo));
+    const int num = static_cast<int>(names::ReadPointer(arms + sbo + 4));
+    const int hi = g_rig.side[0].hand;
+    if (!bones || hi < 0 || hi >= num || g_rig.camera >= num) return false;
+    StanceLock& s = g_stance;
+    if (pawn != s.pawn) {
+        s = StanceLock{};
+        s.pawn = pawn;
+    }
+    const std::uint8_t act = *reinterpret_cast<const std::uint8_t*>(pawn + co);
+    const double now = NowSeconds();
+    const M4 &hand = bones[hi], &cam = bones[g_rig.camera];
+    const bool changing = act == 25;  // PLAYER_ACTIVITY_STANCE_CHANGE
+    if (!changing && now >= s.until) {
+        // Idle, or walking with the arms at idle (WalkArms): the pose the change starts from.
+        if (act == 0 || act == 1 || act == 3) {
+            s.ref = Mul(hand, AffineInverse(cam));
+            s.haveRef = true;
+        }
+        return false;
+    }
+    if (!s.haveRef) return false;
+    if (changing) {
+        if (s.until < now && s.logged < 6) {
+            ++s.logged;
+            MLOG("armik: a stance change -- the gun hand held where idle had it against the camera (Weapon.StanceArms=idle)");
+        }
+        s.until = now + kStanceBlend;
+    }
+    const bool viewCam = s.haveViewCam && GetTickCount() - s.viewCamTick < 250;
+    M4 K = Mul(Mul(AffineInverse(hand), s.ref), viewCam ? s.viewCam : cam);
+    if (!changing) {  // the blend back to the game's pose
+        const float t = static_cast<float>((s.until - now) / kStanceBlend), u = 1.0f - t;
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 3; ++c) K.m[r][c] = K.m[r][c] * t + kIdentity.m[r][c] * u;
+        // (the rotation's rows made orthonormal again)
+        V3 x = Unit(Row(K, 0)), y = Row(K, 1);
+        y = Unit(Sub(y, Scale(x, Dot(x, y))));
+        const V3 z = Cross(x, y);
+        const V3 rows[3] = {x, y, z};
+        for (int r = 0; r < 3; ++r) {
+            K.m[r][0] = rows[r].x;
+            K.m[r][1] = rows[r].y;
+            K.m[r][2] = rows[r].z;
+        }
+    }
+    M4 l2w;
+    std::memcpy(l2w.m, reinterpret_cast<const void*>(arms + l2wo), sizeof(l2w.m));
+    Kw = Mul(Mul(AffineInverse(l2w), K), l2w);
+    return true;
+}
+
+}  // namespace
+
+void NoteView() {
+    StanceLock& s = g_stance;
+    s.haveViewCam = false;
+    const std::uintptr_t pawn = aim::LocalPlayerPawn();
+    if (!g_cfg.stanceArms || !pawn || !g_rig.ok || g_rig.camera < 0) return;
+    const int ao = names::PropertyOffset(pawn, "FPArms");
+    const std::uintptr_t arms = ao >= 0 ? names::ReadPointer(pawn + ao) : 0;
+    const int sbo = arms ? names::PropertyOffset(arms, "SpaceBases") : -1, smo = arms ? names::PropertyOffset(arms, "SkeletalMesh") : -1;
+    if (sbo < 0 || smo < 0 || names::ReadPointer(arms + smo) != g_rig.mesh) return;
+    const auto* bones = reinterpret_cast<const M4*>(names::ReadPointer(arms + sbo));
+    const int num = static_cast<int>(names::ReadPointer(arms + sbo + 4));
+    if (!bones || g_rig.camera >= num) return;
+    s.viewCam = bones[g_rig.camera];
+    s.viewCamTick = GetTickCount();
+    s.haveViewCam = true;
+}
+
+namespace {
+
 void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     const int co = names::PropertyOffset(pawn, "CurrentActivity");
     const std::uint8_t act = co >= 0 ? *reinterpret_cast<const std::uint8_t*>(pawn + co) : 0;
-    const bool sprinting = act == 1 || act == 2 || act == 3;  // walking, sprinting, crouch-walking
     SprintDiag& s = g_sprintDiag;
     LARGE_INTEGER q, f;
     QueryPerformanceCounter(&q);
     QueryPerformanceFrequency(&f);
     const double t = static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
+    // A stance change (D111) is measured through the 0.4 s after it too: the animation blending out, the lock blending back.
+    static double stanceAt = -1.0;
+    if (act == 25) stanceAt = t;
+    const bool stance = stanceAt >= 0.0 && t - stanceAt < 0.4;
+    const bool sprinting = act == 1 || act == 2 || act == 3 || stance;  // walking, sprinting, crouch-walking; a stance change
     // A new pawn (a level change), or no update for a while (the gun not in the hand, a pause): whatever was open is
     // not one sprint -- drop it unlogged (review, round 24: it would log the whole gap as the sprint's length).
     if (pawn != s.pawn || (s.havePending && t - s.lastT > 0.25)) {
@@ -926,12 +1048,13 @@ void TrackSprint(std::uintptr_t pawn, const M4& handInCtrl) {
     if (s.havePending && t - s.lastT > 0.002) {  // a new frame: the last one's last update was the drawn one
         float head[3], yaw = 0.0f, upm = 100.0f;
         view::HeadInWorld(head, yaw, upm);
-        CommitSprintSample(s.pending, s.pendingSprint, s.pendingRun, upm > 1.0f ? upm : 100.0f);
+        CommitSprintSample(s.pending, s.pendingSprint, s.pendingRun, s.pendingStance, upm > 1.0f ? upm : 100.0f);
         TraceShot(s.pending, upm > 1.0f ? upm : 100.0f);
     }
     s.pending = handInCtrl;
     s.pendingSprint = sprinting;
     s.pendingRun = act == 2;
+    s.pendingStance = stance;
     s.havePending = true;
     s.lastT = t;
 }
@@ -1078,6 +1201,11 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     // frame. Carried along instead: D' = W^-1 D W, and the IK's targets x W (ENGINE-NOTES 5ah).
     const M4 carry = g_cfg.catchUp ? W : kIdentity;
     if (g_cfg.catchUp) D = Mul(Mul(AffineInverse(W), D), W);
+    // D111: through a stance change the gun hand keeps its idle place against the camera (StanceMove above).
+    {
+        M4 Kw;
+        if (StanceMove(pawn, Kw)) D = Mul(Kw, D);
+    }
     NoteBakedMove(comp, D);
     const M4 invL2W = AffineInverse(l2w);
     // D99: a room-scale step since the view moved the component with the pawn, but not the hands -- taken back off.

@@ -74,6 +74,8 @@ Config LoadConfig(const std::wstring& dir) {
         c.walkArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
         GetPrivateProfileStringW(L"Weapon", L"JumpArms", c.jumpArms ? L"idle" : L"game", v, 16, ini.c_str());
         c.jumpArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
+        GetPrivateProfileStringW(L"Weapon", L"StanceArms", c.stanceArms ? L"idle" : L"game", v, 16, ini.c_str());
+        c.stanceArms = !(!_wcsicmp(v, L"game") || !wcscmp(v, L"0"));
         auto mode = [&](const wchar_t* key, int def, const wchar_t* moved) {
             GetPrivateProfileStringW(L"Weapon", key, L"", v, 16, ini.c_str());
             if (!_wcsicmp(v, L"hide") || !wcscmp(v, L"0")) return 0;

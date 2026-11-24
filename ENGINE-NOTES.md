@@ -2480,6 +2480,20 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - On the 1280x720 HUD texture only the top bar shows (36 px).
 - barScreenHeightPercentage = 0 draws nothing; the rest of the HUD pass is unchanged.
 
+## 5cd. The stance change (D111, 2026-11-24)
+
+- MOHAPlayerPawn: StanceChangeIn -> StanceChange: `SetActivity(25)`, PlaybackLength = AnimatedStanceChangeTimes[type]
+  (0.7 s crouch <-> stand; prone 1.5-1.8), bAnimatedStanceChange = true.
+- It ends in `OnAnimEnd` when the sequence's root activity is 25: SetCurrentStance(eDesiredStance),
+  EndAnimatedStanceChange, ActivityDoneEvent. `StanceChangeTimerDone` does the same, but its timer is set only when
+  NetMode isn't standalone.
+- The camera's height through the change is the animation's (the Camera bone); afterwards vCurrentStanceHeightMod (the
+  HipsOffset control) holds it.
+- Measured: the gun hand moves 17.5-20.7 cm and turns 15-26 deg against the camera during it; the idle pose before and
+  after is the same against the camera (standing and crouched).
+- A part's bake runs before the Draw whose view it is shown with, with the move built at the Draw before: the Camera
+  bone in the bake is a frame newer than the move's camera (3-4 cm through the glide at the simulator's frame rate).
+
 ## 6. Content and UnrealScript
 
 | Fact | Value | Evidence |

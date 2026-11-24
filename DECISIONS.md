@@ -1902,3 +1902,27 @@ hud, then hold X."
   - "hud: the letterbox's bars hidden in VR (5% ...)" / "back for the flat screen" at each change (the pause menu, the
     loading screen).
 - **Not checked:** a real mission cutscene (the test switches the letterbox on by the script call the levels use).
+
+### D111. The arms and gun stay still through a crouch or stand -- Decided 2026-11-24
+- **Why:** the player, after D109: "Better, but the hands still play a bit of an animation when crouching. Block that."
+- **Cause:** the pawn's stance change (CurrentActivity 25, 0.7 s) plays the weapon's stand-to-crouch / crouch-to-stand
+  animation on the arms. The gun is drawn from its place in the camera's frame, so the animation moved it in the hand:
+  17.5-20.7 cm and 15-26 deg per change (measured in the gun hand's controller frame).
+- **Why not the idle swap** (WalkArms / JumpArms, the arms' activity tick): single player ends a stance change on that
+  animation's OnAnimEnd (the timer is set for net play only), and the camera's glide between the two heights is the
+  animation's Camera bone. Swapped out, the stance would never complete.
+- **What:** `[Weapon] StanceArms` = idle (shipped) | game. The game plays its animation; where the first-person parts
+  are DRAWN, the gun hand's movement against the camera is taken out. In the arms' component space
+  `K = hand^-1 x (hand x Camera^-1 just before the change) x Camera`, put in front of the move for every part (the arms,
+  the gun on its socket, the baked move the flash and brass take). The Camera bone is the one the view was taken with
+  (`armsik::NoteView`): the move's camera is a frame older than the bones, and through the glide that was 3-4 cm.
+  Blended back over 0.2 s when the activity ends.
+- **Proven [S]** (the log's "armik: a stance change ... of N ms", measured through the 0.4 s after it too; the Garand;
+  the stick's crouch and stand, the head's crouch and stand):
+  - game: 17.6-20.4 cm, 15-26 deg.
+  - idle, the Camera bone of the bake: 3.3-4.1 cm, 1-2 deg.
+  - idle, the Camera bone of the view: **0.4-0.5 cm, 1-2 deg**.
+  - Every change completed ("crouch: settled ..." at 96.3 / 111.7 / 161.3 cm as before); `mohavr gun where` afterwards
+    25.2 -0.9 -15.6 (unchanged).
+  - A shot 0.35 s into the stick's crouch (logs/shots/d111-idle-a-mid-stick-crouch): the gun as at rest.
+- **Not checked:** other guns (the lock is the same arithmetic for each); firing or reloading during a change.
