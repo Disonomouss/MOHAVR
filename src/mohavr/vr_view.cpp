@@ -736,13 +736,14 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
             float pl[3];
             names::ReadVector(tp + addr::kActorLocation, pl);
             float wr[2][3] = {};
-            armsik::TraceWrists(wr);
+            bool two = false;
+            armsik::TraceWrists(wr, two);
             const int co = names::PropertyOffset(tp, "CurrentActivity");
             MLOG("armik: drawn -- #%u elbows %.1f %.1f %.1f / %.1f %.1f %.1f from the eye; the pawn %.1f %.1f; wrists %.1f %.1f %.1f / "
-                 "%.1f %.1f %.1f; pawn z %.1f head z %.1f act %d comp %.1f", ++drawNo, el[0][0] - hp[0],
+                 "%.1f %.1f %.1f; pawn z %.1f head z %.1f act %d comp %.1f%s", ++drawNo, el[0][0] - hp[0],
                  el[0][1] - hp[1], el[0][2] - hp[2], el[1][0] - hp[0], el[1][1] - hp[1], el[1][2] - hp[2], pl[0], pl[1],
                  wr[0][0] - hp[0], wr[0][1] - hp[1], wr[0][2] - hp[2], wr[1][0] - hp[0], wr[1][1] - hp[1], wr[1][2] - hp[2], pl[2], hp[2],
-                 co >= 0 ? *reinterpret_cast<const std::uint8_t*>(tp + co) : -1, g_crouchComp);
+                 co >= 0 ? *reinterpret_cast<const std::uint8_t*>(tp + co) : -1, g_crouchComp, two ? " two-handed" : "");
         }
     }
     // D99 (a player: with room-scale on "any movement results in player flickering"): the step comes after the frame is

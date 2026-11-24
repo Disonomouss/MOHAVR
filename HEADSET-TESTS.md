@@ -2454,6 +2454,15 @@ no longer bounces at the end of a physical stand-up.
 2. Standing up with the stick: do the arms stay with your hands while the view rises? (yes/no)
 3. Walking: is the gun as steady in the hand as before? (yes/no)
 
+### Two-handed: crouching and standing (D113)
+**Changed:** with the off hand on the foregrip, the support hand and arm no longer move on the gun as you crouch or
+stand. The log records the first six stance changes of the session frame by frame.
+
+**Questions:**
+1. Two-handed, crouch and stand with the stick: do both arms stay still? (yes/no)
+2. If anything still moves: which arm, and is it a kick at the start or end, or shaking all the way through? (Send
+   MOHAVR.log from that session.)
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

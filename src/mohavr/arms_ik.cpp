@@ -477,13 +477,7 @@ void CollapseArms(M4* bones) {
     for (int i : g_rig.body) collapse(i, joint[0]);
 }
 
-// D112 (the player: "arms jitter when standing up"): the elbows bend the way the game's pose bends, so the stance change's
-// animation still reached them (the free arm's elbow swung 11 cm and stepped 4 through a stand). While the lock below
-// holds the gun hand (StanceMove sets this weight: 1 through the change, to 0 over the blend back), each elbow keeps
-// the bend it had before, in the arms' own space.
-float g_stanceWeight = 0.0f;
-V3    g_bendRef[2] = {};
-bool  g_bendRefOk[2] = {false, false};
+bool g_lastTwoHanded = false;  // (the trace: the last solve had the support hand on the gun)
 
 void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const M4& A, const M4& invL2W, const M4& carry) {
     // The shoulders: anchored to the tracked head (Weapon.ShoulderWidth apart, ShoulderDrop below the eyes,
@@ -529,6 +523,7 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const
     float gunF[16], offF[16];
     bool offValid = false, twoHanded = false;
     const bool framesOk = viewmodel::HandFrames(gunF, offF, offValid, twoHanded);
+    g_lastTwoHanded = framesOk && twoHanded;
     // (The off-hand pistol drawn: the hand holds it whatever FreeOffHand says.)
     const bool freeHand = (g_cfg.freeOffHand || offpistol::CarrierComponent() || offhand::CarrierComponent() || knife::CarrierComponent() ||
                            knife::Pending()) &&
@@ -728,24 +723,8 @@ void SolveArms(M4* bones, const std::vector<M4>& saved, const M4& l2wGame, const
         const V3 e0p = Sub(e0, Scale(u0, Dot(e0, u0)));
         const float w = std::fmin(Len(e0p) / (0.25f * lu), 1.0f);
         const V3 outward = Unit(Sub(anchor[si], Scale(Add(anchor[0], anchor[1]), 0.5f)));
-        // (D112) The game's part of the bend, held through a stance change.
-        V3 hint = Scale(Unit(e0p), w);
-        {
-            const M4 toArms = AffineInverse(l2w);
-            auto turn = [](const V3& v, const M4& m) {
-                return V3{v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0], v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1],
-                          v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2]};
-            };
-            const V3 local = turn(hint, toArms);
-            if (g_stanceWeight <= 0.0f) {
-                g_bendRef[si] = local;
-                g_bendRefOk[si] = true;
-            } else if (g_bendRefOk[si]) {
-                const float t = g_stanceWeight;
-                hint = turn(Add(Scale(g_bendRef[si], t), Scale(local, 1.0f - t)), l2w);
-            }
-        }
-        const float wh = std::fmin(Len(hint), 1.0f);
+        const V3 hint = Scale(Unit(e0p), w);
+        const float wh = w;
         V3 bend = Add(Add(hint, V3{0.0f, 0.0f, -0.5f}), Scale(outward, 0.3f * (1.0f - wh)));
         bend = Unit(Sub(bend, Scale(u, Dot(bend, u))));
         if (Len(bend) < 0.5f) bend = Unit(Sub(V3{0, 0, -1}, Scale(u, -u.z)));
@@ -954,9 +933,16 @@ void TraceShot(const M4& hand, float upm) {
 struct StanceLock {
     std::uintptr_t pawn = 0;
     bool   haveRef = false;
-    M4     ref;            // hand x Camera^-1, component space, the last frame before a stance change
+    // D113: the WHOLE arms' pose just before the change (component space) and its Camera bone. The gun hand alone was
+    // held at first (D111); with both hands on the gun the support hand follows the game's pose, and the stand's
+    // animation moved it 5 cm along the gun (the player, two-handed: "still jitters").
+    std::vector<M4> pose0;
+    M4     cam0;
+    std::vector<M4> eff;   // the pose the parts are drawn from now: pose0 carried with the camera, blended back at the end
+    M4     effCam;         // ... and the Camera bone it was carried with
+    float  weight = 0.0f;  // 1 through the change, to 0 over the blend back
     double until = 0.0;    // the blend back ends here (seconds, QPC)
-    unsigned logged = 0;
+    unsigned logged = 0, recorded = 0;
     // The Camera bone as it was when the view the move is built on was taken (the Draw before this update): the move's
     // camera is that one, and through the glide the bone moves ~1 unit a frame at 90 fps (3 at 30).
     bool   haveViewCam = false;
@@ -966,6 +952,7 @@ struct StanceLock {
 };
 StanceLock g_stance;
 constexpr double kStanceBlend = 0.2;
+DWORD g_autoTraceUntil = 0;  // D113: the first stance changes of a session are recorded per Draw ("armik: drawn")
 
 double NowSeconds() {
     LARGE_INTEGER q, f;
@@ -974,8 +961,29 @@ double NowSeconds() {
     return static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
 }
 
-// The lock's move this frame, in the world (points x Kw x the move): false when there is none. Called by every part's
-// bake: the same bones give the same answer, and the state only moves with the activity and the clock.
+// a x (1 - t) + b x t, the rotation's rows made orthonormal again (two poses of one bone, close together).
+M4 Blend(const M4& a, const M4& b, float t) {
+    if (t >= 1.0f) return b;
+    if (t <= 0.0f) return a;
+    M4 r = a;
+    for (int i = 0; i < 4; ++i)
+        for (int c = 0; c < 3; ++c) r.m[i][c] = a.m[i][c] * (1.0f - t) + b.m[i][c] * t;
+    V3 x = Unit(Row(r, 0)), y = Row(r, 1);
+    y = Unit(Sub(y, Scale(x, Dot(x, y))));
+    const V3 z = Cross(x, y);
+    const V3 rows[3] = {x, y, z};
+    for (int i = 0; i < 3; ++i) {
+        r.m[i][0] = rows[i].x;
+        r.m[i][1] = rows[i].y;
+        r.m[i][2] = rows[i].z;
+    }
+    return r;
+}
+
+// The lock this frame: false when there is none. With it, g_stance.eff is the pose the ARMS are drawn from (in place of
+// the game's bones), and Kw the same hold for the gun's own component, in the world (points x Kw x the move): the gun
+// rides the gun hand, eff's against the game's. Called by every part's bake: the same bones give the same answer, and
+// the state only moves with the activity and the clock.
 bool StanceMove(std::uintptr_t pawn, M4& Kw, V3 (*camAt)[2] = nullptr) {
     if (!g_cfg.stanceArms || !g_rig.ok || g_rig.camera < 0) return false;
     const int ao = names::PropertyOffset(pawn, "FPArms"), co = names::PropertyOffset(pawn, "CurrentActivity");
@@ -987,7 +995,7 @@ bool StanceMove(std::uintptr_t pawn, M4& Kw, V3 (*camAt)[2] = nullptr) {
     const auto* bones = reinterpret_cast<const M4*>(names::ReadPointer(arms + sbo));
     const int num = static_cast<int>(names::ReadPointer(arms + sbo + 4));
     const int hi = g_rig.side[0].hand;
-    if (!bones || hi < 0 || hi >= num || g_rig.camera >= num) return false;
+    if (!bones || hi < 0 || hi >= num || g_rig.camera >= num || num > 512) return false;
     StanceLock& s = g_stance;
     if (pawn != s.pawn) {
         s = StanceLock{};
@@ -995,43 +1003,47 @@ bool StanceMove(std::uintptr_t pawn, M4& Kw, V3 (*camAt)[2] = nullptr) {
     }
     const std::uint8_t act = *reinterpret_cast<const std::uint8_t*>(pawn + co);
     const double now = NowSeconds();
-    const M4 &hand = bones[hi], &cam = bones[g_rig.camera];
+    const M4& cam = bones[g_rig.camera];
     const bool changing = act == 25;  // PLAYER_ACTIVITY_STANCE_CHANGE
-    g_stanceWeight = changing ? 1.0f : now < s.until ? static_cast<float>((s.until - now) / kStanceBlend) : 0.0f;
-    if (!s.haveRef) g_stanceWeight = 0.0f;
     if (!changing && now >= s.until) {
+        s.weight = 0.0f;
         // Idle, or walking with the arms at idle (WalkArms): the pose the change starts from.
         if (act == 0 || act == 1 || act == 3) {
-            s.ref = Mul(hand, AffineInverse(cam));
+            s.pose0.assign(bones, bones + num);
+            s.cam0 = cam;
             s.haveRef = true;
         }
         return false;
     }
-    if (!s.haveRef) return false;
+    if (!s.haveRef || static_cast<int>(s.pose0.size()) != num) return false;
     if (changing) {
-        if (s.until < now && s.logged < 6) {
-            ++s.logged;
-            MLOG("armik: a stance change -- the gun hand held where idle had it against the camera (Weapon.StanceArms=idle)");
+        if (s.until < now) {  // a change begins
+            if (s.logged < 6) {
+                ++s.logged;
+                MLOG("armik: a stance change -- the arms and gun held as idle had them against the camera (Weapon.StanceArms=idle)");
+            }
+            if (s.recorded < 6) {
+                ++s.recorded;
+                g_autoTraceUntil = GetTickCount() + 1400;
+            }
+        } else if (s.weight < 1.0f && static_cast<int>(s.eff.size()) == num) {
+            // A change begun inside the last one's blend back (crouch, and stand at once): held from the pose shown now.
+            s.pose0 = s.eff;
+            s.cam0 = s.effCam;
         }
         s.until = now + kStanceBlend;
+        s.weight = 1.0f;
+    } else {
+        s.weight = static_cast<float>((s.until - now) / kStanceBlend);
     }
     const bool viewCam = s.haveViewCam && GetTickCount() - s.viewCamTick < 250;
-    M4 K = Mul(Mul(AffineInverse(hand), s.ref), viewCam ? s.viewCam : cam);
-    if (!changing) {  // the blend back to the game's pose
-        const float t = static_cast<float>((s.until - now) / kStanceBlend), u = 1.0f - t;
-        for (int r = 0; r < 4; ++r)
-            for (int c = 0; c < 3; ++c) K.m[r][c] = K.m[r][c] * t + kIdentity.m[r][c] * u;
-        // (the rotation's rows made orthonormal again)
-        V3 x = Unit(Row(K, 0)), y = Row(K, 1);
-        y = Unit(Sub(y, Scale(x, Dot(x, y))));
-        const V3 z = Cross(x, y);
-        const V3 rows[3] = {x, y, z};
-        for (int r = 0; r < 3; ++r) {
-            K.m[r][0] = rows[r].x;
-            K.m[r][1] = rows[r].y;
-            K.m[r][2] = rows[r].z;
-        }
-    }
+    const M4& camRef = viewCam ? s.viewCam : cam;
+    const M4 carry = Mul(AffineInverse(s.cam0), camRef);  // pose0 goes with the Camera bone
+    s.eff.resize(static_cast<std::size_t>(num));
+    for (int i = 0; i < num; ++i) s.eff[i] = Blend(bones[i], Mul(s.pose0[i], carry), s.weight);
+    s.eff[g_rig.camera] = cam;  // (the camera itself is the game's)
+    s.effCam = camRef;
+    const M4 K = Mul(AffineInverse(bones[hi]), s.eff[hi]);  // the gun hand's hold, for the gun on its socket
     M4 l2w;
     std::memcpy(l2w.m, reinterpret_cast<const void*>(arms + l2wo), sizeof(l2w.m));
     Kw = Mul(Mul(AffineInverse(l2w), K), l2w);
@@ -1269,12 +1281,19 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
         if (viewmodel::BodyMoveSinceView(wc, true)) std::memcpy(Wc.m, wc, sizeof(Wc.m));
         D = Mul(Mul(AffineInverse(Wc), D), W);
     }
-    // D111: through a stance change the gun hand keeps its idle place against the camera (StanceMove above).
+    // D111 / D113: through a stance change the arms keep the pose idle had against the camera (StanceMove above): the
+    // arms are drawn from that pose, the gun (on the gun hand's socket) through the gun hand's hold.
+    const std::vector<M4>* pose = &sv->bones;
     {
         M4 Kw;
-        if (StanceMove(pawn, Kw)) D = Mul(Kw, D);
+        if (StanceMove(pawn, Kw)) {
+            NoteBakedMove(comp, Mul(Kw, D));
+            if (arms && static_cast<int>(g_stance.eff.size()) == num) pose = &g_stance.eff;
+            else D = Mul(Kw, D);
+        } else {
+            NoteBakedMove(comp, D);
+        }
     }
-    NoteBakedMove(comp, D);
     const M4 invL2W = AffineInverse(l2w);
     // D99: a room-scale step since the view moved the component with the pawn, but not the hands -- taken back off.
     M4 l2wView = l2w;
@@ -1284,7 +1303,7 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
     }
     const M4 A = Mul(l2wView, D);  // where the part is drawn: bone * A
     const M4 kMove = Mul(A, invL2W);
-    for (int i = 0; i < num; ++i) bones[i] = Mul(sv->bones[i], kMove);
+    for (int i = 0; i < num; ++i) bones[i] = Mul((*pose)[i], kMove);
     if (!arms)
         reload::OnGunBake(comp, &sv->bones[0].m[0][0], &bones[0].m[0][0], num, &l2w.m[0][0], &A.m[0][0], &kMove.m[0][0],
                           &carry.m[0][0]);
@@ -1295,9 +1314,9 @@ void OnMeshUpdate(SafetyHookContext& ctx) {
         if (viewmodel::HandFrames(gf, of, ov, th)) {
             M4 gunCtrl;
             std::memcpy(gunCtrl.m, gf, sizeof(gunCtrl.m));
-            TrackSprint(pawn, Mul(Mul(sv->bones[g_rig.side[0].hand], A), AffineInverse(Mul(gunCtrl, W))));
+            TrackSprint(pawn, Mul(Mul((*pose)[g_rig.side[0].hand], A), AffineInverse(Mul(gunCtrl, W))));
         }
-        SolveArms(bones, sv->bones, l2w, A, invL2W, carry);
+        SolveArms(bones, *pose, l2w, A, invL2W, carry);
         // Debug.ReloadTrace (round 31 research): the gun mesh's frame in the arms' RightProp frame (the RightGun socket and
         // the mesh's own offset), once per gun, and the arms' parents of the grip bones, once.
         if (g_cfg.debugReloadTrace) {
@@ -1417,14 +1436,17 @@ bool TestCommand(const wchar_t* line) {
 }
 
 bool TraceDrawn(float (&elbows)[2][3]) {
-    if (!g_armTraceUntil || static_cast<LONG>(GetTickCount() - g_armTraceUntil) > 0) return false;
+    const DWORD now = GetTickCount();
+    const bool manual = g_armTraceUntil && static_cast<LONG>(now - g_armTraceUntil) <= 0;
+    const bool recorder = g_autoTraceUntil && static_cast<LONG>(now - g_autoTraceUntil) <= 0;
+    if (!manual && !recorder) return false;
     std::memcpy(elbows, g_lastElbow, sizeof(elbows));
     return true;
 }
 
-bool TraceWrists(float (&wrists)[2][3]) {
-    if (!g_armTraceUntil || static_cast<LONG>(GetTickCount() - g_armTraceUntil) > 0) return false;
+bool TraceWrists(float (&wrists)[2][3], bool& twoHanded) {
     std::memcpy(wrists, g_lastWrist, sizeof(wrists));
+    twoHanded = g_lastTwoHanded;
     return true;
 }
 

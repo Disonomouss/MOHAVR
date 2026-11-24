@@ -35,6 +35,7 @@ Config LoadConfig(const std::wstring& dir) {
     c.debugReserveLow = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"ReserveLow", 0, ini.c_str()));
     c.debugReloadProbe = get(L"Debug", L"ReloadProbe", c.debugReloadProbe);
     c.debugReloadTrace = get(L"Debug", L"ReloadTrace", c.debugReloadTrace);
+    c.debugTwoHanded = get(L"Debug", L"TwoHanded", c.debugTwoHanded);
     c.debugOffHandTrace = get(L"Debug", L"OffHandTrace", c.debugOffHandTrace);
     c.debugMeleeTrace = get(L"Debug", L"MeleeTrace", c.debugMeleeTrace);
     c.debugMuzzleFreeze = static_cast<int>(GetPrivateProfileIntW(L"Debug", L"MuzzleFreeze", 0, ini.c_str()));

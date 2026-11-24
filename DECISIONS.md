@@ -1977,3 +1977,32 @@ hud, then hold X."
 - **Not checked:** a real stand-up (the simulator moves the head 50 cm in one frame; a real head takes half a second, with
   the hands tracked on their own); the other guns. One run's head crouch was refused by the game three times (an ally
   overlapped the player then; cause not established); the reruns crouched at the first request.
+
+### D113. Both hands on the gun: the whole arm pose held through a stance change -- Decided 2026-11-24
+- **Why:** the player, after D112: "Still jitters."
+- **What their session showed** (the headset's own log, the build confirmed by its hash): the stick's crouch and stand,
+  90 fps, and the Garand held **two-handed** through every change ("hands: foregrip taken" before the first, released
+  after the last). Every trace for D111 and D112 had the off hand free. The log's own measure read 0.5-0.9 cm for the
+  gun hand, as in the simulator: what moved was not in it.
+- **Cause:** with the off hand on the foregrip the support arm is not placed by its controller; it is the game's own
+  left hand on the gun, drawn through the gun's move. D111 held the gun hand alone, so the stand's animation still
+  moved the left hand along the gun.
+- **Reproduced [S]** (`[Debug] TwoHanded=1` solves the arms as two-handed; the simulator's test hand can't hold the
+  foregrip and press the stick): through a stand the support wrist wandered 5.1 / 3.1 / 3.4 cm and its elbow 5.4, in
+  steps to 1.2 cm a frame. The crouch was steady.
+- **What:** the lock holds the WHOLE arms' pose, not the gun hand: the bones as they were just before the change, carried
+  with the Camera bone, are what the arms are drawn (and solved) from; the gun, on its socket, takes the gun hand's
+  hold as before. Blended back bone by bone over 0.2 s. A change begun inside that blend (crouch, then stand at once: the
+  session did it twice) starts from the pose shown at that moment. D112's separate hold of the elbows' bend is gone
+  (the pose it read is held now).
+- **A recorder:** the first six stance changes of every session log the per-Draw line ("armik: drawn": both wrists and
+  elbows against the eye, the pawn's and the head's z, the activity, the compensation, "two-handed"). A headset
+  round that still shows something returns its frames, not only a verdict.
+- **Proven [S]:**
+  - Two-handed, the stick's crouch, stand, and a stand 0.75 s after a crouch: every wrist and elbow within 1.0 cm over
+    the change, the largest step from one Draw to the next 0.1-0.2 cm (before: 5.4 cm, steps of 1.2).
+  - The free off hand again: the stick's stand within 1.8 cm (steps of 0.4), the head's stand steps under 1.0 (its
+    teleport aside); "a stance change ... the gun hand moved up to 0.4-0.5 cm" as before.
+- **Not proven:** that this is all the player sees. `[Debug] TwoHanded` only makes the arms' solve two-handed (the gun's
+  own pose stays the gun hand's); a real foregrip hold also aims the gun through both controllers, which no trace here
+  covered. The recorder is there for that.

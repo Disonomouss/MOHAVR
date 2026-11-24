@@ -32,6 +32,6 @@ void NoteView();
 bool TestCommand(const wchar_t* line);
 // While that trace runs: the elbows (world) as the last solve left them.
 bool TraceDrawn(float (&elbows)[2][3]);
-bool TraceWrists(float (&wrists)[2][3]);
+bool TraceWrists(float (&wrists)[2][3], bool& twoHanded);
 
 }  // namespace mohavr::armsik

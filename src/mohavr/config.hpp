@@ -155,6 +155,7 @@ float knifeHandSpeed = 2.0f;      // [Knife] HandSpeed -- m/s: the hand itself f
 bool  debugScopeView = false;    // [Debug] ScopeView -- the scope spike: the third view always on, from the right eye
 float debugScopeFov = 10.0f;     // [Debug] ScopeViewFov -- its FOV (degrees)
 bool  debugKnifeTrace = false;   // [Debug] KnifeTrace -- the off-hand knife: its holds, refusals, strikes
+    bool debugTwoHanded = false;     // [Debug] TwoHanded -- tests: the arms solved as with the off hand on the foregrip (D113)
     bool debugReloadTrace = false;   // [Debug] ReloadTrace -- the manual reload: the weapon's state changes
     bool debugReloadProbe = false;   // [Debug] ReloadProbe -- M0 of the manual reload: logs bones, ammo, hook calls
     int  debugMuzzleFreeze = 0;  // [Debug] MuzzleFreeze -- pause the world N frames after the first flash ([S] tool)

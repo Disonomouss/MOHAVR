@@ -901,7 +901,7 @@ void OnPlayerView() {
         }
         // For the arm IK: the gun's frame, and the other controller's (the free hand follows it off the foregrip).
         gunFrameNow = ctrlFrame;  // the gun hand's controller frame (its origin at the controller; mirrored with the gun)
-        twoHandedNow = (flags & 2u) != 0;
+        twoHandedNow = (flags & 2u) != 0 || g_cfg.debugTwoHanded;
         shared::Pose hand[2];
         std::uint32_t hv = 0;
         const int o = (flags & 4u) ? 1 : 0;  // the gun in the left hand -> the right one is free

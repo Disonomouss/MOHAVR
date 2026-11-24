@@ -102,7 +102,9 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   the log's "crouch:" lines give the stance and the eye's height; `mohavr gun where` logs the drawn gun's origin against
   its frame at the controller (it must not change with the stance). Game commands are read twice a second: send them
   at least 0.75 s apart. `mohavr arm trace` logs every Draw for 3 s ("armik: drawn": the wrists and elbows against the
-  eye, the pawn's z, the activity, the compensation): with the test hands following the head, nothing should move. `python tools/find_native.py <native table name>` finds a script native's exec in the exe.
+  eye, the pawn's z, the activity, the compensation): with the test hands following the head, nothing should move.
+  `Debug.TwoHanded=1` solves the arms as with the off hand on the foregrip (the test hand can't hold it and press the
+  stick; trace two-handed as well as free: D113). The first six stance changes of any session are recorded the same way. `python tools/find_native.py <native table name>` finds a script native's exec in the exe.
 
 ## Test harness
 - `tools/harness.ps1 cycle`: a cold start to proven gameplay and back, about 30 s, unattended.
