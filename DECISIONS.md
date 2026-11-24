@@ -2006,3 +2006,38 @@ hud, then hold X."
 - **Not proven:** that this is all the player sees. `[Debug] TwoHanded` only makes the arms' solve two-handed (the gun's
   own pose stays the gun hand's); a real foregrip hold also aims the gun through both controllers, which no trace here
   covered. The recorder is there for that.
+
+### D114. The gun held still through a stance change; the lock rebuilt on the view's camera -- Decided 2026-11-24
+- **Why:** the player, after D113: "Arms no longer shake, but gun still does."
+- **Their session** (two-handed Garand, the stick, crouch and stand in quick succession; the recorder's frames kept in
+  logs/headset-20261124-d113-*): the wrists held, but the recorder had no measure of the gun itself.
+- **Measured** (the per-Draw line now carries the gun in the gun hand's frame and the gun hand in its controller's;
+  `tools/stance_trace.py`), two-handed in the simulator:
+  - a stand: the gun moved 1.52 cm and turned **3.69 deg in the hand, 0.70 cm and 1.73 deg of it in single frames**;
+  - a crouch: 0.06 cm, 0.13 deg.
+- **Cause:** the gun is its own part on a socket of the arms. D113 drew it by the gun hand's hold, and the stand's
+  animation turns that socket against the hand.
+- **What:** the lock no longer hangs anything off a bone. Every first-person part is drawn from where it was at the last
+  Draw before the change, **in the frame of the camera the move is built on**: the arms' bones (one frame for the
+  component) and each other part's own frame (the gun, whatever else is attached). Held there, a part is still in the
+  hand exactly, whatever the animation does to the bones, the socket or the Camera bone.
+  - The reference is the last update before a Draw. A tick updates the parts several times, some half way (the frame
+    moved, the bones not yet), and the tick a change begins is one of those: taken from any update, the reference was
+    47 cm off.
+  - No new reference for half a second after a change (the game is still blending its animation out).
+  - Held from the first update of the change (a 50 ms ramp let the animation's first frame show: 1.6 deg).
+- **D112 corrected:** on the tick the cylinder is resized the part's LocalToWorld goes up 47 units and its bones come
+  down 47: it does not move in the world. The catch-up takes the part back by the FEET's move, like the hands'
+  targets. (D112 took it back by the centre's, which only suited a hold built on the bones of the view before; with
+  the lock off it would have jumped.)
+- **Proven [S]** (per Draw, over the whole change and the blend back):
+  - Two-handed (`Debug.TwoHanded=1`), the stick's crouch, stand, and a stand straight after a crouch: **the gun in the
+    hand 0.00 cm, 0.01 deg**; the gun hand in its controller's frame within 0.47 cm (the idle's own sway outside the
+    lock), steps to 0.11; wrists and elbows within 0.6 cm, steps of 0.1.
+  - The free off hand: the stick's stand and the head's stand and crouch the same (0.00 / 0.01 deg; the head's
+    teleport aside).
+  - Room steps through the stick's crouch: as with no stance change.
+  - The Colt: 0.1-0.3 cm. Walking: "a walk ... 0.2 / 0.5 cm".
+  - `StanceArms=game`: the animation alone (17.6-20.4 cm), no 47 cm frame.
+- **Not proven:** a real foregrip hold (the simulator's two-handed solve keeps the gun's own pose on the gun hand); the
+  recorder now measures the gun, so the next session's log says.

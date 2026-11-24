@@ -18,6 +18,10 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The gun held still through a crouch or stand** (2026-11-24, D114), after "arms no longer shake, but gun still does": the
+gun rides a socket the stand's animation turns 3.7 deg against the hand. The lock now holds every first-person part in
+the view camera's frame (0.00 cm / 0.01 deg in the trace); the recorder measures the gun too (`tools/stance_trace.py`).
+Unreleased.
 **Both hands on the gun: the whole arm pose is held through a crouch or stand** (2026-11-24, D113), after "still jitters":
 the player's session was two-handed, where the support hand still followed the game's animation (5 cm in a stand). The
 first six stance changes of a session are recorded per Draw in the log. Unreleased.

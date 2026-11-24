@@ -67,6 +67,8 @@ bool ReloadInputs(ReloadFrame& out);
 // How the player's body (the pawn: location and yaw) moved since the player view CurrentMove and HandFrames come from
 // (world, row-major: a point carried by the body then -> now = p * w). The next tick's bake is one move behind the eyes
 // without it (Weapon.CatchUp). False when unknown (no view, another pawn, a jump of over 1 m).
+// D114: the inverse of the camera the current move is built on (world -> that camera's frame), with CurrentMove's validity.
+bool ViewCamera(float (&camInv)[16]);
 // D112: the move is the pawn's FEET's (a stance change's cylinder resize moves its centre 47 units with the body going
 // nowhere); `centre` = the centre's instead, which the first-person meshes follow on that tick.
 bool BodyMoveSinceView(float (&w)[16], bool centre = false);

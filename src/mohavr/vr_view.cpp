@@ -739,11 +739,15 @@ void __fastcall Hook_Draw(void* self, void* /*edx*/, void* viewport, void* canva
             bool two = false;
             armsik::TraceWrists(wr, two);
             const int co = names::PropertyOffset(tp, "CurrentActivity");
+            float gh[6], hc[6], lockW = 0.0f;
+            armsik::TraceGun(gh, hc, lockW);
             MLOG("armik: drawn -- #%u elbows %.1f %.1f %.1f / %.1f %.1f %.1f from the eye; the pawn %.1f %.1f; wrists %.1f %.1f %.1f / "
-                 "%.1f %.1f %.1f; pawn z %.1f head z %.1f act %d comp %.1f%s", ++drawNo, el[0][0] - hp[0],
+                 "%.1f %.1f %.1f; pawn z %.1f head z %.1f act %d comp %.1f%s; gun in hand %.2f %.2f %.2f / %.4f %.4f %.4f; hand in ctrl %.2f %.2f "
+                 "%.2f / %.4f %.4f %.4f; lock %.2f", ++drawNo, el[0][0] - hp[0],
                  el[0][1] - hp[1], el[0][2] - hp[2], el[1][0] - hp[0], el[1][1] - hp[1], el[1][2] - hp[2], pl[0], pl[1],
                  wr[0][0] - hp[0], wr[0][1] - hp[1], wr[0][2] - hp[2], wr[1][0] - hp[0], wr[1][1] - hp[1], wr[1][2] - hp[2], pl[2], hp[2],
-                 co >= 0 ? *reinterpret_cast<const std::uint8_t*>(tp + co) : -1, g_crouchComp, two ? " two-handed" : "");
+                 co >= 0 ? *reinterpret_cast<const std::uint8_t*>(tp + co) : -1, g_crouchComp, two ? " two-handed" : "", gh[0], gh[1], gh[2],
+                 gh[3], gh[4], gh[5], hc[0], hc[1], hc[2], hc[3], hc[4], hc[5], lockW);
         }
     }
     // D99 (a player: with room-scale on "any movement results in player flickering"): the step comes after the frame is

@@ -2499,7 +2499,12 @@ So 0.8.0's features aren't the cause. The VR path (D3D9On12, two views) is.
 - The collision cylinder is resized at the START of the change, crouching and standing alike: CollisionHeight 96 <-> 49,
   and the pawn's Location (the cylinder's centre) moves 47 units that tick. The feet stay.
 - On that tick the arms' LocalToWorld goes with the centre (+47 standing up) and its bones go the other way (-47 in
-  component space): the Camera bone, and the camera, stay where they were in the world.
+  component space): the Camera bone, the camera and every bone stay where they were in the world (D114: a part's bones
+  x its LocalToWorld is unchanged across it).
+- A tick updates the first-person parts several times; early ones can have the new LocalToWorld with the old bones (47
+  off on that tick). Only the last update before the Draw is what is shown.
+- The gun is a part of its own on a socket of the arms; the stand's animation turns the socket 3.7 deg against the gun
+  hand's bone (1.7 deg in one frame, at its first frame), the crouch's 0.1.
 - The stand's animation takes the camera up to 16.5 units past the standing height (about 0.5 s in) and back down by its
   end; the crouch's dips less than 1.
 - `mohavr arm trace` now logs per Draw: both elbows and wrists against the eye, the pawn's z, the head's z, the

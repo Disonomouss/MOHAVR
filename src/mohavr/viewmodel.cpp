@@ -1024,6 +1024,17 @@ bool DrawMirror(float (&r)[16]) {
     return true;
 }
 
+bool ViewCamera(float (&camInv)[16]) {
+    if (!g_installed || g_cfg.viewModel != 2) return false;
+    State s;
+    AcquireSRWLockShared(&g_lock);
+    s = g_state;
+    ReleaseSRWLockShared(&g_lock);
+    if (!s.valid || s.noHands || GetTickCount() - s.tick > 250) return false;
+    std::memcpy(camInv, s.camInv.m, sizeof(camInv));
+    return true;
+}
+
 bool BodyMoveSinceView(float (&w)[16], bool centre) {
     if (!g_installed || g_cfg.viewModel != 2) return false;
     State s;

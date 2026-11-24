@@ -2463,6 +2463,14 @@ stand. The log records the first six stance changes of the session frame by fram
 2. If anything still moves: which arm, and is it a kick at the start or end, or shaking all the way through? (Send
    MOHAVR.log from that session.)
 
+### The gun in a crouch or stand (D114)
+**Changed:** the gun itself no longer shakes in your hands as you crouch or stand (it was turning up to 3.7 degrees in
+the hand during a stand).
+
+**Questions:**
+1. Two-handed, crouch and stand with the stick: is the gun still in your hands? (yes/no)
+2. If not: send MOHAVR.log from that session (the first six crouches / stands are recorded frame by frame).
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>
