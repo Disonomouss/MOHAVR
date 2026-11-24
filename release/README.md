@@ -1,4 +1,4 @@
-# MOHAVR 0.8.16: VR for Medal of Honor: Airborne
+# MOHAVR 0.8.17: VR for Medal of Honor: Airborne
 
 MOHAVR turns the PC version of *Medal of Honor: Airborne* (Steam or the EA app) into a VR game. You get a stereo,
 head-tracked view, motion controllers with guns held in your hands, and physical interactions: holsters on your body,
@@ -24,7 +24,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 
 ## Install
 
-**Setup program (recommended):** run `MOHAVR-0.8.16-Setup.exe`.
+**Setup program (recommended):** run `MOHAVR-0.8.17-Setup.exe`.
 - It finds the game through Steam or the EA app. If it can't, browse to the game's folder: the one that contains
   `UnrealEngine3\Binaries\MOHA.exe`.
 - It adds three files next to `MOHA.exe`: `dinput8.dll`, `MOHAVR-host.exe` and `MOHAVR.ini`. Nothing of the game's
@@ -37,7 +37,7 @@ wrist. An in-headset menu adjusts all of it. This is a **test build**: read "Kno
 - Windows may warn that the program is from an unknown publisher, because it isn't code-signed. Choose
   "More info", then "Run anyway".
 
-**Zip (manual):** unzip `MOHAVR-0.8.16.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
+**Zip (manual):** unzip `MOHAVR-0.8.17.zip` anywhere and double-click `install.cmd`. If your game is somewhere neither
 Steam nor the EA app knows about, run `install.ps1 -GameDir "<game folder>"` instead. It also sets the 4 GB flag
 (`-Keep2GB` leaves `MOHA.exe` alone). The EA app installs under Program Files: right-click `install.cmd` (and later
 `uninstall.cmd`) and choose "Run as administrator".
@@ -209,7 +209,9 @@ Most things are in the menu. A few you may want to change in the ini:
 
 | Setting | What it does |
 |---|---|
-| `Render.ResX` / `Render.ResY` | Rendering resolution (default 2880x1620). Lower it (for example 1920x1080) if the game stutters. |
+| `Render.ResX` / `Render.ResY` | Rendering resolution when the menu's Resolution is Custom (2880x1620; also used on the very first start, before Auto has seen your headset). Lower it (for example 1920x1080) if the game stutters. |
+| `HUD.Letterbox=1` | Keep the cutscenes' black bars (default `0`: hidden in VR). |
+| `Weapon.StanceArms=game` | Let the game animate your arms and gun as you crouch or stand (default `idle`: they stay in your hands). |
 | `Input.Controllers=0` | Play with an Xbox controller or mouse and keyboard instead of VR controllers. |
 | `Camera.CinemaScreen=2` | Also show cutscenes on the flat screen (default `1`: menus only). |
 | `Bridge.Mirror=2` | Put the monitor mirror in its own window (`0` turns it off). |

@@ -20,25 +20,25 @@ The build check knows both; on the EA copy the IAT hooks wait for the game's ent
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
 **The hands go with the eye, not under its floor** (2026-11-24, D115), after "hands and gun shake when reaching the bottom
 of the crouch": a seated player's eye sits on Camera.MinEyeHeight at the bottom of a crouch while the camera goes on
-moving, and the hands were carried with the camera. Unreleased.
+moving, and the hands were carried with the camera. Released in 0.8.17.
 **The gun held still through a crouch or stand** (2026-11-24, D114), after "arms no longer shake, but gun still does": the
 gun rides a socket the stand's animation turns 3.7 deg against the hand. The lock now holds every first-person part in
 the view camera's frame (0.00 cm / 0.01 deg in the trace); the recorder measures the gun too (`tools/stance_trace.py`).
-Unreleased.
+Released in 0.8.17.
 **Both hands on the gun: the whole arm pose is held through a crouch or stand** (2026-11-24, D113), after "still jitters":
 the player's session was two-handed, where the support hand still followed the game's animation (5 cm in a stand). The
-first six stance changes of a session are recorded per Draw in the log. Unreleased.
+first six stance changes of a session are recorded per Draw in the log. Released in 0.8.17.
 **Standing up: the arms hold still** (2026-11-24, D112): a one-frame 47 cm jump of the arms at every stance change (the
 cylinder's resize taken for a step), the view's bounce at the end of the head's stand, the elbows and the hands' one-frame
-trail behind the camera's glide. Unreleased.
+trail behind the camera's glide. Released in 0.8.17.
 **The arms and gun stay still through a crouch or stand** (2026-11-24, D111; `[Weapon] StanceArms=idle`): the game's
-0.7 s animation moved them 17-21 cm in the hand; now 0.5 cm. Unreleased.
-**The cutscenes' black bars hidden in VR** (2026-11-23, D110; `[HUD] Letterbox=0`). Unreleased.
+0.7 s animation moved them 17-21 cm in the hand; now 0.5 cm. Released in 0.8.17.
+**The cutscenes' black bars hidden in VR** (2026-11-23, D110; `[HUD] Letterbox=0`). Released in 0.8.17.
 **Physical crouch: the gun and arms stay in the hands** (2026-11-23, D109): they were drawn ~64 cm below the controllers
-while the head's crouch was engaged. Unreleased.
+while the head's crouch was engaged. Released in 0.8.17.
 **Perfect landing** (2026-11-14, D108; shared block v39): an option (the menu's Comfort tab, `[Comfort] PerfectLanding`, off
-by default) that makes every parachute landing greased; the log now names the game's verdict for every landing. Unreleased.
-**Auto is the shipped resolution** (2026-11-14, D107): Custom 1440x1620 per eye was the default. Unreleased.
+by default) that makes every parachute landing greased; the log now names the game's verdict for every landing. Released in 0.8.17.
+**Auto is the shipped resolution** (2026-11-14, D107): Custom 1440x1620 per eye was the default. Released in 0.8.17.
 **The arms shown: full / forearms and hands / hands only** (2026-11-13, D106; shared block v38), and the pointer no longer
 flickers on a long tab. Headset-checked ("looks good"); released in 0.8.16.
 **The game's memory every 30 s in the log; no leak found** (2026-11-10, D105): soaks of 12-20 min level off at ~1.75 GB
@@ -74,6 +74,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.17** (published 2026-11-25): Auto resolution by default (D107), Perfect landing (D108), physical crouch's arms (D109), the cutscenes' bars (D110), the arms and gun still through a crouch or stand (D111-D115; D115 not yet judged in the headset).
 **Release 0.8.16** (published 2026-11-13): the arms shown (D106), the pointer on long tabs, the memory in the log (D105).
 **Release 0.8.15** (published 2026-10-13): point and click in the MOHAVR menu, the wrist HUD hidden / shown with Y (D104).
 **Release 0.8.14** (published 2026-10-13): pointing at the game's menus, recentring with the hands at the eyes (D103).
