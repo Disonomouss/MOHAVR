@@ -2477,6 +2477,20 @@ the hand during a stand).
 **Questions:**
 1. Seated, crouch and stand with the stick: are the hands and gun still all the way down and back up? (yes/no)
 
+### Both hands close together on the gun (D116)
+**Changed:** with both hands on a gun, bringing the off hand close to the gun hand (within 12 cm) no longer makes the
+gun jump to the gun hand's own aim; it eases over between 12 and 5 cm.
+
+**How to try it:** any long gun, take the foregrip, then slide the off hand back toward the gun hand and out again,
+keeping the grip held.
+
+**Questions:**
+1. Does the gun jump at any point as the hands come together or apart? (yes/no)
+2. Close together (under 5 cm) the gun aims with the gun hand alone: is that right, or should it go on following the
+   off hand closer in?
+3. For the player who reported it: is the snap gone? If not, please send MOHAVR-host.log (it now records how far apart
+   the hands were in each two-handed hold) and say which guns.
+
 ## Template
 
 ### Round N: YYYY-MM-DD, <milestone>

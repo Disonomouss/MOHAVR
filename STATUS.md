@@ -18,6 +18,11 @@ address-space budget for D3D9On12.
 The build check knows both; on the EA copy the IAT hooks wait for the game's entry point. Harness cycles pass on it
 (`tools/gamedir.txt` now points at it: Steam's copy is uninstalled from this PC). The setup program finds, installs
 into and uninstalls from the EA copy. Open: a headset session on the EA copy [H].
+**The two-handed aim comes in with distance** (2026-11-28, D116), after a player's clip of the gun snapping to "a default
+position" with both hands on it: within 12 cm of the gun hand the off hand was dropped at once and the gun took the gun
+hand's own pose (a 10-13 cm jump of the drawn hands in one frame; there since the foregrip was written). Now blended
+between 5 and 12 cm (`[Hands] ForegripBlend`; 0.3 cm a frame in the same sweep), and a hand brought round behind the gun
+hand no longer swings the gun about. The host logs each hold's distances. Not released. Open: the player's host log [H].
 **The hands go with the eye, not under its floor** (2026-11-24, D115), after "hands and gun shake when reaching the bottom
 of the crouch": a seated player's eye sits on Camera.MinEyeHeight at the bottom of a crouch while the camera goes on
 moving, and the hands were carried with the camera. Released in 0.8.17.

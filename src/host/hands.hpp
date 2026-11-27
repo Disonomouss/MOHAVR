@@ -115,7 +115,7 @@ public:
         bool        thrown = false; // the gun hand's trigger let go of a grenade this frame, fast enough to count
         bool        meleeBusy = false;  // physical melee holds off: the gun hand just pressed at a holster or the pouch (0.4 s),
                                         // the manual reload working the gun, a menu open (and 0.15 s after)
-        bool        turned = false;     // the gun pose is turned onto the off hand this frame (two-handed, past 12 cm)
+        bool        turned = false;     // the gun pose is turned onto the off hand this frame (two-handed; D116: by any part)
         bool        knifeBusy = false;  // the off-hand knife's strikes hold off: just drawn or put back (0.4 s), a menu open (and
                                         // 0.15 s after)
         float       throwVel[3]{};  // its velocity then (LOCAL, m/s)
@@ -167,6 +167,10 @@ private:
     OffHandKnife* knife_ = nullptr;
     float handPoint_[3]{};       // forward, up, in (m)
     float foregripR_ = 0.12f;    // the foregrip ring's radius (m)
+    float foreNear_ = 0.05f, foreFar_ = 0.12f;  // D116: the two-handed turn blended in between these distances (m)
+    double foreSince_ = 0.0;                     // this hold: since, the off hand's distances, the frames by weight
+    float  foreMin_ = 0.0f, foreMax_ = 0.0f, foreDegMax_ = 0.0f;
+    int    foreFrames_ = 0, forePart_ = 0, foreNone_ = 0;
     bool  pouchReload_ = true;   // [Hands] PouchReload: a hand holding a gun grips the pouch -> reloaded at once
     float ringScale_ = 1.0f;     // the reload gesture's and the manual reload's grab rings
     bool  holsters_ = true, foregrip_ = true, reloadGesture_ = true;

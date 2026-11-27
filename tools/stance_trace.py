@@ -49,9 +49,10 @@ for path in sys.argv[1:]:
         gstep = max([math.dist(a['gp'], c['gp']) for a, c in zip(seg, seg[1:])] or [0])
         gastep = max([ang(a['gx'], c['gx']) for a, c in zip(seg, seg[1:])] or [0])
         hstep = max([math.dist(a['hp'], c['hp']) for a, c in zip(seg, seg[1:])] or [0])
+        hastep = max([ang(a['hx'], c['hx']) for a, c in zip(seg, seg[1:])] or [0])
         acts = sorted(set(r['act'] for r in seg))
-        print('   %7.0f ms, %3d frames, acts %s%s: gun in hand moved %.2f (step %.2f) turned %.2f deg (step %.2f); hand in ctrl moved %.2f (step %.2f) turned %.2f deg'
-              % (seg[0]['t'], len(seg), acts, ' two-handed' if any(r['two'] for r in seg) else '', gmax, gstep, gang, gastep, hmax, hstep, hang))
+        print('   %7.0f ms, %3d frames, acts %s%s: gun in hand moved %.2f (step %.2f) turned %.2f deg (step %.2f); hand in ctrl moved %.2f (step %.2f) turned %.2f deg (step %.2f)'
+              % (seg[0]['t'], len(seg), acts, ' two-handed' if any(r['two'] for r in seg) else '', gmax, gstep, gang, gastep, hmax, hstep, hang, hastep))
         if '-v' in sys.argv:
             for r in seg:
                 print('      %7.0f act %2d lock %.2f headz %7.1f | gun %6.2f %6.2f %6.2f %5.2f deg | hand %6.2f %6.2f %6.2f %5.2f deg' % (

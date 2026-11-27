@@ -109,6 +109,16 @@ void Hands::Init(const std::wstring& ini) {
                    iniFloat(L"Hands", L"ForeUp", 0.0f)};
     holsters_ = GetPrivateProfileIntW(L"Holsters", L"Enabled", 1, ini.c_str()) != 0;
     foregrip_ = GetPrivateProfileIntW(L"Hands", L"Foregrip", 1, ini.c_str()) != 0;
+    {  // D116: the two-handed aim blended in with the off hand's distance from the gun hand (cm: none below, all above)
+        wchar_t v[64] = L"";
+        GetPrivateProfileStringW(L"Hands", L"ForegripBlend", L"5 12", v, 64, ini.c_str());
+        float a = 5.0f, b = 12.0f;
+        if (swscanf_s(v, L"%f %f", &a, &b) != 2 || a < 0.0f || b < a) a = 5.0f, b = 12.0f;
+        foreNear_ = a / 100.0f;
+        foreFar_ = b / 100.0f;
+        MLOG("hands: two-handed aim -- the gun follows the off hand from %.0f cm from the gun hand, fully from %.0f cm%s (Hands.ForegripBlend)",
+             a, b, b - a < 0.05f ? " (a cut-off: no blend)" : "");
+    }
     reloadGesture_ = GetPrivateProfileIntW(L"Hands", L"ReloadGesture", 1, ini.c_str()) != 0;
     pouchReload_ = GetPrivateProfileIntW(L"Hands", L"PouchReload", 0, ini.c_str()) != 0;
     mirrorLeft_ = GetPrivateProfileIntW(L"Weapon", L"LeftHandMirror", 1, ini.c_str()) != 0;
@@ -442,13 +452,51 @@ Hands::Output Hands::Update(const Input& in) {
 
     // Two-handed: the gun turns so that its foregrip point lies on the other hand (a long gun only: the point must
     // be well ahead of the gun hand for the direction to be steady).
+    //   D116 (a player's clip: "the gun snaps into a default position and ignores my controller position"): the turn is
+    // blended in with the off hand's distance from the gun hand -- none under ForegripBlend's first distance (so close, the
+    // direction to the off hand says nothing about the barrel), all of it past the second. It was a cut-off at 12 cm: a
+    // hand held about there flipped the gun between the two poses from one frame to the next. The same for a hand past
+    // the gun hand's side (100 deg off its line, none past 160: the gun never points back at the player, and the shortest
+    // rotation's half turn is never reached).
     if (gunOk && offOk && twoHanded_ && in.fit.foreFwd >= 15.0f) {
         const V3 want = Sub(pt[o], gunPos);
         const V3 have = Rotate(gun.orientation, foreOff);
-        if (Len(want) > 0.12f) {
-            gun.orientation = Mul(FromTo(have, want), gun.orientation);
+        const float d = Len(want);
+        const bool blend = foreFar_ - foreNear_ > 0.0005f;
+        float w = d > foreFar_ ? 1.0f : 0.0f, deg = 0.0f;
+        if (d > 1e-4f) deg = 57.29578f * std::acos(std::fmax(-1.0f, std::fmin(1.0f, Dot(want, have) / (d * Len(have)))));
+        if (blend) {
+            auto smooth = [](float t) { t = std::fmax(0.0f, std::fmin(1.0f, t)); return t * t * (3.0f - 2.0f * t); };
+            w = smooth((d - foreNear_) / (foreFar_ - foreNear_)) * (1.0f - smooth((deg - 100.0f) / 60.0f));
+        }
+        if (w > 0.0f) {
+            XrQuaternionf turn = FromTo(have, want);
+            if (w < 1.0f) {  // the same axis, w of the angle
+                const float s = std::sqrt(turn.x * turn.x + turn.y * turn.y + turn.z * turn.z);
+                if (s > 1e-6f) {
+                    const float half = w * std::atan2(s, turn.w), k = std::sin(half) / s;
+                    turn = {turn.x * k, turn.y * k, turn.z * k, std::cos(half)};
+                }
+            }
+            gun.orientation = Mul(turn, gun.orientation);
             out.turned = true;
         }
+        // What this hold was like, for the log when it ends.
+        if (foreFrames_ == 0) foreSince_ = in.now, foreMin_ = foreMax_ = d, foreDegMax_ = deg, forePart_ = foreNone_ = 0;
+        ++foreFrames_;
+        foreMin_ = std::fmin(foreMin_, d);
+        foreMax_ = std::fmax(foreMax_, d);
+        foreDegMax_ = std::fmax(foreDegMax_, deg);
+        if (w <= 0.0f) ++foreNone_;
+        else if (w < 1.0f) ++forePart_;
+    }
+    if (!twoHanded_ && foreFrames_ > 0) {
+        MLOG("hands: two-handed for %.1f s -- the off hand %.0f to %.0f cm from the gun hand, up to %.0f deg off its line; the gun "
+             "followed it fully %.0f%% of the time, partly %.0f%%, not at all %.0f%% (Hands.ForegripBlend %.0f %.0f)",
+             in.now - foreSince_, 100.0f * foreMin_, 100.0f * foreMax_, foreDegMax_,
+             100.0f * (foreFrames_ - forePart_ - foreNone_) / foreFrames_, 100.0f * forePart_ / foreFrames_,
+             100.0f * foreNone_ / foreFrames_, 100.0f * foreNear_, 100.0f * foreFar_);
+        foreFrames_ = 0;
     }
     // The manual reload, with the gun's final pose.
     if (reload_) {

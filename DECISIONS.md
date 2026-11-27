@@ -2059,3 +2059,41 @@ hud, then hold X."
   - After: within 0.5-1.0 cm, steps of 0.2 (the crouch) and 0.1 (the stand); the gun in the hand 0.00 / 0.01 deg.
 - **Test notes:** the harness sometimes leaves the game showing a cursor ("cinema: ON ... UI menu: cursor shown") with
   no menu open, and nothing of the test then runs; seen when "in gameplay" took 12-13 s. A rerun is the only cure so far.
+
+### D116. The two-handed aim comes in with distance, not at a cut-off -- Decided 2026-11-28
+- **Why:** a player's report with a clip and MOHAVR.log (logs/player-20261127/; 0.8.17, the MP40): "issue I am having
+  with the guns, only happens when I 2 hand them. Feels like the gun snaps into a default position and ignore my
+  controller position".
+- **Their session:** the clip (8.5 s, 22:59:15-23.7) lies inside one two-handed hold (the log: 22:58:58.69 "gun in the
+  right hand, two-handed" to 22:59:23.71 "gun in the right hand"), no stance change, no reload. In it the gun jumps in
+  single frames, and for stretches on alternate frames, between following the off hand and one fixed pose; that pose is
+  the one the gun has after the hold ends, so it is the gun hand's own.
+- **Cause:** `Hands::Update` turned the gun to the off hand only while that hand was more than 12 cm from the gun hand
+  (`Len(want) > 0.12f`, there since the foregrip was written, round 14); nearer, the gun took the gun hand's pose, at
+  once and whole. A hand hovering at 12 cm flickers between the two. Not a 0.8.17 change. (A hand the runtime loses is
+  held where it was, `pad.HoldLost`, so tracking loss does not give this pose.)
+- **What:** `[Hands] ForegripBlend=5 12` (cm; host only, no shared block change). Under the first distance the gun
+  follows the gun hand alone, past the second it points through the off hand as before, between them the turn is
+  scaled (smoothstep, about the same axis). The turn also fades out between 100 and 160 degrees off the foregrip's line
+  (a hand brought round behind the gun hand no longer swings the gun about to point backward). "12 12" is the old
+  cut-off, with no fade. `out.turned` (the melee's epoch) is set by any part of the turn.
+- **The host's log** now says what each hold was like when it ends: "hands: two-handed for 24.0 s -- the off hand 4 to
+  30 cm from the gun hand, up to 180 deg off its line; the gun followed it fully 34% of the time, partly 10%, not at
+  all 57%". The player's MOHAVR-host.log from a session where it happens tells whether this was their case.
+- **Proven [S]** (work/research/tests/twohand1.ps1: the MP40, the grip held, the off hand moved 22 -> 4 cm from the
+  gun hand along a line 40 deg off the barrel in 2 s, back out, and round the gun hand's side at 14 cm from 40 to 200
+  deg; `mohavr arm trace`, the drawn wrists against the eye per Draw, `tools/wrist_trace.py`):
+  - The cut-off ("12 12"): the wrists jump 9.94 / 12.79 cm in one frame going in, 10.22 / 12.57 coming out.
+  - "5 12": the largest step in a frame 0.28 / 0.36 cm, in and out. ("6 16", tried first: 0.22 / 0.24.)
+  - Round the side: no jump in either (0.36 / 0.45 before, 0.73 / 0.91 now); the gun hand's wrist travels 15.4 cm
+    where it went 29.3 (the gun no longer swings round).
+  - A harness cycle on the shipped defaults passes.
+- **Not proven:** that the cut-off is all of this player's snap. Their host log was not sent; "the guns" may include
+  the Garand, whose foregrip is 30 cm out (a hand that takes it there is far from 12 cm unless the hands close up
+  afterwards: the hold lasts until the grip is let go, wherever the hand goes). Measured: the MP40's magazine spot is
+  29 cm from the gun hand, so a hand on the magazine is not it. [H] decides.
+- **Why 5 and 12:** past 12 cm nothing changes from 0.8.17 (holds the player has tuned stay as they were). Under 5 cm
+  the direction between the two hands is mostly tracking noise.
+- **Test notes:** a run of this test once found the game's pause menu open 1.3 s after the weapon was given ("cinema:
+  ON ... UI menu: cursor shown", logs/th-fail-*.log) and no gun was drawn; the player typed at the PC during it, and
+  D115's note (the cursor shown, "in gameplay" at 12 s) describes the same picture. The rerun passed.

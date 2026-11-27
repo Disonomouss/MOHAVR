@@ -90,6 +90,10 @@ HEADSET-TESTS.md. A session running `/goal` works through `GOAL.md` (its checkli
   (only the first placement in a run sticks), `mohavr melee enemy at butt|bayonet [depth]`, `where`, `status` (his
   Health, the melee-kill count), `hit` (the executor alone); `Debug.MeleeTrace=1` logs each armed swing.
 
+- Two-handed aim tests (D116): `work/research/tests/twohand1.ps1 -Tag -Blend '5 12'` pins the off hand at `@fore`, holds
+  the grip (`raw=1 press=lgrip dur=24`) and moves the hand by keyframes against the pinned point; the host logs "hands:
+  two-handed for ... s" when the hold ends; `python tools/wrist_trace.py <armik lines>` gives the drawn wrists' largest
+  step in a frame (the trace's "hand in ctrl" cannot show a two-handed turn: that frame turns with the gun).
 - Scope tests (SCOPE-DESIGN 3): the simulator reports both eyes at the head's centre, so a test puts the eyepiece before the
   head's centre (`work/research/tests/scope3.ps1 -Gun -Key -Ex -Ey -Ez -Pitch -Zoom`); the host logs "scope: looking
   through" and "the lens shown"; `Debug.ScopeView=1` renders the scope view always (from the right eye).
