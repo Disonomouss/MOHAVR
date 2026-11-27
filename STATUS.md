@@ -22,7 +22,7 @@ into and uninstalls from the EA copy. Open: a headset session on the EA copy [H]
 position" with both hands on it: within 12 cm of the gun hand the off hand was dropped at once and the gun took the gun
 hand's own pose (a 10-13 cm jump of the drawn hands in one frame; there since the foregrip was written). Now blended
 between 5 and 12 cm (`[Hands] ForegripBlend`; 0.3 cm a frame in the same sweep), and a hand brought round behind the gun
-hand no longer swings the gun about. The host logs each hold's distances. Not released. Open: the player's host log [H].
+hand no longer swings the gun about. The host logs each hold's distances. Released in 0.8.18. Open: the player's host log [H].
 **The hands go with the eye, not under its floor** (2026-11-24, D115), after "hands and gun shake when reaching the bottom
 of the crouch": a seated player's eye sits on Camera.MinEyeHeight at the bottom of a crouch while the camera goes on
 moving, and the hands were carried with the camera. Released in 0.8.17.
@@ -79,6 +79,7 @@ the view fades in a wall; the menu's Comfort tab (on). Shared block v35.
 **Rings off by default, the firing shake a switch** (2026-10-10, D86-D87): General -> Holster rings / Reload rings
 (off); Comfort -> Firing shake (on). Shared block v34. Released in 0.8.6.
 **The Index's menu controls** (2026-10-09, D85): the Index had no menu bindings (the menu opened, nothing moved it); released in 0.8.5.
+**Release 0.8.18** (published 2026-11-28): the two-handed aim comes in with distance instead of snapping at 12 cm (D116; not yet judged in the headset).
 **Release 0.8.17** (published 2026-11-25): Auto resolution by default (D107), Perfect landing (D108), physical crouch's arms (D109), the cutscenes' bars (D110), the arms and gun still through a crouch or stand (D111-D115; D115 not yet judged in the headset).
 **Release 0.8.16** (published 2026-11-13): the arms shown (D106), the pointer on long tabs, the memory in the log (D105).
 **Release 0.8.15** (published 2026-10-13): point and click in the MOHAVR menu, the wrist HUD hidden / shown with Y (D104).
