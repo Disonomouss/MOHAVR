@@ -2488,7 +2488,9 @@ keeping the grip held.
 1. Does the gun jump at any point as the hands come together or apart? (yes/no)
 2. Close together (under 5 cm) the gun aims with the gun hand alone: is that right, or should it go on following the
    off hand closer in?
-3. For the player who reported it: is the snap gone? If not, please send MOHAVR-host.log (it now records how far apart
+3. Between 5 and 12 cm the gun now follows the off hand part of the way (before, it ignored it there). If you hold a
+   gun with the hands that close: is it as steady as before? (yes/no; `[Hands] ForegripBlend=12 12` is the old way)
+4. For the player who reported it: is the snap gone? If not, please send MOHAVR-host.log (it now records how far apart
    the hands were in each two-handed hold) and say which guns.
 
 ## Template

@@ -2064,10 +2064,11 @@ hud, then hold X."
 - **Why:** a player's report with a clip and MOHAVR.log (logs/player-20261127/; 0.8.17, the MP40): "issue I am having
   with the guns, only happens when I 2 hand them. Feels like the gun snaps into a default position and ignore my
   controller position".
-- **Their session:** the clip (8.5 s, 22:59:15-23.7) lies inside one two-handed hold (the log: 22:58:58.69 "gun in the
-  right hand, two-handed" to 22:59:23.71 "gun in the right hand"), no stance change, no reload. In it the gun jumps in
-  single frames, and for stretches on alternate frames, between following the off hand and one fixed pose; that pose is
-  the one the gun has after the hold ends, so it is the gun hand's own.
+- **Their session:** the clip (8.5 s, about 22:59:15-23.7) is the last seconds of one two-handed hold and its end (the
+  log: 22:58:58.69 "gun in the right hand, two-handed", 22:59:23.71 "gun in the right hand"; nothing between them), no
+  stance change, no reload. While the hold lasts the gun jumps in single frames, and for stretches on alternate frames,
+  between following the off hand and one fixed pose; that pose is the one the gun has in the clip's last frames, after
+  the off hand lets go, so it is the gun hand's own.
 - **Cause:** `Hands::Update` turned the gun to the off hand only while that hand was more than 12 cm from the gun hand
   (`Len(want) > 0.12f`, there since the foregrip was written, round 14); nearer, the gun took the gun hand's pose, at
   once and whole. A hand hovering at 12 cm flickers between the two. Not a 0.8.17 change. (A hand the runtime loses is
@@ -2092,8 +2093,14 @@ hud, then hold X."
   the Garand, whose foregrip is 30 cm out (a hand that takes it there is far from 12 cm unless the hands close up
   afterwards: the hold lasts until the grip is let go, wherever the hand goes). Measured: the MP40's magazine spot is
   29 cm from the gun hand, so a hand on the magazine is not it. [H] decides.
-- **Why 5 and 12:** past 12 cm nothing changes from 0.8.17 (holds the player has tuned stay as they were). Under 5 cm
-  the direction between the two hands is mostly tracking noise.
-- **Test notes:** a run of this test once found the game's pause menu open 1.3 s after the weapon was given ("cinema:
-  ON ... UI menu: cursor shown", logs/th-fail-*.log) and no gun was drawn; the player typed at the PC during it, and
-  D115's note (the cursor shown, "in gameplay" at 12 s) describes the same picture. The rerun passed.
+- **Why 5 and 12:** past 12 cm nothing changes from 0.8.17 (holds the player has tuned stay as they were), unless the
+  off hand is more than 100 degrees off the foregrip's line. Under 5 cm the direction between the two hands is mostly
+  tracking noise.
+- **A change for the headset to judge:** between 5 and 12 cm the gun now turns part of the way to the off hand, where
+  it ignored that hand before. A close hold that was steady because the off hand did nothing now follows it a little.
+- **Test notes:** one run of this test failed before its first step (logs/th-fail-*.log): 1.3 s after the weapon was
+  given the game showed a UI menu with a cursor ("cinema: ON ... UI menu: cursor shown", "pointer: pointing at the
+  menu"), no gun was drawn by the weapon switches, and 19 s later the game exited by itself (the host: "the game's side
+  is quiet", "the game exited"; no crash dump). Cause not established: the player was at the PC about then, and D115's
+  note describes the same picture. No two-handed hold happened in that run, so D116's code did not run in it; the same
+  binaries then passed the sweep and a cycle.
